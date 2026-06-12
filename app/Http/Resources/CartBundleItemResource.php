@@ -1,0 +1,27 @@
+<?php
+
+namespace App\Http\Resources;
+
+use App\Services\Bundles\BundlePricingService;
+use Illuminate\Http\Request;
+use Illuminate\Http\Resources\Json\JsonResource;
+
+class CartBundleItemResource extends JsonResource
+{
+    public function toArray(Request $request): array
+    {
+        $pricing = $this->bundle ? app(BundlePricingService::class)->calculate($this->bundle, $this->selected_items) : ['original_price' => $this->unit_price, 'savings' => 0];
+
+        return [
+            'id' => $this->id,
+            'bundle_id' => $this->product_bundle_id,
+            'bundle_name' => $this->bundle?->name,
+            'selected_items' => $this->selected_items,
+            'quantity' => $this->quantity,
+            'unit_price' => $this->unit_price,
+            'total_price' => $this->total_price,
+            'original_price' => $pricing['original_price'],
+            'savings' => $pricing['savings'],
+        ];
+    }
+}

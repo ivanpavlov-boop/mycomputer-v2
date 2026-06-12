@@ -1,0 +1,60 @@
+<?php
+
+namespace App\Http\Resources;
+
+use Illuminate\Http\Request;
+use Illuminate\Http\Resources\Json\JsonResource;
+
+class ProductResource extends JsonResource
+{
+    /**
+     * Transform the resource into an array.
+     *
+     * @return array<string, mixed>
+     */
+    public function toArray(Request $request): array
+    {
+        return [
+            'id' => $this->id,
+            'sku' => $this->sku,
+            'ean' => $this->ean,
+            'mpn' => $this->mpn,
+            'name' => $this->name,
+            'slug' => $this->slug,
+            'short_description' => $this->short_description,
+            'description' => $this->description,
+            'weight' => $this->weight,
+            'price' => $this->price,
+            'promo_price' => $this->promo_price,
+            'promo_start' => $this->promo_start,
+            'promo_end' => $this->promo_end,
+            'quantity' => $this->quantity,
+            'reserved_quantity' => $this->reserved_quantity,
+            'stock_status' => $this->stock_status,
+            'warranty_months' => $this->warranty_months,
+            'featured' => $this->featured,
+            'new_product' => $this->new_product,
+            'bestseller' => $this->bestseller,
+            'brand' => BrandResource::make($this->whenLoaded('brand')),
+            'category' => CategoryResource::make($this->whenLoaded('category')),
+            'images' => $this->whenLoaded('images', fn () => $this->images->map(fn ($image) => [
+                'path' => $image->path,
+                'alt_text' => $image->alt_text,
+                'is_primary' => $image->is_primary,
+            ])),
+            'attributes' => $this->whenLoaded('attributes', fn () => $this->attributes->map(fn ($attribute) => [
+                'group' => $attribute->attribute?->group?->name,
+                'name' => $attribute->attribute?->name,
+                'slug' => $attribute->attribute?->slug,
+                'value' => $attribute->value?->value ?? $attribute->custom_value,
+                'unit' => $attribute->attribute?->unit,
+                'is_filterable' => $attribute->is_filterable,
+            ])),
+            'specifications' => $this->specifications ?? [],
+            'meta_title' => $this->meta_title,
+            'meta_description' => $this->meta_description,
+            'meta_keywords' => $this->meta_keywords,
+            'published_at' => $this->published_at,
+        ];
+    }
+}
