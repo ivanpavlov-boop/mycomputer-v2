@@ -22,7 +22,7 @@ class SupplierFeedFactory extends Factory
             'supplier_id' => Supplier::factory(),
             'feed_name' => 'Main XML Feed',
             'feed_type' => 'xml',
-            'feed_url' => fake()->url(),
+            'feed_url' => $this->faker->url(),
             'username' => null,
             'password' => null,
             'update_interval' => 'manual',

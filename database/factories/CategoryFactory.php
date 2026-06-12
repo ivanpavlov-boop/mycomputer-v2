@@ -18,17 +18,17 @@ class CategoryFactory extends Factory
      */
     public function definition(): array
     {
-        $name = fake()->unique()->words(2, true);
+        $name = $this->faker->unique()->words(2, true);
 
         return [
             'name' => Str::title($name),
             'slug' => Str::slug($name),
-            'description' => fake()->sentence(),
+            'description' => $this->faker->sentence(),
             'icon' => 'heroicon-o-computer-desktop',
             'is_active' => true,
-            'sort_order' => fake()->numberBetween(1, 100),
+            'sort_order' => $this->faker->numberBetween(1, 100),
             'meta_title' => Str::title($name),
-            'meta_description' => fake()->sentence(),
+            'meta_description' => $this->faker->sentence(),
         ];
     }
 }

@@ -21,7 +21,7 @@ return new class extends Migration
             $table->timestamps();
 
             $table->unique(['product_id', 'product_attribute_id', 'attribute_value_id'], 'product_attribute_value_unique');
-            $table->index(['product_attribute_id', 'attribute_value_id']);
+            $table->index(['product_attribute_id', 'attribute_value_id'], 'pav_attr_value_idx');
         });
     }
 

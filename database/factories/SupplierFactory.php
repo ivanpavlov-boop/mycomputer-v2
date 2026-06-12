@@ -18,16 +18,16 @@ class SupplierFactory extends Factory
      */
     public function definition(): array
     {
-        $name = fake()->unique()->company();
+        $name = $this->faker->unique()->company();
 
         return [
             'company_name' => $name,
             'slug' => Str::slug($name),
-            'contact_person' => fake()->name(),
-            'email' => fake()->companyEmail(),
-            'phone' => fake()->phoneNumber(),
-            'website' => fake()->url(),
-            'priority' => fake()->numberBetween(1, 100),
+            'contact_person' => $this->faker->name(),
+            'email' => $this->faker->companyEmail(),
+            'phone' => $this->faker->phoneNumber(),
+            'website' => $this->faker->url(),
+            'priority' => $this->faker->numberBetween(1, 100),
             'sync_strategy' => 'lowest_price',
             'status' => 'active',
         ];
