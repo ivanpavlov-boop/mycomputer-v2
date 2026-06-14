@@ -6,9 +6,9 @@ use App\Models\Product;
 use App\Models\ProductSupplierOffer;
 use App\Models\ProductSyncLog;
 use App\Models\SupplierProduct;
-use App\Services\Availability\AvailabilityStatusMapper;
 use App\Services\Attributes\CatalogAttributeWriter;
 use App\Services\Attributes\SupplierAttributeExtractionService;
+use App\Services\Availability\AvailabilityStatusMapper;
 use Illuminate\Support\Str;
 
 class ProductSyncService

@@ -2,9 +2,9 @@
 
 namespace Tests\Feature;
 
-use App\Models\FailedImport;
 use App\Models\AvailabilityStatus;
 use App\Models\AvailabilityStatusMapping;
+use App\Models\FailedImport;
 use App\Models\ImportJob;
 use App\Models\SupplierFeed;
 use App\Models\SupplierProduct;

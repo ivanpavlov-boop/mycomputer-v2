@@ -2,11 +2,11 @@
 
 namespace App\Services\Search;
 
-use App\Models\AttributeValue;
 use App\Models\Brand;
+use App\Models\CanonicalAttribute;
+use App\Models\CanonicalAttributeValue;
 use App\Models\Category;
 use App\Models\Product;
-use App\Models\ProductAttribute;
 use App\Models\ProductBundle;
 use App\Services\Search\Contracts\SearchServiceInterface;
 use App\Support\Api\ProductQueryFilters;
@@ -314,14 +314,14 @@ class DatabaseSearchService implements SearchServiceInterface
             ])
             ->all();
 
-        $attributes = \App\Models\CanonicalAttribute::query()
+        $attributes = CanonicalAttribute::query()
             ->where('is_filterable', true)
             ->where('is_active', true)
             ->whereHas('catalogAssignments', fn (Builder $assignment) => $assignment->whereIn('product_id', $productIds))
             ->orderBy('sort_order')
             ->get()
-            ->map(function (\App\Models\CanonicalAttribute $attribute) use ($productIds): array {
-                $values = \App\Models\CanonicalAttributeValue::query()
+            ->map(function (CanonicalAttribute $attribute) use ($productIds): array {
+                $values = CanonicalAttributeValue::query()
                     ->where('canonical_attribute_id', $attribute->id)
                     ->whereHas('assignments', fn (Builder $assignment) => $assignment->whereIn('product_id', $productIds))
                     ->withCount(['assignments as products_count' => fn (Builder $assignment) => $assignment->whereIn('product_id', $productIds)])
@@ -335,7 +335,7 @@ class DatabaseSearchService implements SearchServiceInterface
                     'slug' => $attribute->code,
                     'unit' => $attribute->unit,
                     'group' => $attribute->group_name,
-                    'values' => $values->map(fn (\App\Models\CanonicalAttributeValue $value): array => [
+                    'values' => $values->map(fn (CanonicalAttributeValue $value): array => [
                         'id' => $value->id,
                         'value' => $value->display_value,
                         'display_value' => $value->display_value,

@@ -2,7 +2,6 @@
 
 namespace App\Services\Attributes;
 
-use App\Models\Supplier;
 use App\Models\SupplierProduct;
 use SimpleXMLElement;
 
