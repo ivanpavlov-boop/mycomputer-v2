@@ -3,12 +3,14 @@
 namespace Tests\Feature;
 
 use App\Models\AttributeAlias;
+use App\Models\AttributeGroup;
 use App\Models\CanonicalAttribute;
 use App\Models\CanonicalAttributeValue;
 use App\Models\CsvImportJob;
+use App\Models\PcBuild;
 use App\Models\Product;
+use App\Models\ProductAttribute;
 use App\Models\ProductAttributeValue;
-use App\Models\ProductCompareList;
 use App\Models\Supplier;
 use App\Models\SupplierProduct;
 use App\Models\SupplierProductAttribute;
@@ -330,7 +332,7 @@ XML);
         $this->assignCanonical($cpu, 'cpu_socket', 'AM5');
         $this->assignCanonical($motherboard, 'motherboard_socket', 'AM5');
 
-        $build = \App\Models\PcBuild::query()->create(['name' => 'Canonical Build', 'total_price' => 0, 'status' => 'draft']);
+        $build = PcBuild::query()->create(['name' => 'Canonical Build', 'total_price' => 0, 'status' => 'draft']);
         $build->items()->create(['product_id' => $cpu->id, 'component_type' => 'cpu', 'quantity' => 1]);
         $build->items()->create(['product_id' => $motherboard->id, 'component_type' => 'motherboard', 'quantity' => 1]);
 
@@ -399,10 +401,10 @@ XML);
             'canonical_attribute_id' => $attribute->id,
             'canonical_attribute_value_id' => $value->id,
         ], [
-            'product_attribute_id' => \App\Models\ProductAttribute::query()->firstOrCreate([
+            'product_attribute_id' => ProductAttribute::query()->firstOrCreate([
                 'slug' => $attribute->code,
             ], [
-                'attribute_group_id' => \App\Models\AttributeGroup::query()->firstOrCreate(['slug' => 'test'], ['name' => 'Test'])->id,
+                'attribute_group_id' => AttributeGroup::query()->firstOrCreate(['slug' => 'test'], ['name' => 'Test'])->id,
                 'name' => $attribute->name,
                 'type' => 'select',
                 'is_filterable' => true,

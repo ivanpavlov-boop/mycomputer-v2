@@ -125,7 +125,7 @@ class SupplierCsvFeedImportService
     }
 
     /**
-     * @param array<string, mixed> $mapped
+     * @param  array<string, mixed>  $mapped
      * @return array<int, string>
      */
     private function validateMappedRow(array $mapped): array
@@ -167,7 +167,7 @@ class SupplierCsvFeedImportService
     }
 
     /**
-     * @param array<string, mixed> $rawData
+     * @param  array<string, mixed>  $rawData
      */
     private function failRow(ImportJob $job, int $rowNumber, array $rawData, string $message): void
     {
@@ -185,7 +185,7 @@ class SupplierCsvFeedImportService
     }
 
     /**
-     * @param array<string, mixed> $context
+     * @param  array<string, mixed>  $context
      */
     private function log(ImportJob $job, string $event, string $level, ?string $message = null, array $context = []): void
     {

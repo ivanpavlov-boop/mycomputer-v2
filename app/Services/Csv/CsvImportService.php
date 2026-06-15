@@ -2,19 +2,15 @@
 
 namespace App\Services\Csv;
 
-use App\Models\AttributeGroup;
-use App\Models\AttributeValue;
 use App\Models\AvailabilityStatus;
 use App\Models\Brand;
 use App\Models\Category;
 use App\Models\CsvImportFailure;
 use App\Models\CsvImportJob;
 use App\Models\Product;
-use App\Models\ProductAttribute;
-use App\Models\ProductAttributeValue;
-use App\Services\Availability\AvailabilityStatusMapper;
 use App\Services\Attributes\AttributeNormalizationService;
 use App\Services\Attributes\CatalogAttributeWriter;
+use App\Services\Availability\AvailabilityStatusMapper;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;

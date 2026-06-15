@@ -175,7 +175,6 @@ class SupplierImportSchedulingTest extends TestCase
         ]);
     }
 
-
     public function test_mass_product_drop_blocks_sync_without_destructive_sync(): void
     {
         $supplier = $this->supplier([
