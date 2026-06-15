@@ -14,7 +14,10 @@ use App\Services\Email\EmailMarketingService;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Laravel\Sanctum\Sanctum;
+use Spatie\Permission\PermissionRegistrar;
 use Tests\TestCase;
 
 class AbandonedCartRecoveryTest extends TestCase
@@ -206,7 +209,9 @@ class AbandonedCartRecoveryTest extends TestCase
         $other = User::factory()->create();
         $this->staleCart('owned-cart', 'owner@example.com', $owner);
 
-        $this->actingAs($other, 'sanctum')
+        Sanctum::actingAs($other);
+
+        $this
             ->withHeader('X-Cart-Session', 'owned-cart')
             ->getJson('/api/v1/cart')
             ->assertForbidden();
@@ -226,14 +231,18 @@ class AbandonedCartRecoveryTest extends TestCase
     public function test_admin_resource_access_requires_marketing_permission(): void
     {
         $this->seed(RolesAndPermissionsSeeder::class);
+        app(PermissionRegistrar::class)->forgetCachedPermissions();
+
         $plain = User::factory()->create();
         $marketer = User::factory()->create();
         $marketer->givePermissionTo('manage marketing');
 
-        $this->actingAs($plain);
+        $this->actingAs($plain, 'web');
         $this->assertFalse(AbandonedCartRecordResource::canViewAny());
 
-        $this->actingAs($marketer);
+        Auth::guard('web')->logout();
+
+        $this->actingAs($marketer, 'web');
         $this->assertTrue(AbandonedCartRecordResource::canViewAny());
     }
 
