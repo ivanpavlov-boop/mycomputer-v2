@@ -42,12 +42,38 @@ class SsrfProtectionService
 
     public function get(string $url, ?string $username = null, ?string $password = null, int $maxRedirects = 3): string
     {
+        $path = $this->downloadToTemporaryFile($url, $username, $password, $maxRedirects);
+
+        try {
+            $contents = file_get_contents($path);
+
+            if ($contents === false) {
+                throw new RuntimeException('Downloaded feed file is unreadable.');
+            }
+
+            return $contents;
+        } finally {
+            @unlink($path);
+        }
+    }
+
+    public function downloadToTemporaryFile(string $url, ?string $username = null, ?string $password = null, int $maxRedirects = 3): string
+    {
         $currentUrl = $url;
+        $timeout = (int) config('services.suppliers.http_timeout', 300);
+        $connectTimeout = (int) config('services.suppliers.http_connect_timeout', 30);
 
         for ($redirects = 0; $redirects <= $maxRedirects; $redirects++) {
             $this->assertAllowedUrl($currentUrl);
 
-            $request = Http::timeout(60)->withOptions(['allow_redirects' => false]);
+            $targetPath = $this->temporaryFeedPath();
+
+            $request = Http::connectTimeout($connectTimeout)
+                ->timeout($timeout)
+                ->withOptions([
+                    'allow_redirects' => false,
+                    'sink' => $targetPath,
+                ]);
 
             if ($username && $password) {
                 $request = $request->withBasicAuth($username, $password);
@@ -56,8 +82,12 @@ class SsrfProtectionService
             $response = $request->get($currentUrl)->throw();
 
             if (! in_array($response->status(), [301, 302, 303, 307, 308], true)) {
-                return $response->body();
+                $this->writeFakeResponseBodyIfNeeded($targetPath, $response->body());
+
+                return $targetPath;
             }
+
+            @unlink($targetPath);
 
             $location = $response->header('Location');
             if (! $location) {
@@ -68,6 +98,28 @@ class SsrfProtectionService
         }
 
         throw new RuntimeException('Too many feed redirects.');
+    }
+
+    private function temporaryFeedPath(): string
+    {
+        $path = tempnam(sys_get_temp_dir(), 'supplier-feed-');
+
+        if ($path === false) {
+            throw new RuntimeException('Unable to create temporary feed file.');
+        }
+
+        return $path;
+    }
+
+    private function writeFakeResponseBodyIfNeeded(string $targetPath, string $body): void
+    {
+        clearstatcache(true, $targetPath);
+
+        if ((file_exists($targetPath) && filesize($targetPath) > 0) || $body === '') {
+            return;
+        }
+
+        file_put_contents($targetPath, $body);
     }
 
     private function resolveHost(string $host): array
