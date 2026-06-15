@@ -172,29 +172,35 @@ class XmlImportEngine
             throw new \RuntimeException('Supplier XML feeds must use HTTPS or HTTP URLs.');
         }
 
-        $contents = $this->ssrfProtection->get($source, $feed->username, $feed->password);
+        $path = $this->ssrfProtection->downloadToTemporaryFile($source, $feed->username, $feed->password);
 
-        if ($contents === false || trim($contents) === '') {
-            throw new \RuntimeException('XML feed is empty or unreadable.');
-        }
+        try {
+            clearstatcache(true, $path);
 
-        libxml_use_internal_errors(true);
-        $xml = simplexml_load_string($contents);
+            if (! file_exists($path) || filesize($path) === 0) {
+                throw new \RuntimeException('XML feed is empty or unreadable.');
+            }
 
-        if (! $xml instanceof SimpleXMLElement) {
-            $errors = collect(libxml_get_errors())
-                ->map(fn ($error): string => trim($error->message))
-                ->filter()
-                ->implode('; ');
+            libxml_use_internal_errors(true);
+            $xml = simplexml_load_file($path, SimpleXMLElement::class, LIBXML_NONET | LIBXML_NOCDATA);
+
+            if (! $xml instanceof SimpleXMLElement) {
+                $errors = collect(libxml_get_errors())
+                    ->map(fn ($error): string => trim($error->message))
+                    ->filter()
+                    ->implode('; ');
+
+                libxml_clear_errors();
+
+                throw new \RuntimeException($errors ?: 'Invalid XML document.');
+            }
 
             libxml_clear_errors();
 
-            throw new \RuntimeException($errors ?: 'Invalid XML document.');
+            return $xml;
+        } finally {
+            @unlink($path);
         }
-
-        libxml_clear_errors();
-
-        return $xml;
     }
 
     /**

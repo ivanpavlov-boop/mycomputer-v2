@@ -61,6 +61,8 @@ return [
     ],
 
     'suppliers' => [
+        'http_connect_timeout' => env('SUPPLIER_FEED_HTTP_CONNECT_TIMEOUT', 30),
+        'http_timeout' => env('SUPPLIER_FEED_HTTP_TIMEOUT', 300),
         'apcom' => [
             'feed_url' => env('APCOM_FEED_URL', 'https://example.invalid/apcom-feed.xml'),
         ],
