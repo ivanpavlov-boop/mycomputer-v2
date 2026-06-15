@@ -205,8 +205,8 @@ class AbandonedCartRecoveryTest extends TestCase
 
     public function test_authenticated_user_cannot_access_another_users_cart(): void
     {
-        $owner = User::factory()->create();
-        $other = User::factory()->create();
+        $owner = User::factory()->create(['email' => 'cart-owner@example.test']);
+        $other = User::factory()->create(['email' => 'cart-other@example.test']);
         $this->staleCart('owned-cart', 'owner@example.com', $owner);
 
         Sanctum::actingAs($other);
@@ -233,8 +233,8 @@ class AbandonedCartRecoveryTest extends TestCase
         $this->seed(RolesAndPermissionsSeeder::class);
         app(PermissionRegistrar::class)->forgetCachedPermissions();
 
-        $plain = User::factory()->create();
-        $marketer = User::factory()->create();
+        $plain = User::factory()->create(['email' => 'plain-marketing-user@example.test']);
+        $marketer = User::factory()->create(['email' => 'marketer@example.test']);
         $marketer->givePermissionTo('manage marketing');
 
         $this->actingAs($plain, 'web');
