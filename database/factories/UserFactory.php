@@ -28,7 +28,7 @@ class UserFactory extends Factory
             'first_name' => 'Admin',
             'last_name' => 'User',
             'name' => 'Admin User',
-            'email' => 'admin@example.com',
+            'email' => fake()->unique()->safeEmail(),
             'phone' => '+359000000000',
             'is_active' => true,
             'email_verified_at' => now(),
