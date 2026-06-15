@@ -387,6 +387,7 @@ class ProductSyncService
             return null;
         }
 
+        $categoryPath = $this->normalizeSupplierCategoryPath($categoryPath);
         $parent = null;
         $category = null;
 
@@ -412,6 +413,19 @@ class ProductSyncService
         }
 
         return $category;
+    }
+
+    protected function normalizeSupplierCategoryPath(string $categoryPath): string
+    {
+        $paths = collect(explode(',', $categoryPath))
+            ->map(fn (string $path): string => trim($path))
+            ->filter()
+            ->reject(fn (string $path): bool => in_array(Str::lower($path), ['apcom', 'eol products'], true))
+            ->values();
+
+        return $paths->first(fn (string $path): bool => str_contains($path, '>'))
+            ?? $paths->first()
+            ?? trim($categoryPath);
     }
 
     protected function syncImages(SupplierProduct $supplierProduct, Product $product): int
@@ -443,9 +457,27 @@ class ProductSyncService
     protected function extractImageUrls(array $payload): array
     {
         $urls = [];
-        $keys = ['image', 'Image', 'image_url', 'ImageURL', 'ImageUrl', 'Picture', 'picture', 'url', 'URL'];
+        $keys = ['image', 'Image', 'image_url', 'ImageURL', 'ImageUrl', 'Picture', 'picture'];
 
         foreach ($payload as $key => $value) {
+            if (in_array((string) $key, $keys, true) && is_array($value)) {
+                foreach ($value as $nestedValue) {
+                    if (is_string($nestedValue) && Str::startsWith(trim($nestedValue), ['http://', 'https://'])) {
+                        $urls[] = trim($nestedValue);
+
+                        continue;
+                    }
+
+                    if (is_array($nestedValue)) {
+                        foreach ($this->extractImageUrls($nestedValue) as $url) {
+                            $urls[] = $url;
+                        }
+                    }
+                }
+
+                continue;
+            }
+
             if (is_array($value)) {
                 foreach ($this->extractImageUrls($value) as $url) {
                     $urls[] = $url;

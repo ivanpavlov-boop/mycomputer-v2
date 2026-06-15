@@ -223,7 +223,11 @@ class XmlImportEngine
         $mapped = $template->defaults ?? [];
 
         foreach ($template->field_map as $targetField => $xmlPath) {
-            $mapped[$targetField] = $this->readValue($row, $xmlPath);
+            $value = $this->readValue($row, $xmlPath);
+
+            if ($value !== null || ! array_key_exists($targetField, $mapped)) {
+                $mapped[$targetField] = $value;
+            }
         }
 
         foreach (['price', 'quantity'] as $numericField) {
@@ -265,7 +269,9 @@ class XmlImportEngine
             return null;
         }
 
-        return trim((string) $matches[0]) ?: null;
+        $value = trim((string) $matches[0]);
+
+        return $value === '' ? null : $value;
     }
 
     protected function normalizeNumericValue(mixed $value): mixed

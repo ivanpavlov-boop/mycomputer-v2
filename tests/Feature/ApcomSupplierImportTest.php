@@ -43,7 +43,7 @@ class ApcomSupplierImportTest extends TestCase
         $this->assertDatabaseHas('xml_mapping_templates', [
             'supplier_id' => $supplier->id,
             'name' => 'APCOM XML Product Mapping',
-            'root_path' => 'Products.Product',
+            'root_path' => 'xml.product',
             'is_active' => true,
         ]);
 
@@ -73,20 +73,25 @@ class ApcomSupplierImportTest extends TestCase
 
         app(XmlImportEngine::class)->import($job);
 
-        $supplierProduct = SupplierProduct::query()->where('supplier_sku', 'APC-MAC-001')->firstOrFail();
+        $supplierProduct = SupplierProduct::query()->where('supplier_sku', 'MW103ZE/A')->firstOrFail();
         $incoming = AvailabilityStatus::query()->where('code', 'in_stock')->firstOrFail();
 
         $this->assertSame($feed->supplier_id, $supplierProduct->supplier_id);
-        $this->assertSame('Apple MacBook Air 13 M3', $supplierProduct->name);
-        $this->assertSame('0888462999999', $supplierProduct->ean);
-        $this->assertSame('MC8K4ZE/A', $supplierProduct->mpn);
+        $this->assertSame('Apple MBA 13.6: STARLIGHT/M4 10C CPU/10C GPU/16GB/512GB-ZEE', $supplierProduct->name);
+        $this->assertSame('195949837869', $supplierProduct->ean);
+        $this->assertSame('MW103ZE/A', $supplierProduct->mpn);
         $this->assertSame('Apple', $supplierProduct->brand_name);
-        $this->assertSame('Laptops > Apple MacBook', $supplierProduct->category_name);
-        $this->assertSame('2199.90', $supplierProduct->price);
+        $this->assertSame('Apcom,Mac > MacBook Air > MacBook Air,EOL Products > EOL Products', $supplierProduct->category_name);
+        $this->assertSame('855.62', $supplierProduct->price);
         $this->assertSame(7, $supplierProduct->quantity);
-        $this->assertSame('available', $supplierProduct->external_availability_status);
+        $this->assertNull($supplierProduct->external_availability_status);
         $this->assertSame($incoming->id, $supplierProduct->availability_status_id);
-        $this->assertSame('https://cdn.example.test/apcom/macbook.jpg', $supplierProduct->raw_data['_mapped']['image_url']);
+        $this->assertSame('EUR', $supplierProduct->currency);
+        $this->assertSame('https://cdn.example.test/apcom/macbook-01.jpg', $supplierProduct->raw_data['_mapped']['image_url']);
+
+        $zeroStockProduct = SupplierProduct::query()->where('supplier_sku', 'ZERO-STOCK-001')->firstOrFail();
+        $this->assertSame(0, $zeroStockProduct->quantity);
+        $this->assertSame('out_of_stock', $zeroStockProduct->availabilityStatus?->code);
 
         $this->assertDatabaseHas('supplier_product_attributes', [
             'supplier_product_id' => $supplierProduct->id,
@@ -108,30 +113,31 @@ class ApcomSupplierImportTest extends TestCase
 
         Http::fake([
             'https://feeds.example.test/apcom.xml' => Http::sequence()
-                ->push($this->apcomXml(price: '2199,90', quantity: 7), 200)
-                ->push($this->apcomXml(price: '2099.90', quantity: 3), 200),
+                ->push($this->apcomXml(price: '855,62', quantity: 7), 200)
+                ->push($this->apcomXml(price: '849.99', quantity: 3), 200),
         ]);
 
         app(XmlImportEngine::class)->import($this->importJob($feed, $template));
         app(XmlImportEngine::class)->import($this->importJob($feed, $template));
 
-        $supplierProduct = SupplierProduct::query()->where('supplier_sku', 'APC-MAC-001')->firstOrFail();
+        $supplierProduct = SupplierProduct::query()->where('supplier_sku', 'MW103ZE/A')->firstOrFail();
 
-        $this->assertSame(1, SupplierProduct::query()->where('supplier_id', $feed->supplier_id)->where('supplier_sku', 'APC-MAC-001')->count());
-        $this->assertSame('2099.90', $supplierProduct->price);
+        $this->assertSame(1, SupplierProduct::query()->where('supplier_id', $feed->supplier_id)->where('supplier_sku', 'MW103ZE/A')->count());
+        $this->assertSame('849.99', $supplierProduct->price);
         $this->assertSame(3, $supplierProduct->quantity);
         $this->assertSame(4, $supplierProduct->attributes()->count());
 
         app(ProductSyncService::class)->sync($supplierProduct);
 
-        $product = Product::query()->where('supplier_sku', 'APC-MAC-001')->firstOrFail();
+        $product = Product::query()->where('supplier_sku', 'MW103ZE/A')->firstOrFail();
 
-        $this->assertSame('2099.90', $product->price);
+        $this->assertSame('849.99', $product->price);
         $this->assertSame(3, $product->quantity);
         $this->assertSame('Apple', $product->brand?->name);
-        $this->assertSame('Apple MacBook', $product->category?->name);
-        $this->assertSame('in_stock', $product->stock_status);
-        $this->assertSame('https://cdn.example.test/apcom/macbook.jpg', $product->images()->firstOrFail()->path);
+        $this->assertSame('MacBook Air', $product->category?->name);
+        $this->assertSame('limited_stock', $product->stock_status);
+        $this->assertSame('https://cdn.example.test/apcom/macbook-01.jpg', $product->images()->firstOrFail()->path);
+        $this->assertSame(2, $product->images()->count());
         $this->assertDatabaseHas('product_sync_logs', [
             'product_id' => $product->id,
             'supplier_product_id' => $supplierProduct->id,
@@ -141,8 +147,8 @@ class ApcomSupplierImportTest extends TestCase
 
         $search = $product->toSearchableArray();
         $this->assertSame('Apple', $search['brand']);
-        $this->assertContains('Apple MacBook', $search['category_path']);
-        $this->assertSame('in_stock', $search['availability_status_code']);
+        $this->assertContains('MacBook Air', $search['category_path']);
+        $this->assertSame('limited_stock', $search['availability_status_code']);
         $this->assertContains('ram', collect($search['attributes'])->pluck('slug')->all());
     }
 
@@ -168,40 +174,74 @@ class ApcomSupplierImportTest extends TestCase
         ]);
     }
 
-    private function apcomXml(string $price = '2199.90', int $quantity = 7, bool $includeInvalidRow = false): string
+    private function apcomXml(string $price = '855.62', int $quantity = 7, bool $includeInvalidRow = false): string
     {
         $invalid = $includeInvalidRow ? <<<'XML'
-    <Product>
-        <SKU></SKU>
-        <Name>Invalid APCOM Row</Name>
-        <Price>not-number</Price>
-    </Product>
+    <product>
+        <partno></partno>
+        <name>Invalid APCOM Row</name>
+        <fd_price>not-number</fd_price>
+    </product>
 XML : '';
 
         return <<<XML
 <?xml version="1.0" encoding="UTF-8"?>
-<Products>
-    <Product>
-        <SKU>APC-MAC-001</SKU>
-        <EAN>0888462999999</EAN>
-        <MPN>MC8K4ZE/A</MPN>
-        <Name>Apple MacBook Air 13 M3</Name>
-        <Brand>Apple</Brand>
-        <CategoryPath>Laptops &gt; Apple MacBook</CategoryPath>
-        <Price>{$price}</Price>
-        <Stock>{$quantity}</Stock>
-        <Availability>available</Availability>
-        <AvailabilityLabel>Available</AvailabilityLabel>
-        <Image>https://cdn.example.test/apcom/macbook.jpg</Image>
+<xml encoding="utf-8">
+    <product>
+        <partno>MW103ZE/A</partno>
+        <ean>195949837869</ean>
+        <eol>0</eol>
+        <name>Apple MBA 13.6: STARLIGHT/M4 10C CPU/10C GPU/16GB/512GB-ZEE</name>
+        <category>Apcom,Mac &gt; MacBook Air &gt; MacBook Air,EOL Products &gt; EOL Products</category>
+        <dac_price>956</dac_price>
+        <fd_price>{$price}</fd_price>
+        <stock>{$quantity}</stock>
+        <manufacturer>Apple</manufacturer>
+        <url>https://apcom.shop/catalog/product/view/id/31980</url>
+        <promo>0</promo>
+        <news>0</news>
+        <images>
+            <image>https://cdn.example.test/apcom/macbook-01.jpg</image>
+            <image>https://cdn.example.test/apcom/macbook-02.jpg</image>
+        </images>
+        <cncode>84713000</cncode>
+        <width>5.570000</width>
+        <height>24.370000</height>
+        <depth>33.440000</depth>
+        <weight>1.670000</weight>
+        <group>Apple CPU</group>
         <Attributes>
             <Attribute Name="RAM Memory" Value="16GB" />
             <Attribute Name="SSD" Value="512 GB" />
             <Attribute Name="Processor" Value="Apple M3" />
             <Attribute Name="Screen" Value="13 inch" />
         </Attributes>
-    </Product>
+    </product>
+    <product>
+        <partno>ZERO-STOCK-001</partno>
+        <ean></ean>
+        <eol>0</eol>
+        <name>APCOM Zero Stock Adapter</name>
+        <category>Apcom,Accessories &gt; Power &amp; Cable &gt; Adapters &gt; Adapters</category>
+        <dac_price>25.49</dac_price>
+        <fd_price>25.49</fd_price>
+        <stock>0</stock>
+        <manufacturer>Satechi</manufacturer>
+        <url>https://apcom.shop/catalog/product/view/id/00000</url>
+        <promo>0</promo>
+        <news>0</news>
+        <images>
+            <image>https://cdn.example.test/apcom/adapter-01.jpg</image>
+        </images>
+        <cncode>84718000</cncode>
+        <width>0.000000</width>
+        <height>0.000000</height>
+        <depth>0.000000</depth>
+        <weight>0.060000</weight>
+        <group>Third Party Products</group>
+    </product>
 {$invalid}
-</Products>
+</xml>
 XML;
     }
 }
