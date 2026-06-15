@@ -91,6 +91,14 @@ class XmlImportEngine
                     $rawData['_mapped'] = $mappedData;
                 }
 
+                $categoryName = $this->supplierProductCategoryName($mapped['category_name'] ?? null);
+
+                if ($categoryName !== null && Str::length($categoryName) > 255) {
+                    $this->failRow($job, $index + 1, $mapped, 'category_name exceeds 255 characters after primary category path mapping');
+
+                    continue;
+                }
+
                 $supplierProduct = SupplierProduct::query()->updateOrCreate(
                     $this->supplierProductLookup($job, $mapped),
                     [
@@ -101,7 +109,7 @@ class XmlImportEngine
                         'mpn' => $mapped['mpn'] ?? null,
                         'name' => $mapped['name'] ?? null,
                         'brand_name' => $mapped['brand_name'] ?? null,
-                        'category_name' => $mapped['category_name'] ?? null,
+                        'category_name' => $categoryName,
                         'price' => $mapped['price'] ?? null,
                         'quantity' => $mapped['quantity'] ?? null,
                         'external_availability_status' => $mapped['external_availability_status'] ?? $mapped['stock_status'] ?? null,
@@ -295,6 +303,23 @@ class XmlImportEngine
         }
 
         return is_numeric($value) ? $value : $value;
+    }
+
+    protected function supplierProductCategoryName(?string $categoryName): ?string
+    {
+        if (blank($categoryName)) {
+            return null;
+        }
+
+        $paths = collect(explode(',', $categoryName))
+            ->map(fn (string $path): string => trim($path))
+            ->filter()
+            ->reject(fn (string $path): bool => in_array(Str::lower($path), ['apcom', 'eol products'], true))
+            ->values();
+
+        return $paths->first(fn (string $path): bool => str_contains($path, '>'))
+            ?? $paths->first()
+            ?? trim($categoryName);
     }
 
     /**
