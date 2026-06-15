@@ -60,4 +60,10 @@ return [
         'mock_secret' => env('WEBHOOK_MOCK_SECRET', 'local-webhook-secret'),
     ],
 
+    'suppliers' => [
+        'apcom' => [
+            'feed_url' => env('APCOM_FEED_URL', 'https://example.invalid/apcom-feed.xml'),
+        ],
+    ],
+
 ];

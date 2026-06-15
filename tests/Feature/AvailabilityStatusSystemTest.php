@@ -2,8 +2,8 @@
 
 namespace Tests\Feature;
 
-use App\Filament\Resources\AvailabilityStatusMappings\AvailabilityStatusMappingResource;
 use App\Filament\Resources\AvailabilityStatuses\AvailabilityStatusResource;
+use App\Filament\Resources\AvailabilityStatusMappings\AvailabilityStatusMappingResource;
 use App\Models\AvailabilityStatus;
 use App\Models\AvailabilityStatusMapping;
 use App\Models\CsvImportJob;

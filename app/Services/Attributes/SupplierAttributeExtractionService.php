@@ -2,7 +2,6 @@
 
 namespace App\Services\Attributes;
 
-use App\Models\Supplier;
 use App\Models\SupplierProduct;
 use SimpleXMLElement;
 
@@ -66,11 +65,11 @@ class SupplierAttributeExtractionService
     {
         $attributes = [];
 
-        foreach (['attributes.attribute', 'specifications.specification', 'specs.spec'] as $path) {
+        foreach (['attributes.attribute', 'Attributes.Attribute', 'specifications.specification', 'Specifications.Specification', 'specs.spec', 'Specs.Spec'] as $path) {
             foreach ($row->xpath(str_replace('.', '/', $path)) ?: [] as $node) {
-                $name = (string) ($node['name'] ?? $node['key'] ?? $node->name ?? $node->key ?? '');
-                $value = (string) ($node['value'] ?? $node->value ?? $node);
-                $unit = (string) ($node['unit'] ?? $node->unit ?? '');
+                $name = (string) ($node['name'] ?? $node['Name'] ?? $node['key'] ?? $node['Key'] ?? $node->name ?? $node->Name ?? $node->key ?? $node->Key ?? '');
+                $value = (string) ($node['value'] ?? $node['Value'] ?? $node->value ?? $node->Value ?? $node);
+                $unit = (string) ($node['unit'] ?? $node['Unit'] ?? $node->unit ?? $node->Unit ?? '');
 
                 if (filled($name) && filled($value)) {
                     $attributes[] = ['name' => $name, 'value' => $value, 'unit' => $unit ?: null];

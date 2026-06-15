@@ -36,6 +36,7 @@ class DatabaseSeeder extends Seeder
             PaymentSeeder::class,
             RolesAndPermissionsSeeder::class,
             SupplierFeedSeeder::class,
+            ApcomSupplierIntegrationSeeder::class,
             ProductSeeder::class,
             ContentSeeder::class,
             PcBuilderSeeder::class,
