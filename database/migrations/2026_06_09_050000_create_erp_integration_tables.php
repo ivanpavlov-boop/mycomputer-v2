@@ -13,7 +13,7 @@ return new class extends Migration
             $table->string('name');
             $table->string('code')->unique();
             $table->string('status')->default('inactive')->index();
-            $table->json('credentials')->nullable();
+            $table->longText('credentials')->nullable();
             $table->json('settings')->nullable();
             $table->timestamps();
         });

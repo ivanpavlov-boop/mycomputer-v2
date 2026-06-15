@@ -14,7 +14,11 @@ use App\Services\Email\EmailMarketingService;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
+use Laravel\Sanctum\Sanctum;
+use Spatie\Permission\PermissionRegistrar;
 use Tests\TestCase;
 
 class AbandonedCartRecoveryTest extends TestCase
@@ -53,7 +57,7 @@ class AbandonedCartRecoveryTest extends TestCase
 
     public function test_authenticated_cart_becomes_abandoned_after_inactivity(): void
     {
-        $user = User::factory()->create(['email' => 'member@example.com']);
+        $user = $this->makeUser('member@example.com');
         $cart = $this->staleCart('member-cart', null, $user);
 
         app(EmailMarketingService::class)->detectAbandonedCarts();
@@ -202,11 +206,13 @@ class AbandonedCartRecoveryTest extends TestCase
 
     public function test_authenticated_user_cannot_access_another_users_cart(): void
     {
-        $owner = User::factory()->create();
-        $other = User::factory()->create();
+        $owner = $this->makeUser('cart-owner@example.test');
+        $other = $this->makeUser('cart-other@example.test');
         $this->staleCart('owned-cart', 'owner@example.com', $owner);
 
-        $this->actingAs($other, 'sanctum')
+        Sanctum::actingAs($other);
+
+        $this
             ->withHeader('X-Cart-Session', 'owned-cart')
             ->getJson('/api/v1/cart')
             ->assertForbidden();
@@ -226,15 +232,33 @@ class AbandonedCartRecoveryTest extends TestCase
     public function test_admin_resource_access_requires_marketing_permission(): void
     {
         $this->seed(RolesAndPermissionsSeeder::class);
-        $plain = User::factory()->create();
-        $marketer = User::factory()->create();
+        app(PermissionRegistrar::class)->forgetCachedPermissions();
+
+        $plain = $this->makeUser('plain-marketing-user@example.test');
+        $marketer = $this->makeUser('marketer@example.test');
         $marketer->givePermissionTo('manage marketing');
 
-        $this->actingAs($plain);
+        $this->actingAs($plain, 'web');
         $this->assertFalse(AbandonedCartRecordResource::canViewAny());
 
-        $this->actingAs($marketer);
+        Auth::guard('web')->logout();
+
+        $this->actingAs($marketer, 'web');
         $this->assertTrue(AbandonedCartRecordResource::canViewAny());
+    }
+
+    private function makeUser(string $email): User
+    {
+        return User::query()->create([
+            'first_name' => 'Test',
+            'last_name' => 'User',
+            'name' => 'Test User',
+            'email' => $email,
+            'phone' => '+359000000000',
+            'is_active' => true,
+            'email_verified_at' => now(),
+            'password' => Hash::make('password'),
+        ]);
     }
 
     private function staleCart(string $sessionId, ?string $email = null, ?User $user = null, mixed $updatedAt = null): Cart
