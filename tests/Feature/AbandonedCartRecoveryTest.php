@@ -16,6 +16,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 use Laravel\Sanctum\Sanctum;
 use Spatie\Permission\PermissionRegistrar;
 use Tests\TestCase;
@@ -56,7 +57,7 @@ class AbandonedCartRecoveryTest extends TestCase
 
     public function test_authenticated_cart_becomes_abandoned_after_inactivity(): void
     {
-        $user = User::factory()->create(['email' => 'member@example.com']);
+        $user = $this->makeUser('member@example.com');
         $cart = $this->staleCart('member-cart', null, $user);
 
         app(EmailMarketingService::class)->detectAbandonedCarts();
@@ -205,8 +206,8 @@ class AbandonedCartRecoveryTest extends TestCase
 
     public function test_authenticated_user_cannot_access_another_users_cart(): void
     {
-        $owner = User::factory()->create(['email' => 'cart-owner@example.test']);
-        $other = User::factory()->create(['email' => 'cart-other@example.test']);
+        $owner = $this->makeUser('cart-owner@example.test');
+        $other = $this->makeUser('cart-other@example.test');
         $this->staleCart('owned-cart', 'owner@example.com', $owner);
 
         Sanctum::actingAs($other);
@@ -233,8 +234,8 @@ class AbandonedCartRecoveryTest extends TestCase
         $this->seed(RolesAndPermissionsSeeder::class);
         app(PermissionRegistrar::class)->forgetCachedPermissions();
 
-        $plain = User::factory()->create(['email' => 'plain-marketing-user@example.test']);
-        $marketer = User::factory()->create(['email' => 'marketer@example.test']);
+        $plain = $this->makeUser('plain-marketing-user@example.test');
+        $marketer = $this->makeUser('marketer@example.test');
         $marketer->givePermissionTo('manage marketing');
 
         $this->actingAs($plain, 'web');
@@ -244,6 +245,20 @@ class AbandonedCartRecoveryTest extends TestCase
 
         $this->actingAs($marketer, 'web');
         $this->assertTrue(AbandonedCartRecordResource::canViewAny());
+    }
+
+    private function makeUser(string $email): User
+    {
+        return User::query()->create([
+            'first_name' => 'Test',
+            'last_name' => 'User',
+            'name' => 'Test User',
+            'email' => $email,
+            'phone' => '+359000000000',
+            'is_active' => true,
+            'email_verified_at' => now(),
+            'password' => Hash::make('password'),
+        ]);
     }
 
     private function staleCart(string $sessionId, ?string $email = null, ?User $user = null, mixed $updatedAt = null): Cart
