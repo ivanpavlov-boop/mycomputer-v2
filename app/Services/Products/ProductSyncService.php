@@ -2,13 +2,16 @@
 
 namespace App\Services\Products;
 
+use App\Models\Brand;
+use App\Models\Category;
 use App\Models\Product;
+use App\Models\ProductImage;
 use App\Models\ProductSupplierOffer;
 use App\Models\ProductSyncLog;
 use App\Models\SupplierProduct;
-use App\Services\Availability\AvailabilityStatusMapper;
 use App\Services\Attributes\CatalogAttributeWriter;
 use App\Services\Attributes\SupplierAttributeExtractionService;
+use App\Services\Availability\AvailabilityStatusMapper;
 use Illuminate\Support\Str;
 
 class ProductSyncService
@@ -57,6 +60,8 @@ class ProductSyncService
 
         $offer = $this->upsertSupplierOffer($product, $supplierProduct);
         $selectedOffer = $this->selectOffer($product, $strategy);
+        $brand = $this->resolveBrand($supplierProduct->brand_name);
+        $category = $this->resolveCategory($supplierProduct->category_name);
 
         $availability = $this->availabilityMapper->mapWithFallback(
             'supplier',
@@ -68,6 +73,8 @@ class ProductSyncService
         $updates = [
             'supplier_id' => $selectedOffer->supplier_id,
             'supplier_sku' => $selectedOffer->supplier_sku,
+            'brand_id' => $product->brand_id ?: $brand?->id,
+            'category_id' => $product->category_id ?: $category?->id,
             'purchase_price' => $selectedOffer->price,
             'price' => $selectedOffer->price ?? $product->price,
             'quantity' => $selectedOffer->quantity,
@@ -99,6 +106,7 @@ class ProductSyncService
 
         $supplierProduct = $this->extractRawAttributesIfNeeded($supplierProduct->fresh(['attributes', 'supplier']));
         $syncedAttributes = $this->syncAttributes($supplierProduct, $product);
+        $syncedImages = $this->syncImages($supplierProduct, $product);
 
         return ProductSyncLog::query()->create([
             'product_id' => $product->id,
@@ -118,6 +126,7 @@ class ProductSyncService
                 'availability_status_id' => $availability?->id,
                 'external_availability_status' => $supplierProduct->external_availability_status,
                 'synced_attributes' => $syncedAttributes,
+                'synced_images' => $syncedImages,
             ],
         ]);
     }
@@ -165,8 +174,13 @@ class ProductSyncService
             $supplierProduct->quantity,
         );
 
+        $brand = $this->resolveBrand($supplierProduct->brand_name);
+        $category = $this->resolveCategory($supplierProduct->category_name);
+
         return Product::query()->create([
             'supplier_id' => $supplierProduct->supplier_id,
+            'brand_id' => $brand?->id,
+            'category_id' => $category?->id,
             'supplier_sku' => $supplierProduct->supplier_sku,
             'sku' => $this->uniqueSku($sku),
             'ean' => $supplierProduct->ean,
@@ -268,7 +282,7 @@ class ProductSyncService
         $query = SupplierProduct::query()
             ->where('id', '!=', $supplierProduct->id)
             ->where('supplier_id', $supplierProduct->supplier_id)
-            ->whereIn('status', ['new', 'synced']);
+            ->where('status', 'new');
 
         $query->where(function ($nested) use ($supplierProduct): void {
             foreach (array_filter([
@@ -349,5 +363,108 @@ class ProductSyncService
         }
 
         return $candidate;
+    }
+
+    protected function resolveBrand(?string $name): ?Brand
+    {
+        if (blank($name)) {
+            return null;
+        }
+
+        return Brand::query()->firstOrCreate(
+            ['slug' => Str::slug($name)],
+            [
+                'name' => trim($name),
+                'is_active' => true,
+                'sort_order' => 0,
+            ],
+        );
+    }
+
+    protected function resolveCategory(?string $categoryPath): ?Category
+    {
+        if (blank($categoryPath)) {
+            return null;
+        }
+
+        $parent = null;
+        $category = null;
+
+        foreach (preg_split('/\s*(?:>|\/|\|)\s*/', trim($categoryPath)) ?: [] as $segment) {
+            if (blank($segment)) {
+                continue;
+            }
+
+            $slug = Str::slug($segment);
+            $category = Category::query()->where('slug', $slug)->first();
+
+            if (! $category) {
+                $category = Category::query()->create([
+                    'parent_id' => $parent?->id,
+                    'slug' => $slug,
+                    'name' => trim($segment),
+                    'is_active' => true,
+                    'sort_order' => 0,
+                ]);
+            }
+
+            $parent = $category;
+        }
+
+        return $category;
+    }
+
+    protected function syncImages(SupplierProduct $supplierProduct, Product $product): int
+    {
+        $urls = $this->extractImageUrls($supplierProduct->raw_data ?? []);
+        $count = 0;
+
+        foreach ($urls as $index => $url) {
+            $image = ProductImage::query()->firstOrCreate(
+                ['product_id' => $product->id, 'path' => $url],
+                [
+                    'alt_text' => $product->name,
+                    'sort_order' => $index,
+                    'is_primary' => ! $product->images()->where('is_primary', true)->exists() && $index === 0,
+                ],
+            );
+
+            if ($image->wasRecentlyCreated) {
+                $count++;
+            }
+        }
+
+        return $count;
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    protected function extractImageUrls(array $payload): array
+    {
+        $urls = [];
+        $keys = ['image', 'Image', 'image_url', 'ImageURL', 'ImageUrl', 'Picture', 'picture', 'url', 'URL'];
+
+        foreach ($payload as $key => $value) {
+            if (is_array($value)) {
+                foreach ($this->extractImageUrls($value) as $url) {
+                    $urls[] = $url;
+                }
+
+                continue;
+            }
+
+            if (! in_array((string) $key, $keys, true) || blank($value)) {
+                continue;
+            }
+
+            $url = trim((string) $value);
+
+            if (Str::startsWith($url, ['http://', 'https://'])) {
+                $urls[] = $url;
+            }
+        }
+
+        return array_values(array_unique($urls));
     }
 }

@@ -8,9 +8,10 @@ use App\Models\ImportJob;
 use App\Models\SupplierFeed;
 use App\Models\SupplierProduct;
 use App\Models\XmlMappingTemplate;
-use App\Services\Availability\AvailabilityStatusMapper;
 use App\Services\Attributes\SupplierAttributeExtractionService;
+use App\Services\Availability\AvailabilityStatusMapper;
 use App\Services\Security\SsrfProtectionService;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Str;
 use SimpleXMLElement;
 use Throwable;
@@ -83,27 +84,40 @@ class XmlImportEngine
                     isset($mapped['quantity']) ? (int) $mapped['quantity'] : null,
                 );
 
-                $supplierProduct = SupplierProduct::query()->create([
-                    'supplier_id' => $job->supplier_id,
-                    'supplier_feed_id' => $job->supplier_feed_id,
-                    'supplier_sku' => $mapped['supplier_sku'] ?? null,
-                    'ean' => $mapped['ean'] ?? null,
-                    'mpn' => $mapped['mpn'] ?? null,
-                    'name' => $mapped['name'] ?? null,
-                    'brand_name' => $mapped['brand_name'] ?? null,
-                    'category_name' => $mapped['category_name'] ?? null,
-                    'price' => $mapped['price'] ?? null,
-                    'quantity' => $mapped['quantity'] ?? null,
-                    'external_availability_status' => $mapped['external_availability_status'] ?? $mapped['stock_status'] ?? null,
-                    'external_availability_label' => $mapped['external_availability_label'] ?? null,
-                    'availability_status_id' => $availability?->id,
-                    'currency' => $mapped['currency'] ?? 'BGN',
-                    'raw_data' => $mapped['_raw'],
-                    'payload_hash' => sha1(json_encode($mapped['_raw'], JSON_THROW_ON_ERROR)),
-                    'received_at' => now(),
-                    'status' => 'new',
-                    'mapping_notes' => 'Imported from XML feed into staging. Catalog products are not updated directly.',
-                ]);
+                $rawData = $mapped['_raw'];
+                $mappedData = Arr::except($mapped, ['_raw']);
+
+                if ($mappedData !== []) {
+                    $rawData['_mapped'] = $mappedData;
+                }
+
+                $supplierProduct = SupplierProduct::query()->updateOrCreate(
+                    $this->supplierProductLookup($job, $mapped),
+                    [
+                        'supplier_id' => $job->supplier_id,
+                        'supplier_feed_id' => $job->supplier_feed_id,
+                        'supplier_sku' => $mapped['supplier_sku'] ?? null,
+                        'ean' => $mapped['ean'] ?? null,
+                        'mpn' => $mapped['mpn'] ?? null,
+                        'name' => $mapped['name'] ?? null,
+                        'brand_name' => $mapped['brand_name'] ?? null,
+                        'category_name' => $mapped['category_name'] ?? null,
+                        'price' => $mapped['price'] ?? null,
+                        'quantity' => $mapped['quantity'] ?? null,
+                        'external_availability_status' => $mapped['external_availability_status'] ?? $mapped['stock_status'] ?? null,
+                        'external_availability_label' => $mapped['external_availability_label'] ?? null,
+                        'availability_status_id' => $availability?->id,
+                        'currency' => $mapped['currency'] ?? 'BGN',
+                        'raw_data' => $rawData,
+                        'payload_hash' => sha1(json_encode($mapped['_raw'], JSON_THROW_ON_ERROR)),
+                        'received_at' => now(),
+                        'synced_at' => null,
+                        'status' => 'new',
+                        'mapping_notes' => 'Imported from XML feed into staging. Catalog products are not updated directly.',
+                    ],
+                );
+
+                $supplierProduct->attributes()->delete();
 
                 $this->attributeExtraction->stage(
                     $supplierProduct,
@@ -123,7 +137,7 @@ class XmlImportEngine
             $feed->update([
                 'last_sync_at' => now(),
                 'last_error' => $job->failed_rows > 0 ? "{$job->failed_rows} rows failed validation." : null,
-                'status' => $job->failed_rows > 0 ? 'failed' : 'active',
+                'status' => 'active',
             ]);
 
             $this->log($job, 'finished', $job->failed_rows > 0 ? 'warning' : 'info', 'XML import finished.', [
@@ -212,13 +226,31 @@ class XmlImportEngine
             $mapped[$targetField] = $this->readValue($row, $xmlPath);
         }
 
+        foreach (['price', 'quantity'] as $numericField) {
+            if (array_key_exists($numericField, $mapped)) {
+                $mapped[$numericField] = $this->normalizeNumericValue($mapped[$numericField]);
+            }
+        }
+
         $mapped['_raw'] = json_decode(json_encode($row, JSON_THROW_ON_ERROR), true, 512, JSON_THROW_ON_ERROR);
 
         return $mapped;
     }
 
-    protected function readValue(SimpleXMLElement $row, ?string $xmlPath): ?string
+    protected function readValue(SimpleXMLElement $row, mixed $xmlPath): ?string
     {
+        if (is_array($xmlPath)) {
+            foreach ($xmlPath as $path) {
+                $value = $this->readValue($row, $path);
+
+                if (filled($value)) {
+                    return $value;
+                }
+            }
+
+            return null;
+        }
+
         if (! $xmlPath) {
             return null;
         }
@@ -234,6 +266,45 @@ class XmlImportEngine
         }
 
         return trim((string) $matches[0]) ?: null;
+    }
+
+    protected function normalizeNumericValue(mixed $value): mixed
+    {
+        if (blank($value) || is_numeric($value)) {
+            return $value;
+        }
+
+        $value = trim(str_replace([' ', "\xc2\xa0"], '', (string) $value));
+
+        if (substr_count($value, ',') === 1 && substr_count($value, '.') === 0) {
+            $value = str_replace(',', '.', $value);
+        } else {
+            $value = str_replace(',', '', $value);
+        }
+
+        return is_numeric($value) ? $value : $value;
+    }
+
+    /**
+     * @param  array<string, mixed>  $mapped
+     * @return array<string, mixed>
+     */
+    protected function supplierProductLookup(ImportJob $job, array $mapped): array
+    {
+        $lookup = [
+            'supplier_id' => $job->supplier_id,
+            'supplier_feed_id' => $job->supplier_feed_id,
+        ];
+
+        foreach (['supplier_sku', 'ean', 'mpn'] as $identifier) {
+            if (filled($mapped[$identifier] ?? null)) {
+                return $lookup + [$identifier => $mapped[$identifier]];
+            }
+        }
+
+        return $lookup + [
+            'payload_hash' => sha1(json_encode($mapped['_raw'] ?? $mapped, JSON_THROW_ON_ERROR)),
+        ];
     }
 
     /**
