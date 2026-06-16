@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\Products\Tables;
 
 use App\Models\AvailabilityStatus;
+use App\Models\Product;
 use Filament\Actions\BulkAction;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
@@ -13,18 +14,30 @@ use Filament\Actions\RestoreAction;
 use Filament\Actions\RestoreBulkAction;
 use Filament\Forms\Components\Select;
 use Filament\Tables\Columns\IconColumn;
+use Filament\Tables\Columns\ImageColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Filters\TernaryFilter;
 use Filament\Tables\Filters\TrashedFilter;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 
 class ProductsTable
 {
     public static function configure(Table $table): Table
     {
         return $table
+            ->modifyQueryUsing(fn (Builder $query): Builder => $query->with('thumbnailImage'))
             ->columns([
+                ImageColumn::make('thumbnail')
+                    ->label('Image')
+                    ->state(fn (Product $record): ?string => $record->thumbnailUrl())
+                    ->defaultImageUrl(self::placeholderImageUrl())
+                    ->size(56)
+                    ->square()
+                    ->url(fn (Product $record): ?string => $record->thumbnailUrl())
+                    ->openUrlInNewTab()
+                    ->toggleable(),
                 TextColumn::make('sku')->searchable()->sortable(),
                 TextColumn::make('name')->searchable()->sortable()->limit(45),
                 TextColumn::make('category.name')->sortable()->toggleable(),
@@ -85,5 +98,12 @@ class ProductsTable
                     ForceDeleteBulkAction::make(),
                 ]),
             ]);
+    }
+
+    protected static function placeholderImageUrl(): string
+    {
+        return 'data:image/svg+xml;utf8,'.rawurlencode(
+            '<svg xmlns="http://www.w3.org/2000/svg" width="56" height="56" viewBox="0 0 56 56"><rect width="56" height="56" rx="6" fill="#f3f4f6"/><path d="M17 37h22l-7-9-5 6-3-4-7 7Z" fill="#9ca3af"/><circle cx="21" cy="21" r="4" fill="#d1d5db"/></svg>'
+        );
     }
 }

@@ -2,6 +2,8 @@
 
 namespace Tests\Feature;
 
+use App\Models\Product;
+use App\Models\ProductImage;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -33,5 +35,28 @@ class CatalogApiTest extends TestCase
             'supplier_sku' => 'SUP-MC-LAP-001',
             'status' => 'new',
         ]);
+    }
+
+    public function test_product_thumbnail_url_prefers_primary_image(): void
+    {
+        $product = Product::factory()->create();
+        ProductImage::query()->create([
+            'product_id' => $product->id,
+            'path' => 'https://example.test/secondary.jpg',
+            'alt_text' => 'Secondary',
+            'sort_order' => 1,
+            'is_primary' => false,
+        ]);
+        ProductImage::query()->create([
+            'product_id' => $product->id,
+            'path' => 'https://example.test/primary.jpg',
+            'alt_text' => 'Primary',
+            'sort_order' => 2,
+            'is_primary' => true,
+        ]);
+
+        $product->load('thumbnailImage');
+
+        $this->assertSame('https://example.test/primary.jpg', $product->thumbnailUrl());
     }
 }

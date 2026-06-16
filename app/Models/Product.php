@@ -9,7 +9,10 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Laravel\Scout\Searchable;
 
 class Product extends Model
@@ -238,6 +241,30 @@ class Product extends Model
     public function images(): HasMany
     {
         return $this->hasMany(ProductImage::class)->orderBy('sort_order');
+    }
+
+    public function thumbnailImage(): HasOne
+    {
+        return $this->hasOne(ProductImage::class)->ofMany([
+            'is_primary' => 'max',
+            'sort_order' => 'min',
+            'id' => 'min',
+        ]);
+    }
+
+    public function thumbnailUrl(): ?string
+    {
+        $path = $this->thumbnailImage?->path;
+
+        if (blank($path)) {
+            return null;
+        }
+
+        if (Str::startsWith($path, ['http://', 'https://', 'data:'])) {
+            return $path;
+        }
+
+        return Storage::url($path);
     }
 
     public function attributes(): HasMany
