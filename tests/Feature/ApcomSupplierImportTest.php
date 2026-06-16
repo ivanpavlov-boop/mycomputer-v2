@@ -81,12 +81,14 @@ class ApcomSupplierImportTest extends TestCase
         $this->assertSame('195949837869', $supplierProduct->ean);
         $this->assertSame('MW103ZE/A', $supplierProduct->mpn);
         $this->assertSame('Apple', $supplierProduct->brand_name);
-        $this->assertSame('Apcom,Mac > MacBook Air > MacBook Air,EOL Products > EOL Products', $supplierProduct->category_name);
+        $this->assertSame('Mac > MacBook Air > MacBook Air', $supplierProduct->category_name);
         $this->assertSame('855.62', $supplierProduct->price);
         $this->assertSame(7, $supplierProduct->quantity);
         $this->assertNull($supplierProduct->external_availability_status);
         $this->assertSame($incoming->id, $supplierProduct->availability_status_id);
         $this->assertSame('EUR', $supplierProduct->currency);
+        $this->assertSame('Apcom,Mac > MacBook Air > MacBook Air,EOL Products > EOL Products', $supplierProduct->raw_data['_mapped']['category_name']);
+        $this->assertSame('Apcom,Mac > MacBook Air > MacBook Air,EOL Products > EOL Products', $supplierProduct->raw_data['category']);
         $this->assertSame('https://cdn.example.test/apcom/macbook-01.jpg', $supplierProduct->raw_data['_mapped']['image_url']);
 
         $zeroStockProduct = SupplierProduct::query()->where('supplier_sku', 'ZERO-STOCK-001')->firstOrFail();
