@@ -34,6 +34,9 @@ class Product extends Model
         'description',
         'weight',
         'purchase_price',
+        'supplier_price_raw',
+        'recommended_price',
+        'final_selling_price',
         'price',
         'promo_price',
         'promo_start',
@@ -68,6 +71,9 @@ class Product extends Model
         return [
             'weight' => 'decimal:3',
             'purchase_price' => 'decimal:2',
+            'supplier_price_raw' => 'decimal:2',
+            'recommended_price' => 'decimal:2',
+            'final_selling_price' => 'decimal:2',
             'price' => 'decimal:2',
             'promo_price' => 'decimal:2',
             'promo_start' => 'datetime',
@@ -200,6 +206,11 @@ class Product extends Model
     public function supplierOffers(): HasMany
     {
         return $this->hasMany(ProductSupplierOffer::class);
+    }
+
+    public function pricingRules(): HasMany
+    {
+        return $this->hasMany(PricingRule::class);
     }
 
     public function cartItems(): HasMany

@@ -29,6 +29,9 @@ class SupplierFactory extends Factory
             'website' => $this->faker->url(),
             'priority' => $this->faker->numberBetween(1, 100),
             'sync_strategy' => 'lowest_price',
+            'msrp_strategy' => 'margin_only',
+            'vat_mode' => 'price_excludes_vat',
+            'vat_rate' => null,
             'status' => 'active',
         ];
     }

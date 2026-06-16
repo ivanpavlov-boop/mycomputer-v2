@@ -12,6 +12,7 @@ use App\Models\SupplierProduct;
 use App\Services\Attributes\CatalogAttributeWriter;
 use App\Services\Attributes\SupplierAttributeExtractionService;
 use App\Services\Availability\AvailabilityStatusMapper;
+use App\Services\Pricing\PricingEngine;
 use Illuminate\Support\Str;
 
 class ProductSyncService
@@ -20,6 +21,7 @@ class ProductSyncService
         private readonly AvailabilityStatusMapper $availabilityMapper,
         private readonly CatalogAttributeWriter $catalogAttributeWriter,
         private readonly SupplierAttributeExtractionService $attributeExtraction,
+        private readonly PricingEngine $pricingEngine,
     ) {}
 
     public function sync(SupplierProduct $supplierProduct, ?string $strategy = null): ProductSyncLog
@@ -62,6 +64,8 @@ class ProductSyncService
         $selectedOffer = $this->selectOffer($product, $strategy);
         $brand = $this->resolveBrand($supplierProduct->brand_name);
         $category = $this->resolveCategory($supplierProduct->category_name);
+        $selectedSupplierProduct = $selectedOffer->supplierProduct ?: $supplierProduct;
+        $pricing = $this->pricingEngine->calculateForSupplierProduct($selectedSupplierProduct, $product, $category);
 
         $availability = $this->availabilityMapper->mapWithFallback(
             'supplier',
@@ -75,8 +79,11 @@ class ProductSyncService
             'supplier_sku' => $selectedOffer->supplier_sku,
             'brand_id' => $product->brand_id ?: $brand?->id,
             'category_id' => $product->category_id ?: $category?->id,
-            'purchase_price' => $selectedOffer->price,
-            'price' => $selectedOffer->price ?? $product->price,
+            'purchase_price' => $pricing['purchase_price'],
+            'supplier_price_raw' => $pricing['supplier_price_raw'],
+            'recommended_price' => $pricing['recommended_price'],
+            'final_selling_price' => $pricing['final_selling_price'],
+            'price' => $pricing['final_selling_price'],
             'quantity' => $selectedOffer->quantity,
             'availability_status_id' => $product->manual_override ? $product->availability_status_id : $availability?->id,
             'stock_status' => $product->manual_override ? $product->stock_status : ($availability?->code ?? ($selectedOffer->quantity > 0 ? 'in_stock' : 'out_of_stock')),
@@ -86,6 +93,7 @@ class ProductSyncService
                 'sync_strategy' => $strategy,
                 'selected_supplier_offer_id' => $selectedOffer->id,
                 'last_supplier_product_id' => $supplierProduct->id,
+                'pricing' => $pricing,
             ],
         ];
 
@@ -190,6 +198,9 @@ class ProductSyncService
             'short_description' => null,
             'description' => null,
             'purchase_price' => $supplierProduct->price,
+            'supplier_price_raw' => $supplierProduct->price,
+            'recommended_price' => $supplierProduct->recommended_price,
+            'final_selling_price' => $supplierProduct->price ?? 0,
             'price' => $supplierProduct->price ?? 0,
             'quantity' => $supplierProduct->quantity ?? 0,
             'reserved_quantity' => 0,

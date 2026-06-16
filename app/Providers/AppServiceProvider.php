@@ -36,6 +36,7 @@ use App\Models\Order;
 use App\Models\PcBuild;
 use App\Models\PcBuildItem;
 use App\Models\PcCompatibilityRule;
+use App\Models\PricingRule;
 use App\Models\Product;
 use App\Models\ProductAttribute;
 use App\Models\ProductCompareItem;
@@ -154,6 +155,7 @@ class AppServiceProvider extends ServiceProvider
         Gate::policy(ProductReview::class, ProductPolicy::class);
         Gate::policy(ProductReviewVote::class, ProductPolicy::class);
         Gate::policy(ProductReviewReport::class, ProductPolicy::class);
+        Gate::policy(PricingRule::class, ProductPolicy::class);
         Gate::policy(Supplier::class, SupplierPolicy::class);
         Gate::policy(SupplierProduct::class, SupplierPolicy::class);
         Gate::policy(SupplierFeed::class, SupplierFeedPolicy::class);

@@ -22,6 +22,9 @@ class Supplier extends Model
         'notes',
         'priority',
         'sync_strategy',
+        'msrp_strategy',
+        'vat_mode',
+        'vat_rate',
         'import_enabled',
         'schedule_enabled',
         'schedule_type',
@@ -47,6 +50,7 @@ class Supplier extends Model
             'next_import_at' => 'datetime',
             'allow_destructive_sync' => 'boolean',
             'last_import_notification_at' => 'datetime',
+            'vat_rate' => 'decimal:2',
         ];
     }
 
@@ -93,5 +97,10 @@ class Supplier extends Model
     public function importRuns(): HasMany
     {
         return $this->hasMany(SupplierImportRun::class);
+    }
+
+    public function pricingRules(): HasMany
+    {
+        return $this->hasMany(PricingRule::class);
     }
 }
