@@ -22,15 +22,23 @@ class PricingRuleForm
                         Select::make('scope_type')
                             ->options([
                                 PricingRule::SCOPE_PRODUCT => 'Product',
+                                PricingRule::SCOPE_CATEGORY_BRAND_SUPPLIER => 'Category + Brand + Supplier',
+                                PricingRule::SCOPE_CATEGORY_BRAND => 'Category + Brand',
+                                PricingRule::SCOPE_CATEGORY_SUPPLIER => 'Category + Supplier',
                                 PricingRule::SCOPE_CATEGORY => 'Category',
+                                PricingRule::SCOPE_BRAND => 'Brand',
                                 PricingRule::SCOPE_SUPPLIER => 'Supplier',
+                                PricingRule::SCOPE_PRICE_RANGE => 'Price Range',
                                 PricingRule::SCOPE_GLOBAL => 'Global',
                             ])
                             ->required()
                             ->default(PricingRule::SCOPE_GLOBAL),
                         Select::make('product_id')->relationship('product', 'name')->searchable()->preload(),
                         Select::make('category_id')->relationship('category', 'name')->searchable()->preload(),
+                        Select::make('brand_id')->relationship('brand', 'name')->searchable()->preload(),
                         Select::make('supplier_id')->relationship('supplier', 'company_name')->searchable()->preload(),
+                        TextInput::make('price_min')->numeric()->nullable(),
+                        TextInput::make('price_max')->numeric()->nullable(),
                         Toggle::make('is_active')->default(true),
                         TextInput::make('sort_order')->numeric()->default(0),
                     ]),

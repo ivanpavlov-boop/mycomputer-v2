@@ -14,7 +14,10 @@ return new class extends Migration
             $table->string('scope_type')->index();
             $table->foreignId('product_id')->nullable()->constrained()->cascadeOnDelete();
             $table->foreignId('category_id')->nullable()->constrained()->cascadeOnDelete();
+            $table->foreignId('brand_id')->nullable()->constrained()->cascadeOnDelete();
             $table->foreignId('supplier_id')->nullable()->constrained()->cascadeOnDelete();
+            $table->decimal('price_min', 12, 2)->nullable();
+            $table->decimal('price_max', 12, 2)->nullable();
             $table->string('margin_type')->default('percentage')->index();
             $table->decimal('margin_value', 12, 4)->default(0);
             $table->decimal('minimum_margin', 12, 2)->nullable();
@@ -28,7 +31,9 @@ return new class extends Migration
             $table->index(['scope_type', 'is_active']);
             $table->index(['product_id', 'is_active']);
             $table->index(['category_id', 'is_active']);
+            $table->index(['brand_id', 'is_active']);
             $table->index(['supplier_id', 'is_active']);
+            $table->index(['price_min', 'price_max']);
         });
     }
 

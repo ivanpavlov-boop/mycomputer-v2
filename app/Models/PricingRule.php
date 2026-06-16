@@ -10,9 +10,19 @@ class PricingRule extends Model
 {
     public const SCOPE_PRODUCT = 'product';
 
+    public const SCOPE_CATEGORY_BRAND_SUPPLIER = 'category_brand_supplier';
+
+    public const SCOPE_CATEGORY_BRAND = 'category_brand';
+
+    public const SCOPE_CATEGORY_SUPPLIER = 'category_supplier';
+
     public const SCOPE_CATEGORY = 'category';
 
+    public const SCOPE_BRAND = 'brand';
+
     public const SCOPE_SUPPLIER = 'supplier';
+
+    public const SCOPE_PRICE_RANGE = 'price_range';
 
     public const SCOPE_GLOBAL = 'global';
 
@@ -45,7 +55,10 @@ class PricingRule extends Model
         'scope_type',
         'product_id',
         'category_id',
+        'brand_id',
         'supplier_id',
+        'price_min',
+        'price_max',
         'margin_type',
         'margin_value',
         'minimum_margin',
@@ -60,6 +73,8 @@ class PricingRule extends Model
     {
         return [
             'margin_value' => 'decimal:4',
+            'price_min' => 'decimal:2',
+            'price_max' => 'decimal:2',
             'minimum_margin' => 'decimal:2',
             'minimum_final_price' => 'decimal:2',
             'is_active' => 'boolean',
@@ -79,6 +94,11 @@ class PricingRule extends Model
     public function category(): BelongsTo
     {
         return $this->belongsTo(Category::class);
+    }
+
+    public function brand(): BelongsTo
+    {
+        return $this->belongsTo(Brand::class);
     }
 
     public function supplier(): BelongsTo

@@ -20,7 +20,10 @@ class PricingRulesTable
                 TextColumn::make('scope_type')->badge()->sortable(),
                 TextColumn::make('product.name')->toggleable(),
                 TextColumn::make('category.name')->toggleable(),
+                TextColumn::make('brand.name')->toggleable(),
                 TextColumn::make('supplier.company_name')->toggleable(),
+                TextColumn::make('price_min')->sortable()->toggleable(),
+                TextColumn::make('price_max')->sortable()->toggleable(),
                 TextColumn::make('margin_type')->badge()->sortable(),
                 TextColumn::make('margin_value')->sortable(),
                 TextColumn::make('minimum_margin')->sortable()->toggleable(),
@@ -31,8 +34,13 @@ class PricingRulesTable
             ->filters([
                 SelectFilter::make('scope_type')->options([
                     'product' => 'Product',
+                    'category_brand_supplier' => 'Category + Brand + Supplier',
+                    'category_brand' => 'Category + Brand',
+                    'category_supplier' => 'Category + Supplier',
                     'category' => 'Category',
+                    'brand' => 'Brand',
                     'supplier' => 'Supplier',
+                    'price_range' => 'Price Range',
                     'global' => 'Global',
                 ]),
                 SelectFilter::make('margin_type')->options([

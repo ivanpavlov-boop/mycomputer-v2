@@ -21,8 +21,8 @@ class PricingEngine
         $category ??= $product?->category;
         $rawPrice = (float) ($supplierProduct->price ?? $supplierProduct->supplier_price_raw ?? 0);
         $recommendedPrice = $supplierProduct->recommended_price !== null ? (float) $supplierProduct->recommended_price : null;
-        $rule = $this->matchingRule($product, $category, $supplier);
         $normalizedCost = $this->normalizedPurchaseCost($rawPrice, $supplier);
+        $rule = $this->matchingRule($product, $category, $supplier, $normalizedCost);
         $marginPrice = $this->marginPrice($normalizedCost, $rule);
         $finalPrice = $this->applyRecommendedPriceStrategy($marginPrice, $normalizedCost, $recommendedPrice, $rule, $supplier);
         $finalPrice = $this->applyMinimums($finalPrice, $normalizedCost, $rule);
@@ -44,8 +44,10 @@ class PricingEngine
         ];
     }
 
-    public function matchingRule(?Product $product = null, ?Category $category = null, ?Supplier $supplier = null): ?PricingRule
+    public function matchingRule(?Product $product = null, ?Category $category = null, ?Supplier $supplier = null, ?float $normalizedCost = null): ?PricingRule
     {
+        $brandId = $product?->brand_id;
+
         if ($product?->id) {
             $rule = PricingRule::query()
                 ->active()
@@ -59,11 +61,61 @@ class PricingEngine
             }
         }
 
+        if ($brandId && $supplier?->id) {
+            $rule = $this->matchingCategoryRule(
+                PricingRule::SCOPE_CATEGORY_BRAND_SUPPLIER,
+                $category,
+                brandId: $brandId,
+                supplierId: $supplier->id,
+            );
+
+            if ($rule) {
+                return $rule;
+            }
+        }
+
+        if ($brandId) {
+            $rule = $this->matchingCategoryRule(
+                PricingRule::SCOPE_CATEGORY_BRAND,
+                $category,
+                brandId: $brandId,
+            );
+
+            if ($rule) {
+                return $rule;
+            }
+        }
+
+        if ($supplier?->id) {
+            $rule = $this->matchingCategoryRule(
+                PricingRule::SCOPE_CATEGORY_SUPPLIER,
+                $category,
+                supplierId: $supplier->id,
+            );
+
+            if ($rule) {
+                return $rule;
+            }
+        }
+
         foreach ($this->categoryHierarchy($category) as $categoryId) {
             $rule = PricingRule::query()
                 ->active()
                 ->where('scope_type', PricingRule::SCOPE_CATEGORY)
                 ->where('category_id', $categoryId)
+                ->orderBy('sort_order')
+                ->first();
+
+            if ($rule) {
+                return $rule;
+            }
+        }
+
+        if ($brandId) {
+            $rule = PricingRule::query()
+                ->active()
+                ->where('scope_type', PricingRule::SCOPE_BRAND)
+                ->where('brand_id', $brandId)
                 ->orderBy('sort_order')
                 ->first();
 
@@ -85,11 +137,55 @@ class PricingEngine
             }
         }
 
+        if ($normalizedCost !== null) {
+            $rule = PricingRule::query()
+                ->active()
+                ->where('scope_type', PricingRule::SCOPE_PRICE_RANGE)
+                ->where(function ($query) use ($normalizedCost): void {
+                    $query->whereNull('price_min')->orWhere('price_min', '<=', $normalizedCost);
+                })
+                ->where(function ($query) use ($normalizedCost): void {
+                    $query->whereNull('price_max')->orWhere('price_max', '>=', $normalizedCost);
+                })
+                ->orderBy('sort_order')
+                ->first();
+
+            if ($rule) {
+                return $rule;
+            }
+        }
+
         return PricingRule::query()
             ->active()
             ->where('scope_type', PricingRule::SCOPE_GLOBAL)
             ->orderBy('sort_order')
             ->first();
+    }
+
+    protected function matchingCategoryRule(string $scope, ?Category $category, ?int $brandId = null, ?int $supplierId = null): ?PricingRule
+    {
+        foreach ($this->categoryHierarchy($category) as $categoryId) {
+            $query = PricingRule::query()
+                ->active()
+                ->where('scope_type', $scope)
+                ->where('category_id', $categoryId);
+
+            if ($brandId !== null) {
+                $query->where('brand_id', $brandId);
+            }
+
+            if ($supplierId !== null) {
+                $query->where('supplier_id', $supplierId);
+            }
+
+            $rule = $query->orderBy('sort_order')->first();
+
+            if ($rule) {
+                return $rule;
+            }
+        }
+
+        return null;
     }
 
     protected function normalizedPurchaseCost(float $rawPrice, ?Supplier $supplier): float

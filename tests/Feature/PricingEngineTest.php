@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\Brand;
 use App\Models\Category;
 use App\Models\PricingRule;
 use App\Models\Product;
@@ -19,7 +20,9 @@ class PricingEngineTest extends TestCase
     {
         $supplier = $this->supplier();
         $category = Category::factory()->create();
+        $brand = Brand::factory()->create();
         $product = Product::factory()->create([
+            'brand_id' => $brand->id,
             'category_id' => $category->id,
             'supplier_id' => $supplier->id,
         ]);
@@ -27,6 +30,11 @@ class PricingEngineTest extends TestCase
         $this->pricingRule(PricingRule::SCOPE_GLOBAL, 5);
         $this->pricingRule(PricingRule::SCOPE_SUPPLIER, 10, ['supplier_id' => $supplier->id]);
         $this->pricingRule(PricingRule::SCOPE_CATEGORY, 12, ['category_id' => $category->id]);
+        $this->pricingRule(PricingRule::SCOPE_CATEGORY_BRAND_SUPPLIER, 30, [
+            'category_id' => $category->id,
+            'brand_id' => $brand->id,
+            'supplier_id' => $supplier->id,
+        ]);
         $this->pricingRule(PricingRule::SCOPE_PRODUCT, 20, ['product_id' => $product->id]);
 
         $result = app(PricingEngine::class)->calculateForSupplierProduct(
@@ -66,6 +74,10 @@ class PricingEngineTest extends TestCase
         $supplier = $this->supplier();
 
         $this->pricingRule(PricingRule::SCOPE_GLOBAL, 5);
+        $this->pricingRule(PricingRule::SCOPE_PRICE_RANGE, 30, [
+            'price_min' => 50,
+            'price_max' => 150,
+        ]);
         $this->pricingRule(PricingRule::SCOPE_SUPPLIER, 15, ['supplier_id' => $supplier->id]);
 
         $result = app(PricingEngine::class)->calculateForSupplierProduct(
@@ -74,6 +86,129 @@ class PricingEngineTest extends TestCase
 
         $this->assertSame(PricingRule::SCOPE_SUPPLIER, $result['rule_scope']);
         $this->assertSame(115.0, $result['final_selling_price']);
+    }
+
+    public function test_category_brand_rule_overrides_inherited_category_rule_only_for_matching_brand(): void
+    {
+        $supplier = $this->supplier();
+        $videoCards = Category::factory()->create(['name' => 'Video Cards', 'slug' => 'video-cards']);
+        $rtxCards = Category::factory()->create([
+            'parent_id' => $videoCards->id,
+            'name' => 'RTX Video Cards',
+            'slug' => 'rtx-video-cards',
+        ]);
+        $asus = Brand::factory()->create(['name' => 'ASUS', 'slug' => 'asus']);
+        $msi = Brand::factory()->create(['name' => 'MSI', 'slug' => 'msi']);
+        $asusProduct = Product::factory()->create([
+            'brand_id' => $asus->id,
+            'category_id' => $rtxCards->id,
+            'supplier_id' => $supplier->id,
+        ]);
+        $msiProduct = Product::factory()->create([
+            'brand_id' => $msi->id,
+            'category_id' => $rtxCards->id,
+            'supplier_id' => $supplier->id,
+        ]);
+
+        $this->pricingRule(PricingRule::SCOPE_CATEGORY, 12, ['category_id' => $videoCards->id]);
+        $this->pricingRule(PricingRule::SCOPE_CATEGORY_BRAND, 16, [
+            'category_id' => $videoCards->id,
+            'brand_id' => $asus->id,
+        ]);
+
+        $asusResult = app(PricingEngine::class)->calculateForSupplierProduct(
+            $this->supplierProduct($supplier, ['price' => 100]),
+            $asusProduct,
+            $rtxCards,
+        );
+        $msiResult = app(PricingEngine::class)->calculateForSupplierProduct(
+            $this->supplierProduct($supplier, ['price' => 100]),
+            $msiProduct,
+            $rtxCards,
+        );
+
+        $this->assertSame(PricingRule::SCOPE_CATEGORY_BRAND, $asusResult['rule_scope']);
+        $this->assertSame(116.0, $asusResult['final_selling_price']);
+        $this->assertSame(PricingRule::SCOPE_CATEGORY, $msiResult['rule_scope']);
+        $this->assertSame(112.0, $msiResult['final_selling_price']);
+    }
+
+    public function test_category_brand_supplier_rule_has_highest_combined_scope_priority(): void
+    {
+        $supplier = $this->supplier();
+        $category = Category::factory()->create();
+        $brand = Brand::factory()->create();
+        $product = Product::factory()->create([
+            'brand_id' => $brand->id,
+            'category_id' => $category->id,
+            'supplier_id' => $supplier->id,
+        ]);
+
+        $this->pricingRule(PricingRule::SCOPE_CATEGORY_SUPPLIER, 14, [
+            'category_id' => $category->id,
+            'supplier_id' => $supplier->id,
+        ]);
+        $this->pricingRule(PricingRule::SCOPE_CATEGORY_BRAND, 16, [
+            'category_id' => $category->id,
+            'brand_id' => $brand->id,
+        ]);
+        $this->pricingRule(PricingRule::SCOPE_CATEGORY_BRAND_SUPPLIER, 18, [
+            'category_id' => $category->id,
+            'brand_id' => $brand->id,
+            'supplier_id' => $supplier->id,
+        ]);
+
+        $result = app(PricingEngine::class)->calculateForSupplierProduct(
+            $this->supplierProduct($supplier, ['price' => 100]),
+            $product,
+            $category,
+        );
+
+        $this->assertSame(PricingRule::SCOPE_CATEGORY_BRAND_SUPPLIER, $result['rule_scope']);
+        $this->assertSame(118.0, $result['final_selling_price']);
+    }
+
+    public function test_brand_rule_overrides_supplier_and_price_range_rules(): void
+    {
+        $supplier = $this->supplier();
+        $brand = Brand::factory()->create();
+        $product = Product::factory()->create([
+            'brand_id' => $brand->id,
+            'supplier_id' => $supplier->id,
+        ]);
+
+        $this->pricingRule(PricingRule::SCOPE_PRICE_RANGE, 30, [
+            'price_min' => 50,
+            'price_max' => 150,
+        ]);
+        $this->pricingRule(PricingRule::SCOPE_SUPPLIER, 10, ['supplier_id' => $supplier->id]);
+        $this->pricingRule(PricingRule::SCOPE_BRAND, 17, ['brand_id' => $brand->id]);
+
+        $result = app(PricingEngine::class)->calculateForSupplierProduct(
+            $this->supplierProduct($supplier, ['price' => 100]),
+            $product,
+        );
+
+        $this->assertSame(PricingRule::SCOPE_BRAND, $result['rule_scope']);
+        $this->assertSame(117.0, $result['final_selling_price']);
+    }
+
+    public function test_price_range_rule_overrides_global_default(): void
+    {
+        $supplier = $this->supplier();
+
+        $this->pricingRule(PricingRule::SCOPE_GLOBAL, 5);
+        $this->pricingRule(PricingRule::SCOPE_PRICE_RANGE, 9, [
+            'price_min' => 50,
+            'price_max' => 150,
+        ]);
+
+        $result = app(PricingEngine::class)->calculateForSupplierProduct(
+            $this->supplierProduct($supplier, ['price' => 100]),
+        );
+
+        $this->assertSame(PricingRule::SCOPE_PRICE_RANGE, $result['rule_scope']);
+        $this->assertSame(109.0, $result['final_selling_price']);
     }
 
     public function test_msrp_strategies_are_applied(): void

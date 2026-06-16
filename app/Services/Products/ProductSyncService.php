@@ -65,7 +65,12 @@ class ProductSyncService
         $brand = $this->resolveBrand($supplierProduct->brand_name);
         $category = $this->resolveCategory($supplierProduct->category_name);
         $selectedSupplierProduct = $selectedOffer->supplierProduct ?: $supplierProduct;
-        $pricing = $this->pricingEngine->calculateForSupplierProduct($selectedSupplierProduct, $product, $category);
+        $pricingProduct = $product->replicate();
+        $pricingProduct->id = $product->id;
+        $pricingProduct->brand_id = $product->brand_id ?: $brand?->id;
+        $pricingProduct->category_id = $product->category_id ?: $category?->id;
+
+        $pricing = $this->pricingEngine->calculateForSupplierProduct($selectedSupplierProduct, $pricingProduct, $category);
 
         $availability = $this->availabilityMapper->mapWithFallback(
             'supplier',
