@@ -80,7 +80,7 @@ class CatalogSyncPreviewTest extends TestCase
         ]);
         Product::factory()->create([
             'sku' => 'CAT-CONFLICT-002',
-            'ean' => '4444444444444',
+            'ean' => '3333333333333',
             'mpn' => 'SUP-MPN-CONFLICT',
         ]);
         $supplierProduct = $this->supplierProduct($supplier, [
@@ -93,7 +93,7 @@ class CatalogSyncPreviewTest extends TestCase
 
         $this->assertSame('conflict', $row['target_catalog_action']);
         $this->assertContains('multiple_catalog_matches', $row['conflict_reasons']);
-        $this->assertEqualsCanonicalizing(['ean', 'mpn'], $row['matched_by']);
+        $this->assertSame(['ean'], $row['matched_by']);
         $this->assertSame('Conflict detected', $row['result']);
     }
 

@@ -34,6 +34,7 @@
                 'conflicts' => 'Conflicts',
                 'missing_ean' => 'Missing EAN',
                 'missing_images' => 'Missing Images',
+                'excluded' => 'Excluded',
                 'average_margin' => 'Average Margin %',
                 'estimated_revenue' => 'Estimated Revenue',
                 'estimated_profit' => 'Estimated Profit',
@@ -121,6 +122,9 @@
                                                 <div class="font-semibold text-gray-800 dark:text-gray-100">Matching</div>
                                                 <div>Matched By: {{ $row['matched_by_display'] }}</div>
                                                 <div>Reason: {{ $row['reason'] }}</div>
+                                                @if ($row['exclusion_rule'])
+                                                    <div>Exclusion Rule: {{ $row['exclusion_rule'] }}</div>
+                                                @endif
                                                 @if ($row['target_catalog_action'] === 'update')
                                                     <div>Catalog Product ID: {{ $row['target_product_id'] ?: '-' }}</div>
                                                     <div>Current Price: {{ $money($row['current_price']) }}</div>
@@ -142,9 +146,37 @@
                                                 <div>Raw Category: {{ $row['raw_category_data'] ?: '-' }}</div>
                                                 <div>Image Count: {{ $row['image_count'] }}</div>
                                                 <div>Result: {{ $row['result'] }}</div>
+                                                <div>Winning Offer: {{ $row['winning_offer_supplier'] ?: '-' }}</div>
+                                                <div>Winning Reason: {{ $row['winning_offer_reason'] }}</div>
                                                 @if ($row['conflict_reasons'])
                                                     <div class="text-red-600">Conflicts: {{ implode(', ', $row['conflict_reasons']) }}</div>
                                                 @endif
+                                            </div>
+                                            <div class="lg:col-span-2">
+                                                <div class="font-semibold text-gray-800 dark:text-gray-100">Supplier Offers</div>
+                                                <div class="mt-1 grid gap-2 lg:grid-cols-3">
+                                                    @forelse ($row['supplier_offers'] as $offer)
+                                                        <div class="rounded border border-gray-200 p-2 dark:border-gray-700">
+                                                            <div class="font-medium">
+                                                                {{ $offer['supplier_name'] ?: '-' }}
+                                                                @if ($offer['selected'])
+                                                                    <span class="text-green-600">Winning</span>
+                                                                @endif
+                                                            </div>
+                                                            <div>Cost: {{ $money($offer['display_cost']) }}</div>
+                                                            <div>Stock: {{ $offer['stock'] }}</div>
+                                                            <div>Priority: {{ $offer['supplier_priority'] }}</div>
+                                                            @if (! $offer['eligible'])
+                                                                <div class="text-yellow-600">{{ $offer['rejection_reason'] }}</div>
+                                                            @endif
+                                                            @if ($offer['exclusion_rule'])
+                                                                <div class="text-red-600">{{ $offer['exclusion_rule'] }}</div>
+                                                            @endif
+                                                        </div>
+                                                    @empty
+                                                        <div>No supplier offers found.</div>
+                                                    @endforelse
+                                                </div>
                                             </div>
                                         </div>
                                     </details>
@@ -199,7 +231,11 @@
                         <div>Supplier: {{ $row['supplier_name'] }}</div>
                         <div>Category: {{ $row['normalized_category'] ?: '-' }}</div>
                         <div>Winning Rule: {{ $row['winning_pricing_rule'] ?: '-' }}</div>
+                        <div>Winning Offer: {{ $row['winning_offer_supplier'] ?: '-' }}</div>
                         <div>Matched By: {{ $row['matched_by_display'] }}</div>
+                        @if ($row['exclusion_rule'])
+                            <div>Exclusion Rule: {{ $row['exclusion_rule'] }}</div>
+                        @endif
                         <div>EAN: {{ $row['ean'] ?: 'Missing EAN' }}</div>
                         <div>Supplier SKU: {{ $row['supplier_sku'] ?: '-' }}</div>
                         <div>MPN: {{ $row['mpn'] ?: '-' }}</div>

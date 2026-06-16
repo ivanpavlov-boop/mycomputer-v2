@@ -103,4 +103,9 @@ class Supplier extends Model
     {
         return $this->hasMany(PricingRule::class);
     }
+
+    public function exclusionRules(): HasMany
+    {
+        return $this->hasMany(SupplierExclusionRule::class);
+    }
 }
