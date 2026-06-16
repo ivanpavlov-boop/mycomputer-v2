@@ -105,8 +105,19 @@ class ProductSyncService
                 'supplier_price_raw' => $pricing['supplier_price_raw'],
                 'recommended_price' => $pricing['recommended_price'],
                 'final_selling_price' => $pricing['final_selling_price'],
+                'regular_price' => $pricing['regular_price'],
+                'price_source' => Product::PRICE_SOURCE_SUPPLIER_IMPORT,
                 'price' => $pricing['final_selling_price'],
             ]);
+
+            if ($product->sale_price_source !== Product::SALE_PRICE_SOURCE_MANUAL) {
+                $updates = array_merge($updates, [
+                    'promo_price' => $pricing['sale_price'],
+                    'promo_start' => $pricing['sale_price_starts_at'],
+                    'promo_end' => $pricing['sale_price_ends_at'],
+                    'sale_price_source' => $pricing['sale_price_source'],
+                ]);
+            }
         }
 
         $product->update($updates);
@@ -213,9 +224,12 @@ class ProductSyncService
             'supplier_price_raw' => $supplierProduct->price,
             'recommended_price' => $supplierProduct->recommended_price,
             'final_selling_price' => $supplierProduct->price ?? 0,
+            'regular_price' => $supplierProduct->price ?? 0,
             'source' => Product::SOURCE_SUPPLIER_IMPORT,
             'apply_pricing_rules' => false,
+            'price_source' => Product::PRICE_SOURCE_SUPPLIER_IMPORT,
             'price' => $supplierProduct->price ?? 0,
+            'sale_price_source' => null,
             'quantity' => $supplierProduct->quantity ?? 0,
             'reserved_quantity' => 0,
             'availability_status_id' => $availability?->id,

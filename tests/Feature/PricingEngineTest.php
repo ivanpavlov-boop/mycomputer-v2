@@ -6,6 +6,7 @@ use App\Models\Brand;
 use App\Models\Category;
 use App\Models\PricingRule;
 use App\Models\Product;
+use App\Models\ProductDiscountRule;
 use App\Models\Supplier;
 use App\Models\SupplierProduct;
 use App\Services\Pricing\PricingEngine;
@@ -330,6 +331,111 @@ class PricingEngineTest extends TestCase
         $this->assertSame(115.99, $result['final_selling_price']);
     }
 
+    public function test_supplier_product_regular_price_is_calculated_without_sale_price_by_default(): void
+    {
+        $supplier = $this->supplier();
+        $this->pricingRule(PricingRule::SCOPE_SUPPLIER, 20, ['supplier_id' => $supplier->id]);
+
+        $result = app(PricingEngine::class)->calculateForSupplierProduct(
+            $this->supplierProduct($supplier, ['price' => 100]),
+        );
+
+        $this->assertSame('EUR', $result['currency']);
+        $this->assertSame(120.0, $result['regular_price']);
+        $this->assertSame(120.0, $result['final_selling_price']);
+        $this->assertNull($result['sale_price']);
+        $this->assertNull($result['sale_price_source']);
+    }
+
+    public function test_supplier_product_sale_price_is_applied_only_when_active_discount_rule_exists(): void
+    {
+        $supplier = $this->supplier();
+        $this->pricingRule(PricingRule::SCOPE_SUPPLIER, 20, ['supplier_id' => $supplier->id]);
+        $this->discountRule(ProductDiscountRule::SCOPE_SUPPLIER, ProductDiscountRule::TYPE_PERCENTAGE, 10, [
+            'supplier_id' => $supplier->id,
+            'starts_at' => now()->subHour(),
+            'ends_at' => now()->addHour(),
+        ]);
+
+        $result = app(PricingEngine::class)->calculateForSupplierProduct(
+            $this->supplierProduct($supplier, ['price' => 100]),
+        );
+
+        $this->assertSame(120.0, $result['regular_price']);
+        $this->assertSame(108.0, $result['sale_price']);
+        $this->assertSame(Product::SALE_PRICE_SOURCE_PROMOTION_RULE, $result['sale_price_source']);
+    }
+
+    public function test_fixed_sale_price_and_fixed_amount_discounts_are_supported(): void
+    {
+        $supplier = $this->supplier();
+        $this->pricingRule(PricingRule::SCOPE_SUPPLIER, 20, ['supplier_id' => $supplier->id]);
+        $this->discountRule(ProductDiscountRule::SCOPE_SUPPLIER, ProductDiscountRule::TYPE_FIXED_PRICE, 99, [
+            'supplier_id' => $supplier->id,
+        ]);
+
+        $fixedPrice = app(PricingEngine::class)->calculateForSupplierProduct(
+            $this->supplierProduct($supplier, ['price' => 100]),
+        );
+
+        ProductDiscountRule::query()->delete();
+        $this->discountRule(ProductDiscountRule::SCOPE_SUPPLIER, ProductDiscountRule::TYPE_FIXED_AMOUNT, 15, [
+            'supplier_id' => $supplier->id,
+        ]);
+
+        $fixedAmount = app(PricingEngine::class)->calculateForSupplierProduct(
+            $this->supplierProduct($supplier, ['price' => 100]),
+        );
+
+        $this->assertSame(99.0, $fixedPrice['sale_price']);
+        $this->assertSame(105.0, $fixedAmount['sale_price']);
+    }
+
+    public function test_sale_price_cannot_be_higher_than_regular_price(): void
+    {
+        $supplier = $this->supplier();
+        $this->pricingRule(PricingRule::SCOPE_SUPPLIER, 20, ['supplier_id' => $supplier->id]);
+        $this->discountRule(ProductDiscountRule::SCOPE_SUPPLIER, ProductDiscountRule::TYPE_FIXED_PRICE, 150, [
+            'supplier_id' => $supplier->id,
+        ]);
+
+        $result = app(PricingEngine::class)->calculateForSupplierProduct(
+            $this->supplierProduct($supplier, ['price' => 100]),
+        );
+
+        $this->assertSame(120.0, $result['regular_price']);
+        $this->assertNull($result['sale_price']);
+    }
+
+    public function test_expired_and_future_sale_prices_are_ignored(): void
+    {
+        $supplier = $this->supplier();
+        $this->pricingRule(PricingRule::SCOPE_SUPPLIER, 20, ['supplier_id' => $supplier->id]);
+        $this->discountRule(ProductDiscountRule::SCOPE_SUPPLIER, ProductDiscountRule::TYPE_PERCENTAGE, 10, [
+            'supplier_id' => $supplier->id,
+            'starts_at' => now()->subDays(2),
+            'ends_at' => now()->subDay(),
+        ]);
+
+        $expired = app(PricingEngine::class)->calculateForSupplierProduct(
+            $this->supplierProduct($supplier, ['price' => 100]),
+        );
+
+        ProductDiscountRule::query()->delete();
+        $this->discountRule(ProductDiscountRule::SCOPE_SUPPLIER, ProductDiscountRule::TYPE_PERCENTAGE, 10, [
+            'supplier_id' => $supplier->id,
+            'starts_at' => now()->addDay(),
+            'ends_at' => now()->addDays(2),
+        ]);
+
+        $future = app(PricingEngine::class)->calculateForSupplierProduct(
+            $this->supplierProduct($supplier, ['price' => 100]),
+        );
+
+        $this->assertNull($expired['sale_price']);
+        $this->assertNull($future['sale_price']);
+    }
+
     /**
      * @param  array<string, mixed>  $overrides
      */
@@ -373,6 +479,21 @@ class PricingEngineTest extends TestCase
             'margin_type' => PricingRule::MARGIN_PERCENTAGE,
             'margin_value' => $marginValue,
             'rounding_rule' => PricingRule::ROUND_NONE,
+            'is_active' => true,
+            'sort_order' => 0,
+        ], $overrides));
+    }
+
+    /**
+     * @param  array<string, mixed>  $overrides
+     */
+    private function discountRule(string $scope, string $discountType, float $discountValue, array $overrides = []): ProductDiscountRule
+    {
+        return ProductDiscountRule::query()->create(array_merge([
+            'name' => "{$scope} discount rule",
+            'scope_type' => $scope,
+            'discount_type' => $discountType,
+            'discount_value' => $discountValue,
             'is_active' => true,
             'sort_order' => 0,
         ], $overrides));

@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\PricingRule;
 use App\Models\Product;
+use App\Models\ProductDiscountRule;
 use App\Models\ProductSupplierOffer;
 use App\Models\ProductSyncLog;
 use App\Models\Supplier;
@@ -88,7 +89,12 @@ class ProductSyncEngineTest extends TestCase
             'supplier_price_raw' => null,
             'recommended_price' => null,
             'final_selling_price' => 999,
+            'regular_price' => 999,
             'price' => 999,
+            'promo_price' => 899,
+            'promo_start' => now()->subDay(),
+            'promo_end' => now()->addDay(),
+            'sale_price_source' => Product::SALE_PRICE_SOURCE_MANUAL,
             'quantity' => 3,
         ]);
         $supplierProduct = $this->supplierProduct($supplier, [
@@ -117,7 +123,10 @@ class ProductSyncEngineTest extends TestCase
         $this->assertNull($product->supplier_price_raw);
         $this->assertNull($product->recommended_price);
         $this->assertSame('999.00', $product->final_selling_price);
+        $this->assertSame('999.00', $product->regular_price);
         $this->assertSame('999.00', $product->price);
+        $this->assertSame('899.00', $product->promo_price);
+        $this->assertSame(Product::SALE_PRICE_SOURCE_MANUAL, $product->sale_price_source);
         $this->assertSame(8, $product->quantity);
     }
 
@@ -132,7 +141,12 @@ class ProductSyncEngineTest extends TestCase
             'apply_pricing_rules' => true,
             'purchase_price' => 700,
             'final_selling_price' => 999,
+            'regular_price' => 999,
             'price' => 999,
+            'promo_price' => 879,
+            'promo_start' => now()->subDay(),
+            'promo_end' => now()->addDay(),
+            'sale_price_source' => Product::SALE_PRICE_SOURCE_MANUAL,
         ]);
         $supplierProduct = $this->supplierProduct($supplier, [
             'supplier_sku' => 'SUP-MANUAL-GPU-002',
@@ -159,7 +173,98 @@ class ProductSyncEngineTest extends TestCase
         $this->assertSame('100.00', $product->purchase_price);
         $this->assertSame('100.00', $product->supplier_price_raw);
         $this->assertSame('150.00', $product->final_selling_price);
+        $this->assertSame('150.00', $product->regular_price);
         $this->assertSame('150.00', $product->price);
+        $this->assertSame('879.00', $product->promo_price);
+        $this->assertSame(Product::SALE_PRICE_SOURCE_MANUAL, $product->sale_price_source);
+    }
+
+    public function test_supplier_imported_product_gets_discount_rule_sale_price(): void
+    {
+        $supplier = Supplier::factory()->create();
+        $product = Product::factory()->create([
+            'supplier_id' => $supplier->id,
+            'sku' => 'SUPPLIER-GPU-001',
+            'mpn' => 'SUPPLIER-MPN-001',
+            'source' => Product::SOURCE_SUPPLIER_IMPORT,
+            'price' => 999,
+            'promo_price' => null,
+            'sale_price_source' => null,
+        ]);
+        $supplierProduct = $this->supplierProduct($supplier, [
+            'supplier_sku' => 'SUP-SUPPLIER-GPU-001',
+            'mpn' => 'SUPPLIER-MPN-001',
+            'price' => 100,
+            'quantity' => 5,
+        ]);
+
+        PricingRule::query()->create([
+            'name' => 'Supplier margin',
+            'scope_type' => PricingRule::SCOPE_SUPPLIER,
+            'supplier_id' => $supplier->id,
+            'margin_type' => PricingRule::MARGIN_PERCENTAGE,
+            'margin_value' => 50,
+            'rounding_rule' => PricingRule::ROUND_NONE,
+            'is_active' => true,
+        ]);
+        ProductDiscountRule::query()->create([
+            'name' => 'Supplier campaign',
+            'scope_type' => ProductDiscountRule::SCOPE_SUPPLIER,
+            'supplier_id' => $supplier->id,
+            'discount_type' => ProductDiscountRule::TYPE_PERCENTAGE,
+            'discount_value' => 10,
+            'starts_at' => now()->subHour(),
+            'ends_at' => now()->addHour(),
+            'is_active' => true,
+        ]);
+
+        app(ProductSyncService::class)->sync($supplierProduct);
+
+        $product->refresh();
+
+        $this->assertSame('150.00', $product->regular_price);
+        $this->assertSame('150.00', $product->price);
+        $this->assertSame('135.00', $product->promo_price);
+        $this->assertSame(Product::SALE_PRICE_SOURCE_PROMOTION_RULE, $product->sale_price_source);
+    }
+
+    public function test_supplier_imported_product_does_not_get_sale_price_without_discount_rule(): void
+    {
+        $supplier = Supplier::factory()->create();
+        $product = Product::factory()->create([
+            'supplier_id' => $supplier->id,
+            'sku' => 'SUPPLIER-GPU-002',
+            'mpn' => 'SUPPLIER-MPN-002',
+            'source' => Product::SOURCE_SUPPLIER_IMPORT,
+            'price' => 999,
+            'promo_price' => 899,
+            'sale_price_source' => Product::SALE_PRICE_SOURCE_PROMOTION_RULE,
+        ]);
+        $supplierProduct = $this->supplierProduct($supplier, [
+            'supplier_sku' => 'SUP-SUPPLIER-GPU-002',
+            'mpn' => 'SUPPLIER-MPN-002',
+            'price' => 100,
+            'quantity' => 5,
+        ]);
+
+        PricingRule::query()->create([
+            'name' => 'Supplier margin',
+            'scope_type' => PricingRule::SCOPE_SUPPLIER,
+            'supplier_id' => $supplier->id,
+            'margin_type' => PricingRule::MARGIN_PERCENTAGE,
+            'margin_value' => 50,
+            'rounding_rule' => PricingRule::ROUND_NONE,
+            'is_active' => true,
+        ]);
+
+        app(ProductSyncService::class)->sync($supplierProduct);
+
+        $product->refresh();
+
+        $this->assertSame('150.00', $product->regular_price);
+        $this->assertSame('150.00', $product->price);
+        $this->assertNull($product->promo_price);
+        $this->assertNull($product->sale_price_source);
     }
 
     /**

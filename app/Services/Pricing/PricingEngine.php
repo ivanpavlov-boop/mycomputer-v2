@@ -5,6 +5,7 @@ namespace App\Services\Pricing;
 use App\Models\Category;
 use App\Models\PricingRule;
 use App\Models\Product;
+use App\Models\ProductDiscountRule;
 use App\Models\Supplier;
 use App\Models\SupplierProduct;
 
@@ -27,17 +28,26 @@ class PricingEngine
         $finalPrice = $this->applyRecommendedPriceStrategy($marginPrice, $normalizedCost, $recommendedPrice, $rule, $supplier);
         $finalPrice = $this->applyMinimums($finalPrice, $normalizedCost, $rule);
         $finalPrice = $this->roundPrice($finalPrice, $rule?->rounding_rule ?? PricingRule::ROUND_NONE);
+        $discountRule = $this->matchingDiscountRule($product, $category, $supplier);
+        $salePrice = $this->salePrice($finalPrice, $discountRule);
 
         return [
             'currency' => 'EUR',
             'rule_id' => $rule?->id,
             'rule_scope' => $rule?->scope_type,
+            'discount_rule_id' => $salePrice !== null ? $discountRule?->id : null,
+            'discount_rule_scope' => $salePrice !== null ? $discountRule?->scope_type : null,
             'supplier_price_raw' => round($rawPrice, 2),
             'purchase_price' => round($rawPrice, 2),
             'normalized_purchase_cost' => round($normalizedCost, 2),
             'recommended_price' => $recommendedPrice !== null ? round($recommendedPrice, 2) : null,
             'margin_price' => round($marginPrice, 2),
+            'regular_price' => round($finalPrice, 2),
             'final_selling_price' => round($finalPrice, 2),
+            'sale_price' => $salePrice !== null ? round($salePrice, 2) : null,
+            'sale_price_source' => $salePrice !== null ? Product::SALE_PRICE_SOURCE_PROMOTION_RULE : null,
+            'sale_price_starts_at' => $salePrice !== null ? $discountRule?->starts_at : null,
+            'sale_price_ends_at' => $salePrice !== null ? $discountRule?->ends_at : null,
             'msrp_strategy' => $rule?->msrp_strategy ?: ($supplier?->msrp_strategy ?: PricingRule::MSRP_MARGIN_ONLY),
             'vat_mode' => $supplier?->vat_mode ?: 'price_excludes_vat',
             'vat_rate' => $supplier?->vat_rate !== null ? (float) $supplier->vat_rate : null,
@@ -188,6 +198,132 @@ class PricingEngine
         return null;
     }
 
+    public function matchingDiscountRule(?Product $product = null, ?Category $category = null, ?Supplier $supplier = null): ?ProductDiscountRule
+    {
+        $brandId = $product?->brand_id;
+
+        if ($product?->id) {
+            $rule = ProductDiscountRule::query()
+                ->active()
+                ->where('scope_type', ProductDiscountRule::SCOPE_PRODUCT)
+                ->where('product_id', $product->id)
+                ->orderBy('sort_order')
+                ->first();
+
+            if ($rule) {
+                return $rule;
+            }
+        }
+
+        if ($brandId && $supplier?->id) {
+            $rule = $this->matchingCategoryDiscountRule(
+                ProductDiscountRule::SCOPE_CATEGORY_BRAND_SUPPLIER,
+                $category,
+                brandId: $brandId,
+                supplierId: $supplier->id,
+            );
+
+            if ($rule) {
+                return $rule;
+            }
+        }
+
+        if ($brandId) {
+            $rule = $this->matchingCategoryDiscountRule(
+                ProductDiscountRule::SCOPE_CATEGORY_BRAND,
+                $category,
+                brandId: $brandId,
+            );
+
+            if ($rule) {
+                return $rule;
+            }
+        }
+
+        if ($supplier?->id) {
+            $rule = $this->matchingCategoryDiscountRule(
+                ProductDiscountRule::SCOPE_CATEGORY_SUPPLIER,
+                $category,
+                supplierId: $supplier->id,
+            );
+
+            if ($rule) {
+                return $rule;
+            }
+        }
+
+        foreach ($this->categoryHierarchy($category) as $categoryId) {
+            $rule = ProductDiscountRule::query()
+                ->active()
+                ->where('scope_type', ProductDiscountRule::SCOPE_CATEGORY)
+                ->where('category_id', $categoryId)
+                ->orderBy('sort_order')
+                ->first();
+
+            if ($rule) {
+                return $rule;
+            }
+        }
+
+        if ($brandId) {
+            $rule = ProductDiscountRule::query()
+                ->active()
+                ->where('scope_type', ProductDiscountRule::SCOPE_BRAND)
+                ->where('brand_id', $brandId)
+                ->orderBy('sort_order')
+                ->first();
+
+            if ($rule) {
+                return $rule;
+            }
+        }
+
+        if ($supplier?->id) {
+            $rule = ProductDiscountRule::query()
+                ->active()
+                ->where('scope_type', ProductDiscountRule::SCOPE_SUPPLIER)
+                ->where('supplier_id', $supplier->id)
+                ->orderBy('sort_order')
+                ->first();
+
+            if ($rule) {
+                return $rule;
+            }
+        }
+
+        return ProductDiscountRule::query()
+            ->active()
+            ->where('scope_type', ProductDiscountRule::SCOPE_GLOBAL_CAMPAIGN)
+            ->orderBy('sort_order')
+            ->first();
+    }
+
+    protected function matchingCategoryDiscountRule(string $scope, ?Category $category, ?int $brandId = null, ?int $supplierId = null): ?ProductDiscountRule
+    {
+        foreach ($this->categoryHierarchy($category) as $categoryId) {
+            $query = ProductDiscountRule::query()
+                ->active()
+                ->where('scope_type', $scope)
+                ->where('category_id', $categoryId);
+
+            if ($brandId !== null) {
+                $query->where('brand_id', $brandId);
+            }
+
+            if ($supplierId !== null) {
+                $query->where('supplier_id', $supplierId);
+            }
+
+            $rule = $query->orderBy('sort_order')->first();
+
+            if ($rule) {
+                return $rule;
+            }
+        }
+
+        return null;
+    }
+
     protected function normalizedPurchaseCost(float $rawPrice, ?Supplier $supplier): float
     {
         if (($supplier?->vat_mode) !== 'price_includes_vat') {
@@ -258,6 +394,23 @@ class PricingEngine
             PricingRule::ROUND_UP_0_99 => floor($price) + 0.99,
             default => round($price, 2),
         };
+    }
+
+    protected function salePrice(float $regularPrice, ?ProductDiscountRule $rule): ?float
+    {
+        if (! $rule) {
+            return null;
+        }
+
+        $salePrice = match ($rule->discount_type) {
+            ProductDiscountRule::TYPE_FIXED_PRICE => (float) $rule->discount_value,
+            ProductDiscountRule::TYPE_FIXED_AMOUNT => $regularPrice - (float) $rule->discount_value,
+            default => $regularPrice * (1 - ((float) $rule->discount_value / 100)),
+        };
+
+        $salePrice = round($salePrice, 2);
+
+        return $salePrice > 0 && $salePrice < round($regularPrice, 2) ? $salePrice : null;
     }
 
     /**

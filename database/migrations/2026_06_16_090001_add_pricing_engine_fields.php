@@ -24,8 +24,11 @@ return new class extends Migration
             $table->decimal('supplier_price_raw', 12, 2)->nullable()->after('purchase_price');
             $table->decimal('recommended_price', 12, 2)->nullable()->after('supplier_price_raw');
             $table->decimal('final_selling_price', 12, 2)->nullable()->after('recommended_price');
-            $table->string('source')->default('manual')->after('final_selling_price')->index();
+            $table->decimal('regular_price', 12, 2)->nullable()->after('final_selling_price');
+            $table->string('source')->default('manual')->after('regular_price')->index();
             $table->boolean('apply_pricing_rules')->default(false)->after('source')->index();
+            $table->string('price_source')->default('manual')->after('apply_pricing_rules')->index();
+            $table->string('sale_price_source')->nullable()->after('promo_end')->index();
         });
 
         if (DB::getDriverName() === 'mysql') {
@@ -40,8 +43,11 @@ return new class extends Migration
                 'supplier_price_raw',
                 'recommended_price',
                 'final_selling_price',
+                'regular_price',
                 'source',
                 'apply_pricing_rules',
+                'price_source',
+                'sale_price_source',
             ]);
         });
 

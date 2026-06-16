@@ -41,6 +41,7 @@ use App\Models\Product;
 use App\Models\ProductAttribute;
 use App\Models\ProductCompareItem;
 use App\Models\ProductCompareList;
+use App\Models\ProductDiscountRule;
 use App\Models\ProductImage;
 use App\Models\ProductReview;
 use App\Models\ProductReviewReport;
@@ -156,6 +157,7 @@ class AppServiceProvider extends ServiceProvider
         Gate::policy(ProductReviewVote::class, ProductPolicy::class);
         Gate::policy(ProductReviewReport::class, ProductPolicy::class);
         Gate::policy(PricingRule::class, ProductPolicy::class);
+        Gate::policy(ProductDiscountRule::class, ProductPolicy::class);
         Gate::policy(Supplier::class, SupplierPolicy::class);
         Gate::policy(SupplierProduct::class, SupplierPolicy::class);
         Gate::policy(SupplierFeed::class, SupplierFeedPolicy::class);

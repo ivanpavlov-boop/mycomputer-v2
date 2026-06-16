@@ -24,6 +24,18 @@ class Product extends Model
 
     public const SOURCE_SUPPLIER_IMPORT = 'supplier_import';
 
+    public const PRICE_SOURCE_MANUAL = 'manual';
+
+    public const PRICE_SOURCE_SUPPLIER_IMPORT = 'supplier_import_calculated';
+
+    public const PRICE_SOURCE_ADMIN_OVERRIDE = 'admin_override';
+
+    public const SALE_PRICE_SOURCE_MANUAL = 'manual';
+
+    public const SALE_PRICE_SOURCE_PROMOTION_RULE = 'promotion_rule';
+
+    public const SALE_PRICE_SOURCE_SUPPLIER_FEED = 'supplier_feed';
+
     protected $fillable = [
         'category_id',
         'brand_id',
@@ -41,12 +53,15 @@ class Product extends Model
         'supplier_price_raw',
         'recommended_price',
         'final_selling_price',
+        'regular_price',
         'source',
         'apply_pricing_rules',
+        'price_source',
         'price',
         'promo_price',
         'promo_start',
         'promo_end',
+        'sale_price_source',
         'quantity',
         'reserved_quantity',
         'stock_status',
@@ -80,6 +95,7 @@ class Product extends Model
             'supplier_price_raw' => 'decimal:2',
             'recommended_price' => 'decimal:2',
             'final_selling_price' => 'decimal:2',
+            'regular_price' => 'decimal:2',
             'apply_pricing_rules' => 'boolean',
             'price' => 'decimal:2',
             'promo_price' => 'decimal:2',
@@ -223,6 +239,11 @@ class Product extends Model
     public function pricingRules(): HasMany
     {
         return $this->hasMany(PricingRule::class);
+    }
+
+    public function discountRules(): HasMany
+    {
+        return $this->hasMany(ProductDiscountRule::class);
     }
 
     public function cartItems(): HasMany

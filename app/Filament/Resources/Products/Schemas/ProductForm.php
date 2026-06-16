@@ -60,11 +60,32 @@ class ProductForm
                 Section::make('Pricing and inventory')
                     ->schema([
                         Grid::make(4)->schema([
-                            TextInput::make('purchase_price')->numeric()->prefix('BGN'),
-                            TextInput::make('price')->numeric()->prefix('BGN')->default(0)->required(),
-                            TextInput::make('promo_price')->numeric()->prefix('BGN'),
+                            TextInput::make('purchase_price')->numeric()->prefix('EUR'),
+                            TextInput::make('regular_price')->numeric()->prefix('EUR'),
+                            TextInput::make('price')
+                                ->label('Regular selling price')
+                                ->numeric()
+                                ->prefix('EUR')
+                                ->default(0)
+                                ->required(),
+                            Select::make('price_source')
+                                ->options([
+                                    Product::PRICE_SOURCE_MANUAL => 'Manual',
+                                    Product::PRICE_SOURCE_SUPPLIER_IMPORT => 'Supplier import calculated',
+                                    Product::PRICE_SOURCE_ADMIN_OVERRIDE => 'Admin override',
+                                ])
+                                ->default(Product::PRICE_SOURCE_MANUAL)
+                                ->required(),
+                            TextInput::make('promo_price')->label('Sale price')->numeric()->prefix('EUR'),
                             DateTimePicker::make('promo_start'),
                             DateTimePicker::make('promo_end'),
+                            Select::make('sale_price_source')
+                                ->options([
+                                    Product::SALE_PRICE_SOURCE_MANUAL => 'Manual',
+                                    Product::SALE_PRICE_SOURCE_PROMOTION_RULE => 'Promotion rule',
+                                    Product::SALE_PRICE_SOURCE_SUPPLIER_FEED => 'Supplier feed',
+                                ])
+                                ->nullable(),
                             TextInput::make('quantity')->numeric()->default(0)->required(),
                             TextInput::make('reserved_quantity')->numeric()->default(0)->required(),
                             Select::make('availability_status_id')
