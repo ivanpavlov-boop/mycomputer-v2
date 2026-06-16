@@ -24,6 +24,8 @@ return new class extends Migration
             $table->decimal('supplier_price_raw', 12, 2)->nullable()->after('purchase_price');
             $table->decimal('recommended_price', 12, 2)->nullable()->after('supplier_price_raw');
             $table->decimal('final_selling_price', 12, 2)->nullable()->after('recommended_price');
+            $table->string('source')->default('manual')->after('final_selling_price')->index();
+            $table->boolean('apply_pricing_rules')->default(false)->after('source')->index();
         });
 
         if (DB::getDriverName() === 'mysql') {
@@ -34,7 +36,13 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('products', function (Blueprint $table): void {
-            $table->dropColumn(['supplier_price_raw', 'recommended_price', 'final_selling_price']);
+            $table->dropColumn([
+                'supplier_price_raw',
+                'recommended_price',
+                'final_selling_price',
+                'source',
+                'apply_pricing_rules',
+            ]);
         });
 
         Schema::table('supplier_products', function (Blueprint $table): void {

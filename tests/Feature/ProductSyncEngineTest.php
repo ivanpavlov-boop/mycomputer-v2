@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\PricingRule;
 use App\Models\Product;
 use App\Models\ProductSupplierOffer;
 use App\Models\ProductSyncLog;
@@ -72,5 +73,115 @@ class ProductSyncEngineTest extends TestCase
 
         $this->assertSame('synced', $supplierProduct->refresh()->status);
         $this->assertSame('created', ProductSyncLog::query()->where('supplier_product_id', $supplierProduct->id)->firstOrFail()->action);
+    }
+
+    public function test_manual_product_is_not_repriced_during_supplier_sync(): void
+    {
+        $supplier = Supplier::factory()->create();
+        $product = Product::factory()->create([
+            'supplier_id' => null,
+            'sku' => 'MANUAL-GPU-001',
+            'mpn' => 'MANUAL-MPN-001',
+            'source' => Product::SOURCE_MANUAL,
+            'apply_pricing_rules' => false,
+            'purchase_price' => 700,
+            'supplier_price_raw' => null,
+            'recommended_price' => null,
+            'final_selling_price' => 999,
+            'price' => 999,
+            'quantity' => 3,
+        ]);
+        $supplierProduct = $this->supplierProduct($supplier, [
+            'supplier_sku' => 'SUP-MANUAL-GPU-001',
+            'mpn' => 'MANUAL-MPN-001',
+            'price' => 100,
+            'quantity' => 8,
+        ]);
+
+        PricingRule::query()->create([
+            'name' => 'High global margin',
+            'scope_type' => PricingRule::SCOPE_GLOBAL,
+            'margin_type' => PricingRule::MARGIN_PERCENTAGE,
+            'margin_value' => 50,
+            'rounding_rule' => PricingRule::ROUND_NONE,
+            'is_active' => true,
+        ]);
+
+        app(ProductSyncService::class)->sync($supplierProduct);
+
+        $product->refresh();
+
+        $this->assertSame(Product::SOURCE_MANUAL, $product->source);
+        $this->assertFalse($product->apply_pricing_rules);
+        $this->assertSame('700.00', $product->purchase_price);
+        $this->assertNull($product->supplier_price_raw);
+        $this->assertNull($product->recommended_price);
+        $this->assertSame('999.00', $product->final_selling_price);
+        $this->assertSame('999.00', $product->price);
+        $this->assertSame(8, $product->quantity);
+    }
+
+    public function test_manual_product_can_be_explicitly_repriced_by_admin_opt_in(): void
+    {
+        $supplier = Supplier::factory()->create();
+        $product = Product::factory()->create([
+            'supplier_id' => null,
+            'sku' => 'MANUAL-GPU-002',
+            'mpn' => 'MANUAL-MPN-002',
+            'source' => Product::SOURCE_MANUAL,
+            'apply_pricing_rules' => true,
+            'purchase_price' => 700,
+            'final_selling_price' => 999,
+            'price' => 999,
+        ]);
+        $supplierProduct = $this->supplierProduct($supplier, [
+            'supplier_sku' => 'SUP-MANUAL-GPU-002',
+            'mpn' => 'MANUAL-MPN-002',
+            'price' => 100,
+            'quantity' => 5,
+        ]);
+
+        PricingRule::query()->create([
+            'name' => 'Explicit manual pricing',
+            'scope_type' => PricingRule::SCOPE_GLOBAL,
+            'margin_type' => PricingRule::MARGIN_PERCENTAGE,
+            'margin_value' => 50,
+            'rounding_rule' => PricingRule::ROUND_NONE,
+            'is_active' => true,
+        ]);
+
+        app(ProductSyncService::class)->sync($supplierProduct);
+
+        $product->refresh();
+
+        $this->assertSame(Product::SOURCE_MANUAL, $product->source);
+        $this->assertTrue($product->apply_pricing_rules);
+        $this->assertSame('100.00', $product->purchase_price);
+        $this->assertSame('100.00', $product->supplier_price_raw);
+        $this->assertSame('150.00', $product->final_selling_price);
+        $this->assertSame('150.00', $product->price);
+    }
+
+    /**
+     * @param  array<string, mixed>  $overrides
+     */
+    private function supplierProduct(Supplier $supplier, array $overrides = []): SupplierProduct
+    {
+        return SupplierProduct::query()->create(array_merge([
+            'supplier_id' => $supplier->id,
+            'supplier_sku' => 'SUP-'.fake()->unique()->bothify('####??'),
+            'ean' => fake()->ean13(),
+            'mpn' => fake()->unique()->bothify('MPN-####??'),
+            'name' => 'Supplier Sync Test Product',
+            'brand_name' => 'Test Brand',
+            'category_name' => 'Test Category',
+            'price' => 100,
+            'quantity' => 5,
+            'currency' => 'EUR',
+            'raw_data' => ['source' => 'product-sync-test'],
+            'payload_hash' => fake()->unique()->sha1(),
+            'received_at' => now(),
+            'status' => 'new',
+        ], $overrides));
     }
 }

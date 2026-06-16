@@ -70,7 +70,9 @@ class ProductSyncService
         $pricingProduct->brand_id = $product->brand_id ?: $brand?->id;
         $pricingProduct->category_id = $product->category_id ?: $category?->id;
 
-        $pricing = $this->pricingEngine->calculateForSupplierProduct($selectedSupplierProduct, $pricingProduct, $category);
+        $pricing = $product->shouldApplyPricingEngine()
+            ? $this->pricingEngine->calculateForSupplierProduct($selectedSupplierProduct, $pricingProduct, $category)
+            : null;
 
         $availability = $this->availabilityMapper->mapWithFallback(
             'supplier',
@@ -84,11 +86,6 @@ class ProductSyncService
             'supplier_sku' => $selectedOffer->supplier_sku,
             'brand_id' => $product->brand_id ?: $brand?->id,
             'category_id' => $product->category_id ?: $category?->id,
-            'purchase_price' => $pricing['purchase_price'],
-            'supplier_price_raw' => $pricing['supplier_price_raw'],
-            'recommended_price' => $pricing['recommended_price'],
-            'final_selling_price' => $pricing['final_selling_price'],
-            'price' => $pricing['final_selling_price'],
             'quantity' => $selectedOffer->quantity,
             'availability_status_id' => $product->manual_override ? $product->availability_status_id : $availability?->id,
             'stock_status' => $product->manual_override ? $product->stock_status : ($availability?->code ?? ($selectedOffer->quantity > 0 ? 'in_stock' : 'out_of_stock')),
@@ -101,6 +98,16 @@ class ProductSyncService
                 'pricing' => $pricing,
             ],
         ];
+
+        if ($pricing !== null) {
+            $updates = array_merge($updates, [
+                'purchase_price' => $pricing['purchase_price'],
+                'supplier_price_raw' => $pricing['supplier_price_raw'],
+                'recommended_price' => $pricing['recommended_price'],
+                'final_selling_price' => $pricing['final_selling_price'],
+                'price' => $pricing['final_selling_price'],
+            ]);
+        }
 
         $product->update($updates);
 
@@ -206,6 +213,8 @@ class ProductSyncService
             'supplier_price_raw' => $supplierProduct->price,
             'recommended_price' => $supplierProduct->recommended_price,
             'final_selling_price' => $supplierProduct->price ?? 0,
+            'source' => Product::SOURCE_SUPPLIER_IMPORT,
+            'apply_pricing_rules' => false,
             'price' => $supplierProduct->price ?? 0,
             'quantity' => $supplierProduct->quantity ?? 0,
             'reserved_quantity' => 0,

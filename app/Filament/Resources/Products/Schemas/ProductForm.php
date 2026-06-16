@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Products\Schemas;
 
+use App\Models\Product;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\KeyValue;
@@ -40,6 +41,16 @@ class ProductForm
                             Select::make('category_id')->relationship('category', 'name')->searchable()->preload(),
                             Select::make('brand_id')->relationship('brand', 'name')->searchable()->preload(),
                             Select::make('supplier_id')->relationship('supplier', 'company_name')->searchable()->preload(),
+                            Select::make('source')
+                                ->options([
+                                    Product::SOURCE_MANUAL => 'Manual',
+                                    Product::SOURCE_SUPPLIER_IMPORT => 'Supplier import',
+                                ])
+                                ->default(Product::SOURCE_MANUAL)
+                                ->required(),
+                            Toggle::make('apply_pricing_rules')
+                                ->default(false)
+                                ->helperText('Explicitly apply pricing rules to this product even when it is manually managed.'),
                             TextInput::make('weight')->numeric()->suffix('kg'),
                             TextInput::make('warranty_months')->numeric()->suffix('months'),
                         ]),

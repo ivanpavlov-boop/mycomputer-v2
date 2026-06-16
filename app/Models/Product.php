@@ -20,6 +20,10 @@ class Product extends Model
     use Searchable;
     use SoftDeletes;
 
+    public const SOURCE_MANUAL = 'manual';
+
+    public const SOURCE_SUPPLIER_IMPORT = 'supplier_import';
+
     protected $fillable = [
         'category_id',
         'brand_id',
@@ -37,6 +41,8 @@ class Product extends Model
         'supplier_price_raw',
         'recommended_price',
         'final_selling_price',
+        'source',
+        'apply_pricing_rules',
         'price',
         'promo_price',
         'promo_start',
@@ -74,6 +80,7 @@ class Product extends Model
             'supplier_price_raw' => 'decimal:2',
             'recommended_price' => 'decimal:2',
             'final_selling_price' => 'decimal:2',
+            'apply_pricing_rules' => 'boolean',
             'price' => 'decimal:2',
             'promo_price' => 'decimal:2',
             'promo_start' => 'datetime',
@@ -98,6 +105,11 @@ class Product extends Model
     public function shouldBeSearchable(): bool
     {
         return $this->active && $this->published_at !== null;
+    }
+
+    public function shouldApplyPricingEngine(): bool
+    {
+        return $this->source === self::SOURCE_SUPPLIER_IMPORT || $this->apply_pricing_rules;
     }
 
     public function toSearchableArray(): array

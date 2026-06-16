@@ -78,6 +78,8 @@ class ProductSeeder extends Seeder
                     'mpn' => $item['sku'],
                     'weight' => 1.500,
                     'purchase_price' => round($item['price'] * 0.82, 2),
+                    'source' => Product::SOURCE_SUPPLIER_IMPORT,
+                    'apply_pricing_rules' => false,
                     'price' => $item['price'],
                     'promo_price' => null,
                     'quantity' => 10,

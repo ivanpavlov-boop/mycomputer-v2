@@ -37,6 +37,8 @@ class ProductFactory extends Factory
             'description' => $this->faker->paragraph(),
             'weight' => $this->faker->randomFloat(3, 0.1, 10),
             'purchase_price' => $this->faker->randomFloat(2, 30, 3500),
+            'source' => Product::SOURCE_MANUAL,
+            'apply_pricing_rules' => false,
             'price' => $this->faker->randomFloat(2, 49, 4999),
             'promo_price' => null,
             'quantity' => $this->faker->numberBetween(0, 50),
