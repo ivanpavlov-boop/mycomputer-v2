@@ -35,15 +35,19 @@
                         <tr>
                             <th class="px-4 py-3">Action</th>
                             <th class="px-4 py-3">Supplier</th>
-                            <th class="px-4 py-3">SKU / EAN</th>
-                            <th class="px-4 py-3">Product</th>
+                            <th class="px-4 py-3">Supplier SKU</th>
+                            <th class="px-4 py-3">EAN</th>
+                            <th class="px-4 py-3">Product Name</th>
                             <th class="px-4 py-3">Category</th>
-                            <th class="px-4 py-3">Supplier price</th>
-                            <th class="px-4 py-3">Pricing rule</th>
-                            <th class="px-4 py-3">Final price</th>
+                            <th class="px-4 py-3">Supplier Price</th>
+                            <th class="px-4 py-3">Pricing Rule</th>
+                            <th class="px-4 py-3">Margin Rule</th>
+                            <th class="px-4 py-3">Margin Amount</th>
+                            <th class="px-4 py-3">Final Selling Price</th>
                             <th class="px-4 py-3">Stock</th>
-                            <th class="px-4 py-3">Images</th>
-                            <th class="px-4 py-3">Matched by</th>
+                            <th class="px-4 py-3">Image Count</th>
+                            <th class="px-4 py-3">Matched By</th>
+                            <th class="px-4 py-3">Result</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-gray-100 dark:divide-gray-800">
@@ -65,8 +69,10 @@
                                 </td>
                                 <td class="px-4 py-3">{{ $row['supplier_name'] }}</td>
                                 <td class="px-4 py-3">
-                                    <div>{{ $row['supplier_sku'] ?: '-' }}</div>
-                                    <div class="text-xs text-gray-500">{{ $row['ean'] ?: 'Missing EAN' }}</div>
+                                    {{ $row['supplier_sku'] ?: '-' }}
+                                </td>
+                                <td class="px-4 py-3">
+                                    {{ $row['ean'] ?: 'Missing EAN' }}
                                 </td>
                                 <td class="px-4 py-3">
                                     <div class="font-medium text-gray-950 dark:text-white">{{ $row['product_name'] }}</div>
@@ -80,8 +86,19 @@
                                 </td>
                                 <td class="px-4 py-3">{{ $row['supplier_price'] !== null ? number_format((float) $row['supplier_price'], 2).' EUR' : '-' }}</td>
                                 <td class="px-4 py-3">
-                                    <div>{{ $row['pricing_rule_applied'] ?: 'Not applied' }}</div>
-                                    <div class="text-xs text-gray-500">Margin: {{ $row['margin_applied'] !== null ? number_format((float) $row['margin_applied'], 2).' EUR' : '-' }}</div>
+                                    <div class="font-medium">{{ $row['matched_pricing_rule'] ?: 'Not applied' }}</div>
+                                    <div class="mt-1 text-xs text-gray-500">Matched Pricing Rule: {{ $row['matched_pricing_rule'] ?: '-' }}</div>
+                                    <div class="text-xs text-gray-500">Inheritance: {{ $row['pricing_inheritance'] ? implode(' -> ', $row['pricing_inheritance']) : '-' }}</div>
+                                    <div class="text-xs text-gray-500">Winning Rule: {{ $row['winning_pricing_rule'] ?: '-' }}</div>
+                                    @if ($row['pricing_rule_reason'])
+                                        <div class="text-xs text-gray-500">{{ $row['pricing_rule_reason'] }}</div>
+                                    @endif
+                                </td>
+                                <td class="px-4 py-3">
+                                    {{ $row['margin_rule'] ?: '-' }}
+                                </td>
+                                <td class="px-4 py-3">
+                                    {{ $row['margin_amount'] !== null ? number_format((float) $row['margin_amount'], 2).' EUR' : '-' }}
                                 </td>
                                 <td class="px-4 py-3">
                                     <div>{{ $row['final_calculated_selling_price'] !== null ? number_format((float) $row['final_calculated_selling_price'], 2).' EUR' : '-' }}</div>
@@ -95,15 +112,25 @@
                                 </td>
                                 <td class="px-4 py-3">{{ $row['image_count'] }}</td>
                                 <td class="px-4 py-3">
-                                    {{ $row['matched_by'] ? implode(', ', $row['matched_by']) : '-' }}
+                                    <div>{{ $row['matched_by_display'] }}</div>
+                                    <div class="text-xs text-gray-500">Reason: {{ $row['reason'] }}</div>
+                                    @if ($row['target_catalog_action'] === 'update')
+                                        <div class="mt-1 text-xs text-gray-500">Catalog Product: {{ $row['target_product_name'] ?: '-' }}</div>
+                                        <div class="text-xs text-gray-500">Catalog ID: {{ $row['target_product_id'] ?: '-' }}</div>
+                                        <div class="text-xs text-gray-500">Current Price: {{ $row['current_price'] !== null ? number_format((float) $row['current_price'], 2).' EUR' : '-' }}</div>
+                                        <div class="text-xs text-gray-500">New Price: {{ $row['new_price'] !== null ? number_format((float) $row['new_price'], 2).' EUR' : '-' }}</div>
+                                        <div class="text-xs text-gray-500">Current Stock: {{ $row['current_stock'] ?? '-' }}</div>
+                                        <div class="text-xs text-gray-500">New Stock: {{ $row['new_stock'] ?? '-' }}</div>
+                                    @endif
                                     @if ($row['conflict_reasons'])
                                         <div class="text-xs text-red-600">{{ implode(', ', $row['conflict_reasons']) }}</div>
                                     @endif
                                 </td>
+                                <td class="px-4 py-3">{{ $row['result'] }}</td>
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="11" class="px-4 py-8 text-center text-gray-500">No supplier products match the preview filters.</td>
+                                <td colspan="15" class="px-4 py-8 text-center text-gray-500">No supplier products match the preview filters.</td>
                             </tr>
                         @endforelse
                     </tbody>

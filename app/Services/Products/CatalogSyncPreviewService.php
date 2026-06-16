@@ -4,6 +4,7 @@ namespace App\Services\Products;
 
 use App\Models\Brand;
 use App\Models\Category;
+use App\Models\PricingRule;
 use App\Models\Product;
 use App\Models\SupplierProduct;
 use App\Services\Availability\AvailabilityStatusMapper;
@@ -89,7 +90,13 @@ class CatalogSyncPreviewService
             'recommended_price' => $supplierProduct->recommended_price,
             'pricing_rule_applied' => $pricing['rule_label'],
             'pricing_rule_scope' => $pricing['rule_scope'],
-            'margin_applied' => $pricing['margin_applied'],
+            'matched_pricing_rule' => $pricing['matched_pricing_rule'],
+            'winning_pricing_rule' => $pricing['winning_pricing_rule'],
+            'pricing_inheritance' => $pricing['pricing_inheritance'],
+            'pricing_rule_reason' => $pricing['pricing_rule_reason'],
+            'margin_rule' => $pricing['margin_rule'],
+            'margin_amount' => $pricing['margin_amount'],
+            'margin_applied' => $pricing['margin_amount'],
             'final_calculated_selling_price' => $pricing['final_selling_price'],
             'sale_price' => $pricing['sale_price'],
             'pricing_applies' => $pricing['pricing_applies'],
@@ -101,8 +108,16 @@ class CatalogSyncPreviewService
             'missing_ean' => blank($supplierProduct->ean),
             'target_catalog_action' => $action,
             'matched_by' => $matches['matched_by'],
+            'matched_by_display' => $this->matchedByDisplay($matches['matched_by']),
+            'reason' => $this->reason($action),
+            'result' => $this->result($action),
             'target_product_id' => $targetProduct?->id,
             'target_product_sku' => $targetProduct?->sku,
+            'target_product_name' => $targetProduct?->name,
+            'current_price' => $targetProduct?->price,
+            'new_price' => $pricing['final_selling_price'],
+            'current_stock' => $targetProduct?->quantity,
+            'new_stock' => $supplierProduct->quantity,
             'conflict_reasons' => $this->conflictReasons($supplierProduct, $matches, $duplicateSupplierRows),
         ];
     }
@@ -217,12 +232,19 @@ class CatalogSyncPreviewService
         }
 
         $pricing = $this->pricingEngine->calculateForSupplierProduct($supplierProduct, $pricingProduct, $category);
+        $rule = $pricing['rule_id'] ? PricingRule::query()->find($pricing['rule_id']) : null;
+        $inheritance = $this->pricingInheritance($pricingProduct, $category, $supplierProduct, $rule);
 
         return [
             'pricing_applies' => true,
             'rule_label' => $this->pricingRuleLabel($pricing['rule_scope']),
             'rule_scope' => $pricing['rule_scope'],
-            'margin_applied' => $pricing['margin_price'] !== null ? round($pricing['margin_price'] - $pricing['normalized_purchase_cost'], 2) : null,
+            'matched_pricing_rule' => $this->displayPricingRule($rule, $supplierProduct),
+            'winning_pricing_rule' => $this->displayPricingRule($rule, $supplierProduct),
+            'pricing_inheritance' => $inheritance,
+            'pricing_rule_reason' => $this->pricingRuleReason($rule),
+            'margin_rule' => $this->marginRuleLabel($rule),
+            'margin_amount' => $pricing['margin_price'] !== null ? round($pricing['margin_price'] - $pricing['normalized_purchase_cost'], 2) : null,
             'final_selling_price' => $pricing['final_selling_price'],
             'sale_price' => $pricing['sale_price'],
         ];
@@ -237,7 +259,12 @@ class CatalogSyncPreviewService
             'pricing_applies' => $pricingApplies,
             'rule_label' => null,
             'rule_scope' => null,
-            'margin_applied' => null,
+            'matched_pricing_rule' => null,
+            'winning_pricing_rule' => null,
+            'pricing_inheritance' => [],
+            'pricing_rule_reason' => null,
+            'margin_rule' => null,
+            'margin_amount' => null,
             'final_selling_price' => null,
             'sale_price' => null,
         ];
@@ -256,6 +283,206 @@ class CatalogSyncPreviewService
             'global' => 'Global Default',
             'product' => 'Product',
             default => $scope,
+        };
+    }
+
+    protected function displayPricingRule(?PricingRule $rule, SupplierProduct $supplierProduct): ?string
+    {
+        if (! $rule) {
+            return null;
+        }
+
+        return match ($rule->scope_type) {
+            PricingRule::SCOPE_PRODUCT => 'Product '.$rule->product?->name,
+            PricingRule::SCOPE_CATEGORY_BRAND_SUPPLIER => trim(($rule->category?->name ?? 'Category').' + '.($rule->brand?->name ?? 'Brand').' + Supplier '.($rule->supplier?->company_name ?? $supplierProduct->supplier?->company_name)),
+            PricingRule::SCOPE_CATEGORY_BRAND => trim(($rule->category?->name ?? 'Category').' + '.($rule->brand?->name ?? 'Brand')),
+            PricingRule::SCOPE_CATEGORY_SUPPLIER => trim(($rule->category?->name ?? 'Category').' + Supplier '.($rule->supplier?->company_name ?? $supplierProduct->supplier?->company_name)),
+            PricingRule::SCOPE_CATEGORY => $rule->category?->name ?? 'Category',
+            PricingRule::SCOPE_BRAND => $rule->brand?->name ?? 'Brand',
+            PricingRule::SCOPE_SUPPLIER => 'Supplier '.($rule->supplier?->company_name ?? $supplierProduct->supplier?->company_name),
+            PricingRule::SCOPE_PRICE_RANGE => 'Price Range',
+            PricingRule::SCOPE_GLOBAL => 'Global Default',
+            default => $rule->name,
+        };
+    }
+
+    protected function marginRuleLabel(?PricingRule $rule): ?string
+    {
+        if (! $rule) {
+            return null;
+        }
+
+        $value = rtrim(rtrim(number_format((float) $rule->margin_value, 4, '.', ''), '0'), '.');
+
+        return $rule->margin_type === PricingRule::MARGIN_FIXED ? "+{$value} EUR" : "{$value}%";
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    protected function pricingInheritance(Product $product, ?Category $category, SupplierProduct $supplierProduct, ?PricingRule $winningRule): array
+    {
+        $rules = collect();
+
+        $this->appendRule($rules, PricingRule::query()->active()->where('scope_type', PricingRule::SCOPE_GLOBAL)->orderBy('sort_order')->first());
+
+        if ($supplierProduct->supplier_id) {
+            $this->appendRule(
+                $rules,
+                PricingRule::query()
+                    ->active()
+                    ->where('scope_type', PricingRule::SCOPE_SUPPLIER)
+                    ->where('supplier_id', $supplierProduct->supplier_id)
+                    ->orderBy('sort_order')
+                    ->first(),
+            );
+        }
+
+        foreach (array_reverse($this->categoryHierarchy($category)) as $categoryId) {
+            $this->appendRule(
+                $rules,
+                PricingRule::query()
+                    ->active()
+                    ->where('scope_type', PricingRule::SCOPE_CATEGORY)
+                    ->where('category_id', $categoryId)
+                    ->orderBy('sort_order')
+                    ->first(),
+            );
+        }
+
+        foreach (array_reverse($this->categoryHierarchy($category)) as $categoryId) {
+            if ($supplierProduct->supplier_id) {
+                $this->appendRule(
+                    $rules,
+                    PricingRule::query()
+                        ->active()
+                        ->where('scope_type', PricingRule::SCOPE_CATEGORY_SUPPLIER)
+                        ->where('category_id', $categoryId)
+                        ->where('supplier_id', $supplierProduct->supplier_id)
+                        ->orderBy('sort_order')
+                        ->first(),
+                );
+            }
+
+            if ($product->brand_id) {
+                $this->appendRule(
+                    $rules,
+                    PricingRule::query()
+                        ->active()
+                        ->where('scope_type', PricingRule::SCOPE_CATEGORY_BRAND)
+                        ->where('category_id', $categoryId)
+                        ->where('brand_id', $product->brand_id)
+                        ->orderBy('sort_order')
+                        ->first(),
+                );
+            }
+
+            if ($product->brand_id && $supplierProduct->supplier_id) {
+                $this->appendRule(
+                    $rules,
+                    PricingRule::query()
+                        ->active()
+                        ->where('scope_type', PricingRule::SCOPE_CATEGORY_BRAND_SUPPLIER)
+                        ->where('category_id', $categoryId)
+                        ->where('brand_id', $product->brand_id)
+                        ->where('supplier_id', $supplierProduct->supplier_id)
+                        ->orderBy('sort_order')
+                        ->first(),
+                );
+            }
+        }
+
+        if ($product->brand_id) {
+            $this->appendRule(
+                $rules,
+                PricingRule::query()
+                    ->active()
+                    ->where('scope_type', PricingRule::SCOPE_BRAND)
+                    ->where('brand_id', $product->brand_id)
+                    ->orderBy('sort_order')
+                    ->first(),
+            );
+        }
+
+        $this->appendRule($rules, $winningRule);
+
+        return $rules
+            ->unique('id')
+            ->map(fn (PricingRule $rule): ?string => $this->displayPricingRule($rule, $supplierProduct))
+            ->filter()
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @param  Collection<int, PricingRule>  $rules
+     */
+    protected function appendRule(Collection $rules, ?PricingRule $rule): void
+    {
+        if ($rule) {
+            $rules->push($rule);
+        }
+    }
+
+    protected function pricingRuleReason(?PricingRule $rule): ?string
+    {
+        return $rule ? 'First active matching rule by priority: '.$this->pricingRuleLabel($rule->scope_type) : null;
+    }
+
+    /**
+     * @return array<int, int>
+     */
+    protected function categoryHierarchy(?Category $category): array
+    {
+        $ids = [];
+
+        while ($category) {
+            $ids[] = $category->id;
+            $category = $category->parent;
+        }
+
+        return $ids;
+    }
+
+    /**
+     * @param  array<int, string>  $matchedBy
+     */
+    protected function matchedByDisplay(array $matchedBy): string
+    {
+        if ($matchedBy === []) {
+            return 'None';
+        }
+
+        return collect($matchedBy)
+            ->map(fn (string $match): string => match ($match) {
+                'sku' => 'SKU',
+                'ean' => 'EAN',
+                'mpn' => 'MPN',
+                'manual_mapping' => 'Manual mapping',
+                default => Str::title(str_replace('_', ' ', $match)),
+            })
+            ->implode(' / ');
+    }
+
+    protected function reason(string $action): string
+    {
+        return match ($action) {
+            'create' => 'New catalog product',
+            'update' => 'Existing catalog product matched',
+            'conflict' => 'Conflicting identifiers require review',
+            'skip' => 'Missing required identifiers',
+            default => 'Preview generated',
+        };
+    }
+
+    protected function result(string $action): string
+    {
+        return match ($action) {
+            'create' => 'New catalog product will be created',
+            'update' => 'Existing catalog product will be updated',
+            'conflict' => 'Conflict detected',
+            'skip' => 'Supplier product will be skipped',
+            default => 'No catalog change will be made during preview',
         };
     }
 

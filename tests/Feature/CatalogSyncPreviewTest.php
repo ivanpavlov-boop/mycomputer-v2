@@ -33,27 +33,41 @@ class CatalogSyncPreviewTest extends TestCase
 
         $this->assertSame('create', $row['target_catalog_action']);
         $this->assertSame([], $row['matched_by']);
+        $this->assertSame('None', $row['matched_by_display']);
+        $this->assertSame('New catalog product', $row['reason']);
+        $this->assertSame('New catalog product will be created', $row['result']);
         $this->assertSame($beforeCount, Product::query()->count());
     }
 
     public function test_update_preview_shows_match_reason(): void
     {
         $supplier = Supplier::factory()->create();
-        Product::factory()->create([
+        $product = Product::factory()->create([
             'sku' => 'CAT-SKU-001',
             'ean' => '2222222222222',
             'mpn' => 'CAT-MPN-001',
+            'name' => 'Existing Catalog Product',
+            'price' => 120,
+            'quantity' => 3,
         ]);
         $supplierProduct = $this->supplierProduct($supplier, [
             'supplier_sku' => 'SUP-SKU-001',
             'ean' => '2222222222222',
             'mpn' => 'SUP-MPN-001',
+            'quantity' => 8,
         ]);
 
         $row = app(CatalogSyncPreviewService::class)->previewSupplierProduct($supplierProduct);
 
         $this->assertSame('update', $row['target_catalog_action']);
         $this->assertSame(['ean'], $row['matched_by']);
+        $this->assertSame('EAN', $row['matched_by_display']);
+        $this->assertSame($product->id, $row['target_product_id']);
+        $this->assertSame('Existing Catalog Product', $row['target_product_name']);
+        $this->assertSame(120.0, (float) $row['current_price']);
+        $this->assertSame(3, $row['current_stock']);
+        $this->assertSame(8, $row['new_stock']);
+        $this->assertSame('Existing catalog product will be updated', $row['result']);
     }
 
     public function test_conflict_preview_detects_multiple_catalog_matches(): void
@@ -80,11 +94,12 @@ class CatalogSyncPreviewTest extends TestCase
         $this->assertSame('conflict', $row['target_catalog_action']);
         $this->assertContains('multiple_catalog_matches', $row['conflict_reasons']);
         $this->assertEqualsCanonicalizing(['ean', 'mpn'], $row['matched_by']);
+        $this->assertSame('Conflict detected', $row['result']);
     }
 
-    public function test_pricing_preview_shows_winning_rule_and_final_price(): void
+    public function test_pricing_preview_shows_inheritance_margin_and_final_price(): void
     {
-        $supplier = Supplier::factory()->create();
+        $supplier = Supplier::factory()->create(['company_name' => 'APCOM']);
         $category = Category::factory()->create(['name' => 'Video Cards', 'slug' => 'video-cards']);
         $brand = Brand::factory()->create(['name' => 'ASUS', 'slug' => 'asus']);
         $supplierProduct = $this->supplierProduct($supplier, [
@@ -93,6 +108,23 @@ class CatalogSyncPreviewTest extends TestCase
             'price' => 100,
         ]);
 
+        PricingRule::query()->create([
+            'name' => 'Global default margin',
+            'scope_type' => PricingRule::SCOPE_GLOBAL,
+            'margin_type' => PricingRule::MARGIN_PERCENTAGE,
+            'margin_value' => 20,
+            'rounding_rule' => PricingRule::ROUND_NONE,
+            'is_active' => true,
+        ]);
+        PricingRule::query()->create([
+            'name' => 'APCOM supplier margin',
+            'scope_type' => PricingRule::SCOPE_SUPPLIER,
+            'supplier_id' => $supplier->id,
+            'margin_type' => PricingRule::MARGIN_PERCENTAGE,
+            'margin_value' => 15,
+            'rounding_rule' => PricingRule::ROUND_NONE,
+            'is_active' => true,
+        ]);
         PricingRule::query()->create([
             'name' => 'Video Cards margin',
             'scope_type' => PricingRule::SCOPE_CATEGORY,
@@ -116,8 +148,20 @@ class CatalogSyncPreviewTest extends TestCase
         $row = app(CatalogSyncPreviewService::class)->previewSupplierProduct($supplierProduct);
 
         $this->assertSame('Category + Brand', $row['pricing_rule_applied']);
+        $this->assertSame('Video Cards + ASUS', $row['matched_pricing_rule']);
+        $this->assertSame('Video Cards + ASUS', $row['winning_pricing_rule']);
+        $this->assertSame([
+            'Global Default',
+            'Supplier APCOM',
+            'Video Cards',
+            'Video Cards + ASUS',
+        ], $row['pricing_inheritance']);
+        $this->assertSame('First active matching rule by priority: Category + Brand', $row['pricing_rule_reason']);
+        $this->assertSame('16%', $row['margin_rule']);
+        $this->assertSame(16.0, $row['margin_amount']);
         $this->assertSame(16.0, $row['margin_applied']);
         $this->assertSame(116.0, $row['final_calculated_selling_price']);
+        $this->assertSame('Video Cards', $row['normalized_category']);
     }
 
     public function test_category_and_supplier_filters_are_applied(): void
