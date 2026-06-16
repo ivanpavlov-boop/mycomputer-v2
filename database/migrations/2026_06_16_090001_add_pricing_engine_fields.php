@@ -28,6 +28,9 @@ return new class extends Migration
             $table->string('source')->default('manual')->after('regular_price')->index();
             $table->boolean('apply_pricing_rules')->default(false)->after('source')->index();
             $table->string('price_source')->default('manual')->after('apply_pricing_rules')->index();
+            $table->decimal('sale_price', 12, 2)->nullable()->after('promo_price');
+            $table->timestamp('sale_price_starts_at')->nullable()->after('sale_price')->index();
+            $table->timestamp('sale_price_ends_at')->nullable()->after('sale_price_starts_at')->index();
             $table->string('sale_price_source')->nullable()->after('promo_end')->index();
         });
 
@@ -47,6 +50,9 @@ return new class extends Migration
                 'source',
                 'apply_pricing_rules',
                 'price_source',
+                'sale_price',
+                'sale_price_starts_at',
+                'sale_price_ends_at',
                 'sale_price_source',
             ]);
         });

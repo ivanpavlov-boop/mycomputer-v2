@@ -11,6 +11,7 @@ use App\Models\Supplier;
 use App\Models\SupplierProduct;
 use App\Services\Pricing\PricingEngine;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Tests\TestCase;
 
 class PricingEngineTest extends TestCase
@@ -434,6 +435,60 @@ class PricingEngineTest extends TestCase
 
         $this->assertNull($expired['sale_price']);
         $this->assertNull($future['sale_price']);
+    }
+
+    public function test_product_active_sale_price_starts_in_future(): void
+    {
+        Carbon::setTestNow('2026-06-16 12:00:00');
+
+        $product = Product::factory()->create([
+            'regular_price' => 120,
+            'price' => 120,
+            'sale_price' => 99,
+            'sale_price_starts_at' => now()->addDay(),
+            'sale_price_ends_at' => now()->addWeek(),
+        ]);
+
+        $this->assertNull($product->activeSalePrice());
+        $this->assertSame(120.0, $product->effectivePrice());
+
+        Carbon::setTestNow();
+    }
+
+    public function test_product_active_sale_price_is_used_during_date_range(): void
+    {
+        Carbon::setTestNow('2026-06-16 12:00:00');
+
+        $product = Product::factory()->create([
+            'regular_price' => 120,
+            'price' => 120,
+            'sale_price' => 99,
+            'sale_price_starts_at' => now()->subDay(),
+            'sale_price_ends_at' => now()->addDay(),
+        ]);
+
+        $this->assertSame(99.0, $product->activeSalePrice());
+        $this->assertSame(99.0, $product->effectivePrice());
+
+        Carbon::setTestNow();
+    }
+
+    public function test_product_sale_price_expires_after_end_date_and_falls_back_to_regular_price(): void
+    {
+        Carbon::setTestNow('2026-06-16 12:00:00');
+
+        $product = Product::factory()->create([
+            'regular_price' => 120,
+            'price' => 120,
+            'sale_price' => 99,
+            'sale_price_starts_at' => now()->subWeek(),
+            'sale_price_ends_at' => now()->subMinute(),
+        ]);
+
+        $this->assertNull($product->activeSalePrice());
+        $this->assertSame(120.0, $product->effectivePrice());
+
+        Carbon::setTestNow();
     }
 
     /**

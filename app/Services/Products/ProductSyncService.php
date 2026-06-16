@@ -112,10 +112,13 @@ class ProductSyncService
 
             if ($product->sale_price_source !== Product::SALE_PRICE_SOURCE_MANUAL) {
                 $updates = array_merge($updates, [
+                    'sale_price' => $pricing['sale_price'],
+                    'sale_price_starts_at' => $pricing['sale_price_starts_at'],
+                    'sale_price_ends_at' => $pricing['sale_price_ends_at'],
+                    'sale_price_source' => $pricing['sale_price_source'],
                     'promo_price' => $pricing['sale_price'],
                     'promo_start' => $pricing['sale_price_starts_at'],
                     'promo_end' => $pricing['sale_price_ends_at'],
-                    'sale_price_source' => $pricing['sale_price_source'],
                 ]);
             }
         }
@@ -229,6 +232,9 @@ class ProductSyncService
             'apply_pricing_rules' => false,
             'price_source' => Product::PRICE_SOURCE_SUPPLIER_IMPORT,
             'price' => $supplierProduct->price ?? 0,
+            'sale_price' => null,
+            'sale_price_starts_at' => null,
+            'sale_price_ends_at' => null,
             'sale_price_source' => null,
             'quantity' => $supplierProduct->quantity ?? 0,
             'reserved_quantity' => 0,

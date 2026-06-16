@@ -61,6 +61,9 @@ class Product extends Model
         'promo_price',
         'promo_start',
         'promo_end',
+        'sale_price',
+        'sale_price_starts_at',
+        'sale_price_ends_at',
         'sale_price_source',
         'quantity',
         'reserved_quantity',
@@ -101,6 +104,9 @@ class Product extends Model
             'promo_price' => 'decimal:2',
             'promo_start' => 'datetime',
             'promo_end' => 'datetime',
+            'sale_price' => 'decimal:2',
+            'sale_price_starts_at' => 'datetime',
+            'sale_price_ends_at' => 'datetime',
             'active' => 'boolean',
             'featured' => 'boolean',
             'new_product' => 'boolean',
@@ -126,6 +132,39 @@ class Product extends Model
     public function shouldApplyPricingEngine(): bool
     {
         return $this->source === self::SOURCE_SUPPLIER_IMPORT || $this->apply_pricing_rules;
+    }
+
+    public function activeSalePrice(): ?float
+    {
+        $salePrice = $this->sale_price ?? $this->promo_price;
+
+        if ($salePrice === null) {
+            return null;
+        }
+
+        $regularPrice = $this->regular_price ?? $this->price;
+
+        if ($regularPrice !== null && (float) $salePrice >= (float) $regularPrice) {
+            return null;
+        }
+
+        $startsAt = $this->sale_price_starts_at ?? $this->promo_start;
+        $endsAt = $this->sale_price_ends_at ?? $this->promo_end;
+
+        if ($startsAt !== null && $startsAt->isFuture()) {
+            return null;
+        }
+
+        if ($endsAt !== null && $endsAt->isPast()) {
+            return null;
+        }
+
+        return round((float) $salePrice, 2);
+    }
+
+    public function effectivePrice(): float
+    {
+        return $this->activeSalePrice() ?? (float) ($this->regular_price ?? $this->price ?? 0);
     }
 
     public function toSearchableArray(): array
@@ -155,7 +194,10 @@ class Product extends Model
             'short_description' => $this->short_description,
             'description' => strip_tags((string) $this->description),
             'price' => (float) $this->price,
-            'promo_price' => $this->promo_price !== null ? (float) $this->promo_price : null,
+            'regular_price' => $this->regular_price !== null ? (float) $this->regular_price : (float) $this->price,
+            'sale_price' => $this->sale_price !== null ? (float) $this->sale_price : ($this->promo_price !== null ? (float) $this->promo_price : null),
+            'active_sale_price' => $this->activeSalePrice(),
+            'promo_price' => $this->activeSalePrice(),
             'stock_status' => $this->stock_status,
             'availability_status' => $this->availabilityStatus?->code ?? $this->stock_status,
             'availability_status_code' => $this->availabilityStatus?->code ?? $this->stock_status,

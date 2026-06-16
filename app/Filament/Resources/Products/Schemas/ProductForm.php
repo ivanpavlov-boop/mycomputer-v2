@@ -76,9 +76,11 @@ class ProductForm
                                 ])
                                 ->default(Product::PRICE_SOURCE_MANUAL)
                                 ->required(),
-                            TextInput::make('promo_price')->label('Sale price')->numeric()->prefix('EUR'),
-                            DateTimePicker::make('promo_start'),
-                            DateTimePicker::make('promo_end'),
+                            TextInput::make('sale_price')->numeric()->prefix('EUR'),
+                            DateTimePicker::make('sale_price_starts_at')
+                                ->helperText('Optional. Use this with sale price for one week, one month, or custom campaign ranges.'),
+                            DateTimePicker::make('sale_price_ends_at')
+                                ->helperText('Optional. Sale price is active only inside the configured range.'),
                             Select::make('sale_price_source')
                                 ->options([
                                     Product::SALE_PRICE_SOURCE_MANUAL => 'Manual',

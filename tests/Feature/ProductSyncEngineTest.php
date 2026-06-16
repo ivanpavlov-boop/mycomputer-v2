@@ -91,6 +91,9 @@ class ProductSyncEngineTest extends TestCase
             'final_selling_price' => 999,
             'regular_price' => 999,
             'price' => 999,
+            'sale_price' => 899,
+            'sale_price_starts_at' => now()->subDay(),
+            'sale_price_ends_at' => now()->addDay(),
             'promo_price' => 899,
             'promo_start' => now()->subDay(),
             'promo_end' => now()->addDay(),
@@ -125,6 +128,8 @@ class ProductSyncEngineTest extends TestCase
         $this->assertSame('999.00', $product->final_selling_price);
         $this->assertSame('999.00', $product->regular_price);
         $this->assertSame('999.00', $product->price);
+        $this->assertSame('899.00', $product->sale_price);
+        $this->assertSame(899.0, $product->activeSalePrice());
         $this->assertSame('899.00', $product->promo_price);
         $this->assertSame(Product::SALE_PRICE_SOURCE_MANUAL, $product->sale_price_source);
         $this->assertSame(8, $product->quantity);
@@ -143,7 +148,10 @@ class ProductSyncEngineTest extends TestCase
             'final_selling_price' => 999,
             'regular_price' => 999,
             'price' => 999,
-            'promo_price' => 879,
+            'sale_price' => 129,
+            'sale_price_starts_at' => now()->subDay(),
+            'sale_price_ends_at' => now()->addDay(),
+            'promo_price' => 129,
             'promo_start' => now()->subDay(),
             'promo_end' => now()->addDay(),
             'sale_price_source' => Product::SALE_PRICE_SOURCE_MANUAL,
@@ -175,7 +183,9 @@ class ProductSyncEngineTest extends TestCase
         $this->assertSame('150.00', $product->final_selling_price);
         $this->assertSame('150.00', $product->regular_price);
         $this->assertSame('150.00', $product->price);
-        $this->assertSame('879.00', $product->promo_price);
+        $this->assertSame('129.00', $product->sale_price);
+        $this->assertSame(129.0, $product->activeSalePrice());
+        $this->assertSame('129.00', $product->promo_price);
         $this->assertSame(Product::SALE_PRICE_SOURCE_MANUAL, $product->sale_price_source);
     }
 
@@ -224,6 +234,8 @@ class ProductSyncEngineTest extends TestCase
 
         $this->assertSame('150.00', $product->regular_price);
         $this->assertSame('150.00', $product->price);
+        $this->assertSame('135.00', $product->sale_price);
+        $this->assertSame(135.0, $product->activeSalePrice());
         $this->assertSame('135.00', $product->promo_price);
         $this->assertSame(Product::SALE_PRICE_SOURCE_PROMOTION_RULE, $product->sale_price_source);
     }
@@ -263,6 +275,7 @@ class ProductSyncEngineTest extends TestCase
 
         $this->assertSame('150.00', $product->regular_price);
         $this->assertSame('150.00', $product->price);
+        $this->assertNull($product->sale_price);
         $this->assertNull($product->promo_price);
         $this->assertNull($product->sale_price_source);
     }
