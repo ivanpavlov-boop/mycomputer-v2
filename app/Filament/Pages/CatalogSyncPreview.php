@@ -37,7 +37,10 @@ class CatalogSyncPreview extends Page implements HasSchemas
         'brand' => null,
         'stock_status' => null,
         'action' => null,
+        'quick_filter' => null,
         'search' => null,
+        'sort_column' => null,
+        'sort_direction' => 'asc',
     ];
 
     public static function canAccess(): bool
@@ -84,8 +87,33 @@ class CatalogSyncPreview extends Page implements HasSchemas
             ]);
     }
 
+    public function applyQuickFilter(?string $filter): void
+    {
+        $this->filters['quick_filter'] = blank($filter) ? null : $filter;
+
+        if (in_array($filter, ['create', 'update', 'conflict'], true)) {
+            $this->filters['action'] = $filter;
+
+            return;
+        }
+
+        $this->filters['action'] = null;
+    }
+
+    public function sortBy(string $column): void
+    {
+        if (($this->filters['sort_column'] ?? null) === $column) {
+            $this->filters['sort_direction'] = ($this->filters['sort_direction'] ?? 'asc') === 'asc' ? 'desc' : 'asc';
+
+            return;
+        }
+
+        $this->filters['sort_column'] = $column;
+        $this->filters['sort_direction'] = 'asc';
+    }
+
     /**
-     * @return array{summary: array<string, int>, rows: array<int, array<string, mixed>>}
+     * @return array{summary: array<string, int|float>, rows: array<int, array<string, mixed>>}
      */
     public function preview(): array
     {

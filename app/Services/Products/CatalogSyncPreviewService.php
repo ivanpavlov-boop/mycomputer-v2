@@ -22,7 +22,7 @@ class CatalogSyncPreviewService
 
     /**
      * @param  array<string, mixed>  $filters
-     * @return array{summary: array<string, int>, rows: array<int, array<string, mixed>>}
+     * @return array{summary: array<string, int|float>, rows: array<int, array<string, mixed>>}
      */
     public function preview(array $filters = [], int|string $limit = 50): array
     {
@@ -31,6 +31,8 @@ class CatalogSyncPreviewService
             ->get()
             ->map(fn (SupplierProduct $supplierProduct): array => $this->previewSupplierProduct($supplierProduct))
             ->filter(fn (array $row): bool => $this->matchesActionFilter($row, $filters['action'] ?? null))
+            ->filter(fn (array $row): bool => $this->matchesQuickFilter($row, $filters['quick_filter'] ?? null))
+            ->pipe(fn (Collection $rows): Collection => $this->sortRows($rows, $filters))
             ->values();
 
         return [
@@ -40,7 +42,7 @@ class CatalogSyncPreviewService
     }
 
     /**
-     * @return array<string, int>
+     * @return array<string, int|float>
      */
     public function fullSummary(array $filters = []): array
     {
@@ -48,6 +50,8 @@ class CatalogSyncPreviewService
             ->get()
             ->map(fn (SupplierProduct $supplierProduct): array => $this->previewSupplierProduct($supplierProduct))
             ->filter(fn (array $row): bool => $this->matchesActionFilter($row, $filters['action'] ?? null))
+            ->filter(fn (array $row): bool => $this->matchesQuickFilter($row, $filters['quick_filter'] ?? null))
+            ->pipe(fn (Collection $rows): Collection => $this->sortRows($rows, $filters))
             ->values();
 
         return $this->summary($rows);
@@ -74,6 +78,8 @@ class CatalogSyncPreviewService
         );
         $pricing = $this->pricingPreview($supplierProduct, $targetProduct, $brand, $category, $action);
         $imageCount = count($this->extractImageUrls($supplierProduct->raw_data ?? []));
+        $profitAmount = $this->profitAmount($supplierProduct->price, $pricing['final_selling_price']);
+        $marginPercent = $this->marginPercent($supplierProduct->price, $profitAmount);
 
         return [
             'supplier_product_id' => $supplierProduct->id,
@@ -84,6 +90,7 @@ class CatalogSyncPreviewService
             'product_name' => $supplierProduct->name,
             'brand' => $supplierProduct->brand_name,
             'category' => $supplierProduct->category_name,
+            'raw_category_data' => $supplierProduct->category_name,
             'normalized_category' => $this->normalizeSupplierCategoryPath((string) $supplierProduct->category_name),
             'category_exists' => $category !== null,
             'supplier_price' => $supplierProduct->price,
@@ -97,6 +104,8 @@ class CatalogSyncPreviewService
             'margin_rule' => $pricing['margin_rule'],
             'margin_amount' => $pricing['margin_amount'],
             'margin_applied' => $pricing['margin_amount'],
+            'profit_amount' => $profitAmount,
+            'margin_percent' => $marginPercent,
             'final_calculated_selling_price' => $pricing['final_selling_price'],
             'sale_price' => $pricing['sale_price'],
             'pricing_applies' => $pricing['pricing_applies'],
@@ -582,7 +591,7 @@ class CatalogSyncPreviewService
 
     /**
      * @param  Collection<int, array<string, mixed>>  $rows
-     * @return array<string, int>
+     * @return array<string, int|float>
      */
     protected function summary(Collection $rows): array
     {
@@ -595,12 +604,78 @@ class CatalogSyncPreviewService
             'missing_categories' => $rows->where('category_exists', false)->count(),
             'missing_images' => $rows->where('missing_images', true)->count(),
             'missing_ean' => $rows->where('missing_ean', true)->count(),
+            'average_margin' => round((float) $rows->whereNotNull('margin_percent')->avg('margin_percent'), 2),
+            'estimated_revenue' => round((float) $rows->sum(fn (array $row): float => (float) ($row['final_calculated_selling_price'] ?? 0) * (int) ($row['stock_quantity'] ?? 0)), 2),
+            'estimated_profit' => round((float) $rows->sum(fn (array $row): float => (float) ($row['profit_amount'] ?? 0) * (int) ($row['stock_quantity'] ?? 0)), 2),
         ];
     }
 
     protected function matchesActionFilter(array $row, mixed $action): bool
     {
         return blank($action) || $row['target_catalog_action'] === $action;
+    }
+
+    /**
+     * @param  Collection<int, array<string, mixed>>  $rows
+     * @param  array<string, mixed>  $filters
+     * @return Collection<int, array<string, mixed>>
+     */
+    protected function sortRows(Collection $rows, array $filters): Collection
+    {
+        $column = $filters['sort_column'] ?? null;
+
+        if (! in_array($column, [
+            'product_name',
+            'supplier_price',
+            'final_calculated_selling_price',
+            'profit_amount',
+            'margin_percent',
+            'winning_pricing_rule',
+            'target_catalog_action',
+            'stock_quantity',
+            'supplier_name',
+            'normalized_category',
+        ], true)) {
+            return $rows;
+        }
+
+        $direction = ($filters['sort_direction'] ?? 'asc') === 'desc' ? 'desc' : 'asc';
+
+        return $rows->sortBy(
+            fn (array $row): mixed => $row[$column] ?? null,
+            SORT_REGULAR,
+            $direction === 'desc',
+        );
+    }
+
+    protected function matchesQuickFilter(array $row, mixed $quickFilter): bool
+    {
+        return match ($quickFilter) {
+            'create', 'update', 'conflict' => $row['target_catalog_action'] === $quickFilter,
+            'apcom' => Str::lower((string) $row['supplier_name']) === 'apcom',
+            'missing_ean' => (bool) $row['missing_ean'],
+            'zero_stock' => (int) ($row['stock_quantity'] ?? 0) <= 0,
+            'missing_images' => (bool) $row['missing_images'],
+            default => true,
+        };
+    }
+
+    protected function profitAmount(mixed $supplierPrice, mixed $finalSellingPrice): ?float
+    {
+        if ($supplierPrice === null || $finalSellingPrice === null) {
+            return null;
+        }
+
+        return round((float) $finalSellingPrice - (float) $supplierPrice, 2);
+    }
+
+    protected function marginPercent(mixed $supplierPrice, ?float $profitAmount): ?float
+    {
+        if ($supplierPrice === null || $profitAmount === null || (float) $supplierPrice <= 0) {
+            return null;
+        }
+
+        return round(($profitAmount / (float) $supplierPrice) * 100, 2);
     }
 
     protected function normalizeLimit(int|string $limit): int
