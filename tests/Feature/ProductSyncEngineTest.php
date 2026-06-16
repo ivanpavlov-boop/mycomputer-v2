@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\Brand;
 use App\Models\PricingRule;
 use App\Models\Product;
 use App\Models\ProductDiscountRule;
@@ -79,8 +80,10 @@ class ProductSyncEngineTest extends TestCase
     public function test_manual_product_is_not_repriced_during_supplier_sync(): void
     {
         $supplier = Supplier::factory()->create();
+        $brand = Brand::factory()->create(['name' => 'Test Brand', 'slug' => 'test-brand']);
         $product = Product::factory()->create([
             'supplier_id' => null,
+            'brand_id' => $brand->id,
             'sku' => 'MANUAL-GPU-001',
             'mpn' => 'MANUAL-MPN-001',
             'source' => Product::SOURCE_MANUAL,
@@ -138,8 +141,10 @@ class ProductSyncEngineTest extends TestCase
     public function test_manual_product_can_be_explicitly_repriced_by_admin_opt_in(): void
     {
         $supplier = Supplier::factory()->create();
+        $brand = Brand::factory()->create(['name' => 'Test Brand', 'slug' => 'test-brand']);
         $product = Product::factory()->create([
             'supplier_id' => null,
+            'brand_id' => $brand->id,
             'sku' => 'MANUAL-GPU-002',
             'mpn' => 'MANUAL-MPN-002',
             'source' => Product::SOURCE_MANUAL,
@@ -192,8 +197,10 @@ class ProductSyncEngineTest extends TestCase
     public function test_supplier_imported_product_gets_discount_rule_sale_price(): void
     {
         $supplier = Supplier::factory()->create();
+        $brand = Brand::factory()->create(['name' => 'Test Brand', 'slug' => 'test-brand']);
         $product = Product::factory()->create([
             'supplier_id' => $supplier->id,
+            'brand_id' => $brand->id,
             'sku' => 'SUPPLIER-GPU-001',
             'mpn' => 'SUPPLIER-MPN-001',
             'source' => Product::SOURCE_SUPPLIER_IMPORT,
@@ -243,8 +250,10 @@ class ProductSyncEngineTest extends TestCase
     public function test_supplier_imported_product_does_not_get_sale_price_without_discount_rule(): void
     {
         $supplier = Supplier::factory()->create();
+        $brand = Brand::factory()->create(['name' => 'Test Brand', 'slug' => 'test-brand']);
         $product = Product::factory()->create([
             'supplier_id' => $supplier->id,
+            'brand_id' => $brand->id,
             'sku' => 'SUPPLIER-GPU-002',
             'mpn' => 'SUPPLIER-MPN-002',
             'source' => Product::SOURCE_SUPPLIER_IMPORT,

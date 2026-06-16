@@ -6,9 +6,11 @@ use App\Models\Brand;
 use App\Models\Category;
 use App\Models\PricingRule;
 use App\Models\Product;
+use App\Models\ProductSupplierOffer;
 use App\Models\SupplierProduct;
 use App\Services\Availability\AvailabilityStatusMapper;
 use App\Services\Pricing\PricingEngine;
+use App\Services\Suppliers\SupplierExclusionService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
@@ -18,11 +20,12 @@ class CatalogSyncPreviewService
     public function __construct(
         private readonly PricingEngine $pricingEngine,
         private readonly AvailabilityStatusMapper $availabilityMapper,
+        private readonly SupplierExclusionService $exclusionService,
     ) {}
 
     /**
      * @param  array<string, mixed>  $filters
-     * @return array{summary: array<string, int>, rows: array<int, array<string, mixed>>}
+     * @return array{summary: array<string, int|float>, rows: array<int, array<string, mixed>>}
      */
     public function preview(array $filters = [], int|string $limit = 50): array
     {
@@ -31,6 +34,8 @@ class CatalogSyncPreviewService
             ->get()
             ->map(fn (SupplierProduct $supplierProduct): array => $this->previewSupplierProduct($supplierProduct))
             ->filter(fn (array $row): bool => $this->matchesActionFilter($row, $filters['action'] ?? null))
+            ->filter(fn (array $row): bool => $this->matchesQuickFilter($row, $filters['quick_filter'] ?? null))
+            ->pipe(fn (Collection $rows): Collection => $this->sortRows($rows, $filters))
             ->values();
 
         return [
@@ -40,7 +45,7 @@ class CatalogSyncPreviewService
     }
 
     /**
-     * @return array<string, int>
+     * @return array<string, int|float>
      */
     public function fullSummary(array $filters = []): array
     {
@@ -48,6 +53,8 @@ class CatalogSyncPreviewService
             ->get()
             ->map(fn (SupplierProduct $supplierProduct): array => $this->previewSupplierProduct($supplierProduct))
             ->filter(fn (array $row): bool => $this->matchesActionFilter($row, $filters['action'] ?? null))
+            ->filter(fn (array $row): bool => $this->matchesQuickFilter($row, $filters['quick_filter'] ?? null))
+            ->pipe(fn (Collection $rows): Collection => $this->sortRows($rows, $filters))
             ->values();
 
         return $this->summary($rows);
@@ -62,7 +69,8 @@ class CatalogSyncPreviewService
 
         $matches = $this->matchCatalogProducts($supplierProduct);
         $duplicateSupplierRows = $this->hasDuplicateSupplierRows($supplierProduct);
-        $action = $this->action($supplierProduct, $matches, $duplicateSupplierRows);
+        $exclusion = $this->exclusionService->evaluate($supplierProduct);
+        $action = $this->action($supplierProduct, $matches, $duplicateSupplierRows, $exclusion['excluded']);
         $targetProduct = $matches['products']->first();
         $brand = $this->findExistingBrand($supplierProduct->brand_name);
         $category = $this->findExistingCategory($supplierProduct->category_name);
@@ -72,8 +80,13 @@ class CatalogSyncPreviewService
             $supplierProduct->external_availability_status,
             $supplierProduct->quantity,
         );
-        $pricing = $this->pricingPreview($supplierProduct, $targetProduct, $brand, $category, $action);
+        $pricingAction = $exclusion['excluded'] ? ($targetProduct ? 'update' : 'create') : $action;
+        $pricing = $this->pricingPreview($supplierProduct, $targetProduct, $brand, $category, $pricingAction);
         $imageCount = count($this->extractImageUrls($supplierProduct->raw_data ?? []));
+        $profitAmount = $this->profitAmount($supplierProduct->price, $pricing['final_selling_price']);
+        $marginPercent = $this->marginPercent($supplierProduct->price, $profitAmount);
+        $supplierOffers = $this->supplierOffersPreview($supplierProduct, $targetProduct);
+        $winningOffer = collect($supplierOffers)->firstWhere('selected', true);
 
         return [
             'supplier_product_id' => $supplierProduct->id,
@@ -84,6 +97,7 @@ class CatalogSyncPreviewService
             'product_name' => $supplierProduct->name,
             'brand' => $supplierProduct->brand_name,
             'category' => $supplierProduct->category_name,
+            'raw_category_data' => $supplierProduct->category_name,
             'normalized_category' => $this->normalizeSupplierCategoryPath((string) $supplierProduct->category_name),
             'category_exists' => $category !== null,
             'supplier_price' => $supplierProduct->price,
@@ -97,6 +111,8 @@ class CatalogSyncPreviewService
             'margin_rule' => $pricing['margin_rule'],
             'margin_amount' => $pricing['margin_amount'],
             'margin_applied' => $pricing['margin_amount'],
+            'profit_amount' => $profitAmount,
+            'margin_percent' => $marginPercent,
             'final_calculated_selling_price' => $pricing['final_selling_price'],
             'sale_price' => $pricing['sale_price'],
             'pricing_applies' => $pricing['pricing_applies'],
@@ -107,10 +123,13 @@ class CatalogSyncPreviewService
             'missing_images' => $imageCount === 0,
             'missing_ean' => blank($supplierProduct->ean),
             'target_catalog_action' => $action,
+            'excluded' => $exclusion['excluded'],
+            'exclusion_rule_id' => $exclusion['rule']?->id,
+            'exclusion_rule' => $exclusion['label'],
             'matched_by' => $matches['matched_by'],
             'matched_by_display' => $this->matchedByDisplay($matches['matched_by']),
-            'reason' => $this->reason($action),
-            'result' => $this->result($action),
+            'reason' => $this->reason($action, $exclusion),
+            'result' => $this->result($action, $exclusion),
             'target_product_id' => $targetProduct?->id,
             'target_product_sku' => $targetProduct?->sku,
             'target_product_name' => $targetProduct?->name,
@@ -118,6 +137,10 @@ class CatalogSyncPreviewService
             'new_price' => $pricing['final_selling_price'],
             'current_stock' => $targetProduct?->quantity,
             'new_stock' => $supplierProduct->quantity,
+            'supplier_offers' => $supplierOffers,
+            'winning_offer' => $winningOffer,
+            'winning_offer_supplier' => $winningOffer['supplier_name'] ?? null,
+            'winning_offer_reason' => $this->winningOfferReason($supplierOffers),
             'conflict_reasons' => $this->conflictReasons($supplierProduct, $matches, $duplicateSupplierRows),
         ];
     }
@@ -167,37 +190,76 @@ class CatalogSyncPreviewService
             }
         }
 
-        $matches = collect();
-        $matchedBy = [];
+        if (filled($supplierProduct->ean)) {
+            $matches = Product::query()->where('ean', $supplierProduct->ean)->get()->unique('id')->values();
 
-        foreach ([
-            'sku' => $supplierProduct->supplier_sku,
-            'ean' => $supplierProduct->ean,
-            'mpn' => $supplierProduct->mpn,
-        ] as $field => $value) {
-            if (blank($value)) {
-                continue;
+            if ($matches->isNotEmpty()) {
+                return [
+                    'products' => $matches,
+                    'matched_by' => ['ean'],
+                ];
             }
+        }
 
-            $fieldMatches = Product::query()->where($field, $value)->get();
+        if (filled($supplierProduct->mpn) && filled($supplierProduct->brand_name)) {
+            $brandSlug = Str::slug($supplierProduct->brand_name);
+            $matches = Product::query()
+                ->where('mpn', $supplierProduct->mpn)
+                ->whereHas('brand', fn ($query) => $query->where('slug', $brandSlug))
+                ->get()
+                ->unique('id')
+                ->values();
 
-            if ($fieldMatches->isNotEmpty()) {
-                $matchedBy[] = $field;
-                $matches = $matches->merge($fieldMatches);
+            if ($matches->isNotEmpty()) {
+                return [
+                    'products' => $matches,
+                    'matched_by' => ['mpn_brand'],
+                ];
+            }
+        }
+
+        if (filled($supplierProduct->supplier_sku)) {
+            $offerMatches = ProductSupplierOffer::query()
+                ->where('supplier_id', $supplierProduct->supplier_id)
+                ->where('supplier_sku', $supplierProduct->supplier_sku)
+                ->pluck('product_id');
+            $matches = Product::query()
+                ->where(function ($query) use ($supplierProduct, $offerMatches): void {
+                    $query
+                        ->where(function ($query) use ($supplierProduct): void {
+                            $query
+                                ->where('supplier_id', $supplierProduct->supplier_id)
+                                ->where('supplier_sku', $supplierProduct->supplier_sku);
+                        })
+                        ->orWhereIn('id', $offerMatches);
+                })
+                ->get()
+                ->unique('id')
+                ->values();
+
+            if ($matches->isNotEmpty()) {
+                return [
+                    'products' => $matches,
+                    'matched_by' => ['supplier_sku'],
+                ];
             }
         }
 
         return [
-            'products' => $matches->unique('id')->values(),
-            'matched_by' => array_values(array_unique($matchedBy)),
+            'products' => collect(),
+            'matched_by' => [],
         ];
     }
 
     /**
      * @param  array{products: Collection<int, Product>, matched_by: array<int, string>}  $matches
      */
-    protected function action(SupplierProduct $supplierProduct, array $matches, bool $duplicateSupplierRows): string
+    protected function action(SupplierProduct $supplierProduct, array $matches, bool $duplicateSupplierRows, bool $excluded): string
     {
+        if ($excluded) {
+            return 'skip';
+        }
+
         if ($this->identifiers($supplierProduct) === []) {
             return 'skip';
         }
@@ -430,6 +492,178 @@ class CatalogSyncPreviewService
     }
 
     /**
+     * @return array<int, array<string, mixed>>
+     */
+    protected function supplierOffersPreview(SupplierProduct $supplierProduct, ?Product $targetProduct): array
+    {
+        $offers = $this->relatedSupplierProducts($supplierProduct)
+            ->map(fn (SupplierProduct $offer): array => $this->supplierProductOfferCandidate($offer))
+            ->values();
+
+        if ($offers->isEmpty() && $targetProduct) {
+            $offers = $targetProduct->supplierOffers()
+                ->with(['supplier', 'supplierProduct'])
+                ->get()
+                ->map(fn (ProductSupplierOffer $offer): array => $this->catalogOfferCandidate($offer))
+                ->values();
+        }
+
+        $selectedId = $offers
+            ->filter(fn (array $offer): bool => $offer['eligible'])
+            ->sortBy([
+                ['cost', 'asc'],
+                ['supplier_priority', 'asc'],
+                ['preferred_rank', 'asc'],
+            ])
+            ->value('id');
+
+        return $offers
+            ->map(function (array $offer) use ($selectedId): array {
+                $offer['selected'] = $selectedId !== null && $offer['id'] === $selectedId;
+
+                return $offer;
+            })
+            ->all();
+    }
+
+    /**
+     * @return Collection<int, SupplierProduct>
+     */
+    protected function relatedSupplierProducts(SupplierProduct $supplierProduct): Collection
+    {
+        $query = SupplierProduct::query()->with('supplier');
+
+        if (filled($supplierProduct->ean)) {
+            return $query->where('ean', $supplierProduct->ean)->get();
+        }
+
+        if (filled($supplierProduct->mpn) && filled($supplierProduct->brand_name)) {
+            return $query
+                ->where('mpn', $supplierProduct->mpn)
+                ->where('brand_name', $supplierProduct->brand_name)
+                ->get();
+        }
+
+        if (filled($supplierProduct->supplier_sku)) {
+            return $query
+                ->where('supplier_id', $supplierProduct->supplier_id)
+                ->where('supplier_sku', $supplierProduct->supplier_sku)
+                ->get();
+        }
+
+        return collect([$supplierProduct->loadMissing('supplier')]);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected function supplierProductOfferCandidate(SupplierProduct $supplierProduct): array
+    {
+        $exclusion = $this->exclusionService->evaluate($supplierProduct);
+        $supplierActive = $supplierProduct->supplier?->status === 'active';
+        $inStock = (int) ($supplierProduct->quantity ?? 0) > 0;
+        $eligible = $supplierActive && $inStock && ! $exclusion['excluded'];
+
+        return [
+            'id' => 'supplier-product-'.$supplierProduct->id,
+            'supplier_product_id' => $supplierProduct->id,
+            'supplier_name' => $supplierProduct->supplier?->company_name,
+            'supplier_sku' => $supplierProduct->supplier_sku,
+            'cost' => $supplierProduct->price !== null ? (float) $supplierProduct->price : PHP_FLOAT_MAX,
+            'display_cost' => $supplierProduct->price !== null ? (float) $supplierProduct->price : null,
+            'stock' => (int) ($supplierProduct->quantity ?? 0),
+            'supplier_priority' => (int) ($supplierProduct->supplier?->priority ?? 100),
+            'preferred_rank' => 1,
+            'eligible' => $eligible,
+            'selected' => false,
+            'excluded' => (bool) $exclusion['excluded'],
+            'exclusion_rule' => $exclusion['label'],
+            'supplier_active' => $supplierActive,
+            'rejection_reason' => $eligible ? null : $this->offerRejectionReason($supplierActive, $inStock, (bool) $exclusion['excluded']),
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected function catalogOfferCandidate(ProductSupplierOffer $offer): array
+    {
+        $supplierProduct = $offer->supplierProduct;
+        $exclusion = $supplierProduct ? $this->exclusionService->evaluate($supplierProduct) : [
+            'excluded' => false,
+            'label' => null,
+        ];
+        $supplierActive = $offer->supplier?->status === 'active';
+        $inStock = (int) $offer->quantity > 0;
+        $eligible = $supplierActive && $inStock && ! $exclusion['excluded'];
+
+        return [
+            'id' => 'catalog-offer-'.$offer->id,
+            'supplier_product_id' => $offer->supplier_product_id,
+            'supplier_name' => $offer->supplier?->company_name,
+            'supplier_sku' => $offer->supplier_sku,
+            'cost' => $offer->price !== null ? (float) $offer->price : PHP_FLOAT_MAX,
+            'display_cost' => $offer->price !== null ? (float) $offer->price : null,
+            'stock' => (int) $offer->quantity,
+            'supplier_priority' => (int) $offer->supplier_priority,
+            'preferred_rank' => $offer->is_preferred ? 0 : 1,
+            'eligible' => $eligible,
+            'selected' => false,
+            'excluded' => (bool) $exclusion['excluded'],
+            'exclusion_rule' => $exclusion['label'],
+            'supplier_active' => $supplierActive,
+            'rejection_reason' => $eligible ? null : $this->offerRejectionReason($supplierActive, $inStock, (bool) $exclusion['excluded']),
+        ];
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $offers
+     */
+    protected function winningOfferReason(array $offers): string
+    {
+        $collection = collect($offers);
+
+        if ($collection->contains(fn (array $offer): bool => (bool) $offer['selected'])) {
+            return 'Lowest available in-stock supplier.';
+        }
+
+        if ($collection->isEmpty()) {
+            return 'No supplier offers found.';
+        }
+
+        if ($collection->every(fn (array $offer): bool => ! $offer['supplier_active'])) {
+            return 'No active supplier offers are available.';
+        }
+
+        if ($collection->every(fn (array $offer): bool => (int) $offer['stock'] <= 0)) {
+            return 'No supplier has stock; product should become Out Of Stock.';
+        }
+
+        if ($collection->every(fn (array $offer): bool => (bool) $offer['excluded'])) {
+            return 'All supplier offers are excluded by rules.';
+        }
+
+        return 'No eligible supplier offer is available.';
+    }
+
+    protected function offerRejectionReason(bool $supplierActive, bool $inStock, bool $excluded): string
+    {
+        if (! $supplierActive) {
+            return 'Supplier is inactive.';
+        }
+
+        if ($excluded) {
+            return 'Offer is excluded by rule.';
+        }
+
+        if (! $inStock) {
+            return 'Offer has zero stock.';
+        }
+
+        return 'Offer is not eligible.';
+    }
+
+    /**
      * @return array<int, int>
      */
     protected function categoryHierarchy(?Category $category): array
@@ -458,14 +692,23 @@ class CatalogSyncPreviewService
                 'sku' => 'SKU',
                 'ean' => 'EAN',
                 'mpn' => 'MPN',
+                'mpn_brand' => 'MPN + Brand',
+                'supplier_sku' => 'Supplier SKU',
                 'manual_mapping' => 'Manual mapping',
                 default => Str::title(str_replace('_', ' ', $match)),
             })
             ->implode(' / ');
     }
 
-    protected function reason(string $action): string
+    /**
+     * @param  array{excluded: bool, rule: mixed, reason: string|null, label: string|null}  $exclusion
+     */
+    protected function reason(string $action, array $exclusion): string
     {
+        if ($exclusion['excluded']) {
+            return 'Excluded by rule: '.$exclusion['label'];
+        }
+
         return match ($action) {
             'create' => 'New catalog product',
             'update' => 'Existing catalog product matched',
@@ -475,8 +718,15 @@ class CatalogSyncPreviewService
         };
     }
 
-    protected function result(string $action): string
+    /**
+     * @param  array{excluded: bool, rule: mixed, reason: string|null, label: string|null}  $exclusion
+     */
+    protected function result(string $action, array $exclusion): string
     {
+        if ($exclusion['excluded']) {
+            return 'Supplier product will be skipped because it is excluded.';
+        }
+
         return match ($action) {
             'create' => 'New catalog product will be created',
             'update' => 'Existing catalog product will be updated',
@@ -582,7 +832,7 @@ class CatalogSyncPreviewService
 
     /**
      * @param  Collection<int, array<string, mixed>>  $rows
-     * @return array<string, int>
+     * @return array<string, int|float>
      */
     protected function summary(Collection $rows): array
     {
@@ -595,12 +845,79 @@ class CatalogSyncPreviewService
             'missing_categories' => $rows->where('category_exists', false)->count(),
             'missing_images' => $rows->where('missing_images', true)->count(),
             'missing_ean' => $rows->where('missing_ean', true)->count(),
+            'excluded' => $rows->where('excluded', true)->count(),
+            'average_margin' => round((float) $rows->whereNotNull('margin_percent')->avg('margin_percent'), 2),
+            'estimated_revenue' => round((float) $rows->sum(fn (array $row): float => (float) ($row['final_calculated_selling_price'] ?? 0) * (int) ($row['stock_quantity'] ?? 0)), 2),
+            'estimated_profit' => round((float) $rows->sum(fn (array $row): float => (float) ($row['profit_amount'] ?? 0) * (int) ($row['stock_quantity'] ?? 0)), 2),
         ];
     }
 
     protected function matchesActionFilter(array $row, mixed $action): bool
     {
         return blank($action) || $row['target_catalog_action'] === $action;
+    }
+
+    /**
+     * @param  Collection<int, array<string, mixed>>  $rows
+     * @param  array<string, mixed>  $filters
+     * @return Collection<int, array<string, mixed>>
+     */
+    protected function sortRows(Collection $rows, array $filters): Collection
+    {
+        $column = $filters['sort_column'] ?? null;
+
+        if (! in_array($column, [
+            'product_name',
+            'supplier_price',
+            'final_calculated_selling_price',
+            'profit_amount',
+            'margin_percent',
+            'winning_pricing_rule',
+            'target_catalog_action',
+            'stock_quantity',
+            'supplier_name',
+            'normalized_category',
+        ], true)) {
+            return $rows;
+        }
+
+        $direction = ($filters['sort_direction'] ?? 'asc') === 'desc' ? 'desc' : 'asc';
+
+        return $rows->sortBy(
+            fn (array $row): mixed => $row[$column] ?? null,
+            SORT_REGULAR,
+            $direction === 'desc',
+        );
+    }
+
+    protected function matchesQuickFilter(array $row, mixed $quickFilter): bool
+    {
+        return match ($quickFilter) {
+            'create', 'update', 'conflict' => $row['target_catalog_action'] === $quickFilter,
+            'apcom' => Str::lower((string) $row['supplier_name']) === 'apcom',
+            'missing_ean' => (bool) $row['missing_ean'],
+            'zero_stock' => (int) ($row['stock_quantity'] ?? 0) <= 0,
+            'missing_images' => (bool) $row['missing_images'],
+            default => true,
+        };
+    }
+
+    protected function profitAmount(mixed $supplierPrice, mixed $finalSellingPrice): ?float
+    {
+        if ($supplierPrice === null || $finalSellingPrice === null) {
+            return null;
+        }
+
+        return round((float) $finalSellingPrice - (float) $supplierPrice, 2);
+    }
+
+    protected function marginPercent(mixed $supplierPrice, ?float $profitAmount): ?float
+    {
+        if ($supplierPrice === null || $profitAmount === null || (float) $supplierPrice <= 0) {
+            return null;
+        }
+
+        return round(($profitAmount / (float) $supplierPrice) * 100, 2);
     }
 
     protected function normalizeLimit(int|string $limit): int

@@ -13,6 +13,7 @@ use App\Services\Attributes\CatalogAttributeWriter;
 use App\Services\Attributes\SupplierAttributeExtractionService;
 use App\Services\Availability\AvailabilityStatusMapper;
 use App\Services\Pricing\PricingEngine;
+use App\Services\Suppliers\SupplierExclusionService;
 use Illuminate\Support\Str;
 
 class ProductSyncService
@@ -22,6 +23,8 @@ class ProductSyncService
         private readonly CatalogAttributeWriter $catalogAttributeWriter,
         private readonly SupplierAttributeExtractionService $attributeExtraction,
         private readonly PricingEngine $pricingEngine,
+        private readonly SupplierExclusionService $exclusionService,
+        private readonly SupplierOfferSelectionService $offerSelectionService,
     ) {}
 
     public function sync(SupplierProduct $supplierProduct, ?string $strategy = null): ProductSyncLog
@@ -30,6 +33,11 @@ class ProductSyncService
 
         $strategy ??= $supplierProduct->supplier?->sync_strategy ?: 'lowest_price';
         $identifiers = $this->identifiers($supplierProduct);
+        $exclusion = $this->exclusionService->evaluate($supplierProduct);
+
+        if ($exclusion['excluded']) {
+            return $this->skip($supplierProduct, $strategy, 'Excluded by supplier rule: '.$exclusion['label']);
+        }
 
         if ($identifiers === []) {
             return $this->skip($supplierProduct, $strategy, 'Supplier product has no SKU, EAN or MPN identifiers.');
@@ -61,7 +69,23 @@ class ProductSyncService
         }
 
         $offer = $this->upsertSupplierOffer($product, $supplierProduct);
-        $selectedOffer = $this->selectOffer($product, $strategy);
+        $selection = $this->offerSelectionService->select($product);
+        $selectedOffer = $selection['offer'];
+
+        if (! $selectedOffer) {
+            $product->update([
+                'quantity' => 0,
+                'stock_status' => 'out_of_stock',
+                'source_payload' => array_merge($product->source_payload ?? [], [
+                    'last_offer_selection_reason' => $selection['reason'],
+                    'supplier_offer_candidates' => $selection['candidates'],
+                ]),
+            ]);
+
+            return $this->mark($supplierProduct, $strategy, 'skipped', 'skipped', $selection['reason'], [
+                'supplier_offer_candidates' => $selection['candidates'],
+            ]);
+        }
         $brand = $this->resolveBrand($supplierProduct->brand_name);
         $category = $this->resolveCategory($supplierProduct->category_name);
         $selectedSupplierProduct = $selectedOffer->supplierProduct ?: $supplierProduct;
@@ -94,6 +118,8 @@ class ProductSyncService
             'source_payload' => [
                 'sync_strategy' => $strategy,
                 'selected_supplier_offer_id' => $selectedOffer->id,
+                'supplier_offer_candidates' => $selection['candidates'],
+                'offer_selection_reason' => $selection['reason'],
                 'last_supplier_product_id' => $supplierProduct->id,
                 'pricing' => $pricing,
             ],
@@ -156,6 +182,7 @@ class ProductSyncService
             'context' => [
                 'supplier_offer_id' => $offer->id,
                 'selected_supplier_offer_id' => $selectedOffer->id,
+                'offer_selection_reason' => $selection['reason'],
                 'identifiers' => $identifiers,
                 'availability_status_id' => $availability?->id,
                 'external_availability_status' => $supplierProduct->external_availability_status,
@@ -170,30 +197,59 @@ class ProductSyncService
      */
     protected function matchProduct(SupplierProduct $supplierProduct): array
     {
-        $matches = collect();
-        $matchType = null;
+        if ($supplierProduct->product_id) {
+            $product = Product::query()->find($supplierProduct->product_id);
 
-        foreach ([
-            'sku' => $supplierProduct->supplier_sku,
-            'ean' => $supplierProduct->ean,
-            'mpn' => $supplierProduct->mpn,
-        ] as $field => $value) {
-            if (blank($value)) {
-                continue;
-            }
-
-            $fieldMatches = Product::query()->where($field, $value)->get();
-
-            if ($fieldMatches->isNotEmpty() && $matchType === null) {
-                $matchType = $field;
-            }
-
-            $matches = $matches->merge($fieldMatches);
+            return [$product, 'manual_mapping', $product ? 1 : 0];
         }
 
-        $matches = $matches->unique('id')->values();
+        if (filled($supplierProduct->ean)) {
+            $matches = Product::query()->where('ean', $supplierProduct->ean)->get()->unique('id')->values();
 
-        return [$matches->first(), $matchType, $matches->count()];
+            if ($matches->isNotEmpty()) {
+                return [$matches->first(), 'ean', $matches->count()];
+            }
+        }
+
+        if (filled($supplierProduct->mpn) && filled($supplierProduct->brand_name)) {
+            $brandSlug = Str::slug($supplierProduct->brand_name);
+            $matches = Product::query()
+                ->where('mpn', $supplierProduct->mpn)
+                ->whereHas('brand', fn ($query) => $query->where('slug', $brandSlug))
+                ->get()
+                ->unique('id')
+                ->values();
+
+            if ($matches->isNotEmpty()) {
+                return [$matches->first(), 'mpn_brand', $matches->count()];
+            }
+        }
+
+        if (filled($supplierProduct->supplier_sku)) {
+            $offerMatches = ProductSupplierOffer::query()
+                ->where('supplier_id', $supplierProduct->supplier_id)
+                ->where('supplier_sku', $supplierProduct->supplier_sku)
+                ->pluck('product_id');
+            $matches = Product::query()
+                ->where(function ($query) use ($supplierProduct, $offerMatches): void {
+                    $query
+                        ->where(function ($query) use ($supplierProduct): void {
+                            $query
+                                ->where('supplier_id', $supplierProduct->supplier_id)
+                                ->where('supplier_sku', $supplierProduct->supplier_sku);
+                        })
+                        ->orWhereIn('id', $offerMatches);
+                })
+                ->get()
+                ->unique('id')
+                ->values();
+
+            if ($matches->isNotEmpty()) {
+                return [$matches->first(), 'supplier_sku', $matches->count()];
+            }
+        }
+
+        return [null, null, 0];
     }
 
     protected function createProduct(SupplierProduct $supplierProduct): Product
@@ -306,20 +362,6 @@ class ProductSyncService
         }
 
         return $supplierProduct->fresh(['attributes', 'supplier']);
-    }
-
-    protected function selectOffer(Product $product, string $strategy): ProductSupplierOffer
-    {
-        $query = $product->supplierOffers()->where('quantity', '>', 0);
-
-        if (! $query->exists()) {
-            $query = $product->supplierOffers();
-        }
-
-        return match ($strategy) {
-            'preferred_supplier' => $query->orderBy('supplier_priority')->orderBy('price')->firstOrFail(),
-            default => $query->orderBy('price')->orderBy('supplier_priority')->firstOrFail(),
-        };
     }
 
     protected function hasDuplicateSupplierRows(SupplierProduct $supplierProduct): bool

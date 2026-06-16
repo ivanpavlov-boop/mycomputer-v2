@@ -80,7 +80,7 @@ class CatalogSyncPreviewTest extends TestCase
         ]);
         Product::factory()->create([
             'sku' => 'CAT-CONFLICT-002',
-            'ean' => '4444444444444',
+            'ean' => '3333333333333',
             'mpn' => 'SUP-MPN-CONFLICT',
         ]);
         $supplierProduct = $this->supplierProduct($supplier, [
@@ -93,7 +93,7 @@ class CatalogSyncPreviewTest extends TestCase
 
         $this->assertSame('conflict', $row['target_catalog_action']);
         $this->assertContains('multiple_catalog_matches', $row['conflict_reasons']);
-        $this->assertEqualsCanonicalizing(['ean', 'mpn'], $row['matched_by']);
+        $this->assertSame(['ean'], $row['matched_by']);
         $this->assertSame('Conflict detected', $row['result']);
     }
 
@@ -160,8 +160,84 @@ class CatalogSyncPreviewTest extends TestCase
         $this->assertSame('16%', $row['margin_rule']);
         $this->assertSame(16.0, $row['margin_amount']);
         $this->assertSame(16.0, $row['margin_applied']);
+        $this->assertSame(16.0, $row['profit_amount']);
+        $this->assertSame(16.0, $row['margin_percent']);
         $this->assertSame(116.0, $row['final_calculated_selling_price']);
         $this->assertSame('Video Cards', $row['normalized_category']);
+    }
+
+    public function test_summary_includes_margin_revenue_and_profit_metrics(): void
+    {
+        $supplier = Supplier::factory()->create();
+        $this->supplierProduct($supplier, [
+            'supplier_sku' => 'PROFIT-001',
+            'price' => 100,
+            'quantity' => 2,
+        ]);
+
+        PricingRule::query()->create([
+            'name' => 'Global default margin',
+            'scope_type' => PricingRule::SCOPE_GLOBAL,
+            'margin_type' => PricingRule::MARGIN_PERCENTAGE,
+            'margin_value' => 20,
+            'rounding_rule' => PricingRule::ROUND_NONE,
+            'is_active' => true,
+        ]);
+
+        $preview = app(CatalogSyncPreviewService::class)->preview([], 50);
+
+        $this->assertSame(20.0, $preview['summary']['average_margin']);
+        $this->assertSame(240.0, $preview['summary']['estimated_revenue']);
+        $this->assertSame(40.0, $preview['summary']['estimated_profit']);
+    }
+
+    public function test_quick_filters_filter_rows_without_writing_catalog_data(): void
+    {
+        $apcom = Supplier::factory()->create(['company_name' => 'APCOM']);
+        $other = Supplier::factory()->create(['company_name' => 'Other']);
+
+        $this->supplierProduct($apcom, [
+            'supplier_sku' => 'APC-MISSING-EAN',
+            'ean' => null,
+            'quantity' => 0,
+            'raw_data' => [],
+        ]);
+        $this->supplierProduct($other, [
+            'supplier_sku' => 'OTHER-WITH-EAN',
+            'ean' => '9999999999999',
+            'quantity' => 5,
+        ]);
+
+        $service = app(CatalogSyncPreviewService::class);
+
+        $this->assertCount(1, $service->preview(['quick_filter' => 'apcom'], 50)['rows']);
+        $this->assertCount(1, $service->preview(['quick_filter' => 'missing_ean'], 50)['rows']);
+        $this->assertCount(1, $service->preview(['quick_filter' => 'zero_stock'], 50)['rows']);
+        $this->assertCount(1, $service->preview(['quick_filter' => 'missing_images'], 50)['rows']);
+        $this->assertSame(0, Product::query()->count());
+    }
+
+    public function test_preview_rows_can_be_sorted_by_business_columns(): void
+    {
+        $supplier = Supplier::factory()->create();
+        $this->supplierProduct($supplier, [
+            'supplier_sku' => 'SORT-B',
+            'name' => 'B Product',
+            'price' => 200,
+        ]);
+        $this->supplierProduct($supplier, [
+            'supplier_sku' => 'SORT-A',
+            'name' => 'A Product',
+            'price' => 100,
+        ]);
+
+        $preview = app(CatalogSyncPreviewService::class)->preview([
+            'sort_column' => 'supplier_price',
+            'sort_direction' => 'desc',
+        ], 50);
+
+        $this->assertSame('B Product', $preview['rows'][0]['product_name']);
+        $this->assertSame('A Product', $preview['rows'][1]['product_name']);
     }
 
     public function test_category_and_supplier_filters_are_applied(): void
