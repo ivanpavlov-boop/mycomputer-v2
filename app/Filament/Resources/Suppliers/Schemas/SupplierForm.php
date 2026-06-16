@@ -54,6 +54,32 @@ class SupplierForm
                         ]),
                         Textarea::make('notes')->rows(4)->columnSpanFull(),
                     ]),
+                Section::make('Pricing')
+                    ->schema([
+                        Grid::make(3)->schema([
+                            Select::make('msrp_strategy')
+                                ->options([
+                                    'margin_only' => 'Margin price only',
+                                    'recommended_only' => 'Recommended price only',
+                                    'recommended_min_margin' => 'Recommended with minimum margin',
+                                    'higher_of_margin_or_recommended' => 'Higher of margin/recommended',
+                                    'lower_of_margin_or_recommended' => 'Lower of margin/recommended',
+                                ])
+                                ->default('margin_only')
+                                ->required(),
+                            Select::make('vat_mode')
+                                ->options([
+                                    'price_includes_vat' => 'Price includes VAT',
+                                    'price_excludes_vat' => 'Price excludes VAT',
+                                    'reverse_charge_eu' => 'Reverse-charge EU',
+                                ])
+                                ->default('price_excludes_vat')
+                                ->required(),
+                            TextInput::make('vat_rate')
+                                ->numeric()
+                                ->helperText('Optional supplier VAT rate used only for normalized cost calculations.'),
+                        ]),
+                    ]),
                 Section::make('Import schedule')
                     ->schema([
                         Grid::make(3)->schema([

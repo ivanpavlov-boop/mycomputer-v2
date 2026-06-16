@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Products\Schemas;
 
+use App\Models\Product;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\KeyValue;
@@ -40,6 +41,16 @@ class ProductForm
                             Select::make('category_id')->relationship('category', 'name')->searchable()->preload(),
                             Select::make('brand_id')->relationship('brand', 'name')->searchable()->preload(),
                             Select::make('supplier_id')->relationship('supplier', 'company_name')->searchable()->preload(),
+                            Select::make('source')
+                                ->options([
+                                    Product::SOURCE_MANUAL => 'Manual',
+                                    Product::SOURCE_SUPPLIER_IMPORT => 'Supplier import',
+                                ])
+                                ->default(Product::SOURCE_MANUAL)
+                                ->required(),
+                            Toggle::make('apply_pricing_rules')
+                                ->default(false)
+                                ->helperText('Explicitly apply pricing rules to this product even when it is manually managed.'),
                             TextInput::make('weight')->numeric()->suffix('kg'),
                             TextInput::make('warranty_months')->numeric()->suffix('months'),
                         ]),
@@ -49,11 +60,34 @@ class ProductForm
                 Section::make('Pricing and inventory')
                     ->schema([
                         Grid::make(4)->schema([
-                            TextInput::make('purchase_price')->numeric()->prefix('BGN'),
-                            TextInput::make('price')->numeric()->prefix('BGN')->default(0)->required(),
-                            TextInput::make('promo_price')->numeric()->prefix('BGN'),
-                            DateTimePicker::make('promo_start'),
-                            DateTimePicker::make('promo_end'),
+                            TextInput::make('purchase_price')->numeric()->prefix('EUR'),
+                            TextInput::make('regular_price')->numeric()->prefix('EUR'),
+                            TextInput::make('price')
+                                ->label('Regular selling price')
+                                ->numeric()
+                                ->prefix('EUR')
+                                ->default(0)
+                                ->required(),
+                            Select::make('price_source')
+                                ->options([
+                                    Product::PRICE_SOURCE_MANUAL => 'Manual',
+                                    Product::PRICE_SOURCE_SUPPLIER_IMPORT => 'Supplier import calculated',
+                                    Product::PRICE_SOURCE_ADMIN_OVERRIDE => 'Admin override',
+                                ])
+                                ->default(Product::PRICE_SOURCE_MANUAL)
+                                ->required(),
+                            TextInput::make('sale_price')->numeric()->prefix('EUR'),
+                            DateTimePicker::make('sale_price_starts_at')
+                                ->helperText('Optional. Use this with sale price for one week, one month, or custom campaign ranges.'),
+                            DateTimePicker::make('sale_price_ends_at')
+                                ->helperText('Optional. Sale price is active only inside the configured range.'),
+                            Select::make('sale_price_source')
+                                ->options([
+                                    Product::SALE_PRICE_SOURCE_MANUAL => 'Manual',
+                                    Product::SALE_PRICE_SOURCE_PROMOTION_RULE => 'Promotion rule',
+                                    Product::SALE_PRICE_SOURCE_SUPPLIER_FEED => 'Supplier feed',
+                                ])
+                                ->nullable(),
                             TextInput::make('quantity')->numeric()->default(0)->required(),
                             TextInput::make('reserved_quantity')->numeric()->default(0)->required(),
                             Select::make('availability_status_id')

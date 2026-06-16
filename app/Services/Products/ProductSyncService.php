@@ -12,6 +12,7 @@ use App\Models\SupplierProduct;
 use App\Services\Attributes\CatalogAttributeWriter;
 use App\Services\Attributes\SupplierAttributeExtractionService;
 use App\Services\Availability\AvailabilityStatusMapper;
+use App\Services\Pricing\PricingEngine;
 use Illuminate\Support\Str;
 
 class ProductSyncService
@@ -20,6 +21,7 @@ class ProductSyncService
         private readonly AvailabilityStatusMapper $availabilityMapper,
         private readonly CatalogAttributeWriter $catalogAttributeWriter,
         private readonly SupplierAttributeExtractionService $attributeExtraction,
+        private readonly PricingEngine $pricingEngine,
     ) {}
 
     public function sync(SupplierProduct $supplierProduct, ?string $strategy = null): ProductSyncLog
@@ -62,6 +64,15 @@ class ProductSyncService
         $selectedOffer = $this->selectOffer($product, $strategy);
         $brand = $this->resolveBrand($supplierProduct->brand_name);
         $category = $this->resolveCategory($supplierProduct->category_name);
+        $selectedSupplierProduct = $selectedOffer->supplierProduct ?: $supplierProduct;
+        $pricingProduct = $product->replicate();
+        $pricingProduct->id = $product->id;
+        $pricingProduct->brand_id = $product->brand_id ?: $brand?->id;
+        $pricingProduct->category_id = $product->category_id ?: $category?->id;
+
+        $pricing = $product->shouldApplyPricingEngine()
+            ? $this->pricingEngine->calculateForSupplierProduct($selectedSupplierProduct, $pricingProduct, $category)
+            : null;
 
         $availability = $this->availabilityMapper->mapWithFallback(
             'supplier',
@@ -75,8 +86,6 @@ class ProductSyncService
             'supplier_sku' => $selectedOffer->supplier_sku,
             'brand_id' => $product->brand_id ?: $brand?->id,
             'category_id' => $product->category_id ?: $category?->id,
-            'purchase_price' => $selectedOffer->price,
-            'price' => $selectedOffer->price ?? $product->price,
             'quantity' => $selectedOffer->quantity,
             'availability_status_id' => $product->manual_override ? $product->availability_status_id : $availability?->id,
             'stock_status' => $product->manual_override ? $product->stock_status : ($availability?->code ?? ($selectedOffer->quantity > 0 ? 'in_stock' : 'out_of_stock')),
@@ -86,8 +95,33 @@ class ProductSyncService
                 'sync_strategy' => $strategy,
                 'selected_supplier_offer_id' => $selectedOffer->id,
                 'last_supplier_product_id' => $supplierProduct->id,
+                'pricing' => $pricing,
             ],
         ];
+
+        if ($pricing !== null) {
+            $updates = array_merge($updates, [
+                'purchase_price' => $pricing['purchase_price'],
+                'supplier_price_raw' => $pricing['supplier_price_raw'],
+                'recommended_price' => $pricing['recommended_price'],
+                'final_selling_price' => $pricing['final_selling_price'],
+                'regular_price' => $pricing['regular_price'],
+                'price_source' => Product::PRICE_SOURCE_SUPPLIER_IMPORT,
+                'price' => $pricing['final_selling_price'],
+            ]);
+
+            if ($product->sale_price_source !== Product::SALE_PRICE_SOURCE_MANUAL) {
+                $updates = array_merge($updates, [
+                    'sale_price' => $pricing['sale_price'],
+                    'sale_price_starts_at' => $pricing['sale_price_starts_at'],
+                    'sale_price_ends_at' => $pricing['sale_price_ends_at'],
+                    'sale_price_source' => $pricing['sale_price_source'],
+                    'promo_price' => $pricing['sale_price'],
+                    'promo_start' => $pricing['sale_price_starts_at'],
+                    'promo_end' => $pricing['sale_price_ends_at'],
+                ]);
+            }
+        }
 
         $product->update($updates);
 
@@ -190,7 +224,18 @@ class ProductSyncService
             'short_description' => null,
             'description' => null,
             'purchase_price' => $supplierProduct->price,
+            'supplier_price_raw' => $supplierProduct->price,
+            'recommended_price' => $supplierProduct->recommended_price,
+            'final_selling_price' => $supplierProduct->price ?? 0,
+            'regular_price' => $supplierProduct->price ?? 0,
+            'source' => Product::SOURCE_SUPPLIER_IMPORT,
+            'apply_pricing_rules' => false,
+            'price_source' => Product::PRICE_SOURCE_SUPPLIER_IMPORT,
             'price' => $supplierProduct->price ?? 0,
+            'sale_price' => null,
+            'sale_price_starts_at' => null,
+            'sale_price_ends_at' => null,
+            'sale_price_source' => null,
             'quantity' => $supplierProduct->quantity ?? 0,
             'reserved_quantity' => 0,
             'availability_status_id' => $availability?->id,

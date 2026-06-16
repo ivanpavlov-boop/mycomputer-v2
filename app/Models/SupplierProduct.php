@@ -19,6 +19,8 @@ class SupplierProduct extends Model
         'brand_name',
         'category_name',
         'price',
+        'supplier_price_raw',
+        'recommended_price',
         'quantity',
         'external_availability_status',
         'external_availability_label',
@@ -36,6 +38,8 @@ class SupplierProduct extends Model
     {
         return [
             'price' => 'decimal:2',
+            'supplier_price_raw' => 'decimal:2',
+            'recommended_price' => 'decimal:2',
             'raw_data' => 'array',
             'received_at' => 'datetime',
             'synced_at' => 'datetime',

@@ -111,6 +111,8 @@ class XmlImportEngine
                         'brand_name' => $mapped['brand_name'] ?? null,
                         'category_name' => $categoryName,
                         'price' => $mapped['price'] ?? null,
+                        'supplier_price_raw' => $mapped['price'] ?? null,
+                        'recommended_price' => $mapped['recommended_price'] ?? null,
                         'quantity' => $mapped['quantity'] ?? null,
                         'external_availability_status' => $mapped['external_availability_status'] ?? $mapped['stock_status'] ?? null,
                         'external_availability_label' => $mapped['external_availability_label'] ?? null,
