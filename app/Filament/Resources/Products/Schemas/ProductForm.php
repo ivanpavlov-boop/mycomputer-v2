@@ -65,8 +65,18 @@ class ProductForm
                                 ->label('Lock Description')
                                 ->helperText('Prevent supplier sync from overwriting short and full descriptions.'),
                         ]),
-                        Textarea::make('short_description')->rows(2)->columnSpanFull(),
-                        RichEditor::make('description')->columnSpanFull(),
+                        RichEditor::make('short_description')
+                            ->toolbarButtons(self::shortDescriptionToolbar())
+                            ->extraInputAttributes([
+                                'style' => 'min-height: 8rem; max-height: 18rem; overflow-y: auto;',
+                            ])
+                            ->columnSpanFull(),
+                        RichEditor::make('description')
+                            ->toolbarButtons(self::productDescriptionToolbar())
+                            ->extraInputAttributes([
+                                'style' => 'min-height: 24rem; max-height: 42rem; overflow-y: auto;',
+                            ])
+                            ->columnSpanFull(),
                     ]),
                 Section::make('Pricing and inventory')
                     ->schema([
@@ -201,5 +211,33 @@ class ProductForm
                     ->collapsible()
                     ->collapsed(),
             ]);
+    }
+
+    /**
+     * @return array<array<int, string>>
+     */
+    private static function shortDescriptionToolbar(): array
+    {
+        return [
+            ['bold', 'italic', 'underline', 'link'],
+            ['h2', 'h3'],
+            ['bulletList', 'orderedList'],
+            ['undo', 'redo'],
+        ];
+    }
+
+    /**
+     * @return array<array<int, string>>
+     */
+    private static function productDescriptionToolbar(): array
+    {
+        return [
+            ['bold', 'italic', 'underline', 'link'],
+            ['h2', 'h3'],
+            ['blockquote', 'bulletList', 'orderedList'],
+            ['table', 'horizontalRule'],
+            ['code', 'codeBlock', 'clearFormatting'],
+            ['undo', 'redo'],
+        ];
     }
 }
