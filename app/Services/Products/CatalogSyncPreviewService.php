@@ -30,12 +30,12 @@ class CatalogSyncPreviewService
     public function preview(array $filters = [], int|string $limit = 50): array
     {
         $rows = $this->supplierProductsQuery($filters)
-            ->limit($this->normalizeLimit($limit))
             ->get()
             ->map(fn (SupplierProduct $supplierProduct): array => $this->previewSupplierProduct($supplierProduct))
             ->filter(fn (array $row): bool => $this->matchesActionFilter($row, $filters['action'] ?? null))
             ->filter(fn (array $row): bool => $this->matchesQuickFilter($row, $filters['quick_filter'] ?? null))
             ->pipe(fn (Collection $rows): Collection => $this->sortRows($rows, $filters))
+            ->take($this->normalizeLimit($limit))
             ->values();
 
         return [

@@ -147,6 +147,27 @@ class SupplierCatalogSyncControlsTest extends TestCase
         $this->assertSame('conflict', $row['target_catalog_action']);
     }
 
+    public function test_product_sync_duplicate_detection_matches_preview_for_existing_supplier_rows(): void
+    {
+        $supplier = Supplier::factory()->create();
+        $existingRow = $this->supplierProduct($supplier, [
+            'ean' => '8888888888888',
+            'status' => 'synced',
+        ]);
+        $currentRow = $this->supplierProduct($supplier, [
+            'ean' => '8888888888888',
+            'supplier_sku' => 'CURRENT-DUPLICATE',
+        ]);
+
+        $row = app(CatalogSyncPreviewService::class)->previewSupplierProduct($currentRow);
+        $log = app(ProductSyncService::class)->sync($currentRow);
+
+        $this->assertSame('conflict', $row['target_catalog_action']);
+        $this->assertContains('duplicate_supplier_identifiers', $row['conflict_reasons']);
+        $this->assertSame('duplicate', $log->status);
+        $this->assertSame('synced', $existingRow->refresh()->status);
+    }
+
     public function test_same_ean_maps_multiple_suppliers_to_same_catalog_product_with_multiple_offers(): void
     {
         $apcom = Supplier::factory()->create(['company_name' => 'APCOM']);

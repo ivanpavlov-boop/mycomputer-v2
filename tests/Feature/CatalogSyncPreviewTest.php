@@ -217,6 +217,44 @@ class CatalogSyncPreviewTest extends TestCase
         $this->assertSame(0, Product::query()->count());
     }
 
+    public function test_preview_filters_are_applied_before_limit(): void
+    {
+        $supplier = Supplier::factory()->create();
+
+        for ($index = 1; $index <= 50; $index++) {
+            $this->supplierProduct($supplier, [
+                'supplier_sku' => 'LIMIT-CREATE-'.$index,
+                'ean' => '1000000000'.str_pad((string) $index, 3, '0', STR_PAD_LEFT),
+                'quantity' => 5,
+            ]);
+        }
+
+        $this->supplierProduct($supplier, [
+            'supplier_sku' => 'LIMIT-MISSING-EAN',
+            'ean' => null,
+            'quantity' => 0,
+        ]);
+        Product::factory()->create([
+            'ean' => '9990000000001',
+            'price' => 200,
+        ]);
+        $this->supplierProduct($supplier, [
+            'supplier_sku' => 'LIMIT-UPDATE',
+            'ean' => '9990000000001',
+            'quantity' => 7,
+        ]);
+
+        $service = app(CatalogSyncPreviewService::class);
+
+        $missingEanRows = $service->preview(['quick_filter' => 'missing_ean'], 50)['rows'];
+        $updateRows = $service->preview(['action' => 'update'], 50)['rows'];
+
+        $this->assertCount(1, $missingEanRows);
+        $this->assertSame('LIMIT-MISSING-EAN', $missingEanRows[0]['supplier_sku']);
+        $this->assertCount(1, $updateRows);
+        $this->assertSame('LIMIT-UPDATE', $updateRows[0]['supplier_sku']);
+    }
+
     public function test_preview_rows_can_be_sorted_by_business_columns(): void
     {
         $supplier = Supplier::factory()->create();
