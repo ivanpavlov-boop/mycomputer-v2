@@ -4,6 +4,7 @@ namespace App\Services\Products;
 
 use App\Models\Product;
 use App\Models\ProductSupplierOffer;
+use App\Services\Pricing\PricingEngine;
 use App\Services\Suppliers\SupplierExclusionService;
 use Illuminate\Support\Collection;
 
@@ -11,6 +12,7 @@ class SupplierOfferSelectionService
 {
     public function __construct(
         private readonly SupplierExclusionService $exclusionService,
+        private readonly PricingEngine $pricingEngine,
     ) {}
 
     /**
@@ -62,6 +64,7 @@ class SupplierOfferSelectionService
         $supplierActive = $offer->supplier?->status === 'active';
         $inStock = (int) $offer->quantity > 0;
         $eligible = $supplierActive && $inStock && ! $excluded['excluded'];
+        $normalizedCost = $this->normalizedCost($offer);
 
         return [
             'id' => $offer->id,
@@ -69,7 +72,8 @@ class SupplierOfferSelectionService
             'supplier_id' => $offer->supplier_id,
             'supplier_sku' => $offer->supplier_sku,
             'price' => $offer->price !== null ? (float) $offer->price : null,
-            'price_sort' => $offer->price !== null ? (float) $offer->price : PHP_FLOAT_MAX,
+            'normalized_purchase_cost' => $normalizedCost,
+            'price_sort' => $normalizedCost ?? PHP_FLOAT_MAX,
             'quantity' => (int) $offer->quantity,
             'supplier_priority' => (int) $offer->supplier_priority,
             'is_preferred' => (bool) $offer->is_preferred,
@@ -80,6 +84,16 @@ class SupplierOfferSelectionService
             'eligible' => $eligible,
             'rejection_reason' => $eligible ? null : $this->rejectionReason($supplierActive, $inStock, (bool) $excluded['excluded']),
         ];
+    }
+
+    protected function normalizedCost(ProductSupplierOffer $offer): ?float
+    {
+        if ($offer->supplierProduct) {
+            return (float) $this->pricingEngine
+                ->calculateForSupplierProduct($offer->supplierProduct)['normalized_purchase_cost'];
+        }
+
+        return $offer->price !== null ? (float) $offer->price : null;
     }
 
     /**

@@ -58,6 +58,14 @@ class ProductSyncService
             ]);
         }
 
+        if ($product && $product->source === Product::SOURCE_MANUAL && $matchType !== 'manual_mapping') {
+            return $this->mark($supplierProduct, $strategy, 'skipped', 'skipped', 'Matched manual catalog product requires explicit manual mapping before supplier sync.', [
+                'identifiers' => $identifiers,
+                'matched_product_id' => $product->id,
+                'match_type' => $matchType,
+            ]);
+        }
+
         $before = $product?->only(['id', 'sku', 'ean', 'mpn', 'price', 'quantity', 'supplier_id', 'supplier_sku']);
 
         if (! $product) {
@@ -86,9 +94,10 @@ class ProductSyncService
                 'supplier_offer_candidates' => $selection['candidates'],
             ]);
         }
-        $brand = $this->resolveBrand($supplierProduct->brand_name);
-        $category = $this->resolveCategory($supplierProduct->category_name);
         $selectedSupplierProduct = $selectedOffer->supplierProduct ?: $supplierProduct;
+        $selectedSupplierProduct->loadMissing('supplier');
+        $brand = $this->resolveBrand($selectedSupplierProduct->brand_name);
+        $category = $this->resolveCategory($selectedSupplierProduct->category_name);
         $pricingProduct = $product->replicate();
         $pricingProduct->id = $product->id;
         $pricingProduct->brand_id = $product->brand_id ?: $brand?->id;
@@ -100,8 +109,8 @@ class ProductSyncService
 
         $availability = $this->availabilityMapper->mapWithFallback(
             'supplier',
-            $supplierProduct->supplier?->company_name,
-            $supplierProduct->external_availability_status,
+            $selectedSupplierProduct->supplier?->company_name,
+            $selectedSupplierProduct->external_availability_status,
             $selectedOffer->quantity,
         );
 
@@ -113,14 +122,15 @@ class ProductSyncService
             'quantity' => $selectedOffer->quantity,
             'availability_status_id' => $product->manual_override ? $product->availability_status_id : $availability?->id,
             'stock_status' => $product->manual_override ? $product->stock_status : ($availability?->code ?? ($selectedOffer->quantity > 0 ? 'in_stock' : 'out_of_stock')),
-            'external_availability_status' => $supplierProduct->external_availability_status,
-            'external_availability_label' => $supplierProduct->external_availability_label,
+            'external_availability_status' => $selectedSupplierProduct->external_availability_status,
+            'external_availability_label' => $selectedSupplierProduct->external_availability_label,
             'source_payload' => [
                 'sync_strategy' => $strategy,
                 'selected_supplier_offer_id' => $selectedOffer->id,
                 'supplier_offer_candidates' => $selection['candidates'],
                 'offer_selection_reason' => $selection['reason'],
                 'last_supplier_product_id' => $supplierProduct->id,
+                'selected_supplier_product_id' => $selectedSupplierProduct->id,
                 'pricing' => $pricing,
             ],
         ];
@@ -368,8 +378,7 @@ class ProductSyncService
     {
         $query = SupplierProduct::query()
             ->where('id', '!=', $supplierProduct->id)
-            ->where('supplier_id', $supplierProduct->supplier_id)
-            ->where('status', 'new');
+            ->where('supplier_id', $supplierProduct->supplier_id);
 
         $query->where(function ($nested) use ($supplierProduct): void {
             foreach (array_filter([

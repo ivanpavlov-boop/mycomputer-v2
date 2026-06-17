@@ -77,12 +77,13 @@ class ProductSyncEngineTest extends TestCase
         $this->assertSame('created', ProductSyncLog::query()->where('supplier_product_id', $supplierProduct->id)->firstOrFail()->action);
     }
 
-    public function test_manual_product_is_not_repriced_during_supplier_sync(): void
+    public function test_manual_product_is_not_changed_during_automatic_supplier_sync(): void
     {
         $supplier = Supplier::factory()->create();
         $brand = Brand::factory()->create(['name' => 'Test Brand', 'slug' => 'test-brand']);
         $product = Product::factory()->create([
             'supplier_id' => null,
+            'supplier_sku' => null,
             'brand_id' => $brand->id,
             'sku' => 'MANUAL-GPU-001',
             'mpn' => 'MANUAL-MPN-001',
@@ -102,12 +103,15 @@ class ProductSyncEngineTest extends TestCase
             'promo_end' => now()->addDay(),
             'sale_price_source' => Product::SALE_PRICE_SOURCE_MANUAL,
             'quantity' => 3,
+            'external_availability_status' => 'manual-status',
+            'external_availability_label' => 'Manual Status',
         ]);
         $supplierProduct = $this->supplierProduct($supplier, [
             'supplier_sku' => 'SUP-MANUAL-GPU-001',
             'mpn' => 'MANUAL-MPN-001',
             'price' => 100,
             'quantity' => 8,
+            'raw_data' => ['image' => 'https://example.test/manual-sync-image.jpg'],
         ]);
 
         PricingRule::query()->create([
@@ -119,12 +123,16 @@ class ProductSyncEngineTest extends TestCase
             'is_active' => true,
         ]);
 
-        app(ProductSyncService::class)->sync($supplierProduct);
+        $log = app(ProductSyncService::class)->sync($supplierProduct);
 
         $product->refresh();
 
+        $this->assertSame('skipped', $log->status);
+        $this->assertSame('skipped', $supplierProduct->refresh()->status);
         $this->assertSame(Product::SOURCE_MANUAL, $product->source);
         $this->assertFalse($product->apply_pricing_rules);
+        $this->assertNull($product->supplier_id);
+        $this->assertNull($product->supplier_sku);
         $this->assertSame('700.00', $product->purchase_price);
         $this->assertNull($product->supplier_price_raw);
         $this->assertNull($product->recommended_price);
@@ -135,7 +143,11 @@ class ProductSyncEngineTest extends TestCase
         $this->assertSame(899.0, $product->activeSalePrice());
         $this->assertSame('899.00', $product->promo_price);
         $this->assertSame(Product::SALE_PRICE_SOURCE_MANUAL, $product->sale_price_source);
-        $this->assertSame(8, $product->quantity);
+        $this->assertSame(3, $product->quantity);
+        $this->assertSame('manual-status', $product->external_availability_status);
+        $this->assertSame('Manual Status', $product->external_availability_label);
+        $this->assertSame(0, $product->images()->count());
+        $this->assertSame(0, ProductSupplierOffer::query()->where('product_id', $product->id)->count());
     }
 
     public function test_manual_product_can_be_explicitly_repriced_by_admin_opt_in(): void
@@ -162,6 +174,7 @@ class ProductSyncEngineTest extends TestCase
             'sale_price_source' => Product::SALE_PRICE_SOURCE_MANUAL,
         ]);
         $supplierProduct = $this->supplierProduct($supplier, [
+            'product_id' => $product->id,
             'supplier_sku' => 'SUP-MANUAL-GPU-002',
             'mpn' => 'MANUAL-MPN-002',
             'price' => 100,
@@ -192,6 +205,72 @@ class ProductSyncEngineTest extends TestCase
         $this->assertSame(129.0, $product->activeSalePrice());
         $this->assertSame('129.00', $product->promo_price);
         $this->assertSame(Product::SALE_PRICE_SOURCE_MANUAL, $product->sale_price_source);
+    }
+
+    public function test_cross_supplier_winning_offer_controls_synced_supplier_price_stock_and_availability_metadata(): void
+    {
+        $apcom = Supplier::factory()->create(['company_name' => 'APCOM', 'priority' => 20]);
+        $asbis = Supplier::factory()->create(['company_name' => 'ASBIS', 'priority' => 10]);
+        $brand = Brand::factory()->create(['name' => 'Test Brand', 'slug' => 'test-brand']);
+        $product = Product::factory()->create([
+            'brand_id' => $brand->id,
+            'ean' => '4564564564564',
+            'source' => Product::SOURCE_SUPPLIER_IMPORT,
+            'price' => 999,
+            'quantity' => 1,
+            'supplier_id' => $apcom->id,
+            'supplier_sku' => 'APCOM-OLD',
+        ]);
+        $asbisProduct = $this->supplierProduct($asbis, [
+            'supplier_sku' => 'ASBIS-WIN',
+            'ean' => '4564564564564',
+            'price' => 80,
+            'quantity' => 9,
+            'external_availability_status' => 'asbis-available',
+            'external_availability_label' => 'ASBIS Available',
+        ]);
+        $apcomProduct = $this->supplierProduct($apcom, [
+            'supplier_sku' => 'APCOM-LOSE',
+            'ean' => '4564564564564',
+            'price' => 100,
+            'quantity' => 4,
+            'external_availability_status' => 'apcom-available',
+            'external_availability_label' => 'APCOM Available',
+        ]);
+        ProductSupplierOffer::query()->create([
+            'product_id' => $product->id,
+            'supplier_id' => $asbisProduct->supplier_id,
+            'supplier_product_id' => $asbisProduct->id,
+            'supplier_sku' => $asbisProduct->supplier_sku,
+            'price' => $asbisProduct->price,
+            'quantity' => $asbisProduct->quantity,
+            'currency' => 'EUR',
+            'supplier_priority' => $asbis->priority,
+            'is_preferred' => false,
+            'last_seen_at' => now(),
+        ]);
+        PricingRule::query()->create([
+            'name' => 'Global margin',
+            'scope_type' => PricingRule::SCOPE_GLOBAL,
+            'margin_type' => PricingRule::MARGIN_PERCENTAGE,
+            'margin_value' => 20,
+            'rounding_rule' => PricingRule::ROUND_NONE,
+            'is_active' => true,
+        ]);
+
+        app(ProductSyncService::class)->sync($apcomProduct);
+
+        $product->refresh();
+
+        $this->assertSame($asbis->id, $product->supplier_id);
+        $this->assertSame('ASBIS-WIN', $product->supplier_sku);
+        $this->assertSame(9, $product->quantity);
+        $this->assertSame('80.00', $product->purchase_price);
+        $this->assertSame('80.00', $product->supplier_price_raw);
+        $this->assertSame('96.00', $product->price);
+        $this->assertSame('asbis-available', $product->external_availability_status);
+        $this->assertSame('ASBIS Available', $product->external_availability_label);
+        $this->assertSame($asbisProduct->id, $product->source_payload['selected_supplier_product_id']);
     }
 
     public function test_supplier_imported_product_gets_discount_rule_sale_price(): void

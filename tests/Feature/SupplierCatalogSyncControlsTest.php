@@ -147,6 +147,27 @@ class SupplierCatalogSyncControlsTest extends TestCase
         $this->assertSame('conflict', $row['target_catalog_action']);
     }
 
+    public function test_product_sync_duplicate_detection_matches_preview_for_existing_supplier_rows(): void
+    {
+        $supplier = Supplier::factory()->create();
+        $existingRow = $this->supplierProduct($supplier, [
+            'ean' => '8888888888888',
+            'status' => 'synced',
+        ]);
+        $currentRow = $this->supplierProduct($supplier, [
+            'ean' => '8888888888888',
+            'supplier_sku' => 'CURRENT-DUPLICATE',
+        ]);
+
+        $row = app(CatalogSyncPreviewService::class)->previewSupplierProduct($currentRow);
+        $log = app(ProductSyncService::class)->sync($currentRow);
+
+        $this->assertSame('conflict', $row['target_catalog_action']);
+        $this->assertContains('duplicate_supplier_identifiers', $row['conflict_reasons']);
+        $this->assertSame('duplicate', $log->status);
+        $this->assertSame('synced', $existingRow->refresh()->status);
+    }
+
     public function test_same_ean_maps_multiple_suppliers_to_same_catalog_product_with_multiple_offers(): void
     {
         $apcom = Supplier::factory()->create(['company_name' => 'APCOM']);
@@ -180,6 +201,38 @@ class SupplierCatalogSyncControlsTest extends TestCase
 
         $this->assertSame($apcomOffer->id, $selection['offer']->id);
         $this->assertSame('Lowest available in-stock supplier.', $selection['reason']);
+    }
+
+    public function test_offer_selection_uses_normalized_purchase_cost_instead_of_raw_supplier_price(): void
+    {
+        $product = Product::factory()->create();
+        $vatIncludedSupplier = Supplier::factory()->create([
+            'company_name' => 'VAT Included Supplier',
+            'priority' => 10,
+            'vat_mode' => 'price_includes_vat',
+            'vat_rate' => 20,
+        ]);
+        $vatExcludedSupplier = Supplier::factory()->create([
+            'company_name' => 'VAT Excluded Supplier',
+            'priority' => 10,
+            'vat_mode' => 'price_excludes_vat',
+            'vat_rate' => 20,
+        ]);
+
+        $includedProduct = $this->supplierProduct($vatIncludedSupplier, ['ean' => '5555555555555', 'price' => 120, 'quantity' => 5]);
+        $excludedProduct = $this->supplierProduct($vatExcludedSupplier, ['ean' => '5555555555555', 'price' => 110, 'quantity' => 5]);
+
+        $includedOffer = $this->offer($product, $includedProduct);
+        $this->offer($product, $excludedProduct);
+
+        $selection = app(SupplierOfferSelectionService::class)->select($product);
+        $row = app(CatalogSyncPreviewService::class)->previewSupplierProduct($includedProduct);
+        $includedCandidate = collect($selection['candidates'])
+            ->firstWhere('supplier_id', $vatIncludedSupplier->id);
+
+        $this->assertSame($includedOffer->id, $selection['offer']->id);
+        $this->assertSame(100.0, $includedCandidate['normalized_purchase_cost']);
+        $this->assertSame('VAT Included Supplier', $row['winning_offer_supplier']);
     }
 
     public function test_offer_selection_ignores_excluded_and_inactive_offers_and_uses_tie_breakers(): void

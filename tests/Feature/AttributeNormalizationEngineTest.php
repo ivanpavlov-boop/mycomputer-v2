@@ -175,6 +175,7 @@ class AttributeNormalizationEngineTest extends TestCase
             'supplier_id' => $supplier->id,
             'supplier_sku' => 'SYNC-RAM-001',
             'sku' => 'SYNC-RAM-001',
+            'source' => Product::SOURCE_SUPPLIER_IMPORT,
         ]);
         $supplierProduct = SupplierProduct::query()->create([
             'supplier_id' => $supplier->id,
