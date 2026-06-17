@@ -41,9 +41,9 @@ class QuoteRequestItemResource extends Resource
             TextInput::make('product_name')->required(),
             TextInput::make('sku'),
             TextInput::make('quantity')->numeric()->required(),
-            TextInput::make('requested_price')->numeric()->prefix('BGN'),
-            TextInput::make('offered_price')->numeric()->prefix('BGN'),
-            TextInput::make('line_total')->numeric()->prefix('BGN'),
+            TextInput::make('requested_price')->numeric()->prefix('EUR'),
+            TextInput::make('offered_price')->numeric()->prefix('EUR'),
+            TextInput::make('line_total')->numeric()->prefix('EUR'),
         ]);
     }
 
@@ -54,8 +54,8 @@ class QuoteRequestItemResource extends Resource
             TextColumn::make('product_name')->searchable(),
             TextColumn::make('sku')->searchable(),
             TextColumn::make('quantity')->sortable(),
-            TextColumn::make('offered_price')->money('BGN')->sortable(),
-            TextColumn::make('line_total')->money('BGN')->sortable(),
+            TextColumn::make('offered_price')->money('EUR')->sortable(),
+            TextColumn::make('line_total')->money('EUR')->sortable(),
         ]);
     }
 

@@ -56,7 +56,7 @@ function label(value: string) {
 function adjustment(value?: string | number | null) {
   const amount = Number(value || 0)
   if (amount === 0) return 'Включено в комплекта'
-  return amount > 0 ? `+${amount.toFixed(2)} лв.` : `${amount.toFixed(2)} лв.`
+  return amount > 0 ? `+${amount.toFixed(2)} EUR` : `${amount.toFixed(2)} EUR`
 }
 
 watch(

@@ -53,7 +53,7 @@ class AbandonedCartRecordResource extends Resource
             ->columns([
                 TextColumn::make('email')->searchable()->sortable(),
                 TextColumn::make('user.email')->label('User')->searchable(),
-                TextColumn::make('cart_total')->money('BGN')->sortable(),
+                TextColumn::make('cart_total')->money('EUR')->sortable(),
                 TextColumn::make('items_count')->numeric()->sortable(),
                 TextColumn::make('status')->badge()->sortable(),
                 TextColumn::make('emails_sent')->numeric()->sortable(),
@@ -62,7 +62,7 @@ class AbandonedCartRecordResource extends Resource
                 TextColumn::make('third_email_sent_at')->dateTime()->sortable(),
                 TextColumn::make('recovered_at')->dateTime()->sortable(),
                 TextColumn::make('recovered_order_id')->label('Order')->sortable(),
-                TextColumn::make('recovered_revenue')->money('BGN')->sortable(),
+                TextColumn::make('recovered_revenue')->money('EUR')->sortable(),
                 TextColumn::make('created_at')->dateTime()->sortable(),
             ])
             ->filters([

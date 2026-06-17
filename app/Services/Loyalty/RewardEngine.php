@@ -24,7 +24,7 @@ class RewardEngine
         }
 
         $multiplier = (float) config("loyalty.tiers.{$order->user->loyaltyAccount?->tier}.multiplier", 1);
-        $points = (int) floor((float) $order->grand_total * (int) config('loyalty.points_per_bgn', 1) * $multiplier);
+        $points = (int) floor((float) $order->grand_total * (int) config('loyalty.points_per_eur', 1) * $multiplier);
 
         if ($points > 0) {
             $this->points->earn($order->user, $points, "Points from completed order {$order->order_number}", $order);

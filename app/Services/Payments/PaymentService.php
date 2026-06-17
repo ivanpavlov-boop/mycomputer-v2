@@ -51,7 +51,7 @@ class PaymentService
             'payment_method_id' => $method->id,
             'transaction_id' => $response['transaction_id'] ?? null,
             'amount' => $order->grand_total,
-            'currency' => 'BGN',
+            'currency' => 'EUR',
             'status' => $response['status'] ?? 'pending',
             'raw_request' => ['payment_method_code' => $methodCode],
             'raw_response' => $response,

@@ -4,6 +4,7 @@ namespace App\Services\Marketing;
 
 use App\Models\ConversionLog;
 use App\Models\Order;
+use App\Models\Product;
 use App\Services\Marketing\Providers\GoogleAnalyticsProvider;
 use App\Services\Marketing\Providers\MetaConversionApiProvider;
 
@@ -16,7 +17,7 @@ class ConversionTrackingService
         $payload = [
             'order_id' => $order->id,
             'order_number' => $order->order_number,
-            'currency' => 'BGN',
+            'currency' => Product::CATALOG_CURRENCY,
             'value' => (float) $order->grand_total,
             'items' => $order->items->map(fn ($item): array => [
                 'item_id' => $item->sku,

@@ -60,6 +60,7 @@ export interface ProductCard {
   name: string
   slug: string
   short_description?: string | null
+  currency?: string
   price: string | number
   promo_price?: string | number | null
   quantity: number

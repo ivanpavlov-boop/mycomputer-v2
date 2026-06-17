@@ -44,5 +44,5 @@ defineProps<{ bundle: ProductBundle }>()
 const config = useRuntimeConfig()
 const storageBase = computed(() => String(config.public.apiBaseUrl).replace(/\/api\/v1\/?$/, ''))
 const imageSrc = (path: string) => path.startsWith('http') ? path : `${storageBase.value}/storage/${path}`
-const formatPrice = (value: string | number) => `${Number(value).toFixed(2)} лв.`
+const formatPrice = (value: string | number) => `${Number(value).toFixed(2)} EUR`
 </script>

@@ -8,5 +8,5 @@
 
 <script setup lang="ts">
 const props = defineProps<{ total: string | number }>()
-const formatted = computed(() => `${Number(props.total || 0).toFixed(2)} лв.`)
+const formatted = computed(() => `${Number(props.total || 0).toFixed(2)} EUR`)
 </script>

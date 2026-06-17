@@ -17,6 +17,7 @@ class PublicApiV1Test extends TestCase
         $this->getJson('/api/v1/products?per_page=10')
             ->assertOk()
             ->assertJsonFragment(['sku' => 'MC-LAP-001'])
+            ->assertJsonFragment(['currency' => Product::CATALOG_CURRENCY])
             ->assertJsonMissingPath('data.0.purchase_price')
             ->assertJsonMissingPath('data.0.source_payload')
             ->assertJsonMissingPath('data.0.supplier_id');
@@ -29,6 +30,7 @@ class PublicApiV1Test extends TestCase
         $this->getJson('/api/v1/products/lenovo-thinkpad-e16-gen-2')
             ->assertOk()
             ->assertJsonPath('data.sku', 'MC-LAP-001')
+            ->assertJsonPath('data.currency', Product::CATALOG_CURRENCY)
             ->assertJsonStructure([
                 'data' => [
                     'category',

@@ -16,7 +16,7 @@ class B2BQuoteStats extends StatsOverviewWidget
             Stat::make('Open quote requests', QuoteRequest::query()->whereIn('status', ['submitted', 'under_review'])->count()),
             Stat::make('Awaiting response', QuoteRequest::query()->where('status', 'offered')->count()),
             Stat::make('Accepted quotes', QuoteRequest::query()->whereIn('status', ['accepted', 'converted'])->count()),
-            Stat::make('Converted quote revenue', 'BGN '.number_format((float) QuoteRequest::query()->where('status', 'converted')->sum('grand_total'), 2)),
+            Stat::make('Converted quote revenue', 'EUR '.number_format((float) QuoteRequest::query()->where('status', 'converted')->sum('grand_total'), 2)),
         ];
     }
 }

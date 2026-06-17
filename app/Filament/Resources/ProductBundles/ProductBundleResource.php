@@ -67,7 +67,7 @@ class ProductBundleResource extends Resource
             Section::make('Pricing')
                 ->schema([
                     Select::make('pricing_type')->options(array_combine(ProductBundle::PRICING_TYPES, ProductBundle::PRICING_TYPES))->required()->default('sum_items'),
-                    TextInput::make('fixed_price')->numeric()->prefix('BGN'),
+                    TextInput::make('fixed_price')->numeric()->prefix('EUR'),
                     TextInput::make('discount_value')->numeric(),
                     DateTimePicker::make('starts_at'),
                     DateTimePicker::make('ends_at'),
@@ -93,7 +93,7 @@ class ProductBundleResource extends Resource
                         ->schema([
                             TextInput::make('component_group')->required()->maxLength(255),
                             Select::make('product_id')->relationship('product', 'name')->searchable()->preload()->required(),
-                            TextInput::make('price_adjustment')->numeric()->prefix('BGN')->default(0),
+                            TextInput::make('price_adjustment')->numeric()->prefix('EUR')->default(0),
                             Select::make('is_default')->options([1 => 'Default', 0 => 'Alternative'])->default(0)->required(),
                             TextInput::make('sort_order')->numeric()->default(0),
                         ])->columns(3)->columnSpanFull(),

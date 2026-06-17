@@ -43,7 +43,7 @@
                 <div class="flex justify-between"><span>Total</span><span>{{ $dashboard['abandoned_carts']['total'] }}</span></div>
                 <div class="flex justify-between"><span>Recovered</span><span>{{ $dashboard['abandoned_carts']['recovered'] }}</span></div>
                 <div class="flex justify-between"><span>Recovery rate</span><span>{{ $dashboard['abandoned_carts']['recovery_rate'] }}%</span></div>
-                <div class="flex justify-between"><span>Recovered revenue</span><span>{{ number_format($dashboard['abandoned_carts']['recovered_revenue'], 2) }} BGN</span></div>
+                <div class="flex justify-between"><span>Recovered revenue</span><span>{{ number_format($dashboard['abandoned_carts']['recovered_revenue'], 2) }} EUR</span></div>
                 <div class="flex justify-between"><span>Pending emails</span><span>{{ $dashboard['abandoned_carts']['pending_emails'] }}</span></div>
             </div>
         </x-filament::section>

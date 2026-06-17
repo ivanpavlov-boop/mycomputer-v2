@@ -25,11 +25,13 @@ class CatalogApiTest extends TestCase
 
         $this->getJson('/api/v1/products')
             ->assertOk()
-            ->assertJsonFragment(['sku' => 'MC-LAP-001']);
+            ->assertJsonFragment(['sku' => 'MC-LAP-001'])
+            ->assertJsonFragment(['currency' => Product::CATALOG_CURRENCY]);
 
         $this->getJson('/api/v1/products/lenovo-thinkpad-e16-gen-2')
             ->assertOk()
-            ->assertJsonPath('data.sku', 'MC-LAP-001');
+            ->assertJsonPath('data.sku', 'MC-LAP-001')
+            ->assertJsonPath('data.currency', Product::CATALOG_CURRENCY);
 
         $this->assertDatabaseHas('supplier_products', [
             'supplier_sku' => 'SUP-MC-LAP-001',

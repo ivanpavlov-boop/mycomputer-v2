@@ -15,7 +15,7 @@ return new class extends Migration
             $table->foreignId('payment_method_id')->nullable()->constrained()->nullOnDelete();
             $table->string('transaction_id')->nullable()->index();
             $table->decimal('amount', 12, 2);
-            $table->string('currency', 3)->default('BGN');
+            $table->string('currency', 3)->default('EUR');
             $table->string('status')->default('pending')->index();
             $table->json('raw_request')->nullable();
             $table->json('raw_response')->nullable();

@@ -72,13 +72,13 @@
         <div class="mt-4 space-y-3 text-sm">
           <div v-for="item in cart.backendItems" :key="item.id" class="flex justify-between gap-3">
             <span>{{ item.product.name }} x {{ item.quantity }}</span>
-            <span>{{ Number(item.total_price).toFixed(2) }} лв.</span>
+            <span>{{ Number(item.total_price).toFixed(2) }} EUR</span>
           </div>
         </div>
         <div class="mt-5 border-t pt-4 text-sm">
-          <div class="flex justify-between"><span>Продукти</span><span>{{ cart.subtotal.toFixed(2) }} лв.</span></div>
-          <div class="mt-2 flex justify-between"><span>Доставка</span><span>{{ shippingPrice.toFixed(2) }} лв.</span></div>
-          <div class="mt-3 flex justify-between text-lg font-bold"><span>Общо</span><span>{{ (cart.subtotal + shippingPrice).toFixed(2) }} лв.</span></div>
+          <div class="flex justify-between"><span>Продукти</span><span>{{ cart.subtotal.toFixed(2) }} EUR</span></div>
+          <div class="mt-2 flex justify-between"><span>Доставка</span><span>{{ shippingPrice.toFixed(2) }} EUR</span></div>
+          <div class="mt-3 flex justify-between text-lg font-bold"><span>Общо</span><span>{{ (cart.subtotal + shippingPrice).toFixed(2) }} EUR</span></div>
         </div>
         <BaseButton class="mt-5 w-full" type="submit">Изпрати поръчка</BaseButton>
         <ErrorState v-if="error" class="mt-4" :text="error" />

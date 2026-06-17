@@ -203,7 +203,7 @@ class LoyaltyRewardsTest extends TestCase
     {
         return RewardVoucher::query()->create(array_merge([
             'code' => 'LOYALTY10',
-            'title' => '10 BGN discount',
+            'title' => '10 EUR discount',
             'points_cost' => $points,
             'discount_type' => 'fixed',
             'discount_value' => $discount,

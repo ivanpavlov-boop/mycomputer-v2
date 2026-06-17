@@ -14,7 +14,7 @@
       <div class="border-t border-slate-200 p-4">
         <div class="flex justify-between font-semibold">
           <span>Общо</span>
-          <span>{{ cart.subtotal.toFixed(2) }} лв.</span>
+          <span>{{ cart.subtotal.toFixed(2) }} EUR</span>
         </div>
         <NuxtLink to="/cart" class="mt-4 block rounded-md bg-brand-600 px-4 py-2 text-center text-sm font-semibold text-white" @click="ui.cartOpen = false">
           Към количката

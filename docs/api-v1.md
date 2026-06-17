@@ -252,7 +252,7 @@ Query params: `page`, `per_page`, `category`, `brand`, `price_min`, `price_max`,
 
 Sort values: `relevance`, `price_asc`, `price_desc`, `newest`, `bestseller`, `featured`, `name_asc`, `name_desc`.
 
-Attribute filters are canonicalized by the backend. Example: `attributes[]=16_gb` returns products with canonical value `16 GB`, even if the original supplier feed sent `16GB`, `16 GB`, `16 гб` or `16384 MB`.
+Attribute filters are canonicalized by the backend. Example: `attributes[]=16_gb` returns products with canonical value `16 GB`, even if the original supplier feed sent `16GB`, `16 GB`, `16 РіР±` or `16384 MB`.
 
 `GET /api/v1/products/{slug}`
 
@@ -608,10 +608,10 @@ Returns active payment methods:
 {
   "data": [
     {
-      "name": "Наложен платеж",
+      "name": "РќР°Р»РѕР¶РµРЅ РїР»Р°С‚РµР¶",
       "code": "cash_on_delivery",
       "type": "offline",
-      "description": "Плащане при доставка.",
+      "description": "РџР»Р°С‰Р°РЅРµ РїСЂРё РґРѕСЃС‚Р°РІРєР°.",
       "instructions": null,
       "sort_order": 1
     }
@@ -635,7 +635,7 @@ Response:
   "data": {
     "transaction_id": "PAY-ABC123",
     "amount": "208.99",
-    "currency": "BGN",
+    "currency": "EUR",
     "status": "pending",
     "redirect_url": "/payment/mock-card?order=MC20260608-12345",
     "instructions": null
@@ -700,7 +700,7 @@ Response:
 {
   "data": {
     "shipping_price": "8.99",
-    "estimated_delivery": "1-3 работни дни",
+    "estimated_delivery": "1-3 СЂР°Р±РѕС‚РЅРё РґРЅРё",
     "provider": "speedy",
     "method": "address"
   }
@@ -745,7 +745,7 @@ Response:
 {
   "data": {
     "id": 1,
-    "name": "Любими продукти",
+    "name": "Р›СЋР±РёРјРё РїСЂРѕРґСѓРєС‚Рё",
     "is_default": true,
     "items_count": 1,
     "items": [
@@ -797,7 +797,7 @@ Response:
   "data": {
     "id": 1,
     "session_id": "11111111-1111-4111-8111-111111111111",
-    "name": "Гост сравнение",
+    "name": "Р“РѕСЃС‚ СЃСЂР°РІРЅРµРЅРёРµ",
     "max_products": 4,
     "items_count": 2,
     "items": [
@@ -848,11 +848,11 @@ Review submit request:
 ```json
 {
   "rating": 5,
-  "title": "Много добър лаптоп",
-  "comment": "Работи бързо и тихо.",
-  "pros": "Добър екран, бърз SSD",
-  "cons": "Няма операционна система",
-  "customer_name": "Иван Петров",
+  "title": "РњРЅРѕРіРѕ РґРѕР±СЉСЂ Р»Р°РїС‚РѕРї",
+  "comment": "Р Р°Р±РѕС‚Рё Р±СЉСЂР·Рѕ Рё С‚РёС…Рѕ.",
+  "pros": "Р”РѕР±СЉСЂ РµРєСЂР°РЅ, Р±СЉСЂР· SSD",
+  "cons": "РќСЏРјР° РѕРїРµСЂР°С†РёРѕРЅРЅР° СЃРёСЃС‚РµРјР°",
+  "customer_name": "РРІР°РЅ РџРµС‚СЂРѕРІ",
   "customer_email": "ivan@example.com"
 }
 ```
@@ -866,11 +866,11 @@ Review list response:
   "data": [
     {
       "id": 1,
-      "customer_name": "Иван Петров",
+      "customer_name": "РРІР°РЅ РџРµС‚СЂРѕРІ",
       "rating": 5,
-      "title": "Много добър лаптоп",
-      "comment": "Работи бързо и тихо.",
-      "pros": "Добър екран",
+      "title": "РњРЅРѕРіРѕ РґРѕР±СЉСЂ Р»Р°РїС‚РѕРї",
+      "comment": "Р Р°Р±РѕС‚Рё Р±СЉСЂР·Рѕ Рё С‚РёС…Рѕ.",
+      "pros": "Р”РѕР±СЉСЂ РµРєСЂР°РЅ",
       "cons": null,
       "is_verified_purchase": true,
       "helpful_votes_count": 3,
@@ -1112,7 +1112,7 @@ AI search request:
 
 ```json
 {
-  "query": "Need a laptop for architecture under 3000 BGN"
+  "query": "Need a laptop for architecture under 3000 EUR"
 }
 ```
 
@@ -1121,13 +1121,13 @@ AI search response:
 ```json
 {
   "data": {
-    "query": "Need a laptop for architecture under 3000 BGN",
+    "query": "Need a laptop for architecture under 3000 EUR",
     "intent": {
       "category_keywords": ["laptop", "autocad"],
       "price_max": 3000
     },
-    "summary": "Подбрах продукти според заявката.",
-    "reasoning": ["Product X е подходящ избор."],
+    "summary": "РџРѕРґР±СЂР°С… РїСЂРѕРґСѓРєС‚Рё СЃРїРѕСЂРµРґ Р·Р°СЏРІРєР°С‚Р°.",
+    "reasoning": ["Product X Рµ РїРѕРґС…РѕРґСЏС‰ РёР·Р±РѕСЂ."],
     "products": []
   }
 }
@@ -1137,7 +1137,7 @@ Chat request:
 
 ```json
 {
-  "message": "Търся геймърски лаптоп до 2500 лв.",
+  "message": "Търся геймърски лаптоп до 2500 EUR.",
   "conversation_id": 1
 }
 ```
@@ -1175,7 +1175,7 @@ Create build:
 
 ```json
 {
-  "name": "Gaming PC до 3000 лв.",
+  "name": "Gaming PC до 3000 EUR",
   "description": "Конфигурация за 1440p gaming"
 }
 ```
@@ -1224,7 +1224,7 @@ AI build generation:
 
 ```json
 {
-  "query": "Build me a gaming PC under 3000 BGN"
+  "query": "Build me a gaming PC under 3000 EUR"
 }
 ```
 

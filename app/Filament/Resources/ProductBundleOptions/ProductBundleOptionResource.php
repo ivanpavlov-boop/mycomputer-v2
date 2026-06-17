@@ -42,7 +42,7 @@ class ProductBundleOptionResource extends Resource
             Select::make('product_bundle_id')->relationship('bundle', 'name')->searchable()->preload()->required(),
             TextInput::make('component_group')->required()->maxLength(255),
             Select::make('product_id')->relationship('product', 'name')->searchable()->preload()->required(),
-            TextInput::make('price_adjustment')->numeric()->prefix('BGN')->default(0),
+            TextInput::make('price_adjustment')->numeric()->prefix('EUR')->default(0),
             Select::make('is_default')->options([1 => 'Default', 0 => 'Alternative'])->default(0)->required(),
             TextInput::make('sort_order')->numeric()->default(0),
         ]);
@@ -55,7 +55,7 @@ class ProductBundleOptionResource extends Resource
                 TextColumn::make('bundle.name')->searchable()->sortable(),
                 TextColumn::make('component_group')->searchable()->sortable(),
                 TextColumn::make('product.name')->searchable(),
-                TextColumn::make('price_adjustment')->money('BGN')->sortable(),
+                TextColumn::make('price_adjustment')->money('EUR')->sortable(),
                 IconColumn::make('is_default')->boolean(),
                 TextColumn::make('sort_order')->numeric()->sortable(),
             ])

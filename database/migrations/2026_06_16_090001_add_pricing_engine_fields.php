@@ -66,7 +66,7 @@ return new class extends Migration
         });
 
         if (DB::getDriverName() === 'mysql') {
-            DB::statement("ALTER TABLE supplier_products MODIFY currency VARCHAR(3) NOT NULL DEFAULT 'BGN'");
+            DB::statement("ALTER TABLE supplier_products MODIFY currency VARCHAR(3) NOT NULL DEFAULT 'EUR'");
         }
     }
 };

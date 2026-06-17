@@ -19,7 +19,7 @@ return new class extends Migration
             $table->string('supplier_sku')->nullable()->index();
             $table->decimal('price', 12, 2)->nullable();
             $table->unsignedInteger('quantity')->default(0);
-            $table->string('currency', 3)->default('BGN');
+            $table->string('currency', 3)->default('EUR');
             $table->unsignedInteger('supplier_priority')->default(100)->index();
             $table->boolean('is_preferred')->default(false)->index();
             $table->timestamp('last_seen_at')->nullable()->index();

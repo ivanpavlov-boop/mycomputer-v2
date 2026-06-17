@@ -58,7 +58,7 @@ class OrderResource extends Resource
                     TextInput::make('customer_name')->required(),
                     TextInput::make('customer_email')->email()->required(),
                     TextInput::make('customer_phone')->required(),
-                    TextInput::make('grand_total')->numeric()->prefix('BGN')->required(),
+                    TextInput::make('grand_total')->numeric()->prefix('EUR')->required(),
                 ]),
                 Textarea::make('billing_address')->rows(2)->columnSpanFull(),
                 Textarea::make('shipping_address')->rows(2)->columnSpanFull(),
@@ -78,7 +78,7 @@ class OrderResource extends Resource
                 TextColumn::make('status')->badge()->sortable(),
                 TextColumn::make('payment_status')->badge()->sortable(),
                 TextColumn::make('shipping_status')->badge()->sortable(),
-                TextColumn::make('grand_total')->money('BGN')->sortable(),
+                TextColumn::make('grand_total')->money('EUR')->sortable(),
                 TextColumn::make('created_at')->dateTime()->sortable(),
             ])
             ->filters([
@@ -127,7 +127,7 @@ class OrderResource extends Resource
                         TextInput::make('city')->required(),
                         TextInput::make('postcode'),
                         TextInput::make('address'),
-                        TextInput::make('price')->numeric()->prefix('BGN')->required(),
+                        TextInput::make('price')->numeric()->prefix('EUR')->required(),
                     ])
                     ->action(function (Order $record, array $data, ShipmentService $shipmentService): void {
                         $shipmentService->create($record, $data);

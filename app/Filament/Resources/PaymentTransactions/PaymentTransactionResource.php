@@ -37,7 +37,7 @@ class PaymentTransactionResource extends Resource
             Select::make('payment_method_id')->relationship('method', 'name')->searchable()->preload(),
             TextInput::make('transaction_id'),
             TextInput::make('amount')->numeric()->required(),
-            TextInput::make('currency')->default('BGN')->required(),
+            TextInput::make('currency')->default('EUR')->required(),
             Select::make('status')->options(array_combine(PaymentTransaction::STATUSES, PaymentTransaction::STATUSES))->required(),
             DateTimePicker::make('paid_at'),
             DateTimePicker::make('failed_at'),
@@ -52,7 +52,7 @@ class PaymentTransactionResource extends Resource
             TextColumn::make('order.order_number')->searchable()->sortable(),
             TextColumn::make('method.name')->sortable(),
             TextColumn::make('transaction_id')->searchable(),
-            TextColumn::make('amount')->money('BGN')->sortable(),
+            TextColumn::make('amount')->money('EUR')->sortable(),
             TextColumn::make('status')->badge()->sortable(),
             TextColumn::make('created_at')->dateTime()->sortable(),
         ]);

@@ -39,7 +39,7 @@ class PromotionRedemptionResource extends Resource
             TextColumn::make('order.order_number')->searchable(),
             TextColumn::make('user.email')->searchable(),
             TextColumn::make('session_id')->searchable(),
-            TextColumn::make('discount_amount')->money('BGN')->sortable(),
+            TextColumn::make('discount_amount')->money('EUR')->sortable(),
             TextColumn::make('created_at')->dateTime()->sortable(),
         ])->defaultSort('created_at', 'desc');
     }

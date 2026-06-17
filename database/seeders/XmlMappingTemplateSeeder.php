@@ -39,7 +39,7 @@ class XmlMappingTemplateSeeder extends Seeder
                     'quantity' => 'nullable|numeric',
                 ],
                 'defaults' => [
-                    'currency' => 'BGN',
+                    'currency' => 'EUR',
                 ],
                 'is_active' => true,
             ],

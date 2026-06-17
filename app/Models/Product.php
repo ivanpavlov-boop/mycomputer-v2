@@ -27,6 +27,8 @@ class Product extends Model
 
     public const SOURCE_SUPPLIER_IMPORT = 'supplier_import';
 
+    public const CATALOG_CURRENCY = 'EUR';
+
     public const PRICE_SOURCE_MANUAL = 'manual';
 
     public const PRICE_SOURCE_SUPPLIER_IMPORT = 'supplier_import_calculated';

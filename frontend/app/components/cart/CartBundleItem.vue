@@ -25,7 +25,7 @@ import type { CartBundleItem, CartResponse } from '~/types/api'
 const props = defineProps<{ item: CartBundleItem }>()
 const cart = useCartStore()
 
-const formatPrice = (value: string | number) => `${Number(value).toFixed(2)} лв.`
+const formatPrice = (value: string | number) => `${Number(value).toFixed(2)} EUR`
 
 async function remove() {
   const response = await useCartApi().removeBundle(props.item.id) as { data: CartResponse }

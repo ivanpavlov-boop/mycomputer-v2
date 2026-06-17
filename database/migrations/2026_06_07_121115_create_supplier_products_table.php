@@ -24,7 +24,7 @@ return new class extends Migration
             $table->string('category_name')->nullable()->index();
             $table->decimal('price', 12, 2)->nullable();
             $table->unsignedInteger('quantity')->nullable();
-            $table->string('currency', 3)->default('BGN');
+            $table->string('currency', 3)->default('EUR');
             $table->json('raw_data');
             $table->string('payload_hash')->index();
             $table->timestamp('received_at')->index();

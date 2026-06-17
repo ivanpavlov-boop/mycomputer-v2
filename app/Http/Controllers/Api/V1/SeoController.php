@@ -28,7 +28,7 @@ class SeoController extends Controller
                 'brand' => $product->brand?->name,
                 'offers' => [
                     '@type' => 'Offer',
-                    'priceCurrency' => 'BGN',
+                    'priceCurrency' => Product::CATALOG_CURRENCY,
                     'price' => $product->promo_price ?? $product->price,
                 ],
             ],

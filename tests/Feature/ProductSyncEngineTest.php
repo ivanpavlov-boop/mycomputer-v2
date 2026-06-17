@@ -57,7 +57,7 @@ class ProductSyncEngineTest extends TestCase
             'category_name' => 'Keyboards',
             'price' => 49.99,
             'quantity' => 5,
-            'currency' => 'BGN',
+            'currency' => 'EUR',
             'raw_data' => ['sku' => 'SUP-NEW-001'],
             'payload_hash' => sha1('SUP-NEW-001'),
             'received_at' => now(),

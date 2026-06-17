@@ -26,7 +26,7 @@
             <tbody>
               <tr class="border-b">
                 <td class="p-3 font-semibold">Цена</td>
-                <td v-for="product in comparison.products" :key="product.id" class="p-3">{{ comparison.prices[product.id] }} лв.</td>
+                <td v-for="product in comparison.products" :key="product.id" class="p-3">{{ comparison.prices[product.id] }} EUR</td>
               </tr>
               <tr class="border-b">
                 <td class="p-3 font-semibold">Наличност</td>

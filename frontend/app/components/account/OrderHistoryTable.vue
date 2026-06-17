@@ -11,7 +11,7 @@
             <td class="py-3 font-semibold">{{ order.order_number }}</td>
             <td>{{ order.status }}</td>
             <td>{{ order.payment_status }}</td>
-            <td>{{ order.grand_total }} лв.</td>
+            <td>{{ order.grand_total }} EUR</td>
             <td>{{ new Date(order.created_at).toLocaleDateString('bg-BG') }}</td>
           </tr>
         </tbody>

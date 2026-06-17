@@ -121,7 +121,7 @@ class MerchantFeedService
 
     protected function money(string|float|int|null $value): string
     {
-        return number_format((float) $value, 2, '.', '').' BGN';
+        return number_format((float) $value, 2, '.', '').' '.Product::CATALOG_CURRENCY;
     }
 
     protected function categoryPath(Product $product): string

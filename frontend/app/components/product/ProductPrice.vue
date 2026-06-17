@@ -12,7 +12,10 @@
 <script setup lang="ts">
 import type { ProductCard } from '~/types/api'
 
-defineProps<{ product: ProductCard }>()
+const props = defineProps<{ product: ProductCard }>()
 
-const money = (value: string | number) => `${Number(value).toFixed(2)} лв.`
+const money = (value: string | number) => new Intl.NumberFormat('en-US', {
+  style: 'currency',
+  currency: props.product.currency || 'EUR',
+}).format(Number(value))
 </script>

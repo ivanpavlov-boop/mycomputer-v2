@@ -17,7 +17,7 @@ class AiAssistantTest extends TestCase
     {
         Product::factory()->create(['name' => 'Gaming Laptop RTX', 'price' => 2400]);
 
-        $this->postJson('/api/v1/ai/search', ['query' => 'gaming laptop under 2500 BGN'])
+        $this->postJson('/api/v1/ai/search', ['query' => 'gaming laptop under 2500 EUR'])
             ->assertOk()
             ->assertJsonPath('data.intent.price_max', 2500)
             ->assertJsonStructure(['data' => ['summary', 'reasoning', 'products']]);
@@ -53,7 +53,7 @@ class AiAssistantTest extends TestCase
 
     public function test_ai_search_intent_parsing(): void
     {
-        $intent = app(ProductRecommendationService::class)->parseIntent('Need a laptop for architecture under 3000 BGN');
+        $intent = app(ProductRecommendationService::class)->parseIntent('Need a laptop for architecture under 3000 EUR');
 
         $this->assertSame(3000, $intent['price_max']);
         $this->assertContains('autocad', $intent['category_keywords']);
