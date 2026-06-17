@@ -18,7 +18,7 @@
       <article v-for="product in products" :key="product.id" class="rounded-md border border-slate-200 p-3">
         <NuxtLink class="font-semibold hover:text-brand-700" :to="`/p/${product.slug}`">{{ product.name }}</NuxtLink>
         <div class="mt-2 flex items-center justify-between gap-3">
-          <span class="font-bold text-brand-700">{{ Number(product.promo_price || product.price).toFixed(2) }} лв.</span>
+          <span class="font-bold text-brand-700">{{ money(product.promo_price || product.price, product.currency) }}</span>
           <BaseButton @click="$emit('select', product.id, componentType)">Избери</BaseButton>
         </div>
       </article>
@@ -39,6 +39,11 @@ const searched = ref(false)
 const componentType = ref<PcComponentType>(props.componentTypes[0] || 'cpu')
 const products = ref<ProductCard[]>([])
 const typeOptions = computed(() => props.componentTypes.map((type) => ({ label: type, value: type })))
+
+const money = (value: string | number, currency = 'EUR') => new Intl.NumberFormat('en-US', {
+  style: 'currency',
+  currency,
+}).format(Number(value))
 
 async function loadProducts() {
   searched.value = true

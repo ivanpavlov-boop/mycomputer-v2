@@ -28,7 +28,11 @@ class SupplierProductsTable
                 TextColumn::make('product.sku')->label('Matched SKU')->searchable()->toggleable(),
                 TextColumn::make('name')->searchable()->limit(45),
                 TextColumn::make('brand_name')->searchable()->toggleable(),
-                TextColumn::make('price')->money('BGN')->sortable(),
+                TextColumn::make('price')
+                    ->formatStateUsing(fn (mixed $state, SupplierProduct $record): ?string => $state !== null
+                        ? ($record->currency ?: 'EUR').' '.number_format((float) $state, 2)
+                        : null)
+                    ->sortable(),
                 TextColumn::make('quantity')->sortable(),
                 TextColumn::make('status')->badge()->sortable(),
                 TextColumn::make('received_at')->dateTime()->sortable(),

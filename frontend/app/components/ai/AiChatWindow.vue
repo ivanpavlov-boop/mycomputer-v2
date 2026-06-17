@@ -14,7 +14,7 @@
       </div>
     </div>
     <form class="flex gap-2 border-t p-4" @submit.prevent="send">
-      <BaseInput v-model="input" placeholder="Напр. лаптоп за AutoCAD до 3000 лв." />
+      <BaseInput v-model="input" placeholder="Напр. лаптоп за AutoCAD до 3000 EUR" />
       <BaseButton type="submit">Изпрати</BaseButton>
     </form>
   </div>

@@ -44,7 +44,7 @@ class OrderShipmentResource extends Resource
             TextInput::make('city')->required(),
             TextInput::make('postcode'),
             TextInput::make('address'),
-            TextInput::make('price')->numeric()->prefix('BGN')->required(),
+            TextInput::make('price')->numeric()->prefix('EUR')->required(),
             Select::make('status')->options(['pending' => 'Pending', 'created' => 'Created', 'cancelled' => 'Cancelled', 'delivered' => 'Delivered'])->required(),
         ])]);
     }
@@ -58,7 +58,7 @@ class OrderShipmentResource extends Resource
             TextColumn::make('tracking_number')->searchable(),
             TextColumn::make('delivery_type')->badge(),
             TextColumn::make('city')->searchable(),
-            TextColumn::make('price')->money('BGN'),
+            TextColumn::make('price')->money('EUR'),
             TextColumn::make('status')->badge(),
         ])->recordActions([
             Action::make('tracking')->icon('heroicon-o-map')->action(fn () => Notification::make()->title('Tracking placeholder')->success()->send()),

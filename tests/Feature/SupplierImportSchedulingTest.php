@@ -288,7 +288,7 @@ class SupplierImportSchedulingTest extends TestCase
                 'name' => 'required',
                 'price' => 'numeric',
             ],
-            'defaults' => ['currency' => 'BGN'],
+            'defaults' => ['currency' => 'EUR'],
             'is_active' => true,
         ]);
     }

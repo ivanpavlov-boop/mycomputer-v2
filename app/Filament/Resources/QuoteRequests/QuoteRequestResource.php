@@ -51,7 +51,7 @@ class QuoteRequestResource extends Resource
                     TextInput::make('vat_number'),
                     TextInput::make('status')->disabled()->dehydrated(),
                     DatePicker::make('valid_until'),
-                    TextInput::make('grand_total')->numeric()->prefix('BGN')->disabled()->dehydrated(),
+                    TextInput::make('grand_total')->numeric()->prefix('EUR')->disabled()->dehydrated(),
                 ]),
                 Textarea::make('notes')->columnSpanFull(),
                 Textarea::make('internal_notes')->columnSpanFull(),
@@ -69,7 +69,7 @@ class QuoteRequestResource extends Resource
                 TextColumn::make('company.name')->searchable(),
                 TextColumn::make('status')->badge()->sortable(),
                 TextColumn::make('source')->badge()->sortable(),
-                TextColumn::make('grand_total')->money('BGN')->sortable(),
+                TextColumn::make('grand_total')->money('EUR')->sortable(),
                 TextColumn::make('valid_until')->date()->sortable(),
                 TextColumn::make('created_at')->dateTime()->sortable(),
             ])

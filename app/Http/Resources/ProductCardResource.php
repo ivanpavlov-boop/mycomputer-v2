@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Models\Product;
 use App\Services\Reviews\ReviewStatsService;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -20,6 +21,7 @@ class ProductCardResource extends JsonResource
             'name' => $this->name,
             'slug' => $this->slug,
             'short_description' => $this->short_description,
+            'currency' => Product::CATALOG_CURRENCY,
             'price' => $this->price,
             'regular_price' => $this->regular_price ?? $this->price,
             'sale_price' => $this->sale_price ?? $this->promo_price,

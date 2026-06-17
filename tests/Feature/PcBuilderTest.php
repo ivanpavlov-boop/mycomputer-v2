@@ -132,7 +132,7 @@ class PcBuilderTest extends TestCase
         $this->createComponent('gpu', 'Gaming RTX Video Card', 1200, ['recommended_psu_watts' => '750']);
 
         $this->withHeader('X-PC-Build-Session', $this->session)
-            ->postJson('/api/v1/pc-builder/ai-generate', ['query' => 'Build me a gaming PC under 3000 BGN'])
+            ->postJson('/api/v1/pc-builder/ai-generate', ['query' => 'Build me a gaming PC under 3000 EUR'])
             ->assertOk()
             ->assertJsonPath('data.status', 'draft')
             ->assertJsonPath('data.session_id', $this->session);

@@ -51,7 +51,7 @@ class B2BCompanyResource extends Resource
                     TextInput::make('website')->url()->maxLength(255),
                     Select::make('status')->options(array_combine(B2BCompany::STATUSES, B2BCompany::STATUSES))->required(),
                     Select::make('approval_status')->options(array_combine(B2BCompany::APPROVAL_STATUSES, B2BCompany::APPROVAL_STATUSES))->required(),
-                    TextInput::make('credit_limit')->numeric()->prefix('BGN'),
+                    TextInput::make('credit_limit')->numeric()->prefix('EUR'),
                     TextInput::make('payment_terms')->maxLength(255),
                 ]),
                 Textarea::make('billing_address')->columnSpanFull(),
@@ -70,7 +70,7 @@ class B2BCompanyResource extends Resource
                 TextColumn::make('email')->searchable(),
                 TextColumn::make('status')->badge()->sortable(),
                 TextColumn::make('approval_status')->badge()->sortable(),
-                TextColumn::make('credit_limit')->money('BGN')->sortable(),
+                TextColumn::make('credit_limit')->money('EUR')->sortable(),
                 TextColumn::make('created_at')->dateTime()->sortable(),
             ])
             ->filters([

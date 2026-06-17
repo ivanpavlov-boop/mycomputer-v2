@@ -41,7 +41,7 @@ class PcBuildResource extends Resource
                 TextInput::make('session_id')->disabled(),
                 TextInput::make('name')->required()->maxLength(160),
                 Textarea::make('description')->rows(3),
-                TextInput::make('total_price')->numeric()->prefix('BGN')->disabled()->dehydrated(),
+                TextInput::make('total_price')->numeric()->prefix('EUR')->disabled()->dehydrated(),
                 Select::make('status')->options(array_combine(PcBuild::STATUSES, PcBuild::STATUSES))->required(),
             ]),
         ]);
@@ -54,7 +54,7 @@ class PcBuildResource extends Resource
                 TextColumn::make('name')->searchable()->sortable(),
                 TextColumn::make('user.email')->searchable()->sortable(),
                 TextColumn::make('status')->badge()->sortable(),
-                TextColumn::make('total_price')->money('BGN')->sortable(),
+                TextColumn::make('total_price')->money('EUR')->sortable(),
                 TextColumn::make('items_count')->counts('items')->label('Components')->sortable(),
                 TextColumn::make('created_at')->dateTime()->sortable(),
             ])

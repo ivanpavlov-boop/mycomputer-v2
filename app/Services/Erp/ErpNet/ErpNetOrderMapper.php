@@ -34,7 +34,7 @@ class ErpNetOrderMapper
                 'shipping' => (float) $order->shipping_price,
                 'discount' => (float) $order->discount_total,
                 'total' => (float) $order->grand_total,
-                'currency' => 'BGN',
+                'currency' => 'EUR',
             ],
             'payment' => [
                 'method' => $order->payment_method,

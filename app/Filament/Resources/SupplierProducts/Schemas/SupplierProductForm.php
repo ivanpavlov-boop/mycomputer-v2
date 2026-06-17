@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\SupplierProducts\Schemas;
 
+use App\Models\SupplierProduct;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\KeyValue;
 use Filament\Forms\Components\Select;
@@ -39,9 +40,9 @@ class SupplierProductForm
                             TextInput::make('name')->maxLength(255),
                             TextInput::make('brand_name')->maxLength(255),
                             TextInput::make('category_name')->maxLength(255),
-                            TextInput::make('price')->numeric()->prefix('BGN'),
+                            TextInput::make('price')->numeric()->prefix(fn (?SupplierProduct $record): string => $record?->currency ?: 'EUR'),
                             TextInput::make('quantity')->numeric(),
-                            TextInput::make('currency')->maxLength(3)->default('BGN'),
+                            TextInput::make('currency')->maxLength(3)->default('EUR'),
                             TextInput::make('payload_hash')->required()->maxLength(255),
                             DateTimePicker::make('received_at')->required(),
                             Select::make('status')

@@ -22,7 +22,7 @@
             >
               <div class="flex items-center justify-between gap-3">
                 <span class="font-semibold">{{ build.name }}</span>
-                <span class="font-bold text-brand-700">{{ Number(build.total_price).toFixed(2) }} лв.</span>
+                <span class="font-bold text-brand-700">{{ Number(build.total_price).toFixed(2) }} EUR</span>
               </div>
               <div class="mt-1 text-sm text-slate-500">{{ build.items.length }} компонента</div>
             </NuxtLink>

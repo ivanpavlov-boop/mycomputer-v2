@@ -1,7 +1,7 @@
 <?php
 
 return [
-    'points_per_bgn' => (int) env('LOYALTY_POINTS_PER_BGN', 1),
+    'points_per_eur' => (int) env('LOYALTY_POINTS_PER_EUR', 1),
     'birthday_bonus_points' => (int) env('LOYALTY_BIRTHDAY_BONUS_POINTS', 100),
 
     'tiers' => [

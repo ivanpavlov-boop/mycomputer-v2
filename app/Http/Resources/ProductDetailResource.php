@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Models\Product;
 use App\Services\Availability\AvailabilityStatusService;
 use App\Services\Reviews\ReviewStatsService;
 use Illuminate\Http\Request;
@@ -24,6 +25,7 @@ class ProductDetailResource extends JsonResource
             'short_description' => $this->short_description,
             'description' => $this->description,
             'weight' => $this->weight,
+            'currency' => Product::CATALOG_CURRENCY,
             'price' => $this->price,
             'regular_price' => $this->regular_price ?? $this->price,
             'sale_price' => $this->sale_price ?? $this->promo_price,
@@ -62,7 +64,7 @@ class ProductDetailResource extends JsonResource
                 'brand' => $this->brand?->name,
                 'offers' => [
                     '@type' => 'Offer',
-                    'priceCurrency' => 'EUR',
+                    'priceCurrency' => Product::CATALOG_CURRENCY,
                     'price' => $this->activeSalePrice() ?? $this->price,
                     'availability' => $availability->schemaAvailability($this->resource),
                 ],

@@ -117,7 +117,7 @@ class XmlImportEngine
                         'external_availability_status' => $mapped['external_availability_status'] ?? $mapped['stock_status'] ?? null,
                         'external_availability_label' => $mapped['external_availability_label'] ?? null,
                         'availability_status_id' => $availability?->id,
-                        'currency' => $mapped['currency'] ?? 'BGN',
+                        'currency' => $mapped['currency'] ?? 'EUR',
                         'raw_data' => $rawData,
                         'payload_hash' => sha1(json_encode($mapped['_raw'], JSON_THROW_ON_ERROR)),
                         'received_at' => now(),

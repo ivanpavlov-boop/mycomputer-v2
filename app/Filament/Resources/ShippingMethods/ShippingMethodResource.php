@@ -36,8 +36,8 @@ class ShippingMethodResource extends Resource
             TextInput::make('code')->required(),
             Select::make('type')->options(['office' => 'Office', 'address' => 'Address', 'locker' => 'Locker', 'pickup' => 'Pickup'])->required(),
             Select::make('status')->options(['active' => 'Active', 'inactive' => 'Inactive'])->required(),
-            TextInput::make('price')->numeric()->prefix('BGN')->required(),
-            TextInput::make('free_shipping_threshold')->numeric()->prefix('BGN'),
+            TextInput::make('price')->numeric()->prefix('EUR')->required(),
+            TextInput::make('free_shipping_threshold')->numeric()->prefix('EUR'),
             TextInput::make('sort_order')->numeric()->default(0),
             KeyValue::make('settings'),
         ])]);
@@ -51,7 +51,7 @@ class ShippingMethodResource extends Resource
             TextColumn::make('code')->badge(),
             TextColumn::make('type')->badge(),
             TextColumn::make('status')->badge(),
-            TextColumn::make('price')->money('BGN')->sortable(),
+            TextColumn::make('price')->money('EUR')->sortable(),
         ]);
     }
 

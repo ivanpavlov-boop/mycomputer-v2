@@ -45,6 +45,8 @@ class MarketingPlatformTest extends TestCase
         $this->assertStringContainsString('<g:id><![CDATA[MC-LAP-001]]></g:id>', $xml);
         $this->assertStringContainsString('<g:gtin><![CDATA[1234567890123]]></g:gtin>', $xml);
         $this->assertStringContainsString('<g:condition><![CDATA[new]]></g:condition>', $xml);
+        $this->assertStringContainsString(' EUR', $xml);
+        $this->assertStringNotContainsString(' BGN', $xml);
         $this->assertStringNotContainsString('purchase_price', $xml);
         $this->assertNotFalse(simplexml_load_string($xml));
     }
@@ -55,6 +57,8 @@ class MarketingPlatformTest extends TestCase
 
         $this->assertStringContainsString('Facebook Catalog', $xml);
         $this->assertStringContainsString('<g:id><![CDATA[MC-LAP-001]]></g:id>', $xml);
+        $this->assertStringContainsString(' EUR', $xml);
+        $this->assertStringNotContainsString(' BGN', $xml);
         $this->assertStringNotContainsString('source_payload', $xml);
         $this->assertNotFalse(simplexml_load_string($xml));
     }
@@ -151,6 +155,7 @@ class MarketingPlatformTest extends TestCase
         $this->assertDatabaseHas('conversion_logs', ['order_id' => $order->id, 'provider' => 'ga4', 'event_name' => 'purchase']);
         $this->assertDatabaseHas('conversion_logs', ['order_id' => $order->id, 'provider' => 'meta', 'event_name' => 'Purchase']);
         $this->assertEquals(2, ConversionLog::query()->where('order_id', $order->id)->count());
+        $this->assertSame(Product::CATALOG_CURRENCY, ConversionLog::query()->where('order_id', $order->id)->firstOrFail()->payload['currency']);
     }
 
     public function test_feed_regeneration_api_requires_permission_and_creates_history(): void

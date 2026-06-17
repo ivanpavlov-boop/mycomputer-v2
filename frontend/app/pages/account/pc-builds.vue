@@ -12,7 +12,7 @@
             <div class="flex flex-wrap items-center justify-between gap-3">
               <NuxtLink class="font-semibold hover:text-brand-700" :to="`/pc-builder/build/${build.id}`">{{ build.name }}</NuxtLink>
               <div class="flex items-center gap-3">
-                <span class="font-bold text-brand-700">{{ Number(build.total_price).toFixed(2) }} лв.</span>
+                <span class="font-bold text-brand-700">{{ Number(build.total_price).toFixed(2) }} EUR</span>
                 <button class="text-sm font-semibold text-red-700" @click="deleteBuild(build.id)">Изтрий</button>
               </div>
             </div>

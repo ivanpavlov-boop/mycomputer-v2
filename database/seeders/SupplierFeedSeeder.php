@@ -50,7 +50,7 @@ class SupplierFeedSeeder extends Seeder
                 'category_name' => 'Business Laptops',
                 'price' => 1393.18,
                 'quantity' => 12,
-                'currency' => 'BGN',
+                'currency' => 'EUR',
                 'raw_data' => [
                     'code' => 'SUP-MC-LAP-001',
                     'name' => 'Lenovo ThinkPad E16 Gen 2',

@@ -11,7 +11,7 @@
           <div v-for="item in quote.items" :key="item.id" class="rounded-md border border-slate-200 p-3">
             <p class="font-semibold">{{ item.product_name }}</p>
             <p class="text-sm text-slate-600">Количество: {{ item.quantity }}</p>
-            <p v-if="item.offered_price" class="text-sm font-semibold">Оферирана цена: {{ item.offered_price }} лв.</p>
+            <p v-if="item.offered_price" class="text-sm font-semibold">Оферирана цена: {{ item.offered_price }} EUR</p>
           </div>
         </div>
         <QuoteActions class="mt-5" :quote="quote" @submit="submit" @accept="accept" />

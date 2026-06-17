@@ -11,13 +11,13 @@
             <tr>
                 <td>{{ $item['name'] ?? 'Продукт' }}<br><small>{{ $item['sku'] ?? '' }}</small></td>
                 <td align="center">{{ $item['quantity'] ?? 1 }}</td>
-                <td align="right">{{ number_format((float) ($item['total_price'] ?? $item['unit_price'] ?? 0), 2) }} лв.</td>
+                <td align="right">{{ number_format((float) ($item['total_price'] ?? $item['unit_price'] ?? 0), 2) }} EUR</td>
             </tr>
         @endforeach
     </tbody>
 </table>
 
-<p><strong>Общо: {{ number_format((float) $cartTotal, 2) }} лв.</strong></p>
+<p><strong>Общо: {{ number_format((float) $cartTotal, 2) }} EUR</strong></p>
 <p><a href="{{ $recoveryUrl }}">Възстановете количката</a></p>
 <p>Нужда от помощ? Пишете ни на {{ $supportContact }}.</p>
 <p><small><a href="{{ $unsubscribeUrl }}">Отписване от напомняния</a></small></p>

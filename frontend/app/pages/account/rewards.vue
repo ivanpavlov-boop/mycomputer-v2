@@ -13,7 +13,7 @@
                 <h2 class="font-bold">{{ reward.title }}</h2>
                 <p class="mt-1 text-sm text-slate-500">{{ reward.points_cost }} точки</p>
               </div>
-              <span class="rounded bg-emerald-50 px-2 py-1 text-xs font-bold text-emerald-700">{{ reward.discount_value }} {{ reward.discount_type === 'percentage' ? '%' : 'лв.' }}</span>
+              <span class="rounded bg-emerald-50 px-2 py-1 text-xs font-bold text-emerald-700">{{ reward.discount_value }} {{ reward.discount_type === 'percentage' ? '%' : 'EUR' }}</span>
             </div>
             <BaseButton class="mt-4 w-full" @click="redeem(reward.id)">Осребри</BaseButton>
           </article>

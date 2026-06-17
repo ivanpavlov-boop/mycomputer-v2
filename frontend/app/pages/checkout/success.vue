@@ -7,7 +7,7 @@
         <h1 class="mt-2 text-3xl font-bold">Благодарим Ви!</h1>
         <div class="mt-5 grid gap-2 text-sm text-slate-700">
           <p>Номер на поръчка: <strong>{{ route.query.order }}</strong></p>
-          <p>Обща сума: <strong>{{ route.query.total }} лв.</strong></p>
+          <p>Обща сума: <strong>{{ route.query.total }} EUR</strong></p>
           <p>Имейл: <strong>{{ route.query.email }}</strong></p>
         </div>
 
@@ -28,7 +28,7 @@ onMounted(() => {
   useAnalytics().purchase({
     order_number: route.query.order,
     value: Number(route.query.total || 0),
-    currency: 'BGN',
+    currency: 'EUR',
   })
 })
 useSeo().page('Успешна поръчка', 'Поръчката е приета.', '/checkout/success')

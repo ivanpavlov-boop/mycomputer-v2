@@ -30,7 +30,7 @@ const quantity = ref(1)
 const pending = ref(false)
 const message = ref('')
 const error = ref(false)
-const formatPrice = (value: string | number) => `${Number(value).toFixed(2)} лв.`
+const formatPrice = (value: string | number) => `${Number(value).toFixed(2)} EUR`
 
 async function add() {
   pending.value = true
