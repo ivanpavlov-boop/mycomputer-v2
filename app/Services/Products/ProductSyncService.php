@@ -159,7 +159,7 @@ class ProductSyncService
             }
         }
 
-        $product->update($updates);
+        $product->update($this->filterLockedContentUpdates($product, $updates));
 
         ProductSupplierOffer::query()
             ->where('product_id', $product->id)
@@ -318,6 +318,27 @@ class ProductSyncService
                 'needs_brand_mapping' => true,
             ],
         ]);
+    }
+
+    /**
+     * @param  array<string, mixed>  $updates
+     * @return array<string, mixed>
+     */
+    public function filterLockedContentUpdates(Product $product, array $updates): array
+    {
+        if ($product->lock_name) {
+            unset($updates['name']);
+        }
+
+        if ($product->lock_seo) {
+            unset($updates['meta_title'], $updates['meta_description']);
+        }
+
+        if ($product->lock_descriptions) {
+            unset($updates['description'], $updates['short_description']);
+        }
+
+        return $updates;
     }
 
     protected function upsertSupplierOffer(Product $product, SupplierProduct $supplierProduct): ProductSupplierOffer

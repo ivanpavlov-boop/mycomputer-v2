@@ -54,6 +54,17 @@ class ProductForm
                             TextInput::make('weight')->numeric()->suffix('kg'),
                             TextInput::make('warranty_months')->numeric()->suffix('months'),
                         ]),
+                        Grid::make(3)->schema([
+                            Toggle::make('lock_name')
+                                ->label('Lock Product Name')
+                                ->helperText('Prevent supplier sync from overwriting the curated product name.'),
+                            Toggle::make('lock_seo')
+                                ->label('Lock SEO')
+                                ->helperText('Prevent supplier sync from overwriting meta title and meta description.'),
+                            Toggle::make('lock_descriptions')
+                                ->label('Lock Description')
+                                ->helperText('Prevent supplier sync from overwriting short and full descriptions.'),
+                        ]),
                         Textarea::make('short_description')->rows(2)->columnSpanFull(),
                         RichEditor::make('description')->columnSpanFull(),
                     ]),
