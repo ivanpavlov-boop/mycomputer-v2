@@ -511,7 +511,7 @@ class CatalogSyncPreviewService
         $selectedId = $offers
             ->filter(fn (array $offer): bool => $offer['eligible'])
             ->sortBy([
-                ['cost', 'asc'],
+                ['normalized_cost', 'asc'],
                 ['supplier_priority', 'asc'],
                 ['preferred_rank', 'asc'],
             ])
@@ -563,6 +563,8 @@ class CatalogSyncPreviewService
         $supplierActive = $supplierProduct->supplier?->status === 'active';
         $inStock = (int) ($supplierProduct->quantity ?? 0) > 0;
         $eligible = $supplierActive && $inStock && ! $exclusion['excluded'];
+        $normalizedCost = (float) $this->pricingEngine
+            ->calculateForSupplierProduct($supplierProduct)['normalized_purchase_cost'];
 
         return [
             'id' => 'supplier-product-'.$supplierProduct->id,
@@ -570,6 +572,7 @@ class CatalogSyncPreviewService
             'supplier_name' => $supplierProduct->supplier?->company_name,
             'supplier_sku' => $supplierProduct->supplier_sku,
             'cost' => $supplierProduct->price !== null ? (float) $supplierProduct->price : PHP_FLOAT_MAX,
+            'normalized_cost' => $normalizedCost,
             'display_cost' => $supplierProduct->price !== null ? (float) $supplierProduct->price : null,
             'stock' => (int) ($supplierProduct->quantity ?? 0),
             'supplier_priority' => (int) ($supplierProduct->supplier?->priority ?? 100),
@@ -596,6 +599,9 @@ class CatalogSyncPreviewService
         $supplierActive = $offer->supplier?->status === 'active';
         $inStock = (int) $offer->quantity > 0;
         $eligible = $supplierActive && $inStock && ! $exclusion['excluded'];
+        $normalizedCost = $supplierProduct
+            ? (float) $this->pricingEngine->calculateForSupplierProduct($supplierProduct)['normalized_purchase_cost']
+            : ($offer->price !== null ? (float) $offer->price : PHP_FLOAT_MAX);
 
         return [
             'id' => 'catalog-offer-'.$offer->id,
@@ -603,6 +609,7 @@ class CatalogSyncPreviewService
             'supplier_name' => $offer->supplier?->company_name,
             'supplier_sku' => $offer->supplier_sku,
             'cost' => $offer->price !== null ? (float) $offer->price : PHP_FLOAT_MAX,
+            'normalized_cost' => $normalizedCost,
             'display_cost' => $offer->price !== null ? (float) $offer->price : null,
             'stock' => (int) $offer->quantity,
             'supplier_priority' => (int) $offer->supplier_priority,

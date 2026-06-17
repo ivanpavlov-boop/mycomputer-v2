@@ -182,6 +182,38 @@ class SupplierCatalogSyncControlsTest extends TestCase
         $this->assertSame('Lowest available in-stock supplier.', $selection['reason']);
     }
 
+    public function test_offer_selection_uses_normalized_purchase_cost_instead_of_raw_supplier_price(): void
+    {
+        $product = Product::factory()->create();
+        $vatIncludedSupplier = Supplier::factory()->create([
+            'company_name' => 'VAT Included Supplier',
+            'priority' => 10,
+            'vat_mode' => 'price_includes_vat',
+            'vat_rate' => 20,
+        ]);
+        $vatExcludedSupplier = Supplier::factory()->create([
+            'company_name' => 'VAT Excluded Supplier',
+            'priority' => 10,
+            'vat_mode' => 'price_excludes_vat',
+            'vat_rate' => 20,
+        ]);
+
+        $includedProduct = $this->supplierProduct($vatIncludedSupplier, ['ean' => '5555555555555', 'price' => 120, 'quantity' => 5]);
+        $excludedProduct = $this->supplierProduct($vatExcludedSupplier, ['ean' => '5555555555555', 'price' => 110, 'quantity' => 5]);
+
+        $includedOffer = $this->offer($product, $includedProduct);
+        $this->offer($product, $excludedProduct);
+
+        $selection = app(SupplierOfferSelectionService::class)->select($product);
+        $row = app(CatalogSyncPreviewService::class)->previewSupplierProduct($includedProduct);
+        $includedCandidate = collect($selection['candidates'])
+            ->firstWhere('supplier_id', $vatIncludedSupplier->id);
+
+        $this->assertSame($includedOffer->id, $selection['offer']->id);
+        $this->assertSame(100.0, $includedCandidate['normalized_purchase_cost']);
+        $this->assertSame('VAT Included Supplier', $row['winning_offer_supplier']);
+    }
+
     public function test_offer_selection_ignores_excluded_and_inactive_offers_and_uses_tie_breakers(): void
     {
         $product = Product::factory()->create();
