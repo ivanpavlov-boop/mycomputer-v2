@@ -46,13 +46,13 @@ class AdminPanelProvider extends PanelProvider
                 PanelsRenderHook::STYLES_AFTER,
                 fn (): HtmlString => new HtmlString(<<<'HTML'
                     <style>
-                        .fi-main.fi-width-full {
-                            padding-inline: 1rem;
+                        .fi-main-ctn > .fi-main.fi-width-full {
+                            width: calc(100% - 2rem);
                         }
 
                         @media (min-width: 1024px) {
-                            .fi-main.fi-width-full {
-                                padding-inline: 1.5rem;
+                            .fi-main-ctn > .fi-main.fi-width-full {
+                                width: calc(100% - 3rem);
                             }
                         }
                     </style>
