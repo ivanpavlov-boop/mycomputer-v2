@@ -207,6 +207,97 @@ class ProductSyncEngineTest extends TestCase
         $this->assertSame(Product::SALE_PRICE_SOURCE_MANUAL, $product->sale_price_source);
     }
 
+    public function test_content_locks_filter_supplier_content_updates_without_blocking_commercial_updates(): void
+    {
+        $lockedProduct = Product::factory()->create([
+            'lock_name' => true,
+            'lock_seo' => true,
+            'lock_descriptions' => true,
+        ]);
+        $unlockedProduct = Product::factory()->create([
+            'lock_name' => false,
+            'lock_seo' => false,
+            'lock_descriptions' => false,
+        ]);
+        $updates = [
+            'name' => 'Supplier Product Name',
+            'meta_title' => 'Supplier Meta Title',
+            'meta_description' => 'Supplier Meta Description',
+            'description' => 'Supplier full description',
+            'short_description' => 'Supplier short description',
+            'quantity' => 12,
+            'price' => 199,
+        ];
+
+        $service = app(ProductSyncService::class);
+        $lockedUpdates = $service->filterLockedContentUpdates($lockedProduct, $updates);
+        $unlockedUpdates = $service->filterLockedContentUpdates($unlockedProduct, $updates);
+
+        $this->assertArrayNotHasKey('name', $lockedUpdates);
+        $this->assertArrayNotHasKey('meta_title', $lockedUpdates);
+        $this->assertArrayNotHasKey('meta_description', $lockedUpdates);
+        $this->assertArrayNotHasKey('description', $lockedUpdates);
+        $this->assertArrayNotHasKey('short_description', $lockedUpdates);
+        $this->assertSame(12, $lockedUpdates['quantity']);
+        $this->assertSame(199, $lockedUpdates['price']);
+
+        $this->assertSame($updates, $unlockedUpdates);
+    }
+
+    public function test_locked_content_remains_curated_while_supplier_sync_updates_commercial_fields(): void
+    {
+        $supplier = Supplier::factory()->create();
+        $brand = Brand::factory()->create(['name' => 'Satechi', 'slug' => 'satechi']);
+        $product = Product::factory()->create([
+            'brand_id' => $brand->id,
+            'ean' => '1234567890123',
+            'name' => 'Безжично зарядно Satechi Duo Power Bank',
+            'slug' => 'bezzhichno-zaryadno-satechi-duo-power-bank',
+            'meta_title' => 'Безжично зарядно Satechi Duo',
+            'meta_description' => 'Кураторско SEO описание',
+            'description' => 'Кураторско пълно описание',
+            'short_description' => 'Кратко описание на български',
+            'lock_name' => true,
+            'lock_seo' => true,
+            'lock_descriptions' => true,
+            'source' => Product::SOURCE_SUPPLIER_IMPORT,
+            'price' => 99,
+            'quantity' => 1,
+        ]);
+        $supplierProduct = $this->supplierProduct($supplier, [
+            'ean' => '1234567890123',
+            'name' => 'Satechi Duo Wireless Charger Power Bank',
+            'brand_name' => 'Satechi',
+            'price' => 50,
+            'quantity' => 7,
+        ]);
+
+        PricingRule::query()->create([
+            'name' => 'Supplier margin',
+            'scope_type' => PricingRule::SCOPE_SUPPLIER,
+            'supplier_id' => $supplier->id,
+            'margin_type' => PricingRule::MARGIN_PERCENTAGE,
+            'margin_value' => 20,
+            'rounding_rule' => PricingRule::ROUND_NONE,
+            'is_active' => true,
+        ]);
+
+        app(ProductSyncService::class)->sync($supplierProduct);
+
+        $product->refresh();
+
+        $this->assertSame('Безжично зарядно Satechi Duo Power Bank', $product->name);
+        $this->assertSame('bezzhichno-zaryadno-satechi-duo-power-bank', $product->slug);
+        $this->assertSame('Безжично зарядно Satechi Duo', $product->meta_title);
+        $this->assertSame('Кураторско SEO описание', $product->meta_description);
+        $this->assertSame('Кураторско пълно описание', $product->description);
+        $this->assertSame('Кратко описание на български', $product->short_description);
+        $this->assertSame(7, $product->quantity);
+        $this->assertSame('50.00', $product->purchase_price);
+        $this->assertSame('60.00', $product->price);
+        $this->assertSame($supplier->id, $product->supplier_id);
+    }
+
     public function test_cross_supplier_winning_offer_controls_synced_supplier_price_stock_and_availability_metadata(): void
     {
         $apcom = Supplier::factory()->create(['company_name' => 'APCOM', 'priority' => 20]);
