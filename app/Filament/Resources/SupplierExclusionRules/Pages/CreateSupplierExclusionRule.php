@@ -8,4 +8,9 @@ use Filament\Resources\Pages\CreateRecord;
 class CreateSupplierExclusionRule extends CreateRecord
 {
     protected static string $resource = SupplierExclusionRuleResource::class;
+
+    protected function getRedirectUrl(): string
+    {
+        return $this->getResourceUrl();
+    }
 }

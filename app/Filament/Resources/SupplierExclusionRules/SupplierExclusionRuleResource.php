@@ -12,6 +12,7 @@ use App\Models\Supplier;
 use App\Models\SupplierExclusionRule;
 use BackedEnum;
 use Filament\Actions\BulkActionGroup;
+use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Forms\Components\Select;
@@ -114,6 +115,8 @@ class SupplierExclusionRuleResource extends Resource
             ])
             ->recordActions([
                 EditAction::make(),
+                DeleteAction::make()
+                    ->requiresConfirmation(),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
