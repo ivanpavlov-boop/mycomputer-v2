@@ -82,7 +82,7 @@ class CatalogSyncPreviewService
         );
         $pricingAction = $exclusion['excluded'] ? ($targetProduct ? 'update' : 'create') : $action;
         $pricing = $this->pricingPreview($supplierProduct, $targetProduct, $brand, $category, $pricingAction);
-        $imageCount = count($this->extractImageUrls($supplierProduct->raw_data ?? []));
+        $imageCount = count($this->extractImageUrls($supplierProduct->raw_data));
         $profitAmount = $this->profitAmount($supplierProduct->price, $pricing['final_selling_price']);
         $marginPercent = $this->marginPercent($supplierProduct->price, $profitAmount);
         $supplierOffers = $this->supplierOffersPreview($supplierProduct, $targetProduct);
@@ -933,8 +933,12 @@ class CatalogSyncPreviewService
     /**
      * @return array<int, string>
      */
-    protected function extractImageUrls(array $payload): array
+    protected function extractImageUrls(mixed $payload): array
     {
+        if (! is_array($payload)) {
+            return [];
+        }
+
         $urls = [];
         $keys = ['image', 'Image', 'image_url', 'ImageURL', 'ImageUrl', 'Picture', 'picture'];
 

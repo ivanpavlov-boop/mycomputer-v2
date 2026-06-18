@@ -2,13 +2,17 @@
 
 namespace Tests\Feature;
 
+use App\Filament\Pages\CatalogSyncPreview;
 use App\Models\Brand;
 use App\Models\Category;
 use App\Models\PricingRule;
 use App\Models\Product;
 use App\Models\Supplier;
+use App\Models\SupplierExclusionRule;
 use App\Models\SupplierProduct;
+use App\Models\User;
 use App\Services\Products\CatalogSyncPreviewService;
+use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -328,6 +332,57 @@ class CatalogSyncPreviewTest extends TestCase
         $this->assertSame(1, $product->quantity);
         $this->assertNull($supplierProduct->refresh()->product_id);
         $this->assertSame('new', $supplierProduct->status);
+    }
+
+    public function test_catalog_sync_preview_page_renders_legacy_scalar_raw_payloads(): void
+    {
+        $this->actingAsSupplierManager();
+
+        $supplier = Supplier::factory()->create();
+        $this->supplierProduct($supplier, [
+            'name' => 'Legacy Raw Payload Product',
+            'raw_data' => 'legacy payload',
+        ]);
+
+        $this
+            ->get(CatalogSyncPreview::getUrl())
+            ->assertOk()
+            ->assertSee('Legacy Raw Payload Product');
+    }
+
+    public function test_catalog_sync_preview_page_renders_legacy_scalar_raw_payloads_with_eol_exclusion_rule(): void
+    {
+        $this->actingAsSupplierManager();
+
+        SupplierExclusionRule::query()->create([
+            'name' => 'Exclude EOL products',
+            'is_active' => true,
+            'exclude_eol' => true,
+            'priority' => 1,
+        ]);
+
+        $supplier = Supplier::factory()->create();
+        $this->supplierProduct($supplier, [
+            'name' => 'Legacy EOL Check Product',
+            'raw_data' => 'legacy payload',
+        ]);
+
+        $this
+            ->get(CatalogSyncPreview::getUrl())
+            ->assertOk()
+            ->assertSee('Legacy EOL Check Product');
+    }
+
+    private function actingAsSupplierManager(): User
+    {
+        $this->seed(RolesAndPermissionsSeeder::class);
+
+        $user = User::factory()->create();
+        $user->assignRole('manager');
+
+        $this->actingAs($user);
+
+        return $user;
     }
 
     /**
