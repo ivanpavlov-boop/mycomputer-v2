@@ -45,6 +45,16 @@ class CatalogSyncPreview extends Page implements HasSchemas
         'sort_direction' => 'asc',
     ];
 
+    /**
+     * @var array{summary: array<string, int|float>, rows: array<int, array<string, mixed>>, error?: string}
+     */
+    public array $previewPayload = [
+        'summary' => [],
+        'rows' => [],
+    ];
+
+    public bool $diagnosticsOnly = false;
+
     public static function canAccess(): bool
     {
         return (bool) auth()->user()?->can('manage suppliers');
@@ -52,10 +62,25 @@ class CatalogSyncPreview extends Page implements HasSchemas
 
     public function mount(): void
     {
+        $this->diagnosticsOnly = (bool) config('services.catalog_sync_preview.diagnostics')
+            || request()->boolean('diagnostics')
+            || request()->boolean('catalog_sync_preview_diagnostics');
+
+        if ($this->diagnosticsOnly) {
+            $this->previewPayload = [
+                'summary' => $this->emptySummary(),
+                'rows' => [],
+            ];
+
+            return;
+        }
+
         $this->filters['supplier_id'] ??= Supplier::query()
             ->where('slug', 'apcom')
             ->orWhere('company_name', 'APCOM')
             ->value('id');
+
+        $this->refreshPreview();
     }
 
     public function form(Schema $schema): Schema
@@ -97,29 +122,40 @@ class CatalogSyncPreview extends Page implements HasSchemas
             ]);
     }
 
+    public function updatedFilters(mixed $value = null, ?string $key = null): void
+    {
+        if (! $this->diagnosticsOnly) {
+            $this->refreshPreview();
+        }
+    }
+
     public function applyQuickFilter(?string $filter): void
     {
         $this->filters['quick_filter'] = blank($filter) ? null : $filter;
 
         if (in_array($filter, ['create', 'update', 'conflict'], true)) {
             $this->filters['action'] = $filter;
+            $this->refreshPreview();
 
             return;
         }
 
         $this->filters['action'] = null;
+        $this->refreshPreview();
     }
 
     public function sortBy(string $column): void
     {
         if (($this->filters['sort_column'] ?? null) === $column) {
             $this->filters['sort_direction'] = ($this->filters['sort_direction'] ?? 'asc') === 'asc' ? 'desc' : 'asc';
+            $this->refreshPreview();
 
             return;
         }
 
         $this->filters['sort_column'] = $column;
         $this->filters['sort_direction'] = 'asc';
+        $this->refreshPreview();
     }
 
     /**
@@ -127,8 +163,15 @@ class CatalogSyncPreview extends Page implements HasSchemas
      */
     public function preview(): array
     {
+        $this->refreshPreview();
+
+        return $this->previewPayload;
+    }
+
+    protected function refreshPreview(): void
+    {
         try {
-            return app(CatalogSyncPreviewService::class)->preview($this->filters, $this->filters['limit'] ?? 50);
+            $this->previewPayload = app(CatalogSyncPreviewService::class)->preview($this->filters, $this->filters['limit'] ?? 50);
         } catch (Throwable $exception) {
             Log::error('Catalog Sync Preview page failed to render preview.', [
                 'exception' => $exception::class,
@@ -136,7 +179,7 @@ class CatalogSyncPreview extends Page implements HasSchemas
                 'filters' => $this->filters,
             ]);
 
-            return [
+            $this->previewPayload = [
                 'summary' => $this->emptySummary(),
                 'rows' => [],
                 'error' => $exception->getMessage(),

@@ -426,6 +426,24 @@ class CatalogSyncPreviewTest extends TestCase
             ->once();
     }
 
+    public function test_catalog_sync_preview_diagnostics_mode_renders_static_page_without_preview_service(): void
+    {
+        $this->actingAsSupplierManager();
+
+        config(['services.catalog_sync_preview.diagnostics' => true]);
+
+        $this->mock(CatalogSyncPreviewService::class, function ($mock): void {
+            $mock->shouldNotReceive('preview');
+        });
+
+        $this
+            ->get(CatalogSyncPreview::getUrl())
+            ->assertOk()
+            ->assertSee('Catalog Sync Preview diagnostics OK')
+            ->assertSee('Static Filament page render completed without loading filters, suppliers, or preview services.')
+            ->assertDontSee('Quick filters');
+    }
+
     public function test_catalog_sync_preview_initial_page_limits_rows_before_preview_generation(): void
     {
         $this->actingAsSupplierManager();
