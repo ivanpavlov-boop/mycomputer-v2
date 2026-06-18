@@ -13,6 +13,7 @@ use App\Services\Pricing\PricingEngine;
 use App\Services\Suppliers\SupplierExclusionService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Throwable;
@@ -31,14 +32,26 @@ class CatalogSyncPreviewService
      */
     public function preview(array $filters = [], int|string $limit = 50): array
     {
-        $rows = $this->supplierProductsQuery($filters)
+        $startedAt = microtime(true);
+        $filters = $this->normalizeFilters($filters);
+        $limit = $this->normalizeLimit($limit);
+
+        $this->startQueryLogging();
+
+        $query = $this->supplierProductsQuery($filters);
+        $rowsSelected = (clone $query)->count();
+        $supplierProducts = $query
+            ->limit($limit)
             ->get()
+            ->values();
+
+        $rows = $supplierProducts
             ->map(fn (SupplierProduct $supplierProduct): array => $this->safePreviewSupplierProduct($supplierProduct))
             ->filter(fn (array $row): bool => $this->matchesActionFilter($row, $filters['action'] ?? null))
             ->filter(fn (array $row): bool => $this->matchesQuickFilter($row, $filters['quick_filter'] ?? null))
-            ->pipe(fn (Collection $rows): Collection => $this->sortRows($rows, $filters))
-            ->take($this->normalizeLimit($limit))
             ->values();
+
+        $this->logPreviewMetrics($filters, $rowsSelected, $supplierProducts->count(), $rows->count(), $startedAt);
 
         return [
             'summary' => $this->summary($rows),
@@ -51,7 +64,10 @@ class CatalogSyncPreviewService
      */
     public function fullSummary(array $filters = []): array
     {
+        $filters = $this->normalizeFilters($filters);
+
         $rows = $this->supplierProductsQuery($filters)
+            ->limit($this->normalizeLimit($filters['limit'] ?? 50))
             ->get()
             ->map(fn (SupplierProduct $supplierProduct): array => $this->safePreviewSupplierProduct($supplierProduct))
             ->filter(fn (array $row): bool => $this->matchesActionFilter($row, $filters['action'] ?? null))
@@ -60,6 +76,28 @@ class CatalogSyncPreviewService
             ->values();
 
         return $this->summary($rows);
+    }
+
+    /**
+     * @param  array<string, mixed>  $filters
+     * @return array<string, mixed>
+     */
+    protected function normalizeFilters(array $filters): array
+    {
+        $filters['supplier_id'] ??= $this->defaultSupplierId();
+        $filters['limit'] ??= 50;
+        $filters['sort_direction'] = ($filters['sort_direction'] ?? 'asc') === 'desc' ? 'desc' : 'asc';
+
+        return $filters;
+    }
+
+    protected function defaultSupplierId(): ?int
+    {
+        return SupplierProduct::query()
+            ->whereHas('supplier', fn (Builder $query) => $query
+                ->where('slug', 'apcom')
+                ->orWhere('company_name', 'APCOM'))
+            ->value('supplier_id');
     }
 
     /**
@@ -167,6 +205,34 @@ class CatalogSyncPreviewService
         }
     }
 
+    protected function startQueryLogging(): void
+    {
+        DB::flushQueryLog();
+        DB::enableQueryLog();
+    }
+
+    /**
+     * @param  array<string, mixed>  $filters
+     */
+    protected function logPreviewMetrics(array $filters, int $rowsSelected, int $rowsProcessed, int $rowsRendered, float $startedAt): void
+    {
+        $durationMs = (int) round((microtime(true) - $startedAt) * 1000);
+        $queryCount = count(DB::getQueryLog());
+        DB::disableQueryLog();
+
+        Log::info('Catalog sync preview generated.', [
+            'supplier_id' => $filters['supplier_id'] ?? null,
+            'limit' => $this->normalizeLimit($filters['limit'] ?? 50),
+            'action' => $filters['action'] ?? null,
+            'quick_filter' => $filters['quick_filter'] ?? null,
+            'rows_selected' => $rowsSelected,
+            'rows_processed' => $rowsProcessed,
+            'rows_rendered' => $rowsRendered,
+            'duration_ms' => $durationMs,
+            'query_count' => $queryCount,
+        ]);
+    }
+
     /**
      * @return array<string, mixed>
      */
@@ -234,7 +300,7 @@ class CatalogSyncPreviewService
      */
     protected function supplierProductsQuery(array $filters): Builder
     {
-        return SupplierProduct::query()
+        $query = SupplierProduct::query()
             ->with('supplier')
             ->when($filters['supplier_id'] ?? null, fn (Builder $query, mixed $supplierId) => $query->where('supplier_id', $supplierId))
             ->when($filters['category'] ?? null, fn (Builder $query, mixed $category) => $query->where('category_name', 'like', "%{$category}%"))
@@ -246,6 +312,8 @@ class CatalogSyncPreviewService
                     default => null,
                 };
             })
+            ->when($filters['action'] ?? null, fn (Builder $query, mixed $action) => $this->applyActionPreFilter($query, $action))
+            ->when($filters['quick_filter'] ?? null, fn (Builder $query, mixed $quickFilter) => $this->applyQuickPreFilter($query, $quickFilter))
             ->when($filters['search'] ?? null, function (Builder $query, mixed $search): void {
                 $query->where(function (Builder $query) use ($search): void {
                     $query
@@ -256,6 +324,72 @@ class CatalogSyncPreviewService
                 });
             })
             ->orderBy('id');
+
+        return $this->applyQuerySort($query, $filters);
+    }
+
+    protected function applyActionPreFilter(Builder $query, mixed $action): void
+    {
+        match ($action) {
+            'update' => $query->where(function (Builder $query): void {
+                $query
+                    ->whereNotNull('product_id')
+                    ->orWhereIn('ean', Product::query()
+                        ->select('ean')
+                        ->whereNotNull('ean')
+                        ->where('ean', '!=', ''))
+                    ->orWhereExists(function ($query): void {
+                        $query
+                            ->selectRaw('1')
+                            ->from('product_supplier_offers')
+                            ->whereColumn('product_supplier_offers.supplier_id', 'supplier_products.supplier_id')
+                            ->whereColumn('product_supplier_offers.supplier_sku', 'supplier_products.supplier_sku');
+                    });
+            }),
+            'skip' => $query->where(function (Builder $query): void {
+                $query
+                    ->where(fn (Builder $query) => $query->whereNull('supplier_sku')->orWhere('supplier_sku', ''))
+                    ->where(fn (Builder $query) => $query->whereNull('ean')->orWhere('ean', ''))
+                    ->where(fn (Builder $query) => $query->whereNull('mpn')->orWhere('mpn', ''));
+            }),
+            default => null,
+        };
+    }
+
+    protected function applyQuickPreFilter(Builder $query, mixed $quickFilter): void
+    {
+        match ($quickFilter) {
+            'apcom' => $query->whereHas('supplier', fn (Builder $query) => $query
+                ->where('slug', 'apcom')
+                ->orWhere('company_name', 'APCOM')),
+            'missing_ean' => $query->where(fn (Builder $query) => $query->whereNull('ean')->orWhere('ean', '')),
+            'zero_stock' => $query->where(fn (Builder $query) => $query->whereNull('quantity')->orWhere('quantity', '<=', 0)),
+            default => null,
+        };
+    }
+
+    /**
+     * @param  array<string, mixed>  $filters
+     */
+    protected function applyQuerySort(Builder $query, array $filters): Builder
+    {
+        $column = $filters['sort_column'] ?? null;
+        $direction = ($filters['sort_direction'] ?? 'asc') === 'desc' ? 'desc' : 'asc';
+
+        $queryColumn = match ($column) {
+            'product_name' => 'name',
+            'supplier_price' => 'price',
+            'stock_quantity' => 'quantity',
+            'supplier_name' => 'supplier_id',
+            'normalized_category' => 'category_name',
+            default => null,
+        };
+
+        if ($queryColumn) {
+            return $query->reorder($queryColumn, $direction)->orderBy('id');
+        }
+
+        return $query;
     }
 
     /**
