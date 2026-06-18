@@ -48,6 +48,14 @@ class CatalogSyncPreview extends Page implements HasSchemas
         return (bool) auth()->user()?->can('manage suppliers');
     }
 
+    public function mount(): void
+    {
+        $this->filters['supplier_id'] ??= Supplier::query()
+            ->where('slug', 'apcom')
+            ->orWhere('company_name', 'APCOM')
+            ->value('id');
+    }
+
     public function form(Schema $schema): Schema
     {
         return $schema

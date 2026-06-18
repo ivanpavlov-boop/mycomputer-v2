@@ -15,6 +15,8 @@ use App\Services\Pricing\PricingEngine;
 use App\Services\Products\CatalogSyncPreviewService;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Log;
+use Mockery;
 use RuntimeException;
 use Tests\TestCase;
 
@@ -396,6 +398,67 @@ class CatalogSyncPreviewTest extends TestCase
             ->assertSee('Broken Pricing Preview Product')
             ->assertSee('Preview generation failed')
             ->assertSee('preview_generation_failed');
+    }
+
+    public function test_catalog_sync_preview_initial_page_limits_rows_before_preview_generation(): void
+    {
+        $this->actingAsSupplierManager();
+
+        $supplier = Supplier::factory()->create([
+            'company_name' => 'APCOM',
+            'slug' => 'apcom',
+        ]);
+
+        for ($index = 1; $index <= 75; $index++) {
+            $this->supplierProduct($supplier, [
+                'supplier_sku' => 'APC-LIMIT-'.$index,
+                'name' => 'APCOM Limited Product '.$index,
+                'ean' => '9900000000'.str_pad((string) $index, 3, '0', STR_PAD_LEFT),
+            ]);
+        }
+
+        Log::spy();
+
+        $this
+            ->get(CatalogSyncPreview::getUrl())
+            ->assertOk()
+            ->assertSee('APCOM Limited Product 50')
+            ->assertDontSee('APCOM Limited Product 51');
+
+        Log::shouldHaveReceived('info')
+            ->with('Catalog sync preview generated.', Mockery::on(fn (array $context): bool => $context['supplier_id'] === $supplier->id
+                && $context['limit'] === 50
+                && $context['rows_selected'] === 75
+                && $context['rows_processed'] === 50
+                && $context['rows_rendered'] === 50
+                && isset($context['duration_ms'], $context['query_count'])))
+            ->once();
+    }
+
+    public function test_catalog_sync_preview_initial_page_defaults_to_apcom_when_available(): void
+    {
+        $this->actingAsSupplierManager();
+
+        $apcom = Supplier::factory()->create([
+            'company_name' => 'APCOM',
+            'slug' => 'apcom',
+        ]);
+        $other = Supplier::factory()->create(['company_name' => 'Other Supplier']);
+
+        $this->supplierProduct($apcom, [
+            'supplier_sku' => 'APC-DEFAULT-001',
+            'name' => 'APCOM Default Preview Product',
+        ]);
+        $this->supplierProduct($other, [
+            'supplier_sku' => 'OTHER-DEFAULT-001',
+            'name' => 'Other Supplier Preview Product',
+        ]);
+
+        $this
+            ->get(CatalogSyncPreview::getUrl())
+            ->assertOk()
+            ->assertSee('APCOM Default Preview Product')
+            ->assertDontSee('Other Supplier Preview Product');
     }
 
     private function actingAsSupplierManager(): User
