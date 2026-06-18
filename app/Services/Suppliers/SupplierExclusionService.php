@@ -106,12 +106,14 @@ class SupplierExclusionService
 
     protected function isEol(SupplierProduct $supplierProduct): bool
     {
+        $rawData = is_array($supplierProduct->raw_data) ? $supplierProduct->raw_data : [];
+
         $haystack = Str::lower(implode(' ', array_filter([
             $supplierProduct->category_name,
             $supplierProduct->external_availability_status,
             $supplierProduct->external_availability_label,
-            $supplierProduct->raw_data['category'] ?? null,
-            $supplierProduct->raw_data['Category'] ?? null,
+            $rawData['category'] ?? null,
+            $rawData['Category'] ?? null,
         ], fn (mixed $value): bool => is_scalar($value))));
 
         return Str::contains($haystack, ['eol', 'end of life', 'discontinued']);
