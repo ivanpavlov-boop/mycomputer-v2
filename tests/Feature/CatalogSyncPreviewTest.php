@@ -11,9 +11,11 @@ use App\Models\Supplier;
 use App\Models\SupplierExclusionRule;
 use App\Models\SupplierProduct;
 use App\Models\User;
+use App\Services\Pricing\PricingEngine;
 use App\Services\Products\CatalogSyncPreviewService;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use RuntimeException;
 use Tests\TestCase;
 
 class CatalogSyncPreviewTest extends TestCase
@@ -371,6 +373,29 @@ class CatalogSyncPreviewTest extends TestCase
             ->get(CatalogSyncPreview::getUrl())
             ->assertOk()
             ->assertSee('Legacy EOL Check Product');
+    }
+
+    public function test_catalog_sync_preview_page_renders_failed_rows_as_conflicts(): void
+    {
+        $this->actingAsSupplierManager();
+
+        $supplier = Supplier::factory()->create();
+        $this->supplierProduct($supplier, [
+            'name' => 'Broken Pricing Preview Product',
+        ]);
+
+        $this->mock(PricingEngine::class, function ($mock): void {
+            $mock
+                ->shouldReceive('calculateForSupplierProduct')
+                ->andThrow(new RuntimeException('Pricing preview failed'));
+        });
+
+        $this
+            ->get(CatalogSyncPreview::getUrl())
+            ->assertOk()
+            ->assertSee('Broken Pricing Preview Product')
+            ->assertSee('Preview generation failed')
+            ->assertSee('preview_generation_failed');
     }
 
     private function actingAsSupplierManager(): User

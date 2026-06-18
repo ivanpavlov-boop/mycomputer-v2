@@ -13,7 +13,9 @@ use App\Services\Pricing\PricingEngine;
 use App\Services\Suppliers\SupplierExclusionService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
+use Throwable;
 
 class CatalogSyncPreviewService
 {
@@ -31,7 +33,7 @@ class CatalogSyncPreviewService
     {
         $rows = $this->supplierProductsQuery($filters)
             ->get()
-            ->map(fn (SupplierProduct $supplierProduct): array => $this->previewSupplierProduct($supplierProduct))
+            ->map(fn (SupplierProduct $supplierProduct): array => $this->safePreviewSupplierProduct($supplierProduct))
             ->filter(fn (array $row): bool => $this->matchesActionFilter($row, $filters['action'] ?? null))
             ->filter(fn (array $row): bool => $this->matchesQuickFilter($row, $filters['quick_filter'] ?? null))
             ->pipe(fn (Collection $rows): Collection => $this->sortRows($rows, $filters))
@@ -51,7 +53,7 @@ class CatalogSyncPreviewService
     {
         $rows = $this->supplierProductsQuery($filters)
             ->get()
-            ->map(fn (SupplierProduct $supplierProduct): array => $this->previewSupplierProduct($supplierProduct))
+            ->map(fn (SupplierProduct $supplierProduct): array => $this->safePreviewSupplierProduct($supplierProduct))
             ->filter(fn (array $row): bool => $this->matchesActionFilter($row, $filters['action'] ?? null))
             ->filter(fn (array $row): bool => $this->matchesQuickFilter($row, $filters['quick_filter'] ?? null))
             ->pipe(fn (Collection $rows): Collection => $this->sortRows($rows, $filters))
@@ -142,6 +144,88 @@ class CatalogSyncPreviewService
             'winning_offer_supplier' => $winningOffer['supplier_name'] ?? null,
             'winning_offer_reason' => $this->winningOfferReason($supplierOffers),
             'conflict_reasons' => $this->conflictReasons($supplierProduct, $matches, $duplicateSupplierRows),
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected function safePreviewSupplierProduct(SupplierProduct $supplierProduct): array
+    {
+        try {
+            return $this->previewSupplierProduct($supplierProduct);
+        } catch (Throwable $exception) {
+            Log::warning('Catalog sync preview row failed.', [
+                'supplier_product_id' => $supplierProduct->id,
+                'supplier_id' => $supplierProduct->supplier_id,
+                'supplier_sku' => $supplierProduct->supplier_sku,
+                'exception' => $exception::class,
+                'message' => $exception->getMessage(),
+            ]);
+
+            return $this->failedPreviewRow($supplierProduct, $exception);
+        }
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected function failedPreviewRow(SupplierProduct $supplierProduct, Throwable $exception): array
+    {
+        return [
+            'supplier_product_id' => $supplierProduct->id,
+            'supplier_name' => $supplierProduct->supplier?->company_name,
+            'supplier_sku' => $supplierProduct->supplier_sku,
+            'ean' => $supplierProduct->ean,
+            'mpn' => $supplierProduct->mpn,
+            'product_name' => $supplierProduct->name ?: 'Supplier product '.$supplierProduct->id,
+            'brand' => $supplierProduct->brand_name,
+            'category' => $supplierProduct->category_name,
+            'raw_category_data' => $supplierProduct->category_name,
+            'normalized_category' => $supplierProduct->category_name,
+            'category_exists' => false,
+            'supplier_price' => $supplierProduct->price,
+            'recommended_price' => $supplierProduct->recommended_price,
+            'pricing_rule_applied' => null,
+            'pricing_rule_scope' => null,
+            'matched_pricing_rule' => null,
+            'winning_pricing_rule' => null,
+            'pricing_inheritance' => [],
+            'pricing_rule_reason' => 'Preview failed: '.$exception->getMessage(),
+            'margin_rule' => null,
+            'margin_amount' => null,
+            'margin_applied' => null,
+            'profit_amount' => null,
+            'margin_percent' => null,
+            'final_calculated_selling_price' => null,
+            'sale_price' => null,
+            'pricing_applies' => false,
+            'stock_quantity' => $supplierProduct->quantity,
+            'stock_status' => ((int) ($supplierProduct->quantity ?? 0)) > 0 ? 'in_stock' : 'out_of_stock',
+            'availability_status' => null,
+            'image_count' => 0,
+            'missing_images' => true,
+            'missing_ean' => blank($supplierProduct->ean),
+            'target_catalog_action' => 'conflict',
+            'excluded' => false,
+            'exclusion_rule_id' => null,
+            'exclusion_rule' => null,
+            'matched_by' => [],
+            'matched_by_display' => 'None',
+            'reason' => 'Preview generation failed',
+            'result' => 'Conflict detected: preview row requires review before sync',
+            'target_product_id' => null,
+            'target_product_sku' => null,
+            'target_product_name' => null,
+            'current_price' => null,
+            'new_price' => null,
+            'current_stock' => null,
+            'new_stock' => $supplierProduct->quantity,
+            'supplier_offers' => [],
+            'winning_offer' => null,
+            'winning_offer_supplier' => null,
+            'winning_offer_reason' => 'Preview generation failed.',
+            'conflict_reasons' => ['preview_generation_failed'],
         ];
     }
 
