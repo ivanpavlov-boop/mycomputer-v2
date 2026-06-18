@@ -70,6 +70,15 @@ class PricingRuleFilamentTest extends TestCase
             ->assertTableColumnFormattedStateSet('margin_value', '15 EUR', $fixedRule);
     }
 
+    public function test_pricing_rules_table_shows_active_status_after_name(): void
+    {
+        $this->actingAsPricingManager();
+
+        $columnNames = array_keys(Livewire::test(ListPricingRules::class)->instance()->getTable()->getColumns());
+
+        $this->assertSame(['name', 'is_active', 'scope_type'], array_slice($columnNames, 0, 3));
+    }
+
     public function test_pricing_rule_can_be_deleted_from_table_row_action(): void
     {
         $this->actingAsPricingManager();

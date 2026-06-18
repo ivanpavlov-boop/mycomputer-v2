@@ -61,6 +61,15 @@ class SupplierExclusionRuleFilamentTest extends TestCase
             ->assertTableBulkActionExists('delete');
     }
 
+    public function test_supplier_exclusion_rules_table_shows_active_status_after_name(): void
+    {
+        $this->actingAsSupplierManager();
+
+        $columnNames = array_keys(Livewire::test(ListSupplierExclusionRules::class)->instance()->getTable()->getColumns());
+
+        $this->assertSame(['name', 'is_active', 'supplier.company_name'], array_slice($columnNames, 0, 3));
+    }
+
     public function test_supplier_exclusion_rule_can_be_deleted_from_table_row_action(): void
     {
         $this->actingAsSupplierManager();
