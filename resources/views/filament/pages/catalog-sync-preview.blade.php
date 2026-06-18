@@ -1,11 +1,17 @@
 <x-filament-panels::page>
     <div class="space-y-6">
+        @if ($this->diagnosticsOnly)
+            <div class="rounded-lg border border-green-200 bg-green-50 p-4 text-sm text-green-700 shadow-sm dark:border-green-900 dark:bg-green-950 dark:text-green-200">
+                <div class="font-semibold">Catalog Sync Preview diagnostics OK</div>
+                <div class="mt-1">Static Filament page render completed without loading filters, suppliers, or preview services.</div>
+            </div>
+        @else
         <div class="rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-gray-900">
             {{ $this->form }}
         </div>
 
         @php
-            $preview = $this->preview();
+            $preview = $this->previewPayload;
             $summary = $preview['summary'];
             $rows = $preview['rows'];
             $previewError = $preview['error'] ?? null;
@@ -257,5 +263,6 @@
                 </div>
             @endforelse
         </div>
+        @endif
     </div>
 </x-filament-panels::page>
