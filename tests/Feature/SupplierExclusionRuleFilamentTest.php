@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Filament\Resources\SupplierExclusionRules\Pages\CreateSupplierExclusionRule;
+use App\Filament\Resources\SupplierExclusionRules\Pages\EditSupplierExclusionRule;
 use App\Filament\Resources\SupplierExclusionRules\Pages\ListSupplierExclusionRules;
 use App\Filament\Resources\SupplierExclusionRules\SupplierExclusionRuleResource;
 use App\Models\SupplierExclusionRule;
@@ -93,6 +94,29 @@ class SupplierExclusionRuleFilamentTest extends TestCase
         ]);
         $this->assertDatabaseMissing('supplier_exclusion_rules', [
             'name' => 'Bulk delete two',
+        ]);
+    }
+
+    public function test_editing_supplier_exclusion_rule_redirects_to_list_after_updating_record(): void
+    {
+        $this->actingAsSupplierManager();
+
+        $rule = SupplierExclusionRule::query()->create($this->ruleFormData('Original exclusion'));
+
+        Livewire::test(EditSupplierExclusionRule::class, ['record' => $rule->getKey()])
+            ->fillForm(array_merge($this->ruleFormData('Updated exclusion'), [
+                'priority' => 5,
+                'exclude_zero_stock' => false,
+            ]))
+            ->call('save')
+            ->assertHasNoFormErrors()
+            ->assertRedirect(SupplierExclusionRuleResource::getUrl('index'));
+
+        $this->assertDatabaseHas('supplier_exclusion_rules', [
+            'id' => $rule->id,
+            'name' => 'Updated exclusion',
+            'priority' => 5,
+            'exclude_zero_stock' => false,
         ]);
     }
 

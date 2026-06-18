@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Filament\Resources\PricingRules\Pages\CreatePricingRule;
+use App\Filament\Resources\PricingRules\Pages\EditPricingRule;
 use App\Filament\Resources\PricingRules\Pages\ListPricingRules;
 use App\Filament\Resources\PricingRules\PricingRuleResource;
 use App\Models\PricingRule;
@@ -81,6 +82,27 @@ class PricingRuleFilamentTest extends TestCase
 
         $this->assertDatabaseMissing('pricing_rules', [
             'id' => $rule->id,
+        ]);
+    }
+
+    public function test_editing_pricing_rule_redirects_to_list_after_updating_record(): void
+    {
+        $this->actingAsPricingManager();
+
+        $rule = PricingRule::query()->create($this->pricingRuleFormData('Original margin'));
+
+        Livewire::test(EditPricingRule::class, ['record' => $rule->getKey()])
+            ->fillForm(array_merge($this->pricingRuleFormData('Updated margin'), [
+                'margin_value' => 25,
+            ]))
+            ->call('save')
+            ->assertHasNoFormErrors()
+            ->assertRedirect(PricingRuleResource::getUrl('index'));
+
+        $this->assertDatabaseHas('pricing_rules', [
+            'id' => $rule->id,
+            'name' => 'Updated margin',
+            'margin_value' => 25,
         ]);
     }
 
