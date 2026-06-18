@@ -400,6 +400,32 @@ class CatalogSyncPreviewTest extends TestCase
             ->assertSee('preview_generation_failed');
     }
 
+    public function test_catalog_sync_preview_page_renders_diagnostic_state_when_preview_generation_fails(): void
+    {
+        $this->actingAsSupplierManager();
+
+        Log::spy();
+
+        $this->mock(CatalogSyncPreviewService::class, function ($mock): void {
+            $mock
+                ->shouldReceive('preview')
+                ->once()
+                ->andThrow(new RuntimeException('Top-level preview failure'));
+        });
+
+        $this
+            ->get(CatalogSyncPreview::getUrl())
+            ->assertOk()
+            ->assertSee('Catalog Sync Preview could not be generated.')
+            ->assertSee('Top-level preview failure');
+
+        Log::shouldHaveReceived('error')
+            ->with('Catalog Sync Preview page failed to render preview.', Mockery::on(fn (array $context): bool => $context['exception'] === RuntimeException::class
+                && $context['message'] === 'Top-level preview failure'
+                && isset($context['filters'])))
+            ->once();
+    }
+
     public function test_catalog_sync_preview_initial_page_limits_rows_before_preview_generation(): void
     {
         $this->actingAsSupplierManager();

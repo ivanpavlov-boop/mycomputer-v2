@@ -8,6 +8,7 @@
             $preview = $this->preview();
             $summary = $preview['summary'];
             $rows = $preview['rows'];
+            $previewError = $preview['error'] ?? null;
 
             $quickFilters = [
                 'create' => 'CREATE',
@@ -25,6 +26,13 @@
                 ? (($this->filters['sort_direction'] ?? 'asc') === 'asc' ? ' ↑' : ' ↓')
                 : '';
         @endphp
+
+        @if ($previewError)
+            <div class="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700 shadow-sm dark:border-red-900 dark:bg-red-950 dark:text-red-200">
+                <div class="font-semibold">Catalog Sync Preview could not be generated.</div>
+                <div class="mt-1">{{ $previewError }}</div>
+            </div>
+        @endif
 
         <div class="grid gap-4 md:grid-cols-3 xl:grid-cols-6">
             @foreach ([
