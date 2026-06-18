@@ -13,6 +13,8 @@ use Filament\Schemas\Concerns\InteractsWithSchemas;
 use Filament\Schemas\Contracts\HasSchemas;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
+use Illuminate\Support\Facades\Log;
+use Throwable;
 use UnitEnum;
 
 class CatalogSyncPreview extends Page implements HasSchemas
@@ -121,10 +123,45 @@ class CatalogSyncPreview extends Page implements HasSchemas
     }
 
     /**
-     * @return array{summary: array<string, int|float>, rows: array<int, array<string, mixed>>}
+     * @return array{summary: array<string, int|float>, rows: array<int, array<string, mixed>>, error?: string}
      */
     public function preview(): array
     {
-        return app(CatalogSyncPreviewService::class)->preview($this->filters, $this->filters['limit'] ?? 50);
+        try {
+            return app(CatalogSyncPreviewService::class)->preview($this->filters, $this->filters['limit'] ?? 50);
+        } catch (Throwable $exception) {
+            Log::error('Catalog Sync Preview page failed to render preview.', [
+                'exception' => $exception::class,
+                'message' => $exception->getMessage(),
+                'filters' => $this->filters,
+            ]);
+
+            return [
+                'summary' => $this->emptySummary(),
+                'rows' => [],
+                'error' => $exception->getMessage(),
+            ];
+        }
+    }
+
+    /**
+     * @return array<string, int|float>
+     */
+    protected function emptySummary(): array
+    {
+        return [
+            'total_staged_products' => 0,
+            'to_create' => 0,
+            'to_update' => 0,
+            'to_skip' => 0,
+            'conflicts' => 0,
+            'missing_categories' => 0,
+            'missing_images' => 0,
+            'missing_ean' => 0,
+            'excluded' => 0,
+            'average_margin' => 0.0,
+            'estimated_revenue' => 0.0,
+            'estimated_profit' => 0.0,
+        ];
     }
 }
