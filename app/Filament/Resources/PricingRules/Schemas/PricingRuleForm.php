@@ -8,6 +8,7 @@ use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
 use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Section;
+use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
 
 class PricingRuleForm
@@ -53,7 +54,11 @@ class PricingRuleForm
                             ])
                             ->default(PricingRule::MARGIN_PERCENTAGE)
                             ->required(),
-                        TextInput::make('margin_value')->numeric()->required()->default(0),
+                        TextInput::make('margin_value')
+                            ->numeric()
+                            ->required()
+                            ->default(0)
+                            ->suffix(fn (Get $get): string => $get('margin_type') === PricingRule::MARGIN_FIXED ? 'EUR' : '%'),
                         TextInput::make('minimum_margin')->numeric()->nullable(),
                         TextInput::make('minimum_final_price')->numeric()->nullable(),
                         Select::make('rounding_rule')

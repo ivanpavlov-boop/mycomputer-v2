@@ -370,13 +370,7 @@ class CatalogSyncPreviewService
 
     protected function marginRuleLabel(?PricingRule $rule): ?string
     {
-        if (! $rule) {
-            return null;
-        }
-
-        $value = rtrim(rtrim(number_format((float) $rule->margin_value, 4, '.', ''), '0'), '.');
-
-        return $rule->margin_type === PricingRule::MARGIN_FIXED ? "+{$value} EUR" : "{$value}%";
+        return $rule?->formattedMarginValue();
     }
 
     /**

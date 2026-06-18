@@ -86,6 +86,13 @@ class PricingRule extends Model
         return $query->where('is_active', true);
     }
 
+    public function formattedMarginValue(): string
+    {
+        $value = rtrim(rtrim(number_format((float) $this->margin_value, 4, '.', ''), '0'), '.');
+
+        return $this->margin_type === self::MARGIN_FIXED ? "{$value} EUR" : "{$value}%";
+    }
+
     public function product(): BelongsTo
     {
         return $this->belongsTo(Product::class);

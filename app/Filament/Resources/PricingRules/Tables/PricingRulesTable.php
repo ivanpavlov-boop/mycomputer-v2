@@ -2,7 +2,9 @@
 
 namespace App\Filament\Resources\PricingRules\Tables;
 
+use App\Models\PricingRule;
 use Filament\Actions\BulkActionGroup;
+use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Tables\Columns\IconColumn;
@@ -25,7 +27,10 @@ class PricingRulesTable
                 TextColumn::make('price_min')->sortable()->toggleable(),
                 TextColumn::make('price_max')->sortable()->toggleable(),
                 TextColumn::make('margin_type')->badge()->sortable(),
-                TextColumn::make('margin_value')->sortable(),
+                TextColumn::make('margin_value')
+                    ->label('Margin')
+                    ->formatStateUsing(fn (PricingRule $record): string => $record->formattedMarginValue())
+                    ->sortable(),
                 TextColumn::make('minimum_margin')->sortable()->toggleable(),
                 TextColumn::make('minimum_final_price')->sortable()->toggleable(),
                 TextColumn::make('msrp_strategy')->badge()->toggleable(),
@@ -50,6 +55,8 @@ class PricingRulesTable
             ])
             ->recordActions([
                 EditAction::make(),
+                DeleteAction::make()
+                    ->requiresConfirmation(),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
