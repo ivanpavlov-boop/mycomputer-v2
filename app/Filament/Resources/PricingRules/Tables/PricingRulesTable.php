@@ -19,6 +19,7 @@ class PricingRulesTable
         return $table
             ->columns([
                 TextColumn::make('name')->searchable()->sortable(),
+                IconColumn::make('is_active')->boolean()->sortable(),
                 TextColumn::make('scope_type')->badge()->sortable(),
                 TextColumn::make('product.name')->toggleable(),
                 TextColumn::make('category.name')->toggleable(),
@@ -34,7 +35,6 @@ class PricingRulesTable
                 TextColumn::make('minimum_margin')->sortable()->toggleable(),
                 TextColumn::make('minimum_final_price')->sortable()->toggleable(),
                 TextColumn::make('msrp_strategy')->badge()->toggleable(),
-                IconColumn::make('is_active')->boolean()->sortable(),
             ])
             ->filters([
                 SelectFilter::make('scope_type')->options([
