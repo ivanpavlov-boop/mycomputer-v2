@@ -1,9 +1,63 @@
 <x-filament-panels::page>
     <div class="space-y-6">
         @if ($this->diagnosticsOnly)
-            <div class="rounded-lg border border-green-200 bg-green-50 p-4 text-sm text-green-700 shadow-sm dark:border-green-900 dark:bg-green-950 dark:text-green-200">
-                <div class="font-semibold">Catalog Sync Preview diagnostics OK</div>
-                <div class="mt-1">Static Filament page render completed without loading filters, suppliers, or preview services.</div>
+            @php
+                $report = $this->diagnosticReport;
+                $diagnosticStatus = $report['status'] ?? 'ok';
+                $diagnosticIsFailure = $diagnosticStatus === 'failed';
+            @endphp
+
+            <div @class([
+                'rounded-lg border p-4 text-sm shadow-sm',
+                'border-red-200 bg-red-50 text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-200' => $diagnosticIsFailure,
+                'border-green-200 bg-green-50 text-green-700 dark:border-green-900 dark:bg-green-950 dark:text-green-200' => ! $diagnosticIsFailure,
+            ])>
+                <div class="font-semibold">Catalog Sync Preview diagnostics {{ $diagnosticIsFailure ? 'FAILED' : 'OK' }}</div>
+                <div class="mt-1">Step: {{ $report['step'] ?? 'static' }}</div>
+                <div class="mt-1">{{ $report['message'] ?? 'Static Filament page render completed without loading filters, suppliers, or preview services.' }}</div>
+                @if (isset($report['exception']))
+                    <div class="mt-1">Exception: {{ $report['exception'] }}</div>
+                @endif
+                @if (isset($report['duration_ms']))
+                    <div class="mt-1">Duration: {{ $report['duration_ms'] }} ms</div>
+                @endif
+            </div>
+
+            @if (($this->diagnosticStep ?? null) === 'filters')
+                <div class="rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-gray-900">
+                    {{ $this->form }}
+                </div>
+            @endif
+
+            <div class="rounded-lg border border-gray-200 bg-white p-4 text-sm shadow-sm dark:border-gray-800 dark:bg-gray-900">
+                <div class="mb-2 font-semibold text-gray-950 dark:text-white">Diagnostic report</div>
+                <dl class="space-y-2">
+                    @foreach ($report as $key => $value)
+                        <div>
+                            <dt class="font-medium text-gray-700 dark:text-gray-200">{{ str_replace('_', ' ', (string) $key) }}</dt>
+                            <dd class="text-gray-600 dark:text-gray-300">
+                                @if (is_array($value))
+                                    <pre class="mt-1 overflow-x-auto rounded bg-gray-100 p-2 text-xs dark:bg-gray-950">{{ json_encode($value, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) }}</pre>
+                                @else
+                                    {{ $value }}
+                                @endif
+                            </dd>
+                        </div>
+                    @endforeach
+                </dl>
+            </div>
+
+            <div class="rounded-lg border border-gray-200 bg-white p-4 text-sm shadow-sm dark:border-gray-800 dark:bg-gray-900">
+                <div class="mb-2 font-semibold text-gray-950 dark:text-white">Available diagnostic steps</div>
+                <div class="flex flex-wrap gap-2">
+                    @foreach ($this->diagnosticSteps as $step)
+                        <span @class([
+                            'rounded-md border px-3 py-1.5',
+                            'border-primary-500 bg-primary-50 text-primary-700' => ($this->diagnosticStep ?? 'static') === $step,
+                            'border-gray-200 text-gray-700 dark:border-gray-700 dark:text-gray-200' => ($this->diagnosticStep ?? 'static') !== $step,
+                        ])>{{ $step }}</span>
+                    @endforeach
+                </div>
             </div>
         @else
         <div class="rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-gray-900">

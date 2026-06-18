@@ -70,6 +70,7 @@ return [
 
     'catalog_sync_preview' => [
         'diagnostics' => env('CATALOG_SYNC_PREVIEW_DIAGNOSTICS', false),
+        'diagnostic_step' => env('CATALOG_SYNC_PREVIEW_DIAGNOSTIC_STEP'),
     ],
 
 ];

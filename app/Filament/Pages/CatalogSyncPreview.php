@@ -3,6 +3,7 @@
 namespace App\Filament\Pages;
 
 use App\Models\Supplier;
+use App\Models\SupplierProduct;
 use App\Services\Products\CatalogSyncPreviewService;
 use BackedEnum;
 use Filament\Forms\Components\Select;
@@ -14,6 +15,7 @@ use Filament\Schemas\Contracts\HasSchemas;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 use Throwable;
 use UnitEnum;
 
@@ -55,6 +57,26 @@ class CatalogSyncPreview extends Page implements HasSchemas
 
     public bool $diagnosticsOnly = false;
 
+    public ?string $diagnosticStep = null;
+
+    /**
+     * @var array<string, mixed>
+     */
+    public array $diagnosticReport = [];
+
+    /**
+     * @var array<int, string>
+     */
+    public array $diagnosticSteps = [
+        'static',
+        'suppliers',
+        'filters',
+        'selected_supplier',
+        'query_rows',
+        'preview_one',
+        'preview_50',
+    ];
+
     public static function canAccess(): bool
     {
         return (bool) auth()->user()?->can('manage suppliers');
@@ -62,23 +84,20 @@ class CatalogSyncPreview extends Page implements HasSchemas
 
     public function mount(): void
     {
-        $this->diagnosticsOnly = (bool) config('services.catalog_sync_preview.diagnostics')
-            || request()->boolean('diagnostics')
-            || request()->boolean('catalog_sync_preview_diagnostics');
+        $this->diagnosticStep = $this->requestedDiagnosticStep();
+        $this->diagnosticsOnly = $this->diagnosticStep !== null;
 
         if ($this->diagnosticsOnly) {
             $this->previewPayload = [
                 'summary' => $this->emptySummary(),
                 'rows' => [],
             ];
+            $this->diagnosticReport = $this->runDiagnosticStep($this->diagnosticStep ?? 'static');
 
             return;
         }
 
-        $this->filters['supplier_id'] ??= Supplier::query()
-            ->where('slug', 'apcom')
-            ->orWhere('company_name', 'APCOM')
-            ->value('id');
+        $this->filters['supplier_id'] ??= $this->defaultSupplierId();
 
         $this->refreshPreview();
     }
@@ -206,5 +225,191 @@ class CatalogSyncPreview extends Page implements HasSchemas
             'estimated_revenue' => 0.0,
             'estimated_profit' => 0.0,
         ];
+    }
+
+    protected function requestedDiagnosticStep(): ?string
+    {
+        if ((bool) config('services.catalog_sync_preview.diagnostics')
+            || request()->boolean('diagnostics')
+            || request()->boolean('catalog_sync_preview_diagnostics')) {
+            return 'static';
+        }
+
+        $step = request()->string('diagnostic_step')->toString()
+            ?: (string) config('services.catalog_sync_preview.diagnostic_step');
+
+        if (blank($step)) {
+            return null;
+        }
+
+        $step = Str::snake($step);
+
+        return in_array($step, $this->diagnosticSteps, true) ? $step : 'static';
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected function runDiagnosticStep(string $step): array
+    {
+        $startedAt = microtime(true);
+
+        try {
+            $report = match ($step) {
+                'suppliers' => $this->diagnoseSuppliers(),
+                'filters' => $this->diagnoseFilters(),
+                'selected_supplier' => $this->diagnoseSelectedSupplier(),
+                'query_rows' => $this->diagnoseQueryRows(),
+                'preview_one' => $this->diagnosePreviewOne(),
+                'preview_50' => $this->diagnosePreviewLimited(),
+                default => [
+                    'message' => 'Static Filament page render completed without loading filters, suppliers, or preview services.',
+                ],
+            };
+
+            return array_merge([
+                'step' => $step,
+                'status' => 'ok',
+                'duration_ms' => (int) round((microtime(true) - $startedAt) * 1000),
+            ], $report);
+        } catch (Throwable $exception) {
+            Log::error('Catalog Sync Preview diagnostic step failed.', [
+                'step' => $step,
+                'exception' => $exception::class,
+                'message' => $exception->getMessage(),
+            ]);
+
+            return [
+                'step' => $step,
+                'status' => 'failed',
+                'exception' => $exception::class,
+                'message' => $exception->getMessage(),
+                'duration_ms' => (int) round((microtime(true) - $startedAt) * 1000),
+            ];
+        }
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected function diagnoseSuppliers(): array
+    {
+        $suppliers = Supplier::query()
+            ->orderBy('company_name')
+            ->limit(10)
+            ->get(['id', 'company_name', 'slug', 'status']);
+
+        return [
+            'message' => 'Supplier lookup completed.',
+            'supplier_count' => Supplier::query()->count(),
+            'sample_suppliers' => $suppliers
+                ->map(fn (Supplier $supplier): string => "{$supplier->id}: {$supplier->company_name} ({$supplier->status})")
+                ->all(),
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected function diagnoseFilters(): array
+    {
+        return [
+            'message' => 'Filter form diagnostic selected. The Filament form will render below this report.',
+            'filter_keys' => array_keys($this->filters),
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected function diagnoseSelectedSupplier(): array
+    {
+        $supplierId = $this->defaultSupplierId();
+        $supplier = $supplierId ? Supplier::query()->find($supplierId) : null;
+
+        return [
+            'message' => 'Selected supplier lookup completed.',
+            'selected_supplier_id' => $supplierId,
+            'selected_supplier' => $supplier?->company_name,
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected function diagnoseQueryRows(): array
+    {
+        $supplierId = $this->defaultSupplierId();
+        $rows = SupplierProduct::query()
+            ->with('supplier')
+            ->when($supplierId, fn ($query) => $query->where('supplier_id', $supplierId))
+            ->orderBy('id')
+            ->limit(50)
+            ->get(['id', 'supplier_id', 'supplier_sku', 'ean', 'mpn', 'name', 'price', 'quantity']);
+
+        return [
+            'message' => 'Supplier product row query completed without preview generation.',
+            'selected_supplier_id' => $supplierId,
+            'rows_found' => $rows->count(),
+            'first_supplier_product_id' => $rows->first()?->id,
+            'first_supplier_sku' => $rows->first()?->supplier_sku,
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected function diagnosePreviewOne(): array
+    {
+        $supplierId = $this->defaultSupplierId();
+        $supplierProduct = SupplierProduct::query()
+            ->with('supplier')
+            ->when($supplierId, fn ($query) => $query->where('supplier_id', $supplierId))
+            ->orderBy('id')
+            ->first();
+
+        if (! $supplierProduct) {
+            return [
+                'message' => 'No supplier products found for one-row preview.',
+                'selected_supplier_id' => $supplierId,
+            ];
+        }
+
+        $row = app(CatalogSyncPreviewService::class)->previewSupplierProduct($supplierProduct);
+
+        return [
+            'message' => 'One supplier product preview completed.',
+            'selected_supplier_id' => $supplierId,
+            'supplier_product_id' => $supplierProduct->id,
+            'action' => $row['target_catalog_action'] ?? null,
+            'product_name' => $row['product_name'] ?? null,
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected function diagnosePreviewLimited(): array
+    {
+        $supplierId = $this->defaultSupplierId();
+        $payload = app(CatalogSyncPreviewService::class)->preview([
+            'supplier_id' => $supplierId,
+            'limit' => 50,
+        ], 50);
+
+        return [
+            'message' => 'Limited 50-row preview completed.',
+            'selected_supplier_id' => $supplierId,
+            'rows_rendered' => count($payload['rows']),
+            'summary' => $payload['summary'],
+        ];
+    }
+
+    protected function defaultSupplierId(): ?int
+    {
+        return Supplier::query()
+            ->where('slug', 'apcom')
+            ->orWhere('company_name', 'APCOM')
+            ->value('id');
     }
 }
