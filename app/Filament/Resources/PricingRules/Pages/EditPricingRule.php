@@ -16,4 +16,9 @@ class EditPricingRule extends EditRecord
             DeleteAction::make(),
         ];
     }
+
+    protected function getRedirectUrl(): ?string
+    {
+        return $this->getResourceUrl();
+    }
 }
