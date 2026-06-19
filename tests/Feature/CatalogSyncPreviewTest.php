@@ -505,6 +505,36 @@ class CatalogSyncPreviewTest extends TestCase
             ->assertSee('APC-DIAGNOSTIC-ROW');
     }
 
+    public function test_catalog_sync_preview_query_first_five_diagnostic_step_does_not_preview_rows(): void
+    {
+        $this->actingAsSupplierManager();
+
+        $supplier = Supplier::factory()->create([
+            'company_name' => 'APCOM',
+            'slug' => 'apcom',
+        ]);
+
+        for ($index = 1; $index <= 6; $index++) {
+            $this->supplierProduct($supplier, [
+                'supplier_sku' => 'APC-FIRST-'.$index,
+                'name' => 'APCOM First Query Product '.$index,
+            ]);
+        }
+
+        $this->mock(CatalogSyncPreviewService::class, function ($mock): void {
+            $mock->shouldNotReceive('preview');
+            $mock->shouldNotReceive('previewSupplierProduct');
+        });
+
+        $this
+            ->get(CatalogSyncPreview::getUrl().'?diagnostic_step=query_first_5')
+            ->assertOk()
+            ->assertSee('Step: query_first_5')
+            ->assertSee('First 5 supplier products queried without preview generation.')
+            ->assertSee('APC-FIRST-5')
+            ->assertDontSee('APC-FIRST-6');
+    }
+
     public function test_catalog_sync_preview_selected_supplier_diagnostic_step_renders_default_supplier(): void
     {
         $this->actingAsSupplierManager();
@@ -540,6 +570,135 @@ class CatalogSyncPreviewTest extends TestCase
             ->assertSee('Step: preview_50')
             ->assertSee('Limited 50-row preview completed.')
             ->assertSee('rows_rendered');
+    }
+
+    public function test_catalog_sync_preview_first_id_diagnostic_previews_only_first_row(): void
+    {
+        $this->actingAsSupplierManager();
+
+        $supplier = Supplier::factory()->create([
+            'company_name' => 'APCOM',
+            'slug' => 'apcom',
+        ]);
+        $firstProduct = $this->supplierProduct($supplier, [
+            'supplier_sku' => 'APC-FIRST-ID',
+            'name' => 'APCOM First ID Product',
+        ]);
+        $this->supplierProduct($supplier, [
+            'supplier_sku' => 'APC-SECOND-ID',
+            'name' => 'APCOM Second ID Product',
+        ]);
+
+        Log::spy();
+
+        $this->mock(CatalogSyncPreviewService::class, function ($mock) use ($firstProduct): void {
+            $mock
+                ->shouldReceive('previewSupplierProduct')
+                ->once()
+                ->with(Mockery::on(fn (SupplierProduct $supplierProduct): bool => $supplierProduct->is($firstProduct)))
+                ->andReturn([
+                    'product_name' => 'APCOM First ID Product',
+                    'target_catalog_action' => 'create',
+                    'reason' => 'New catalog product',
+                    'result' => 'New catalog product will be created',
+                    'conflict_reasons' => [],
+                ]);
+        });
+
+        $this
+            ->get(CatalogSyncPreview::getUrl().'?diagnostic_step=preview_first_id')
+            ->assertOk()
+            ->assertSee('Step: preview_first_id')
+            ->assertSee('Single supplier product preview completed.')
+            ->assertSee('APC-FIRST-ID')
+            ->assertDontSee('APC-SECOND-ID');
+
+        Log::shouldHaveReceived('info')
+            ->with('Catalog Sync Preview diagnostic row preview starting.', Mockery::on(fn (array $context): bool => $context['diagnostic_step'] === 'preview_first_id'
+                && $context['supplier_product_id'] === $firstProduct->id))
+            ->once();
+        Log::shouldHaveReceived('info')
+            ->with('Catalog Sync Preview diagnostic row preview completed.', Mockery::on(fn (array $context): bool => $context['diagnostic_step'] === 'preview_first_id'
+                && $context['supplier_product_id'] === $firstProduct->id))
+            ->once();
+    }
+
+    public function test_catalog_sync_preview_explicit_row_diagnostic_previews_requested_row_only(): void
+    {
+        $this->actingAsSupplierManager();
+
+        $supplier = Supplier::factory()->create([
+            'company_name' => 'APCOM',
+            'slug' => 'apcom',
+        ]);
+        $this->supplierProduct($supplier, [
+            'supplier_sku' => 'APC-IGNORED-ROW',
+        ]);
+        $requestedProduct = $this->supplierProduct($supplier, [
+            'supplier_sku' => 'APC-REQUESTED-ROW',
+            'name' => 'APCOM Requested Row Product',
+        ]);
+
+        $this->mock(CatalogSyncPreviewService::class, function ($mock) use ($requestedProduct): void {
+            $mock
+                ->shouldReceive('previewSupplierProduct')
+                ->once()
+                ->with(Mockery::on(fn (SupplierProduct $supplierProduct): bool => $supplierProduct->is($requestedProduct)))
+                ->andReturn([
+                    'product_name' => 'APCOM Requested Row Product',
+                    'target_catalog_action' => 'update',
+                    'reason' => 'Existing catalog product matched',
+                    'result' => 'Existing catalog product will be updated',
+                    'conflict_reasons' => [],
+                ]);
+        });
+
+        $this
+            ->get(CatalogSyncPreview::getUrl().'?diagnostic_step=preview_row&supplier_product_id='.$requestedProduct->id)
+            ->assertOk()
+            ->assertSee('Step: preview_row')
+            ->assertSee('Single supplier product preview completed.')
+            ->assertSee('APC-REQUESTED-ROW')
+            ->assertDontSee('APC-IGNORED-ROW');
+    }
+
+    public function test_catalog_sync_preview_explicit_row_diagnostic_failure_renders_compact_conflict(): void
+    {
+        $this->actingAsSupplierManager();
+
+        $supplier = Supplier::factory()->create([
+            'company_name' => 'APCOM',
+            'slug' => 'apcom',
+        ]);
+        $supplierProduct = $this->supplierProduct($supplier, [
+            'supplier_sku' => 'APC-REQUESTED-FAIL',
+            'name' => 'APCOM Requested Failed Product',
+        ]);
+
+        Log::spy();
+
+        $this->mock(CatalogSyncPreviewService::class, function ($mock): void {
+            $mock
+                ->shouldReceive('previewSupplierProduct')
+                ->once()
+                ->andThrow(new RuntimeException('Explicit row diagnostic failure'));
+        });
+
+        $this
+            ->get(CatalogSyncPreview::getUrl().'?diagnostic_step=preview_row&supplier_product_id='.$supplierProduct->id)
+            ->assertOk()
+            ->assertSee('Step: preview_row')
+            ->assertSee('Single supplier product preview failed.')
+            ->assertSee('APC-REQUESTED-FAIL')
+            ->assertSee('preview_generation_failed')
+            ->assertSee('Explicit row diagnostic failure');
+
+        Log::shouldHaveReceived('warning')
+            ->with('Catalog Sync Preview diagnostic row preview failed.', Mockery::on(fn (array $context): bool => $context['diagnostic_step'] === 'preview_row'
+                && $context['supplier_product_id'] === $supplierProduct->id
+                && $context['exception'] === RuntimeException::class
+                && $context['message'] === 'Explicit row diagnostic failure'))
+            ->once();
     }
 
     public function test_catalog_sync_preview_smaller_preview_diagnostic_steps_are_available(): void

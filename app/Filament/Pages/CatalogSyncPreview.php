@@ -73,7 +73,10 @@ class CatalogSyncPreview extends Page implements HasSchemas
         'filters',
         'selected_supplier',
         'query_rows',
+        'query_first_5',
         'preview_one',
+        'preview_row',
+        'preview_first_id',
         'preview_5',
         'preview_10',
         'preview_25',
@@ -263,7 +266,10 @@ class CatalogSyncPreview extends Page implements HasSchemas
                 'filters' => $this->diagnoseFilters(),
                 'selected_supplier' => $this->diagnoseSelectedSupplier(),
                 'query_rows' => $this->diagnoseQueryRows(),
+                'query_first_5' => $this->diagnoseQueryFirstRows(5),
                 'preview_one' => $this->diagnosePreviewOne(),
+                'preview_row' => $this->diagnosePreviewRow(),
+                'preview_first_id' => $this->diagnosePreviewFirstId(),
                 'preview_5' => $this->diagnosePreviewLimited(5),
                 'preview_10' => $this->diagnosePreviewLimited(10),
                 'preview_25' => $this->diagnosePreviewLimited(25),
@@ -345,20 +351,42 @@ class CatalogSyncPreview extends Page implements HasSchemas
      */
     protected function diagnoseQueryRows(): array
     {
+        return array_merge([
+            'message' => 'Supplier product row query completed without preview generation.',
+        ], $this->querySupplierProductDiagnostics(50));
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected function diagnoseQueryFirstRows(int $limit): array
+    {
+        return array_merge([
+            'message' => "First {$limit} supplier products queried without preview generation.",
+        ], $this->querySupplierProductDiagnostics($limit));
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected function querySupplierProductDiagnostics(int $limit): array
+    {
         $supplierId = $this->defaultSupplierId();
         $rows = SupplierProduct::query()
             ->with('supplier')
             ->when($supplierId, fn ($query) => $query->where('supplier_id', $supplierId))
             ->orderBy('id')
-            ->limit(50)
+            ->limit($limit)
             ->get(['id', 'supplier_id', 'supplier_sku', 'ean', 'mpn', 'name', 'price', 'quantity']);
 
         return [
-            'message' => 'Supplier product row query completed without preview generation.',
             'selected_supplier_id' => $supplierId,
             'rows_found' => $rows->count(),
             'first_supplier_product_id' => $rows->first()?->id,
             'first_supplier_sku' => $rows->first()?->supplier_sku,
+            'rows' => $rows
+                ->map(fn (SupplierProduct $supplierProduct): array => $this->compactSupplierProduct($supplierProduct))
+                ->all(),
         ];
     }
 
@@ -386,10 +414,106 @@ class CatalogSyncPreview extends Page implements HasSchemas
         return [
             'message' => 'One supplier product preview completed.',
             'selected_supplier_id' => $supplierId,
-            'supplier_product_id' => $supplierProduct->id,
-            'action' => $row['target_catalog_action'] ?? null,
-            'product_name' => $row['product_name'] ?? null,
+            'row' => $this->compactPreviewRow($row, $supplierProduct, 1),
         ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected function diagnosePreviewRow(): array
+    {
+        $supplierProductId = request()->integer('supplier_product_id');
+
+        if ($supplierProductId <= 0) {
+            return [
+                'message' => 'Missing supplier_product_id query parameter.',
+                'supplier_product_id' => null,
+            ];
+        }
+
+        $supplierProduct = SupplierProduct::query()
+            ->with('supplier')
+            ->find($supplierProductId);
+
+        if (! $supplierProduct) {
+            return [
+                'message' => 'Supplier product was not found.',
+                'supplier_product_id' => $supplierProductId,
+            ];
+        }
+
+        return $this->previewSingleDiagnosticRow($supplierProduct, 1, 'preview_row');
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected function diagnosePreviewFirstId(): array
+    {
+        $supplierId = $this->defaultSupplierId();
+        $supplierProduct = SupplierProduct::query()
+            ->with('supplier')
+            ->when($supplierId, fn ($query) => $query->where('supplier_id', $supplierId))
+            ->orderBy('id')
+            ->first();
+
+        if (! $supplierProduct) {
+            return [
+                'message' => 'No supplier products found for first-row preview.',
+                'selected_supplier_id' => $supplierId,
+            ];
+        }
+
+        return array_merge([
+            'selected_supplier_id' => $supplierId,
+        ], $this->previewSingleDiagnosticRow($supplierProduct, 1, 'preview_first_id'));
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected function previewSingleDiagnosticRow(SupplierProduct $supplierProduct, int $rowNumber, string $step): array
+    {
+        Log::info('Catalog Sync Preview diagnostic row preview starting.', [
+            'diagnostic_step' => $step,
+            'row_index' => $rowNumber,
+            'supplier_product_id' => $supplierProduct->id,
+            'supplier_id' => $supplierProduct->supplier_id,
+            'supplier_sku' => $supplierProduct->supplier_sku,
+        ]);
+
+        try {
+            $row = app(CatalogSyncPreviewService::class)->previewSupplierProduct($supplierProduct);
+
+            Log::info('Catalog Sync Preview diagnostic row preview completed.', [
+                'diagnostic_step' => $step,
+                'row_index' => $rowNumber,
+                'supplier_product_id' => $supplierProduct->id,
+                'supplier_sku' => $supplierProduct->supplier_sku,
+                'target_catalog_action' => $row['target_catalog_action'] ?? null,
+            ]);
+
+            return [
+                'message' => 'Single supplier product preview completed.',
+                'row' => $this->compactPreviewRow($row, $supplierProduct, $rowNumber),
+            ];
+        } catch (Throwable $exception) {
+            Log::warning('Catalog Sync Preview diagnostic row preview failed.', [
+                'diagnostic_step' => $step,
+                'row_index' => $rowNumber,
+                'supplier_product_id' => $supplierProduct->id,
+                'supplier_id' => $supplierProduct->supplier_id,
+                'supplier_sku' => $supplierProduct->supplier_sku,
+                'exception' => $exception::class,
+                'message' => $exception->getMessage(),
+            ]);
+
+            return [
+                'message' => 'Single supplier product preview failed.',
+                'row' => $this->failedDiagnosticPreviewRow($supplierProduct, $rowNumber, $exception),
+            ];
+        }
     }
 
     /**
@@ -477,6 +601,24 @@ class CatalogSyncPreview extends Page implements HasSchemas
             'result' => $row['result'] ?? null,
             'exception' => null,
             'conflict_reasons' => $row['conflict_reasons'] ?? [],
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected function compactSupplierProduct(SupplierProduct $supplierProduct): array
+    {
+        return [
+            'supplier_product_id' => $supplierProduct->id,
+            'supplier_id' => $supplierProduct->supplier_id,
+            'supplier' => $supplierProduct->supplier?->company_name,
+            'supplier_sku' => $supplierProduct->supplier_sku,
+            'ean' => $supplierProduct->ean,
+            'mpn' => $supplierProduct->mpn,
+            'name' => Str::limit((string) $supplierProduct->name, 120, '...'),
+            'price' => $supplierProduct->price,
+            'quantity' => $supplierProduct->quantity,
         ];
     }
 
