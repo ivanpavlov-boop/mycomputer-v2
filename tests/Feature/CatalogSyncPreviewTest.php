@@ -446,6 +446,24 @@ class CatalogSyncPreviewTest extends TestCase
             ->assertDontSee('Quick filters');
     }
 
+    public function test_catalog_sync_preview_ping_diagnostic_returns_without_preview_service(): void
+    {
+        $this->actingAsSupplierManager();
+
+        $this->mock(CatalogSyncPreviewService::class, function ($mock): void {
+            $mock->shouldNotReceive('preview');
+            $mock->shouldNotReceive('previewSupplierProduct');
+            $mock->shouldNotReceive('traceSupplierProductPreview');
+        });
+
+        $this
+            ->get(CatalogSyncPreview::getUrl().'?diagnostic_step=ping')
+            ->assertOk()
+            ->assertSee('Step: ping')
+            ->assertSee('Catalog Sync Preview ping OK')
+            ->assertDontSee('Quick filters');
+    }
+
     public function test_catalog_sync_preview_supplier_diagnostic_step_renders_supplier_report(): void
     {
         $this->actingAsSupplierManager();
