@@ -10,8 +10,6 @@ use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Pages\Page;
 use Filament\Schemas\Components\Grid;
-use Filament\Schemas\Concerns\InteractsWithSchemas;
-use Filament\Schemas\Contracts\HasSchemas;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Illuminate\Support\Facades\Log;
@@ -19,10 +17,8 @@ use Illuminate\Support\Str;
 use Throwable;
 use UnitEnum;
 
-class CatalogSyncPreview extends Page implements HasSchemas
+class CatalogSyncPreview extends Page
 {
-    use InteractsWithSchemas;
-
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedEye;
 
     protected static ?string $navigationLabel = 'Catalog Sync Preview';
@@ -30,6 +26,24 @@ class CatalogSyncPreview extends Page implements HasSchemas
     protected static string|UnitEnum|null $navigationGroup = 'Suppliers';
 
     protected string $view = 'filament.pages.catalog-sync-preview';
+
+    protected const DIAGNOSTIC_STEPS = [
+        'ping',
+        'static',
+        'suppliers',
+        'filters',
+        'selected_supplier',
+        'query_rows',
+        'query_first_5',
+        'preview_one',
+        'preview_row',
+        'preview_trace',
+        'preview_first_id',
+        'preview_5',
+        'preview_10',
+        'preview_25',
+        'preview_50',
+    ];
 
     /**
      * @var array<string, mixed>
@@ -64,30 +78,17 @@ class CatalogSyncPreview extends Page implements HasSchemas
      */
     public array $diagnosticReport = [];
 
-    /**
-     * @var array<int, string>
-     */
-    public array $diagnosticSteps = [
-        'ping',
-        'static',
-        'suppliers',
-        'filters',
-        'selected_supplier',
-        'query_rows',
-        'query_first_5',
-        'preview_one',
-        'preview_row',
-        'preview_trace',
-        'preview_first_id',
-        'preview_5',
-        'preview_10',
-        'preview_25',
-        'preview_50',
-    ];
-
     public static function canAccess(): bool
     {
         return (bool) auth()->user()?->can('manage suppliers');
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    public function diagnosticSteps(): array
+    {
+        return self::DIAGNOSTIC_STEPS;
     }
 
     public function mount(): void
@@ -284,7 +285,7 @@ class CatalogSyncPreview extends Page implements HasSchemas
 
         $step = Str::snake($step);
 
-        return in_array($step, $this->diagnosticSteps, true) ? $step : 'static';
+        return in_array($step, self::DIAGNOSTIC_STEPS, true) ? $step : 'static';
     }
 
     /**

@@ -50,7 +50,7 @@
             <div class="rounded-lg border border-gray-200 bg-white p-4 text-sm shadow-sm dark:border-gray-800 dark:bg-gray-900">
                 <div class="mb-2 font-semibold text-gray-950 dark:text-white">Available diagnostic steps</div>
                 <div class="flex flex-wrap gap-2">
-                    @foreach ($this->diagnosticSteps as $step)
+                    @foreach ($this->diagnosticSteps() as $step)
                         <span @class([
                             'rounded-md border px-3 py-1.5',
                             'border-primary-500 bg-primary-50 text-primary-700' => ($this->diagnosticStep ?? 'static') === $step,
