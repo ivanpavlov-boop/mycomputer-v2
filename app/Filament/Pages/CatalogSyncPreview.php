@@ -85,14 +85,6 @@ class CatalogSyncPreview extends Page implements HasSchemas
         'preview_50',
     ];
 
-    public function __construct()
-    {
-        Log::info('Catalog Sync Preview lifecycle: constructor reached.', [
-            'diagnostic_step' => request()->query('diagnostic_step'),
-            'has_supplier_product_id' => request()->has('supplier_product_id'),
-        ]);
-    }
-
     public static function canAccess(): bool
     {
         return (bool) auth()->user()?->can('manage suppliers');
