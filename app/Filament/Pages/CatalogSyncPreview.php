@@ -68,6 +68,7 @@ class CatalogSyncPreview extends Page implements HasSchemas
      * @var array<int, string>
      */
     public array $diagnosticSteps = [
+        'ping',
         'static',
         'suppliers',
         'filters',
@@ -84,6 +85,14 @@ class CatalogSyncPreview extends Page implements HasSchemas
         'preview_50',
     ];
 
+    public function __construct()
+    {
+        Log::info('Catalog Sync Preview lifecycle: constructor reached.', [
+            'diagnostic_step' => request()->query('diagnostic_step'),
+            'has_supplier_product_id' => request()->has('supplier_product_id'),
+        ]);
+    }
+
     public static function canAccess(): bool
     {
         return (bool) auth()->user()?->can('manage suppliers');
@@ -91,15 +100,47 @@ class CatalogSyncPreview extends Page implements HasSchemas
 
     public function mount(): void
     {
+        Log::info('Catalog Sync Preview lifecycle: mount starting.', [
+            'diagnostic_step_query' => request()->query('diagnostic_step'),
+            'supplier_product_id_query' => request()->query('supplier_product_id'),
+        ]);
+
         $this->diagnosticStep = $this->requestedDiagnosticStep();
         $this->diagnosticsOnly = $this->diagnosticStep !== null;
 
+        Log::info('Catalog Sync Preview lifecycle: diagnostic step resolved.', [
+            'diagnostic_step' => $this->diagnosticStep,
+            'diagnostics_only' => $this->diagnosticsOnly,
+        ]);
+
         if ($this->diagnosticsOnly) {
+            if ($this->diagnosticStep === 'ping') {
+                Log::info('Catalog Sync Preview lifecycle: ping diagnostic selected.');
+
+                $this->diagnosticReport = [
+                    'step' => 'ping',
+                    'status' => 'ok',
+                    'message' => 'Catalog Sync Preview ping OK',
+                ];
+
+                return;
+            }
+
             $this->previewPayload = [
                 'summary' => $this->emptySummary(),
                 'rows' => [],
             ];
+
+            Log::info('Catalog Sync Preview lifecycle: before diagnostic step dispatch.', [
+                'diagnostic_step' => $this->diagnosticStep,
+            ]);
+
             $this->diagnosticReport = $this->runDiagnosticStep($this->diagnosticStep ?? 'static');
+
+            Log::info('Catalog Sync Preview lifecycle: after diagnostic step dispatch.', [
+                'diagnostic_step' => $this->diagnosticStep,
+                'diagnostic_status' => $this->diagnosticReport['status'] ?? null,
+            ]);
 
             return;
         }
@@ -260,6 +301,10 @@ class CatalogSyncPreview extends Page implements HasSchemas
     protected function runDiagnosticStep(string $step): array
     {
         $startedAt = microtime(true);
+
+        Log::info('Catalog Sync Preview lifecycle: runDiagnosticStep entered.', [
+            'diagnostic_step' => $step,
+        ]);
 
         try {
             $report = match ($step) {
@@ -453,16 +498,31 @@ class CatalogSyncPreview extends Page implements HasSchemas
      */
     protected function diagnosePreviewTrace(): array
     {
+        Log::info('Catalog Sync Preview lifecycle: before preview_trace handler.', [
+            'supplier_product_id_query' => request()->query('supplier_product_id'),
+        ]);
+
         $supplierProductId = request()->integer('supplier_product_id');
 
         if ($supplierProductId <= 0) {
+            Log::info('Catalog Sync Preview lifecycle: preview_trace missing supplier_product_id.');
+
             return [
                 'message' => 'Missing supplier_product_id query parameter.',
                 'supplier_product_id' => null,
             ];
         }
 
-        return app(CatalogSyncPreviewService::class)->traceSupplierProductPreview($supplierProductId);
+        $report = app(CatalogSyncPreviewService::class)->traceSupplierProductPreview($supplierProductId);
+
+        Log::info('Catalog Sync Preview lifecycle: after preview_trace handler.', [
+            'supplier_product_id' => $supplierProductId,
+            'status' => $report['status'] ?? null,
+            'last_successful_step' => $report['last_successful_step'] ?? null,
+            'failing_step' => $report['failing_step'] ?? null,
+        ]);
+
+        return $report;
     }
 
     /**
