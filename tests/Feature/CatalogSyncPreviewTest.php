@@ -542,6 +542,90 @@ class CatalogSyncPreviewTest extends TestCase
             ->assertSee('rows_rendered');
     }
 
+    public function test_catalog_sync_preview_smaller_preview_diagnostic_steps_are_available(): void
+    {
+        $this->actingAsSupplierManager();
+
+        Supplier::factory()->create([
+            'company_name' => 'APCOM',
+            'slug' => 'apcom',
+        ]);
+
+        foreach ([5, 10, 25] as $limit) {
+            $this
+                ->get(CatalogSyncPreview::getUrl()."?diagnostic_step=preview_{$limit}")
+                ->assertOk()
+                ->assertSee("Step: preview_{$limit}")
+                ->assertSee("Limited {$limit}-row preview completed.");
+        }
+    }
+
+    public function test_catalog_sync_preview_limited_diagnostic_row_failure_is_returned_as_conflict(): void
+    {
+        $this->actingAsSupplierManager();
+
+        $supplier = Supplier::factory()->create([
+            'company_name' => 'APCOM',
+            'slug' => 'apcom',
+        ]);
+        $firstProduct = $this->supplierProduct($supplier, [
+            'supplier_sku' => 'APC-DIAG-OK',
+            'name' => 'APCOM Diagnostic OK Product',
+        ]);
+        $failedProduct = $this->supplierProduct($supplier, [
+            'supplier_sku' => 'APC-DIAG-FAIL',
+            'name' => 'APCOM Diagnostic Failed Product',
+        ]);
+
+        Log::spy();
+
+        $this->mock(CatalogSyncPreviewService::class, function ($mock) use ($firstProduct, $failedProduct): void {
+            $mock
+                ->shouldReceive('previewSupplierProduct')
+                ->twice()
+                ->andReturnUsing(function (SupplierProduct $supplierProduct) use ($firstProduct, $failedProduct): array {
+                    if ($supplierProduct->is($failedProduct)) {
+                        throw new RuntimeException('Limited row diagnostic failure');
+                    }
+
+                    $this->assertTrue($supplierProduct->is($firstProduct));
+
+                    return [
+                        'product_name' => 'APCOM Diagnostic OK Product',
+                        'target_catalog_action' => 'create',
+                        'reason' => 'New catalog product',
+                        'result' => 'New catalog product will be created',
+                        'conflict_reasons' => [],
+                    ];
+                });
+        });
+
+        $this
+            ->get(CatalogSyncPreview::getUrl().'?diagnostic_step=preview_5')
+            ->assertOk()
+            ->assertSee('Catalog Sync Preview diagnostics OK')
+            ->assertSee('Limited 5-row preview completed.')
+            ->assertSee('failed_rows')
+            ->assertSee('APC-DIAG-FAIL')
+            ->assertSee('preview_generation_failed')
+            ->assertSee('Limited row diagnostic failure');
+
+        Log::shouldHaveReceived('info')
+            ->with('Catalog Sync Preview diagnostic row preview starting.', Mockery::on(fn (array $context): bool => $context['supplier_product_id'] === $firstProduct->id
+                && $context['row_index'] === 1))
+            ->once();
+        Log::shouldHaveReceived('info')
+            ->with('Catalog Sync Preview diagnostic row preview completed.', Mockery::on(fn (array $context): bool => $context['supplier_product_id'] === $firstProduct->id
+                && $context['target_catalog_action'] === 'create'))
+            ->once();
+        Log::shouldHaveReceived('warning')
+            ->with('Catalog Sync Preview diagnostic row preview failed.', Mockery::on(fn (array $context): bool => $context['supplier_product_id'] === $failedProduct->id
+                && $context['row_index'] === 2
+                && $context['exception'] === RuntimeException::class
+                && $context['message'] === 'Limited row diagnostic failure'))
+            ->once();
+    }
+
     public function test_catalog_sync_preview_step_failure_is_visible_to_admin(): void
     {
         $this->actingAsSupplierManager();

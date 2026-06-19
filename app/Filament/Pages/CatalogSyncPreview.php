@@ -74,6 +74,9 @@ class CatalogSyncPreview extends Page implements HasSchemas
         'selected_supplier',
         'query_rows',
         'preview_one',
+        'preview_5',
+        'preview_10',
+        'preview_25',
         'preview_50',
     ];
 
@@ -261,7 +264,10 @@ class CatalogSyncPreview extends Page implements HasSchemas
                 'selected_supplier' => $this->diagnoseSelectedSupplier(),
                 'query_rows' => $this->diagnoseQueryRows(),
                 'preview_one' => $this->diagnosePreviewOne(),
-                'preview_50' => $this->diagnosePreviewLimited(),
+                'preview_5' => $this->diagnosePreviewLimited(5),
+                'preview_10' => $this->diagnosePreviewLimited(10),
+                'preview_25' => $this->diagnosePreviewLimited(25),
+                'preview_50' => $this->diagnosePreviewLimited(50),
                 default => [
                     'message' => 'Static Filament page render completed without loading filters, suppliers, or preview services.',
                 ],
@@ -389,19 +395,108 @@ class CatalogSyncPreview extends Page implements HasSchemas
     /**
      * @return array<string, mixed>
      */
-    protected function diagnosePreviewLimited(): array
+    protected function diagnosePreviewLimited(int $limit): array
     {
         $supplierId = $this->defaultSupplierId();
-        $payload = app(CatalogSyncPreviewService::class)->preview([
-            'supplier_id' => $supplierId,
-            'limit' => 50,
-        ], 50);
+        $service = app(CatalogSyncPreviewService::class);
+        $supplierProducts = SupplierProduct::query()
+            ->with('supplier')
+            ->when($supplierId, fn ($query) => $query->where('supplier_id', $supplierId))
+            ->orderBy('id')
+            ->limit($limit)
+            ->get();
+
+        $rows = [];
+        $failedRows = [];
+
+        foreach ($supplierProducts as $index => $supplierProduct) {
+            $rowNumber = $index + 1;
+
+            Log::info('Catalog Sync Preview diagnostic row preview starting.', [
+                'diagnostic_step' => "preview_{$limit}",
+                'row_index' => $rowNumber,
+                'supplier_product_id' => $supplierProduct->id,
+                'supplier_id' => $supplierProduct->supplier_id,
+                'supplier_sku' => $supplierProduct->supplier_sku,
+            ]);
+
+            try {
+                $row = $service->previewSupplierProduct($supplierProduct);
+
+                Log::info('Catalog Sync Preview diagnostic row preview completed.', [
+                    'diagnostic_step' => "preview_{$limit}",
+                    'row_index' => $rowNumber,
+                    'supplier_product_id' => $supplierProduct->id,
+                    'supplier_sku' => $supplierProduct->supplier_sku,
+                    'target_catalog_action' => $row['target_catalog_action'] ?? null,
+                ]);
+
+                $rows[] = $this->compactPreviewRow($row, $supplierProduct, $rowNumber);
+            } catch (Throwable $exception) {
+                Log::warning('Catalog Sync Preview diagnostic row preview failed.', [
+                    'diagnostic_step' => "preview_{$limit}",
+                    'row_index' => $rowNumber,
+                    'supplier_product_id' => $supplierProduct->id,
+                    'supplier_id' => $supplierProduct->supplier_id,
+                    'supplier_sku' => $supplierProduct->supplier_sku,
+                    'exception' => $exception::class,
+                    'message' => $exception->getMessage(),
+                ]);
+
+                $failedRow = $this->failedDiagnosticPreviewRow($supplierProduct, $rowNumber, $exception);
+                $rows[] = $failedRow;
+                $failedRows[] = $failedRow;
+            }
+        }
 
         return [
-            'message' => 'Limited 50-row preview completed.',
+            'message' => "Limited {$limit}-row preview completed.",
             'selected_supplier_id' => $supplierId,
-            'rows_rendered' => count($payload['rows']),
-            'summary' => $payload['summary'],
+            'rows_selected' => $supplierProducts->count(),
+            'rows_rendered' => count($rows),
+            'failed_rows' => count($failedRows),
+            'first_failed_row' => $failedRows[0] ?? null,
+            'rows' => $rows,
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $row
+     * @return array<string, mixed>
+     */
+    protected function compactPreviewRow(array $row, SupplierProduct $supplierProduct, int $rowNumber): array
+    {
+        return [
+            'row_index' => $rowNumber,
+            'supplier_product_id' => $supplierProduct->id,
+            'supplier_sku' => $supplierProduct->supplier_sku,
+            'ean' => $supplierProduct->ean,
+            'product_name' => $row['product_name'] ?? $supplierProduct->name,
+            'target_catalog_action' => $row['target_catalog_action'] ?? 'conflict',
+            'reason' => $row['reason'] ?? null,
+            'result' => $row['result'] ?? null,
+            'exception' => null,
+            'conflict_reasons' => $row['conflict_reasons'] ?? [],
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected function failedDiagnosticPreviewRow(SupplierProduct $supplierProduct, int $rowNumber, Throwable $exception): array
+    {
+        return [
+            'row_index' => $rowNumber,
+            'supplier_product_id' => $supplierProduct->id,
+            'supplier_sku' => $supplierProduct->supplier_sku,
+            'ean' => $supplierProduct->ean,
+            'product_name' => $supplierProduct->name ?: 'Supplier product '.$supplierProduct->id,
+            'target_catalog_action' => 'conflict',
+            'reason' => 'Preview generation failed',
+            'result' => 'Conflict detected: preview row requires review before sync',
+            'exception' => $exception::class,
+            'exception_message' => $exception->getMessage(),
+            'conflict_reasons' => ['preview_generation_failed'],
         ];
     }
 
