@@ -12,11 +12,23 @@
             $queryOnly = $this->queryOnlySupplierProducts();
             $rows = $queryOnly['rows'];
             $queryError = $queryOnly['error'];
+            $summary = $queryOnly['summary'];
             $money = fn ($value): string => $value !== null ? number_format((float) $value, 2).' EUR' : '-';
         @endphp
 
         <div class="rounded-lg border border-gray-200 bg-white p-4 text-sm font-medium text-gray-950 shadow-sm dark:border-gray-800 dark:bg-gray-900 dark:text-white">
             Catalog Sync Preview Query Only OK
+        </div>
+
+        <div class="grid gap-4 md:grid-cols-2">
+            <div class="rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-gray-900">
+                <div class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Included Rows</div>
+                <div class="mt-1 text-2xl font-semibold text-gray-950 dark:text-white">{{ $summary['included'] }}</div>
+            </div>
+            <div class="rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-gray-900">
+                <div class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Excluded Rows</div>
+                <div class="mt-1 text-2xl font-semibold text-gray-950 dark:text-white">{{ $summary['excluded'] }}</div>
+            </div>
         </div>
 
         @if ($queryError)
@@ -42,6 +54,8 @@
                                 <th class="px-4 py-3">Margin Type</th>
                                 <th class="px-4 py-3">Margin Value</th>
                                 <th class="px-4 py-3">Calculated Price</th>
+                                <th class="px-4 py-3">Excluded</th>
+                                <th class="px-4 py-3">Exclusion Reason</th>
                                 <th class="px-4 py-3">Quantity</th>
                                 <th class="px-4 py-3">Availability</th>
                                 <th class="px-4 py-3">Status</th>
@@ -68,6 +82,13 @@
                                     <td class="px-4 py-3">{{ $row['margin_type'] ?: '-' }}</td>
                                     <td class="px-4 py-3">{{ $row['margin_value'] ?: '-' }}</td>
                                     <td class="px-4 py-3">{{ $money($row['calculated_price']) }}</td>
+                                    <td class="px-4 py-3">{{ $row['excluded'] ? 'Yes' : 'No' }}</td>
+                                    <td class="px-4 py-3">
+                                        <div>{{ $row['exclusion_reason'] }}</div>
+                                        @if ($row['exclusion_error'])
+                                            <div class="mt-1 text-xs text-red-600 dark:text-red-400">{{ $row['exclusion_error'] }}</div>
+                                        @endif
+                                    </td>
                                     <td class="px-4 py-3">{{ $row['quantity'] }}</td>
                                     <td class="px-4 py-3">{{ $row['availability'] }}</td>
                                     <td class="px-4 py-3">{{ $row['status'] }}</td>
@@ -75,7 +96,7 @@
                                 </tr>
                             @empty
                                 <tr>
-                                    <td colspan="16" class="px-4 py-8 text-center text-gray-500">No supplier products match the query-only filters.</td>
+                                    <td colspan="18" class="px-4 py-8 text-center text-gray-500">No supplier products match the query-only filters.</td>
                                 </tr>
                             @endforelse
                         </tbody>

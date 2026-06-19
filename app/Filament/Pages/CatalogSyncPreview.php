@@ -9,6 +9,7 @@ use App\Models\Product;
 use App\Models\Supplier;
 use App\Models\SupplierProduct;
 use App\Services\Pricing\PricingEngine;
+use App\Services\Suppliers\SupplierExclusionService;
 use BackedEnum;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
@@ -99,7 +100,7 @@ class CatalogSyncPreview extends Page
     }
 
     /**
-     * @return array{rows: array<int, array<string, mixed>>, error: string|null, limit: int|string}
+     * @return array{rows: array<int, array<string, mixed>>, error: string|null, limit: int|string, summary: array{included: int, excluded: int}}
      */
     public function queryOnlySupplierProducts(): array
     {
@@ -154,13 +155,14 @@ class CatalogSyncPreview extends Page
                         ?? '-',
                     'status' => $supplierProduct->status ?: '-',
                     'updated_at' => $supplierProduct->updated_at?->format('Y-m-d H:i'),
-                ], $this->pricingPreviewForSupplierProduct($supplierProduct)))
+                ], $this->pricingPreviewForSupplierProduct($supplierProduct), $this->exclusionPreviewForSupplierProduct($supplierProduct)))
                 ->all();
 
             return [
                 'rows' => $rows,
                 'error' => null,
                 'limit' => $limit,
+                'summary' => $this->queryOnlySummary($rows),
             ];
         } catch (Throwable $exception) {
             report($exception);
@@ -169,6 +171,10 @@ class CatalogSyncPreview extends Page
                 'rows' => [],
                 'error' => $exception->getMessage(),
                 'limit' => $this->filters['limit'] ?? 50,
+                'summary' => [
+                    'included' => 0,
+                    'excluded' => 0,
+                ],
             ];
         }
     }
@@ -273,6 +279,50 @@ class CatalogSyncPreview extends Page
                 'pricing_error' => $exception->getMessage(),
             ];
         }
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected function exclusionPreviewForSupplierProduct(SupplierProduct $supplierProduct): array
+    {
+        try {
+            if ((int) config('services.catalog_sync_preview.force_exclusion_failure_supplier_product_id') === $supplierProduct->id) {
+                throw new RuntimeException('Forced exclusion failure.');
+            }
+
+            $exclusion = app(SupplierExclusionService::class)->evaluate($supplierProduct);
+
+            return [
+                'excluded' => (bool) $exclusion['excluded'],
+                'exclusion_reason' => $exclusion['excluded']
+                    ? ($exclusion['label'] ?: $exclusion['reason'] ?: 'Excluded by rule')
+                    : '-',
+                'exclusion_error' => null,
+            ];
+        } catch (Throwable $exception) {
+            report($exception);
+
+            return [
+                'excluded' => false,
+                'exclusion_reason' => 'Exclusion Error',
+                'exclusion_error' => $exception->getMessage(),
+            ];
+        }
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $rows
+     * @return array{included: int, excluded: int}
+     */
+    protected function queryOnlySummary(array $rows): array
+    {
+        $excluded = collect($rows)->where('excluded', true)->count();
+
+        return [
+            'included' => count($rows) - $excluded,
+            'excluded' => $excluded,
+        ];
     }
 
     protected function findExistingBrand(?string $name): ?Brand
