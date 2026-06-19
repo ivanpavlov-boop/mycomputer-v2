@@ -463,6 +463,104 @@ class CatalogSyncPreviewTest extends TestCase
             ->assertSee('Catalog Sync Preview Query Only OK');
     }
 
+    public function test_catalog_sync_preview_query_only_pricing_renders(): void
+    {
+        $this->actingAsSupplierManager();
+
+        $supplier = Supplier::factory()->create();
+        $this->supplierProduct($supplier, [
+            'name' => 'Pricing Query Product',
+            'price' => 100,
+        ]);
+
+        PricingRule::query()->create([
+            'name' => 'Global default margin',
+            'scope_type' => PricingRule::SCOPE_GLOBAL,
+            'margin_type' => PricingRule::MARGIN_PERCENTAGE,
+            'margin_value' => 20,
+            'rounding_rule' => PricingRule::ROUND_NONE,
+            'is_active' => true,
+        ]);
+
+        $this
+            ->get(CatalogSyncPreview::getUrl())
+            ->assertOk()
+            ->assertSee('Supplier Cost')
+            ->assertSee('Pricing Rule')
+            ->assertSee('Margin Type')
+            ->assertSee('Margin Value')
+            ->assertSee('Calculated Price')
+            ->assertSee('Global Default')
+            ->assertSee('percentage')
+            ->assertSee('20%')
+            ->assertSee('120.00 EUR');
+    }
+
+    public function test_catalog_sync_preview_query_only_pricing_rule_is_applied(): void
+    {
+        $this->actingAsSupplierManager();
+
+        $supplier = Supplier::factory()->create();
+        $category = Category::factory()->create([
+            'name' => 'Video Cards',
+            'slug' => 'video-cards',
+        ]);
+        $this->supplierProduct($supplier, [
+            'name' => 'Category Pricing Query Product',
+            'category_name' => 'Components > Video Cards',
+            'price' => 100,
+        ]);
+
+        PricingRule::query()->create([
+            'name' => 'Video Cards margin',
+            'scope_type' => PricingRule::SCOPE_CATEGORY,
+            'category_id' => $category->id,
+            'margin_type' => PricingRule::MARGIN_PERCENTAGE,
+            'margin_value' => 12,
+            'rounding_rule' => PricingRule::ROUND_NONE,
+            'is_active' => true,
+        ]);
+
+        Livewire::test(CatalogSyncPreview::class)
+            ->assertSee('Video Cards')
+            ->assertSee('12%')
+            ->assertSee('112.00 EUR');
+    }
+
+    public function test_catalog_sync_preview_query_only_pricing_error_does_not_crash_page(): void
+    {
+        $this->actingAsSupplierManager();
+
+        $supplier = Supplier::factory()->create();
+        $broken = $this->supplierProduct($supplier, [
+            'name' => 'Broken Pricing Product',
+            'price' => 100,
+        ]);
+        $this->supplierProduct($supplier, [
+            'name' => 'Healthy Pricing Product',
+            'price' => 50,
+        ]);
+
+        PricingRule::query()->create([
+            'name' => 'Global default margin',
+            'scope_type' => PricingRule::SCOPE_GLOBAL,
+            'margin_type' => PricingRule::MARGIN_PERCENTAGE,
+            'margin_value' => 20,
+            'rounding_rule' => PricingRule::ROUND_NONE,
+            'is_active' => true,
+        ]);
+        config(['services.catalog_sync_preview.force_pricing_failure_supplier_product_id' => $broken->id]);
+
+        $this
+            ->get(CatalogSyncPreview::getUrl())
+            ->assertOk()
+            ->assertSee('Broken Pricing Product')
+            ->assertSee('Pricing Error')
+            ->assertSee('Forced pricing failure.')
+            ->assertSee('Healthy Pricing Product')
+            ->assertSee('60.00 EUR');
+    }
+
     private function actingAsSupplierManager(): User
     {
         $this->seed(RolesAndPermissionsSeeder::class);
