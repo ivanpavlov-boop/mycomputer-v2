@@ -8,6 +8,7 @@ use App\Models\Category;
 use App\Models\PricingRule;
 use App\Models\Product;
 use App\Models\Supplier;
+use App\Models\SupplierExclusionRule;
 use App\Models\SupplierProduct;
 use App\Models\User;
 use App\Services\Products\CatalogSyncPreviewService;
@@ -559,6 +560,127 @@ class CatalogSyncPreviewTest extends TestCase
             ->assertSee('Forced pricing failure.')
             ->assertSee('Healthy Pricing Product')
             ->assertSee('60.00 EUR');
+    }
+
+    public function test_catalog_sync_preview_query_only_zero_stock_exclusion_renders(): void
+    {
+        $this->actingAsSupplierManager();
+
+        $supplier = Supplier::factory()->create();
+        $this->supplierProduct($supplier, [
+            'name' => 'Zero Stock Excluded Product',
+            'quantity' => 0,
+        ]);
+        $this->supplierProduct($supplier, [
+            'name' => 'Included Stock Product',
+            'quantity' => 5,
+        ]);
+
+        SupplierExclusionRule::query()->create([
+            'name' => 'Exclude zero stock',
+            'is_active' => true,
+            'exclude_zero_stock' => true,
+            'priority' => 10,
+            'reason' => 'No stock products stay staged only',
+        ]);
+
+        $result = Livewire::test(CatalogSyncPreview::class);
+        $summary = $result->instance()->queryOnlySupplierProducts()['summary'];
+
+        $this->assertSame(1, $summary['included']);
+        $this->assertSame(1, $summary['excluded']);
+
+        $result
+            ->assertSee('Excluded Rows')
+            ->assertSee('Zero Stock Excluded Product')
+            ->assertSee('Included Stock Product')
+            ->assertSee('Yes')
+            ->assertSee('No')
+            ->assertSee('Zero stock');
+    }
+
+    public function test_catalog_sync_preview_query_only_missing_ean_exclusion_renders(): void
+    {
+        $this->actingAsSupplierManager();
+
+        $supplier = Supplier::factory()->create();
+        $this->supplierProduct($supplier, [
+            'name' => 'Missing EAN Excluded Product',
+            'ean' => null,
+        ]);
+        $this->supplierProduct($supplier, [
+            'name' => 'EAN Included Product',
+            'ean' => '1234567890123',
+        ]);
+
+        SupplierExclusionRule::query()->create([
+            'name' => 'Exclude missing EAN',
+            'is_active' => true,
+            'exclude_missing_ean' => true,
+            'priority' => 10,
+        ]);
+
+        $result = Livewire::test(CatalogSyncPreview::class);
+        $summary = $result->instance()->queryOnlySupplierProducts()['summary'];
+
+        $this->assertSame(1, $summary['included']);
+        $this->assertSame(1, $summary['excluded']);
+
+        $result
+            ->assertSee('Missing EAN Excluded Product')
+            ->assertSee('EAN Included Product')
+            ->assertSee('Missing EAN');
+    }
+
+    public function test_catalog_sync_preview_query_only_page_renders_with_exclusions(): void
+    {
+        $this->actingAsSupplierManager();
+
+        $supplier = Supplier::factory()->create();
+        $this->supplierProduct($supplier, [
+            'name' => 'Renderable Exclusion Product',
+            'quantity' => 0,
+        ]);
+
+        SupplierExclusionRule::query()->create([
+            'name' => 'Renderable zero stock rule',
+            'is_active' => true,
+            'exclude_zero_stock' => true,
+            'priority' => 10,
+        ]);
+
+        $this
+            ->get(CatalogSyncPreview::getUrl())
+            ->assertOk()
+            ->assertSee('Included Rows')
+            ->assertSee('Excluded Rows')
+            ->assertSee('Excluded')
+            ->assertSee('Exclusion Reason')
+            ->assertSee('Renderable Exclusion Product')
+            ->assertSee('Zero stock');
+    }
+
+    public function test_catalog_sync_preview_query_only_exclusion_error_does_not_crash_page(): void
+    {
+        $this->actingAsSupplierManager();
+
+        $supplier = Supplier::factory()->create();
+        $broken = $this->supplierProduct($supplier, [
+            'name' => 'Broken Exclusion Product',
+        ]);
+        $this->supplierProduct($supplier, [
+            'name' => 'Healthy Exclusion Product',
+        ]);
+
+        config(['services.catalog_sync_preview.force_exclusion_failure_supplier_product_id' => $broken->id]);
+
+        $this
+            ->get(CatalogSyncPreview::getUrl())
+            ->assertOk()
+            ->assertSee('Broken Exclusion Product')
+            ->assertSee('Exclusion Error')
+            ->assertSee('Forced exclusion failure.')
+            ->assertSee('Healthy Exclusion Product');
     }
 
     private function actingAsSupplierManager(): User
