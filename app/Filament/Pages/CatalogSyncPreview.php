@@ -12,6 +12,7 @@ use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Illuminate\Database\Eloquent\Builder;
+use RuntimeException;
 use Throwable;
 use UnitEnum;
 
@@ -97,6 +98,10 @@ class CatalogSyncPreview extends Page
     public function queryOnlySupplierProducts(): array
     {
         try {
+            if ((bool) config('services.catalog_sync_preview.force_query_only_failure')) {
+                throw new RuntimeException('Forced query-only failure.');
+            }
+
             $limit = $this->filters['limit'] ?? 50;
             $query = SupplierProduct::query()
                 ->with(['supplier:id,company_name', 'availabilityStatus:id,name,code'])

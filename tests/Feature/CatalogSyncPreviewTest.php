@@ -13,7 +13,6 @@ use App\Models\User;
 use App\Services\Products\CatalogSyncPreviewService;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\Schema;
 use Livewire\Livewire;
 use Tests\TestCase;
 
@@ -454,12 +453,13 @@ class CatalogSyncPreviewTest extends TestCase
     {
         $this->actingAsSupplierManager();
 
-        Schema::drop('supplier_products');
+        config(['services.catalog_sync_preview.force_query_only_failure' => true]);
 
         $this
             ->get(CatalogSyncPreview::getUrl())
             ->assertOk()
             ->assertSee('Supplier products query failed.')
+            ->assertSee('Forced query-only failure.')
             ->assertSee('Catalog Sync Preview Query Only OK');
     }
 
