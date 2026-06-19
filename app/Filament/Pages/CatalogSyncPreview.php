@@ -76,6 +76,7 @@ class CatalogSyncPreview extends Page implements HasSchemas
         'query_first_5',
         'preview_one',
         'preview_row',
+        'preview_trace',
         'preview_first_id',
         'preview_5',
         'preview_10',
@@ -269,6 +270,7 @@ class CatalogSyncPreview extends Page implements HasSchemas
                 'query_first_5' => $this->diagnoseQueryFirstRows(5),
                 'preview_one' => $this->diagnosePreviewOne(),
                 'preview_row' => $this->diagnosePreviewRow(),
+                'preview_trace' => $this->diagnosePreviewTrace(),
                 'preview_first_id' => $this->diagnosePreviewFirstId(),
                 'preview_5' => $this->diagnosePreviewLimited(5),
                 'preview_10' => $this->diagnosePreviewLimited(10),
@@ -444,6 +446,23 @@ class CatalogSyncPreview extends Page implements HasSchemas
         }
 
         return $this->previewSingleDiagnosticRow($supplierProduct, 1, 'preview_row');
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected function diagnosePreviewTrace(): array
+    {
+        $supplierProductId = request()->integer('supplier_product_id');
+
+        if ($supplierProductId <= 0) {
+            return [
+                'message' => 'Missing supplier_product_id query parameter.',
+                'supplier_product_id' => null,
+            ];
+        }
+
+        return app(CatalogSyncPreviewService::class)->traceSupplierProductPreview($supplierProductId);
     }
 
     /**
