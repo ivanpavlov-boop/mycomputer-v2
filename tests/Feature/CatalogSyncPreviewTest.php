@@ -13,6 +13,7 @@ use App\Models\User;
 use App\Services\Products\CatalogSyncPreviewService;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Livewire\Livewire;
 use Tests\TestCase;
 
 class CatalogSyncPreviewTest extends TestCase
@@ -333,7 +334,7 @@ class CatalogSyncPreviewTest extends TestCase
         $this->assertSame('new', $supplierProduct->status);
     }
 
-    public function test_catalog_sync_preview_page_renders_filter_ui_without_preview_generation(): void
+    public function test_catalog_sync_preview_page_renders_filter_ui_and_query_only_section_without_preview_generation(): void
     {
         $this->actingAsSupplierManager();
 
@@ -359,7 +360,107 @@ class CatalogSyncPreviewTest extends TestCase
             ->assertSee('Catalog action')
             ->assertSee('Quick filter')
             ->assertSee('Catalog Sync Preview UI OK')
-            ->assertDontSee('Supplier Product Must Not Render');
+            ->assertSee('Catalog Sync Preview Query Only OK')
+            ->assertSee('Supplier Product Must Not Render');
+    }
+
+    public function test_catalog_sync_preview_query_only_supplier_filter_works(): void
+    {
+        $this->actingAsSupplierManager();
+
+        $apcom = Supplier::factory()->create(['company_name' => 'APCOM']);
+        $other = Supplier::factory()->create(['company_name' => 'Other Supplier']);
+
+        $this->supplierProduct($apcom, ['name' => 'APCOM Query Only Product']);
+        $this->supplierProduct($other, ['name' => 'Other Query Only Product']);
+
+        Livewire::test(CatalogSyncPreview::class)
+            ->set('filters.supplier_id', $apcom->id)
+            ->assertSee('APCOM Query Only Product')
+            ->assertDontSee('Other Query Only Product');
+    }
+
+    public function test_catalog_sync_preview_query_only_limit_is_applied_before_rendering(): void
+    {
+        $this->actingAsSupplierManager();
+
+        $supplier = Supplier::factory()->create();
+
+        for ($index = 1; $index <= 60; $index++) {
+            $this->supplierProduct($supplier, [
+                'name' => 'Query Limit Product '.$index,
+                'supplier_sku' => 'QLIMIT-'.$index,
+            ]);
+        }
+
+        Livewire::test(CatalogSyncPreview::class)
+            ->set('filters.limit', 50)
+            ->assertSee('Query Limit Product 50')
+            ->assertDontSee('Query Limit Product 51');
+    }
+
+    public function test_catalog_sync_preview_query_only_search_filter_matches_sku_ean_and_name(): void
+    {
+        $this->actingAsSupplierManager();
+
+        $supplier = Supplier::factory()->create();
+        $this->supplierProduct($supplier, [
+            'name' => 'Needle Name Product',
+            'supplier_sku' => 'SKU-NEEDLE',
+            'ean' => '1234567890001',
+        ]);
+        $this->supplierProduct($supplier, [
+            'name' => 'EAN Matched Product',
+            'supplier_sku' => 'SKU-OTHER',
+            'ean' => '9999999999999',
+        ]);
+        $this->supplierProduct($supplier, [
+            'name' => 'Hidden Query Product',
+            'supplier_sku' => 'SKU-HIDDEN',
+            'ean' => '1234567890002',
+        ]);
+
+        Livewire::test(CatalogSyncPreview::class)
+            ->set('filters.search', 'NEEDLE')
+            ->assertSee('Needle Name Product')
+            ->assertDontSee('Hidden Query Product');
+
+        Livewire::test(CatalogSyncPreview::class)
+            ->set('filters.search', '9999999999999')
+            ->assertSee('EAN Matched Product')
+            ->assertDontSee('Hidden Query Product');
+    }
+
+    public function test_catalog_sync_preview_query_only_does_not_render_raw_data(): void
+    {
+        $this->actingAsSupplierManager();
+
+        $supplier = Supplier::factory()->create();
+        $this->supplierProduct($supplier, [
+            'name' => 'Raw Data Safe Product',
+            'raw_data' => ['secret_raw_payload_marker' => 'do-not-render'],
+        ]);
+
+        $this
+            ->get(CatalogSyncPreview::getUrl())
+            ->assertOk()
+            ->assertSee('Raw Data Safe Product')
+            ->assertDontSee('secret_raw_payload_marker')
+            ->assertDontSee('do-not-render');
+    }
+
+    public function test_catalog_sync_preview_query_only_failure_renders_error_panel(): void
+    {
+        $this->actingAsSupplierManager();
+
+        config(['services.catalog_sync_preview.force_query_only_failure' => true]);
+
+        $this
+            ->get(CatalogSyncPreview::getUrl())
+            ->assertOk()
+            ->assertSee('Supplier products query failed.')
+            ->assertSee('Forced query-only failure.')
+            ->assertSee('Catalog Sync Preview Query Only OK');
     }
 
     private function actingAsSupplierManager(): User
