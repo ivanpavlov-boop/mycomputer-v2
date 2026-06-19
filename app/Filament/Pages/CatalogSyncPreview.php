@@ -2,8 +2,13 @@
 
 namespace App\Filament\Pages;
 
+use App\Models\Brand;
+use App\Models\Category;
+use App\Models\PricingRule;
+use App\Models\Product;
 use App\Models\Supplier;
 use App\Models\SupplierProduct;
+use App\Services\Pricing\PricingEngine;
 use BackedEnum;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
@@ -12,6 +17,7 @@ use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Str;
 use RuntimeException;
 use Throwable;
 use UnitEnum;
@@ -132,7 +138,7 @@ class CatalogSyncPreview extends Page
 
             $rows = $query
                 ->get()
-                ->map(fn (SupplierProduct $supplierProduct): array => [
+                ->map(fn (SupplierProduct $supplierProduct): array => array_merge([
                     'supplier_product_id' => $supplierProduct->id,
                     'supplier' => $supplierProduct->supplier?->company_name ?? '-',
                     'supplier_sku' => $supplierProduct->supplier_sku ?: '-',
@@ -148,7 +154,7 @@ class CatalogSyncPreview extends Page
                         ?? '-',
                     'status' => $supplierProduct->status ?: '-',
                     'updated_at' => $supplierProduct->updated_at?->format('Y-m-d H:i'),
-                ])
+                ], $this->pricingPreviewForSupplierProduct($supplierProduct)))
                 ->all();
 
             return [
@@ -223,5 +229,93 @@ class CatalogSyncPreview extends Page
                 ->orWhere('ean', 'like', "%{$search}%")
                 ->orWhere('mpn', 'like', "%{$search}%"));
         }
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected function pricingPreviewForSupplierProduct(SupplierProduct $supplierProduct): array
+    {
+        try {
+            if ((int) config('services.catalog_sync_preview.force_pricing_failure_supplier_product_id') === $supplierProduct->id) {
+                throw new RuntimeException('Forced pricing failure.');
+            }
+
+            $supplierProduct->loadMissing('supplier');
+
+            $brand = $this->findExistingBrand($supplierProduct->brand_name);
+            $category = $this->findExistingCategory($supplierProduct->category_name);
+            $pricingProduct = new Product;
+            $pricingProduct->brand_id = $brand?->id;
+            $pricingProduct->category_id = $category?->id;
+            $pricingProduct->source = Product::SOURCE_SUPPLIER_IMPORT;
+
+            $pricing = app(PricingEngine::class)->calculateForSupplierProduct($supplierProduct, $pricingProduct, $category);
+            $rule = $pricing['rule_id'] ? PricingRule::query()->find($pricing['rule_id']) : null;
+
+            return [
+                'supplier_cost' => $pricing['normalized_purchase_cost'] ?? null,
+                'pricing_rule_used' => $this->displayPricingRule($rule, $supplierProduct),
+                'margin_type' => $rule?->margin_type,
+                'margin_value' => $rule?->formattedMarginValue(),
+                'calculated_price' => $pricing['final_selling_price'] ?? null,
+                'pricing_error' => null,
+            ];
+        } catch (Throwable $exception) {
+            report($exception);
+
+            return [
+                'supplier_cost' => null,
+                'pricing_rule_used' => 'Pricing Error',
+                'margin_type' => null,
+                'margin_value' => null,
+                'calculated_price' => null,
+                'pricing_error' => $exception->getMessage(),
+            ];
+        }
+    }
+
+    protected function findExistingBrand(?string $name): ?Brand
+    {
+        if (blank($name)) {
+            return null;
+        }
+
+        return Brand::query()->where('slug', Str::slug($name))->first();
+    }
+
+    protected function findExistingCategory(?string $categoryPath): ?Category
+    {
+        if (blank($categoryPath)) {
+            return null;
+        }
+
+        $segments = preg_split('/\s*(?:>|\/|\|)\s*/', trim((string) $categoryPath)) ?: [];
+        $lastSegment = collect($segments)
+            ->map(fn (string $segment): string => trim($segment))
+            ->filter()
+            ->last();
+
+        return $lastSegment ? Category::query()->where('slug', Str::slug($lastSegment))->first() : null;
+    }
+
+    protected function displayPricingRule(?PricingRule $rule, SupplierProduct $supplierProduct): string
+    {
+        if (! $rule) {
+            return '-';
+        }
+
+        return match ($rule->scope_type) {
+            PricingRule::SCOPE_PRODUCT => 'Product '.$rule->product?->name,
+            PricingRule::SCOPE_CATEGORY_BRAND_SUPPLIER => trim(($rule->category?->name ?? 'Category').' + '.($rule->brand?->name ?? 'Brand').' + Supplier '.($rule->supplier?->company_name ?? $supplierProduct->supplier?->company_name)),
+            PricingRule::SCOPE_CATEGORY_BRAND => trim(($rule->category?->name ?? 'Category').' + '.($rule->brand?->name ?? 'Brand')),
+            PricingRule::SCOPE_CATEGORY_SUPPLIER => trim(($rule->category?->name ?? 'Category').' + Supplier '.($rule->supplier?->company_name ?? $supplierProduct->supplier?->company_name)),
+            PricingRule::SCOPE_CATEGORY => $rule->category?->name ?? 'Category',
+            PricingRule::SCOPE_BRAND => $rule->brand?->name ?? 'Brand',
+            PricingRule::SCOPE_SUPPLIER => 'Supplier '.($rule->supplier?->company_name ?? $supplierProduct->supplier?->company_name),
+            PricingRule::SCOPE_PRICE_RANGE => 'Price Range',
+            PricingRule::SCOPE_GLOBAL => 'Global Default',
+            default => $rule->name,
+        };
     }
 }

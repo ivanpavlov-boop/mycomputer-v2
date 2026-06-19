@@ -37,6 +37,11 @@
                                 <th class="px-4 py-3">MPN</th>
                                 <th class="px-4 py-3">Name</th>
                                 <th class="px-4 py-3">Price</th>
+                                <th class="px-4 py-3">Supplier Cost</th>
+                                <th class="px-4 py-3">Pricing Rule</th>
+                                <th class="px-4 py-3">Margin Type</th>
+                                <th class="px-4 py-3">Margin Value</th>
+                                <th class="px-4 py-3">Calculated Price</th>
                                 <th class="px-4 py-3">Quantity</th>
                                 <th class="px-4 py-3">Availability</th>
                                 <th class="px-4 py-3">Status</th>
@@ -53,6 +58,16 @@
                                     <td class="px-4 py-3">{{ $row['mpn'] }}</td>
                                     <td class="px-4 py-3 font-medium text-gray-950 dark:text-white">{{ $row['name'] }}</td>
                                     <td class="px-4 py-3">{{ $money($row['price']) }}</td>
+                                    <td class="px-4 py-3">{{ $money($row['supplier_cost']) }}</td>
+                                    <td class="px-4 py-3">
+                                        <div>{{ $row['pricing_rule_used'] }}</div>
+                                        @if ($row['pricing_error'])
+                                            <div class="mt-1 text-xs text-red-600 dark:text-red-400">{{ $row['pricing_error'] }}</div>
+                                        @endif
+                                    </td>
+                                    <td class="px-4 py-3">{{ $row['margin_type'] ?: '-' }}</td>
+                                    <td class="px-4 py-3">{{ $row['margin_value'] ?: '-' }}</td>
+                                    <td class="px-4 py-3">{{ $money($row['calculated_price']) }}</td>
                                     <td class="px-4 py-3">{{ $row['quantity'] }}</td>
                                     <td class="px-4 py-3">{{ $row['availability'] }}</td>
                                     <td class="px-4 py-3">{{ $row['status'] }}</td>
@@ -60,7 +75,7 @@
                                 </tr>
                             @empty
                                 <tr>
-                                    <td colspan="11" class="px-4 py-8 text-center text-gray-500">No supplier products match the query-only filters.</td>
+                                    <td colspan="16" class="px-4 py-8 text-center text-gray-500">No supplier products match the query-only filters.</td>
                                 </tr>
                             @endforelse
                         </tbody>
