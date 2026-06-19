@@ -11,8 +11,10 @@ use App\Models\Supplier;
 use App\Models\SupplierExclusionRule;
 use App\Models\SupplierProduct;
 use App\Models\User;
+use App\Services\Availability\AvailabilityStatusMapper;
 use App\Services\Pricing\PricingEngine;
 use App\Services\Products\CatalogSyncPreviewService;
+use App\Services\Suppliers\SupplierExclusionService;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Log;
@@ -698,6 +700,85 @@ class CatalogSyncPreviewTest extends TestCase
                 && $context['supplier_product_id'] === $supplierProduct->id
                 && $context['exception'] === RuntimeException::class
                 && $context['message'] === 'Explicit row diagnostic failure'))
+            ->once();
+    }
+
+    public function test_catalog_sync_preview_trace_diagnostic_renders_compact_step_report(): void
+    {
+        $this->actingAsSupplierManager();
+
+        $supplier = Supplier::factory()->create([
+            'company_name' => 'APCOM',
+            'slug' => 'apcom',
+        ]);
+        $supplierProduct = $this->supplierProduct($supplier, [
+            'supplier_sku' => 'APC-TRACE-ROW',
+            'ean' => '879961009533',
+            'name' => 'Satechi Duo Wireless Charger Power Bank Stand',
+            'price' => 100,
+            'quantity' => 7,
+        ]);
+
+        $this
+            ->get(CatalogSyncPreview::getUrl().'?diagnostic_step=preview_trace&supplier_product_id='.$supplierProduct->id)
+            ->assertOk()
+            ->assertSee('Step: preview_trace')
+            ->assertSee('Single supplier product preview trace completed.')
+            ->assertSee('load_row')
+            ->assertSee('apply_exclusion_checks')
+            ->assertSee('find_matching_product')
+            ->assertSee('duplicate_detection')
+            ->assertSee('pricing_calculation')
+            ->assertSee('offer_selection')
+            ->assertSee('image_extraction')
+            ->assertSee('build_preview_payload')
+            ->assertSee('APC-TRACE-ROW')
+            ->assertDontSee('raw_data');
+    }
+
+    public function test_catalog_sync_preview_trace_diagnostic_reports_failing_substep(): void
+    {
+        $supplier = Supplier::factory()->create([
+            'company_name' => 'APCOM',
+            'slug' => 'apcom',
+        ]);
+        $supplierProduct = $this->supplierProduct($supplier, [
+            'supplier_sku' => 'APC-TRACE-FAIL',
+            'ean' => '879961009533',
+            'name' => 'Satechi Duo Wireless Charger Power Bank Stand',
+            'price' => 100,
+            'quantity' => 7,
+        ]);
+
+        Log::spy();
+
+        $pricingEngine = Mockery::mock(PricingEngine::class);
+        $pricingEngine
+            ->shouldReceive('calculateForSupplierProduct')
+            ->once()
+            ->andThrow(new RuntimeException('Trace pricing failure'));
+
+        $service = new CatalogSyncPreviewService(
+            $pricingEngine,
+            app(AvailabilityStatusMapper::class),
+            app(SupplierExclusionService::class),
+        );
+
+        $trace = $service->traceSupplierProductPreview($supplierProduct->id);
+
+        $this->assertSame('Single supplier product preview trace failed.', $trace['message']);
+        $this->assertSame('duplicate_detection', $trace['last_successful_step']);
+        $this->assertSame('pricing_calculation', $trace['failing_step']);
+        $this->assertSame(RuntimeException::class, $trace['exception']['class']);
+        $this->assertSame('Trace pricing failure', $trace['exception']['message']);
+
+        Log::shouldHaveReceived('error')
+            ->with('Catalog Sync Preview trace step failed.', Mockery::on(fn (array $context): bool => $context['step'] === 'pricing_calculation'
+                && $context['supplier_product_id'] === $supplierProduct->id
+                && $context['supplier_sku'] === 'APC-TRACE-FAIL'
+                && $context['exception'] === RuntimeException::class
+                && $context['message'] === 'Trace pricing failure'
+                && isset($context['line'])))
             ->once();
     }
 

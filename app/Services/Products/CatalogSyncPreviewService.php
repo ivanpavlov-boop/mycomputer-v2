@@ -188,6 +188,258 @@ class CatalogSyncPreviewService
     /**
      * @return array<string, mixed>
      */
+    public function traceSupplierProductPreview(int $supplierProductId): array
+    {
+        $trace = [
+            'message' => 'Single supplier product preview trace completed.',
+            'supplier_product_id' => $supplierProductId,
+            'supplier_sku' => null,
+            'last_successful_step' => null,
+            'failing_step' => null,
+            'exception' => null,
+            'steps' => [],
+        ];
+
+        $context = [
+            'supplierProduct' => null,
+            'matches' => null,
+            'duplicateSupplierRows' => null,
+            'exclusion' => null,
+            'action' => null,
+            'targetProduct' => null,
+            'brand' => null,
+            'category' => null,
+            'availability' => null,
+            'pricing' => null,
+            'supplierOffers' => null,
+            'imageCount' => null,
+            'row' => null,
+        ];
+
+        foreach ($this->previewTraceSteps() as $step => $callback) {
+            $startedAt = microtime(true);
+
+            Log::info('Catalog Sync Preview trace step starting.', [
+                'step' => $step,
+                'supplier_product_id' => $supplierProductId,
+                'supplier_sku' => $context['supplierProduct']?->supplier_sku,
+            ]);
+
+            try {
+                $stepResult = $callback($context, $supplierProductId);
+                $context = array_merge($context, $stepResult['context'] ?? []);
+                $supplierProduct = $context['supplierProduct'];
+
+                $trace['supplier_sku'] = $supplierProduct?->supplier_sku;
+                $trace['last_successful_step'] = $step;
+                $trace['steps'][] = array_merge([
+                    'step' => $step,
+                    'status' => 'ok',
+                    'duration_ms' => (int) round((microtime(true) - $startedAt) * 1000),
+                ], $stepResult['report'] ?? []);
+
+                Log::info('Catalog Sync Preview trace step completed.', [
+                    'step' => $step,
+                    'supplier_product_id' => $supplierProductId,
+                    'supplier_sku' => $supplierProduct?->supplier_sku,
+                ]);
+            } catch (Throwable $exception) {
+                $supplierProduct = $context['supplierProduct'];
+                $trace['message'] = 'Single supplier product preview trace failed.';
+                $trace['supplier_sku'] = $supplierProduct?->supplier_sku;
+                $trace['failing_step'] = $step;
+                $trace['exception'] = [
+                    'class' => $exception::class,
+                    'message' => $exception->getMessage(),
+                    'file' => $exception->getFile(),
+                    'line' => $exception->getLine(),
+                ];
+                $trace['steps'][] = [
+                    'step' => $step,
+                    'status' => 'failed',
+                    'duration_ms' => (int) round((microtime(true) - $startedAt) * 1000),
+                    'exception' => $trace['exception'],
+                ];
+
+                Log::error('Catalog Sync Preview trace step failed.', [
+                    'step' => $step,
+                    'supplier_product_id' => $supplierProductId,
+                    'supplier_sku' => $supplierProduct?->supplier_sku,
+                    'exception' => $exception::class,
+                    'message' => $exception->getMessage(),
+                    'file' => $exception->getFile(),
+                    'line' => $exception->getLine(),
+                ]);
+
+                break;
+            }
+        }
+
+        return $trace;
+    }
+
+    /**
+     * @return array<string, callable(array<string, mixed>, int): array{context?: array<string, mixed>, report?: array<string, mixed>}>
+     */
+    protected function previewTraceSteps(): array
+    {
+        return [
+            'load_row' => function (array $context, int $supplierProductId): array {
+                $supplierProduct = SupplierProduct::query()
+                    ->with('supplier')
+                    ->findOrFail($supplierProductId);
+
+                return [
+                    'context' => ['supplierProduct' => $supplierProduct],
+                    'report' => [
+                        'supplier_product_id' => $supplierProduct->id,
+                        'supplier_id' => $supplierProduct->supplier_id,
+                        'supplier' => $supplierProduct->supplier?->company_name,
+                        'supplier_sku' => $supplierProduct->supplier_sku,
+                        'ean' => $supplierProduct->ean,
+                        'mpn' => $supplierProduct->mpn,
+                        'name' => Str::limit((string) $supplierProduct->name, 120, '...'),
+                        'price' => $supplierProduct->price,
+                        'quantity' => $supplierProduct->quantity,
+                    ],
+                ];
+            },
+            'apply_exclusion_checks' => function (array $context): array {
+                /** @var SupplierProduct $supplierProduct */
+                $supplierProduct = $context['supplierProduct'];
+                $exclusion = $this->exclusionService->evaluate($supplierProduct);
+
+                return [
+                    'context' => ['exclusion' => $exclusion],
+                    'report' => [
+                        'excluded' => (bool) $exclusion['excluded'],
+                        'rule_id' => $exclusion['rule']?->id,
+                        'rule' => $exclusion['label'],
+                        'reason' => $exclusion['reason'],
+                    ],
+                ];
+            },
+            'find_matching_product' => function (array $context): array {
+                /** @var SupplierProduct $supplierProduct */
+                $supplierProduct = $context['supplierProduct'];
+                $matches = $this->matchCatalogProducts($supplierProduct);
+                $targetProduct = $matches['products']->first();
+
+                return [
+                    'context' => [
+                        'matches' => $matches,
+                        'targetProduct' => $targetProduct,
+                    ],
+                    'report' => [
+                        'match_count' => $matches['products']->count(),
+                        'matched_by' => $matches['matched_by'],
+                        'target_product_id' => $targetProduct?->id,
+                        'target_product_name' => $targetProduct?->name,
+                    ],
+                ];
+            },
+            'duplicate_detection' => function (array $context): array {
+                /** @var SupplierProduct $supplierProduct */
+                $supplierProduct = $context['supplierProduct'];
+                $duplicateSupplierRows = $this->hasDuplicateSupplierRows($supplierProduct);
+                $matches = $context['matches'];
+                $exclusion = $context['exclusion'];
+                $action = $this->action($supplierProduct, $matches, $duplicateSupplierRows, (bool) $exclusion['excluded']);
+
+                return [
+                    'context' => [
+                        'duplicateSupplierRows' => $duplicateSupplierRows,
+                        'action' => $action,
+                    ],
+                    'report' => [
+                        'duplicate_supplier_rows' => $duplicateSupplierRows,
+                        'action' => $action,
+                        'conflict_reasons' => $this->conflictReasons($supplierProduct, $matches, $duplicateSupplierRows),
+                    ],
+                ];
+            },
+            'pricing_calculation' => function (array $context): array {
+                /** @var SupplierProduct $supplierProduct */
+                $supplierProduct = $context['supplierProduct'];
+                $targetProduct = $context['targetProduct'];
+                $brand = $this->findExistingBrand($supplierProduct->brand_name);
+                $category = $this->findExistingCategory($supplierProduct->category_name);
+                $pricingAction = ($context['exclusion']['excluded'] ?? false)
+                    ? ($targetProduct ? 'update' : 'create')
+                    : $context['action'];
+                $pricing = $this->pricingPreview($supplierProduct, $targetProduct, $brand, $category, $pricingAction);
+
+                return [
+                    'context' => [
+                        'brand' => $brand,
+                        'category' => $category,
+                        'pricing' => $pricing,
+                    ],
+                    'report' => [
+                        'brand_id' => $brand?->id,
+                        'brand' => $brand?->name,
+                        'category_id' => $category?->id,
+                        'category' => $category?->name,
+                        'pricing_applies' => (bool) $pricing['pricing_applies'],
+                        'rule' => $pricing['winning_pricing_rule'],
+                        'margin_rule' => $pricing['margin_rule'],
+                        'final_selling_price' => $pricing['final_selling_price'],
+                    ],
+                ];
+            },
+            'offer_selection' => function (array $context): array {
+                /** @var SupplierProduct $supplierProduct */
+                $supplierProduct = $context['supplierProduct'];
+                $supplierOffers = $this->supplierOffersPreview($supplierProduct, $context['targetProduct']);
+                $winningOffer = collect($supplierOffers)->firstWhere('selected', true);
+
+                return [
+                    'context' => ['supplierOffers' => $supplierOffers],
+                    'report' => [
+                        'offers_count' => count($supplierOffers),
+                        'winning_offer_supplier' => $winningOffer['supplier_name'] ?? null,
+                        'winning_offer_supplier_product_id' => $winningOffer['supplier_product_id'] ?? null,
+                        'winning_offer_reason' => $this->winningOfferReason($supplierOffers),
+                    ],
+                ];
+            },
+            'image_extraction' => function (array $context): array {
+                /** @var SupplierProduct $supplierProduct */
+                $supplierProduct = $context['supplierProduct'];
+                $imageCount = count($this->extractImageUrls($supplierProduct->raw_data));
+
+                return [
+                    'context' => ['imageCount' => $imageCount],
+                    'report' => [
+                        'image_count' => $imageCount,
+                        'missing_images' => $imageCount === 0,
+                    ],
+                ];
+            },
+            'build_preview_payload' => function (array $context): array {
+                /** @var SupplierProduct $supplierProduct */
+                $supplierProduct = $context['supplierProduct'];
+                $row = $this->previewSupplierProduct($supplierProduct);
+
+                return [
+                    'context' => ['row' => $row],
+                    'report' => [
+                        'target_catalog_action' => $row['target_catalog_action'] ?? null,
+                        'result' => $row['result'] ?? null,
+                        'matched_by' => $row['matched_by'] ?? [],
+                        'pricing_rule' => $row['winning_pricing_rule'] ?? null,
+                        'final_selling_price' => $row['final_calculated_selling_price'] ?? null,
+                        'image_count' => $row['image_count'] ?? null,
+                        'conflict_reasons' => $row['conflict_reasons'] ?? [],
+                    ],
+                ];
+            },
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
     protected function safePreviewSupplierProduct(SupplierProduct $supplierProduct): array
     {
         try {
