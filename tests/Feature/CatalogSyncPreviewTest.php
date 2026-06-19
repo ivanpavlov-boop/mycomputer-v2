@@ -333,14 +333,33 @@ class CatalogSyncPreviewTest extends TestCase
         $this->assertSame('new', $supplierProduct->status);
     }
 
-    public function test_catalog_sync_preview_page_renders_minimal_boot_text(): void
+    public function test_catalog_sync_preview_page_renders_filter_ui_without_preview_generation(): void
     {
         $this->actingAsSupplierManager();
+
+        $supplier = Supplier::factory()->create([
+            'company_name' => 'APCOM',
+            'slug' => 'apcom',
+        ]);
+        $this->supplierProduct($supplier, [
+            'name' => 'Supplier Product Must Not Render',
+        ]);
+
+        $this->mock(CatalogSyncPreviewService::class, function ($mock): void {
+            $mock->shouldNotReceive('preview');
+            $mock->shouldNotReceive('previewSupplierProduct');
+            $mock->shouldNotReceive('traceSupplierProductPreview');
+        });
 
         $this
             ->get(CatalogSyncPreview::getUrl())
             ->assertOk()
-            ->assertSee('Catalog Sync Preview minimal boot OK');
+            ->assertSee('Batch')
+            ->assertSee('Supplier')
+            ->assertSee('Catalog action')
+            ->assertSee('Quick filter')
+            ->assertSee('Catalog Sync Preview UI OK')
+            ->assertDontSee('Supplier Product Must Not Render');
     }
 
     private function actingAsSupplierManager(): User
