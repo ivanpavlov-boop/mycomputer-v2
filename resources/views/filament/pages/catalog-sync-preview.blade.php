@@ -36,6 +36,31 @@
             Catalog Sync Preview Query Only OK
         </div>
 
+        @if ($this->lastManualSyncResult)
+            <div class="rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-gray-900">
+                <div class="text-sm font-semibold text-gray-950 dark:text-white">Manual CREATE sync result</div>
+                <div class="mt-3 grid grid-cols-1 gap-3 text-sm sm:grid-cols-3">
+                    <div class="rounded-md border border-green-200 bg-green-50 p-3 text-green-800 dark:border-green-900 dark:bg-green-950 dark:text-green-200">
+                        Created: {{ $this->lastManualSyncResult['created'] }}
+                    </div>
+                    <div class="rounded-md border border-yellow-200 bg-yellow-50 p-3 text-yellow-800 dark:border-yellow-900 dark:bg-yellow-950 dark:text-yellow-200">
+                        Skipped: {{ $this->lastManualSyncResult['skipped'] }}
+                    </div>
+                    <div class="rounded-md border border-red-200 bg-red-50 p-3 text-red-800 dark:border-red-900 dark:bg-red-950 dark:text-red-200">
+                        Failed: {{ $this->lastManualSyncResult['failed'] }}
+                    </div>
+                </div>
+
+                @if (! empty($this->lastManualSyncResult['messages']))
+                    <ul class="mt-3 list-disc space-y-1 pl-5 text-sm text-gray-600 dark:text-gray-300">
+                        @foreach ($this->lastManualSyncResult['messages'] as $message)
+                            <li>{{ $message }}</li>
+                        @endforeach
+                    </ul>
+                @endif
+            </div>
+        @endif
+
         <div
             data-catalog-sync-preview-summary-grid
             class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5"
@@ -55,6 +80,21 @@
                 <div class="mt-1">{{ $queryError }}</div>
             </div>
         @else
+            <div class="flex flex-col gap-3 rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-gray-900 sm:flex-row sm:items-center sm:justify-between">
+                <div class="text-sm text-gray-600 dark:text-gray-300">
+                    Select eligible CREATE rows, then run a safe manual create sync. UPDATE, SKIP, CONFLICT and ERROR rows are revalidated and ignored.
+                </div>
+                <button
+                    type="button"
+                    wire:click="syncSelectedCreateProducts"
+                    wire:loading.attr="disabled"
+                    wire:target="syncSelectedCreateProducts"
+                    class="inline-flex items-center justify-center rounded-md bg-primary-600 px-3 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-primary-500 disabled:cursor-not-allowed disabled:opacity-70 dark:bg-primary-500 dark:hover:bg-primary-400"
+                >
+                    Sync Selected CREATE Products
+                </button>
+            </div>
+
             <div class="max-w-full rounded-lg border border-gray-200 bg-white shadow-sm dark:border-gray-800 dark:bg-gray-900" style="width: 100%; max-width: 100%;">
                 <div
                     data-catalog-sync-preview-scroll-panel
@@ -65,6 +105,7 @@
                         <table class="w-full min-w-[2400px] divide-y divide-gray-200 text-xs dark:divide-gray-800" style="width: 100%; min-width: 2400px;">
                         <thead class="bg-gray-50 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:bg-gray-950 dark:text-gray-400">
                             <tr>
+                                <th class="{{ $headerCell }}">Select</th>
                                 <th class="{{ $headerCell }}">ID</th>
                                 <th class="{{ $headerCell }}">Supplier</th>
                                 <th class="{{ $headerCell }}">Supplier SKU</th>
@@ -94,6 +135,16 @@
                         <tbody class="divide-y divide-gray-100 dark:divide-gray-800">
                             @forelse ($rows as $row)
                                 <tr>
+                                    <td class="{{ $cell }}">
+                                        <input
+                                            type="checkbox"
+                                            wire:model="selectedSupplierProductIds"
+                                            value="{{ $row['supplier_product_id'] }}"
+                                            @disabled($row['sync_action'] !== 'CREATE')
+                                            aria-label="Select supplier product {{ $row['supplier_product_id'] }}"
+                                            class="rounded border-gray-300 text-primary-600 shadow-sm focus:ring-primary-600 disabled:cursor-not-allowed disabled:opacity-40 dark:border-gray-700 dark:bg-gray-900"
+                                        >
+                                    </td>
                                     <td class="{{ $cell }}">{{ $row['supplier_product_id'] }}</td>
                                     <td class="{{ $cell }}">{{ $row['supplier'] }}</td>
                                     <td class="{{ $cell }}">{{ $row['supplier_sku'] }}</td>
@@ -131,7 +182,7 @@
                                 </tr>
                             @empty
                                 <tr>
-                                    <td colspan="24" class="px-3 py-8 text-center text-gray-500">No supplier products match the query-only filters.</td>
+                                    <td colspan="25" class="px-3 py-8 text-center text-gray-500">No supplier products match the query-only filters.</td>
                                 </tr>
                             @endforelse
                         </tbody>
