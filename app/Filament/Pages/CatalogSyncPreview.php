@@ -89,10 +89,11 @@ class CatalogSyncPreview extends Page
                     Select::make('action')
                         ->label('Catalog action')
                         ->options([
-                            'create' => 'Create',
-                            'update' => 'Update',
-                            'skip' => 'Skip',
-                            'conflict' => 'Conflict',
+                            'CREATE' => 'Create',
+                            'UPDATE' => 'Update',
+                            'SKIP' => 'Skip',
+                            'CONFLICT' => 'Conflict',
+                            'ERROR' => 'Error',
                         ]),
                     Select::make('quick_filter')
                         ->label('Quick filter')
@@ -178,9 +179,10 @@ class CatalogSyncPreview extends Page
                     return array_merge($row, $this->syncActionPreviewForSupplierProduct($supplierProduct, $row));
                 })
                 ->all();
+            $filteredRows = $this->applyCatalogActionFilter($rows);
 
             return [
-                'rows' => $rows,
+                'rows' => $filteredRows,
                 'error' => null,
                 'limit' => $limit,
                 'summary' => $this->queryOnlySummary($rows),
@@ -207,6 +209,26 @@ class CatalogSyncPreview extends Page
                 ],
             ];
         }
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $rows
+     * @return array<int, array<string, mixed>>
+     */
+    protected function applyCatalogActionFilter(array $rows): array
+    {
+        $action = $this->filters['action'] ?? null;
+
+        if (blank($action)) {
+            return $rows;
+        }
+
+        $normalizedAction = Str::upper((string) $action);
+
+        return array_values(array_filter(
+            $rows,
+            fn (array $row): bool => ($row['sync_action'] ?? null) === $normalizedAction,
+        ));
     }
 
     /**
