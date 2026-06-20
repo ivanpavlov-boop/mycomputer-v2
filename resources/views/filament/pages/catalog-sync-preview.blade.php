@@ -14,7 +14,7 @@
             $queryError = $queryOnly['error'];
             $summary = $queryOnly['summary'];
             $money = fn ($value): string => $value !== null ? number_format((float) $value, 2).' EUR' : '-';
-            $headerCell = 'whitespace-nowrap px-3 py-2';
+            $headerCell = 'sticky top-0 z-10 whitespace-nowrap bg-gray-50 px-3 py-2 dark:bg-gray-950';
             $cell = 'whitespace-nowrap px-3 py-2';
             $truncateCell = 'max-w-[22rem] truncate px-3 py-2';
         @endphp
@@ -57,7 +57,7 @@
             </div>
         @else
             <div class="max-w-full rounded-lg border border-gray-200 bg-white shadow-sm dark:border-gray-800 dark:bg-gray-900" style="width: 100%; max-width: 100%;">
-                <div class="max-w-full overflow-x-auto overflow-y-visible pb-4" style="width: 100%; max-width: 100%; overflow-x: auto; overflow-y: visible;">
+                <div class="max-w-full overflow-x-auto overflow-y-auto" style="width: 100%; max-width: 100%; max-height: 70vh; overflow-x: auto; overflow-y: auto;">
                     <div class="block min-w-[2400px]" style="display: block; min-width: 2400px;">
                         <table class="w-full min-w-[2400px] divide-y divide-gray-200 text-xs dark:divide-gray-800" style="width: 100%; min-width: 2400px;">
                         <thead class="bg-gray-50 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:bg-gray-950 dark:text-gray-400">
