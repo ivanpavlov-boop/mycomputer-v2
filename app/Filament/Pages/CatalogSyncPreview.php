@@ -6,19 +6,24 @@ use App\Models\Brand;
 use App\Models\Category;
 use App\Models\PricingRule;
 use App\Models\Product;
+use App\Models\ProductSupplierOffer;
+use App\Models\ProductSyncLog;
 use App\Models\Supplier;
 use App\Models\SupplierProduct;
+use App\Services\Availability\AvailabilityStatusMapper;
 use App\Services\Pricing\PricingEngine;
 use App\Services\Products\CatalogSyncPreviewService;
 use App\Services\Suppliers\SupplierExclusionService;
 use BackedEnum;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
+use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use RuntimeException;
 use Throwable;
@@ -47,6 +52,16 @@ class CatalogSyncPreview extends Page
         'brand' => null,
         'search' => null,
     ];
+
+    /**
+     * @var array<int, int|string>
+     */
+    public array $selectedSupplierProductIds = [];
+
+    /**
+     * @var array{created: int, skipped: int, failed: int, messages: array<int, string>}|null
+     */
+    public ?array $lastManualSyncResult = null;
 
     public static function canAccess(): bool
     {
@@ -435,6 +450,69 @@ class CatalogSyncPreview extends Page
         }
     }
 
+    public function syncSelectedCreateProducts(): void
+    {
+        $result = [
+            'created' => 0,
+            'skipped' => 0,
+            'failed' => 0,
+            'messages' => [],
+        ];
+
+        foreach (array_values(array_unique(array_map('intval', $this->selectedSupplierProductIds))) as $supplierProductId) {
+            try {
+                $supplierProduct = SupplierProduct::query()
+                    ->with(['supplier:id,company_name,priority'])
+                    ->find($supplierProductId);
+
+                if (! $supplierProduct) {
+                    $result['skipped']++;
+                    $result['messages'][] = "Supplier product {$supplierProductId} skipped: row no longer exists.";
+
+                    continue;
+                }
+
+                if ((int) config('services.catalog_sync_preview.force_manual_create_failure_supplier_product_id') === $supplierProduct->id) {
+                    throw new RuntimeException('Forced manual create sync failure.');
+                }
+
+                $row = array_merge(
+                    $this->basePreviewRowForSupplierProduct($supplierProduct),
+                    $this->pricingPreviewForSupplierProduct($supplierProduct),
+                    $this->exclusionPreviewForSupplierProduct($supplierProduct),
+                    $this->matchingPreviewForSupplierProduct($supplierProduct),
+                );
+                $row = array_merge($row, $this->syncActionPreviewForSupplierProduct($supplierProduct, $row));
+
+                if (! $this->isEligibleForManualCreateSync($supplierProduct, $row)) {
+                    $result['skipped']++;
+                    $result['messages'][] = "Supplier product {$supplierProduct->id} skipped: {$row['sync_reason']}.";
+
+                    continue;
+                }
+
+                $product = DB::transaction(fn (): Product => $this->createCatalogProductFromSupplierProduct($supplierProduct, $row));
+
+                $result['created']++;
+                $result['messages'][] = "Supplier product {$supplierProduct->id} created catalog product {$product->id}.";
+            } catch (Throwable $exception) {
+                report($exception);
+
+                $result['failed']++;
+                $result['messages'][] = "Supplier product {$supplierProductId} failed: ".$exception->getMessage();
+            }
+        }
+
+        $this->selectedSupplierProductIds = [];
+        $this->lastManualSyncResult = $result;
+
+        Notification::make()
+            ->title('Selected CREATE products sync completed')
+            ->body("Created {$result['created']}, skipped {$result['skipped']}, failed {$result['failed']}.")
+            ->success()
+            ->send();
+    }
+
     /**
      * @param  array<int, array<string, mixed>>  $rows
      * @return array{total: int, included: int, excluded: int, matched: int, unmatched: int, match_errors: int, create_rows: int, update_rows: int, skip_rows: int, conflict_rows: int, error_rows: int}
@@ -460,6 +538,176 @@ class CatalogSyncPreview extends Page
             'conflict_rows' => collect($rows)->where('sync_action', 'CONFLICT')->count(),
             'error_rows' => collect($rows)->where('sync_action', 'ERROR')->count(),
         ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected function basePreviewRowForSupplierProduct(SupplierProduct $supplierProduct): array
+    {
+        $supplierProduct->loadMissing(['supplier:id,company_name', 'availabilityStatus:id,name,code']);
+
+        return [
+            'supplier_product_id' => $supplierProduct->id,
+            'supplier' => $supplierProduct->supplier?->company_name ?? '-',
+            'supplier_sku' => $supplierProduct->supplier_sku ?: '-',
+            'ean' => $supplierProduct->ean ?: '-',
+            'mpn' => $supplierProduct->mpn ?: '-',
+            'name' => $supplierProduct->name ?: '-',
+            'price' => $supplierProduct->price,
+            'quantity' => $supplierProduct->quantity ?? 0,
+            'availability' => $supplierProduct->availabilityStatus?->name
+                ?? $supplierProduct->external_availability_label
+                ?? $supplierProduct->external_availability_status
+                ?? $supplierProduct->status
+                ?? '-',
+            'status' => $supplierProduct->status ?: '-',
+            'updated_at' => $supplierProduct->updated_at?->format('Y-m-d H:i'),
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $row
+     */
+    protected function isEligibleForManualCreateSync(SupplierProduct $supplierProduct, array $row): bool
+    {
+        return ($row['sync_action'] ?? null) === 'CREATE'
+            && ! (bool) ($row['excluded'] ?? false)
+            && blank($row['matched_product_id'] ?? null)
+            && $this->hasMinimumSyncData($supplierProduct);
+    }
+
+    /**
+     * @param  array<string, mixed>  $row
+     */
+    protected function createCatalogProductFromSupplierProduct(SupplierProduct $supplierProduct, array $row): Product
+    {
+        $supplierProduct->loadMissing('supplier');
+
+        $name = $supplierProduct->name ?: $supplierProduct->supplier_sku ?: 'Supplier Product '.$supplierProduct->id;
+        $sku = $supplierProduct->supplier_sku ?: $supplierProduct->ean ?: $supplierProduct->mpn ?: 'SP-'.$supplierProduct->id;
+        $brand = $this->findExistingBrand($supplierProduct->brand_name);
+        $category = $this->findExistingCategory($supplierProduct->category_name);
+        $availability = app(AvailabilityStatusMapper::class)->mapWithFallback(
+            'supplier',
+            $supplierProduct->supplier?->company_name,
+            $supplierProduct->external_availability_status,
+            $supplierProduct->quantity,
+        );
+        $calculatedPrice = $row['calculated_price'] ?? $supplierProduct->price ?? 0;
+
+        $product = Product::query()->create([
+            'supplier_id' => $supplierProduct->supplier_id,
+            'brand_id' => $brand?->id,
+            'category_id' => $category?->id,
+            'supplier_sku' => $supplierProduct->supplier_sku,
+            'sku' => $this->uniqueSku((string) $sku),
+            'ean' => $supplierProduct->ean,
+            'mpn' => $supplierProduct->mpn,
+            'name' => $name,
+            'slug' => $this->uniqueSlug($name),
+            'short_description' => null,
+            'description' => null,
+            'purchase_price' => $supplierProduct->price,
+            'supplier_price_raw' => $supplierProduct->price,
+            'recommended_price' => $supplierProduct->recommended_price,
+            'final_selling_price' => $calculatedPrice,
+            'regular_price' => $calculatedPrice,
+            'source' => Product::SOURCE_SUPPLIER_IMPORT,
+            'apply_pricing_rules' => false,
+            'price_source' => Product::PRICE_SOURCE_SUPPLIER_IMPORT,
+            'price' => $calculatedPrice,
+            'sale_price' => null,
+            'sale_price_starts_at' => null,
+            'sale_price_ends_at' => null,
+            'sale_price_source' => null,
+            'quantity' => $supplierProduct->quantity ?? 0,
+            'reserved_quantity' => 0,
+            'availability_status_id' => $availability?->id,
+            'stock_status' => $availability?->code ?? (($supplierProduct->quantity ?? 0) > 0 ? 'in_stock' : 'out_of_stock'),
+            'product_status' => 'draft',
+            'external_availability_status' => $supplierProduct->external_availability_status,
+            'external_availability_label' => $supplierProduct->external_availability_label,
+            'active' => false,
+            'new_product' => true,
+            'source_payload' => [
+                'created_from_catalog_sync_preview' => true,
+                'created_from_supplier_product_id' => $supplierProduct->id,
+                'needs_enrichment' => true,
+                'needs_category_mapping' => $category === null,
+                'needs_brand_mapping' => $brand === null,
+            ],
+        ]);
+
+        $offer = ProductSupplierOffer::query()->create([
+            'product_id' => $product->id,
+            'supplier_id' => $supplierProduct->supplier_id,
+            'supplier_product_id' => $supplierProduct->id,
+            'supplier_sku' => $supplierProduct->supplier_sku,
+            'price' => $supplierProduct->price,
+            'quantity' => $supplierProduct->quantity ?? 0,
+            'currency' => $supplierProduct->currency ?: Product::CATALOG_CURRENCY,
+            'supplier_priority' => $supplierProduct->supplier?->priority ?? 100,
+            'is_preferred' => true,
+            'last_seen_at' => now(),
+        ]);
+
+        $supplierProduct->update([
+            'product_id' => $product->id,
+            'status' => 'synced',
+            'synced_at' => now(),
+            'mapping_notes' => 'Created catalog product via Catalog Sync Preview selected CREATE action. Images and attributes were not imported.',
+        ]);
+
+        ProductSyncLog::query()->create([
+            'product_id' => $product->id,
+            'supplier_id' => $supplierProduct->supplier_id,
+            'supplier_product_id' => $supplierProduct->id,
+            'match_type' => 'created',
+            'strategy' => 'manual_selected_create',
+            'action' => 'created',
+            'status' => 'synced',
+            'message' => 'Created catalog product via Catalog Sync Preview selected CREATE action.',
+            'before_data' => null,
+            'after_data' => $product->fresh()->only(['id', 'sku', 'ean', 'mpn', 'price', 'quantity', 'supplier_id', 'supplier_sku']),
+            'context' => [
+                'supplier_offer_id' => $offer->id,
+                'sync_action_preview' => $row['sync_action'] ?? 'CREATE',
+                'sync_reason_preview' => $row['sync_reason'] ?? 'new_catalog_product',
+                'images_imported' => 0,
+                'attributes_imported' => 0,
+            ],
+        ]);
+
+        return $product;
+    }
+
+    protected function uniqueSku(string $sku): string
+    {
+        $base = Str::upper(Str::slug($sku, '-')) ?: 'PRODUCT';
+        $candidate = $base;
+        $counter = 2;
+
+        while (Product::query()->where('sku', $candidate)->exists()) {
+            $candidate = "{$base}-{$counter}";
+            $counter++;
+        }
+
+        return $candidate;
+    }
+
+    protected function uniqueSlug(string $name): string
+    {
+        $base = Str::slug($name) ?: 'product';
+        $candidate = $base;
+        $counter = 2;
+
+        while (Product::query()->where('slug', $candidate)->exists()) {
+            $candidate = "{$base}-{$counter}";
+            $counter++;
+        }
+
+        return $candidate;
     }
 
     protected function hasMinimumSyncData(SupplierProduct $supplierProduct): bool

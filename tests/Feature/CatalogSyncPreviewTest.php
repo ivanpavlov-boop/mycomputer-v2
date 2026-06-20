@@ -7,6 +7,7 @@ use App\Models\Brand;
 use App\Models\Category;
 use App\Models\PricingRule;
 use App\Models\Product;
+use App\Models\ProductImage;
 use App\Models\ProductSupplierOffer;
 use App\Models\Supplier;
 use App\Models\SupplierExclusionRule;
@@ -1070,6 +1071,245 @@ class CatalogSyncPreviewTest extends TestCase
         $this->assertSame($beforeSupplierProductCount, SupplierProduct::query()->count());
         $this->assertSame($beforeProduct, $product->fresh()->only(['name', 'ean', 'price', 'quantity', 'supplier_id', 'supplier_sku']));
         $this->assertSame($beforeSupplierProduct, $supplierProduct->fresh()->only(['name', 'ean', 'price', 'quantity', 'status']));
+    }
+
+    public function test_catalog_sync_preview_selected_valid_create_row_creates_product(): void
+    {
+        $this->actingAsSupplierManager();
+
+        $supplier = Supplier::factory()->create(['company_name' => 'APCOM']);
+        $supplierProduct = $this->supplierProduct($supplier, [
+            'name' => 'Manual Create Supplier Product',
+            'supplier_sku' => 'MANUAL-CREATE-001',
+            'ean' => null,
+            'mpn' => null,
+            'price' => 100,
+            'quantity' => 6,
+            'raw_data' => [
+                'image' => [
+                    'https://example.test/manual-create.jpg',
+                ],
+            ],
+        ]);
+
+        PricingRule::query()->create([
+            'name' => 'Global default margin',
+            'scope_type' => PricingRule::SCOPE_GLOBAL,
+            'margin_type' => PricingRule::MARGIN_PERCENTAGE,
+            'margin_value' => 20,
+            'rounding_rule' => PricingRule::ROUND_NONE,
+            'is_active' => true,
+        ]);
+
+        Livewire::test(CatalogSyncPreview::class)
+            ->set('selectedSupplierProductIds', [$supplierProduct->id])
+            ->call('syncSelectedCreateProducts')
+            ->assertSet('lastManualSyncResult.created', 1)
+            ->assertSet('lastManualSyncResult.skipped', 0)
+            ->assertSet('lastManualSyncResult.failed', 0);
+
+        $product = Product::query()->where('supplier_sku', 'MANUAL-CREATE-001')->first();
+
+        $this->assertNotNull($product);
+        $this->assertSame(Product::SOURCE_SUPPLIER_IMPORT, $product->source);
+        $this->assertSame(Product::PRICE_SOURCE_SUPPLIER_IMPORT, $product->price_source);
+        $this->assertSame($supplier->id, $product->supplier_id);
+        $this->assertSame('120.00', $product->price);
+        $this->assertSame('120.00', $product->regular_price);
+        $this->assertSame('100.00', $product->purchase_price);
+        $this->assertSame(6, $product->quantity);
+        $this->assertFalse((bool) $product->active);
+        $this->assertDatabaseHas('product_supplier_offers', [
+            'product_id' => $product->id,
+            'supplier_id' => $supplier->id,
+            'supplier_product_id' => $supplierProduct->id,
+            'supplier_sku' => 'MANUAL-CREATE-001',
+        ]);
+        $this->assertDatabaseHas('product_sync_logs', [
+            'product_id' => $product->id,
+            'supplier_product_id' => $supplierProduct->id,
+            'action' => 'created',
+            'strategy' => 'manual_selected_create',
+        ]);
+        $this->assertSame($product->id, $supplierProduct->fresh()->product_id);
+        $this->assertSame('synced', $supplierProduct->fresh()->status);
+        $this->assertSame(0, ProductImage::query()->count());
+    }
+
+    public function test_catalog_sync_preview_selected_excluded_row_is_skipped(): void
+    {
+        $this->actingAsSupplierManager();
+
+        $supplier = Supplier::factory()->create();
+        $supplierProduct = $this->supplierProduct($supplier, [
+            'name' => 'Excluded Manual Create Product',
+            'quantity' => 0,
+        ]);
+
+        SupplierExclusionRule::query()->create([
+            'name' => 'Skip selected zero stock rule',
+            'is_active' => true,
+            'exclude_zero_stock' => true,
+            'priority' => 10,
+        ]);
+
+        Livewire::test(CatalogSyncPreview::class)
+            ->set('selectedSupplierProductIds', [$supplierProduct->id])
+            ->call('syncSelectedCreateProducts')
+            ->assertSet('lastManualSyncResult.created', 0)
+            ->assertSet('lastManualSyncResult.skipped', 1)
+            ->assertSet('lastManualSyncResult.failed', 0);
+
+        $this->assertSame(0, Product::query()->count());
+        $this->assertNull($supplierProduct->fresh()->product_id);
+        $this->assertSame('new', $supplierProduct->fresh()->status);
+    }
+
+    public function test_catalog_sync_preview_selected_matched_update_row_is_skipped_and_existing_product_is_not_updated(): void
+    {
+        $this->actingAsSupplierManager();
+
+        $supplier = Supplier::factory()->create();
+        $product = Product::factory()->create([
+            'name' => 'Existing Matched Product',
+            'ean' => '8888888888888',
+            'price' => 50,
+            'quantity' => 2,
+            'supplier_id' => null,
+            'supplier_sku' => null,
+        ]);
+        $supplierProduct = $this->supplierProduct($supplier, [
+            'name' => 'Selected Update Supplier Product',
+            'ean' => '8888888888888',
+            'price' => 200,
+            'quantity' => 20,
+        ]);
+
+        $before = $product->fresh()->only(['name', 'ean', 'price', 'quantity', 'supplier_id', 'supplier_sku']);
+
+        Livewire::test(CatalogSyncPreview::class)
+            ->set('selectedSupplierProductIds', [$supplierProduct->id])
+            ->call('syncSelectedCreateProducts')
+            ->assertSet('lastManualSyncResult.created', 0)
+            ->assertSet('lastManualSyncResult.skipped', 1)
+            ->assertSet('lastManualSyncResult.failed', 0);
+
+        $this->assertSame(1, Product::query()->count());
+        $this->assertSame($before, $product->fresh()->only(['name', 'ean', 'price', 'quantity', 'supplier_id', 'supplier_sku']));
+        $this->assertNull($supplierProduct->fresh()->product_id);
+    }
+
+    public function test_catalog_sync_preview_selected_conflict_row_is_skipped(): void
+    {
+        $this->actingAsSupplierManager();
+
+        $supplier = Supplier::factory()->create();
+        Product::factory()->create(['ean' => '9999999999999', 'mpn' => null]);
+        Product::factory()->create(['ean' => '9999999999999', 'mpn' => null]);
+        $supplierProduct = $this->supplierProduct($supplier, [
+            'name' => 'Selected Conflict Supplier Product',
+            'ean' => '9999999999999',
+            'mpn' => null,
+        ]);
+
+        Livewire::test(CatalogSyncPreview::class)
+            ->set('selectedSupplierProductIds', [$supplierProduct->id])
+            ->call('syncSelectedCreateProducts')
+            ->assertSet('lastManualSyncResult.created', 0)
+            ->assertSet('lastManualSyncResult.skipped', 1)
+            ->assertSet('lastManualSyncResult.failed', 0);
+
+        $this->assertSame(2, Product::query()->count());
+        $this->assertNull($supplierProduct->fresh()->product_id);
+    }
+
+    public function test_catalog_sync_preview_selected_create_failure_does_not_stop_other_selected_rows(): void
+    {
+        $this->actingAsSupplierManager();
+
+        $supplier = Supplier::factory()->create();
+        $broken = $this->supplierProduct($supplier, [
+            'name' => 'Broken Selected Create Product',
+            'supplier_sku' => 'BROKEN-CREATE',
+            'ean' => null,
+            'mpn' => null,
+        ]);
+        $healthy = $this->supplierProduct($supplier, [
+            'name' => 'Healthy Selected Create Product',
+            'supplier_sku' => 'HEALTHY-CREATE',
+            'ean' => null,
+            'mpn' => null,
+        ]);
+
+        config(['services.catalog_sync_preview.force_manual_create_failure_supplier_product_id' => $broken->id]);
+
+        Livewire::test(CatalogSyncPreview::class)
+            ->set('selectedSupplierProductIds', [$broken->id, $healthy->id])
+            ->call('syncSelectedCreateProducts')
+            ->assertSet('lastManualSyncResult.created', 1)
+            ->assertSet('lastManualSyncResult.skipped', 0)
+            ->assertSet('lastManualSyncResult.failed', 1);
+
+        $this->assertNull($broken->fresh()->product_id);
+        $this->assertNotNull($healthy->fresh()->product_id);
+        $this->assertDatabaseHas('products', [
+            'supplier_sku' => 'HEALTHY-CREATE',
+            'source' => Product::SOURCE_SUPPLIER_IMPORT,
+        ]);
+    }
+
+    public function test_catalog_sync_preview_selected_create_does_not_import_images_or_update_unrelated_products(): void
+    {
+        $this->actingAsSupplierManager();
+
+        $supplier = Supplier::factory()->create();
+        $existingProduct = Product::factory()->create([
+            'name' => 'Unrelated Existing Product',
+            'price' => 77,
+            'quantity' => 4,
+        ]);
+        $supplierProduct = $this->supplierProduct($supplier, [
+            'name' => 'No Image Import Supplier Product',
+            'supplier_sku' => 'NO-IMAGE-IMPORT',
+            'ean' => null,
+            'mpn' => null,
+            'raw_data' => [
+                'images' => [
+                    'https://example.test/one.jpg',
+                    'https://example.test/two.jpg',
+                ],
+            ],
+        ]);
+
+        $beforeExisting = $existingProduct->fresh()->only(['name', 'price', 'quantity', 'supplier_id', 'supplier_sku']);
+
+        Livewire::test(CatalogSyncPreview::class)
+            ->set('selectedSupplierProductIds', [$supplierProduct->id])
+            ->call('syncSelectedCreateProducts')
+            ->assertSet('lastManualSyncResult.created', 1);
+
+        $this->assertSame(0, ProductImage::query()->count());
+        $this->assertSame($beforeExisting, $existingProduct->fresh()->only(['name', 'price', 'quantity', 'supplier_id', 'supplier_sku']));
+    }
+
+    public function test_catalog_sync_preview_renders_manual_create_selection_controls(): void
+    {
+        $this->actingAsSupplierManager();
+
+        $supplier = Supplier::factory()->create();
+        $this->supplierProduct($supplier, [
+            'name' => 'Selectable Create Product',
+            'supplier_sku' => 'SELECTABLE-CREATE',
+            'ean' => null,
+            'mpn' => null,
+        ]);
+
+        $this
+            ->get(CatalogSyncPreview::getUrl())
+            ->assertOk()
+            ->assertSee('Sync Selected CREATE Products')
+            ->assertSee('Select')
+            ->assertSee('wire:model="selectedSupplierProductIds"', false);
     }
 
     private function actingAsSupplierManager(): User
