@@ -56,9 +56,10 @@
                 <div class="mt-1">{{ $queryError }}</div>
             </div>
         @else
-            <div class="max-w-full overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm dark:border-gray-800 dark:bg-gray-900">
-                <div class="max-w-full overflow-x-auto">
-                    <table class="min-w-max divide-y divide-gray-200 text-xs dark:divide-gray-800">
+            <div class="max-w-full rounded-lg border border-gray-200 bg-white shadow-sm dark:border-gray-800 dark:bg-gray-900" style="width: 100%; max-width: 100%;">
+                <div class="max-w-full overflow-x-auto overflow-y-visible pb-4" style="width: 100%; max-width: 100%; overflow-x: auto; overflow-y: visible;">
+                    <div class="block min-w-[2400px]" style="display: block; min-width: 2400px;">
+                        <table class="w-full min-w-[2400px] divide-y divide-gray-200 text-xs dark:divide-gray-800" style="width: 100%; min-width: 2400px;">
                         <thead class="bg-gray-50 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:bg-gray-950 dark:text-gray-400">
                             <tr>
                                 <th class="{{ $headerCell }}">ID</th>
@@ -127,7 +128,8 @@
                                 </tr>
                             @endforelse
                         </tbody>
-                    </table>
+                        </table>
+                    </div>
                 </div>
             </div>
         @endif
