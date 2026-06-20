@@ -1040,6 +1040,217 @@ class CatalogSyncPreviewTest extends TestCase
             ->assertSee('action_preview_failed');
     }
 
+    public function test_catalog_sync_preview_action_filter_create_with_zero_create_rows_renders_no_rows(): void
+    {
+        $this->actingAsSupplierManager();
+
+        $supplier = Supplier::factory()->create();
+        Product::factory()->create([
+            'name' => 'Existing CREATE Filter Catalog Product',
+            'ean' => '1212121212121',
+            'price' => 10,
+            'quantity' => 1,
+        ]);
+        $this->supplierProduct($supplier, [
+            'name' => 'Update Only Supplier Product',
+            'ean' => '1212121212121',
+            'price' => 20,
+            'quantity' => 5,
+        ]);
+
+        $result = Livewire::test(CatalogSyncPreview::class)
+            ->set('filters.action', 'CREATE');
+        $preview = $result->instance()->queryOnlySupplierProducts();
+
+        $this->assertSame(0, $preview['summary']['create_rows']);
+        $this->assertSame(1, $preview['summary']['update_rows']);
+        $this->assertSame([], $preview['rows']);
+
+        $result
+            ->assertDontSee('Update Only Supplier Product')
+            ->assertSee('No supplier products match the query-only filters.');
+    }
+
+    public function test_catalog_sync_preview_action_filter_update_renders_only_update_rows(): void
+    {
+        $this->actingAsSupplierManager();
+
+        $supplier = Supplier::factory()->create();
+        Product::factory()->create([
+            'name' => 'Existing UPDATE Filter Catalog Product',
+            'ean' => '2323232323232',
+            'price' => 10,
+            'quantity' => 1,
+        ]);
+        $this->supplierProduct($supplier, [
+            'name' => 'Visible UPDATE Supplier Product',
+            'ean' => '2323232323232',
+            'price' => 30,
+            'quantity' => 7,
+        ]);
+        $this->supplierProduct($supplier, [
+            'name' => 'Hidden CREATE Supplier Product',
+            'ean' => null,
+            'mpn' => null,
+            'supplier_sku' => 'HIDDEN-CREATE-ACTION',
+        ]);
+
+        $result = Livewire::test(CatalogSyncPreview::class)
+            ->set('filters.action', 'UPDATE');
+        $rows = $result->instance()->queryOnlySupplierProducts()['rows'];
+
+        $this->assertCount(1, $rows);
+        $this->assertSame('UPDATE', $rows[0]['sync_action']);
+        $this->assertSame('Visible UPDATE Supplier Product', $rows[0]['name']);
+
+        $result
+            ->assertSee('Visible UPDATE Supplier Product')
+            ->assertDontSee('Hidden CREATE Supplier Product');
+    }
+
+    public function test_catalog_sync_preview_action_filter_skip_renders_only_skip_rows(): void
+    {
+        $this->actingAsSupplierManager();
+
+        $supplier = Supplier::factory()->create();
+        $this->supplierProduct($supplier, [
+            'name' => 'Visible SKIP Supplier Product',
+            'quantity' => 0,
+        ]);
+        $this->supplierProduct($supplier, [
+            'name' => 'Hidden CREATE From Skip Filter',
+            'supplier_sku' => 'HIDDEN-CREATE-SKIP-FILTER',
+            'ean' => null,
+            'mpn' => null,
+            'quantity' => 5,
+        ]);
+
+        SupplierExclusionRule::query()->create([
+            'name' => 'Action filter zero stock rule',
+            'is_active' => true,
+            'exclude_zero_stock' => true,
+            'priority' => 10,
+        ]);
+
+        $result = Livewire::test(CatalogSyncPreview::class)
+            ->set('filters.action', 'SKIP');
+        $rows = $result->instance()->queryOnlySupplierProducts()['rows'];
+
+        $this->assertCount(1, $rows);
+        $this->assertSame('SKIP', $rows[0]['sync_action']);
+        $this->assertSame('Visible SKIP Supplier Product', $rows[0]['name']);
+
+        $result
+            ->assertSee('Visible SKIP Supplier Product')
+            ->assertDontSee('Hidden CREATE From Skip Filter');
+    }
+
+    public function test_catalog_sync_preview_without_action_filter_renders_all_action_rows(): void
+    {
+        $this->actingAsSupplierManager();
+
+        $supplier = Supplier::factory()->create();
+        Product::factory()->create([
+            'name' => 'All Actions Update Product',
+            'ean' => '3434343434343',
+            'mpn' => null,
+            'price' => 10,
+            'quantity' => 1,
+        ]);
+        Product::factory()->create(['ean' => '4545454545454', 'mpn' => null]);
+        Product::factory()->create(['ean' => '4545454545454', 'mpn' => null]);
+
+        $this->supplierProduct($supplier, [
+            'name' => 'All Actions CREATE Supplier Product',
+            'supplier_sku' => 'ALL-ACTIONS-CREATE',
+            'ean' => null,
+            'mpn' => null,
+        ]);
+        $this->supplierProduct($supplier, [
+            'name' => 'All Actions UPDATE Supplier Product',
+            'ean' => '3434343434343',
+            'mpn' => null,
+            'price' => 20,
+        ]);
+        $this->supplierProduct($supplier, [
+            'name' => 'All Actions SKIP Supplier Product',
+            'quantity' => 0,
+        ]);
+        $this->supplierProduct($supplier, [
+            'name' => 'All Actions CONFLICT Supplier Product',
+            'ean' => '4545454545454',
+            'mpn' => null,
+        ]);
+
+        SupplierExclusionRule::query()->create([
+            'name' => 'All actions zero stock rule',
+            'is_active' => true,
+            'exclude_zero_stock' => true,
+            'priority' => 10,
+        ]);
+
+        $rows = Livewire::test(CatalogSyncPreview::class)
+            ->instance()
+            ->queryOnlySupplierProducts()['rows'];
+
+        $this->assertCount(4, $rows);
+        $this->assertSame(['CONFLICT', 'CREATE', 'SKIP', 'UPDATE'], collect($rows)->pluck('sync_action')->sort()->values()->all());
+    }
+
+    public function test_catalog_sync_preview_action_filter_works_with_existing_filters(): void
+    {
+        $this->actingAsSupplierManager();
+
+        $apcom = Supplier::factory()->create(['company_name' => 'APCOM']);
+        $other = Supplier::factory()->create(['company_name' => 'Other Supplier']);
+
+        $this->supplierProduct($apcom, [
+            'name' => 'APCOM CREATE Combined Filter Product',
+            'supplier_sku' => 'APCOM-CREATE-COMBINED',
+            'ean' => null,
+            'mpn' => null,
+        ]);
+        $this->supplierProduct($other, [
+            'name' => 'Other CREATE Combined Filter Product',
+            'supplier_sku' => 'OTHER-CREATE-COMBINED',
+            'ean' => null,
+            'mpn' => null,
+        ]);
+
+        $result = Livewire::test(CatalogSyncPreview::class)
+            ->set('filters.supplier_id', $apcom->id)
+            ->set('filters.search', 'COMBINED')
+            ->set('filters.action', 'CREATE');
+        $rows = $result->instance()->queryOnlySupplierProducts()['rows'];
+
+        $this->assertCount(1, $rows);
+        $this->assertSame('CREATE', $rows[0]['sync_action']);
+        $this->assertSame('APCOM CREATE Combined Filter Product', $rows[0]['name']);
+
+        $result
+            ->assertSee('APCOM CREATE Combined Filter Product')
+            ->assertDontSee('Other CREATE Combined Filter Product');
+    }
+
+    public function test_catalog_sync_preview_create_filter_keeps_create_rows_selectable(): void
+    {
+        $this->actingAsSupplierManager();
+
+        $supplier = Supplier::factory()->create();
+        $this->supplierProduct($supplier, [
+            'name' => 'Selectable CREATE Filter Product',
+            'supplier_sku' => 'SELECTABLE-CREATE-FILTER',
+            'ean' => null,
+            'mpn' => null,
+        ]);
+
+        Livewire::test(CatalogSyncPreview::class)
+            ->set('filters.action', 'CREATE')
+            ->assertSee('Selectable CREATE Filter Product')
+            ->assertSee('wire:model="selectedSupplierProductIds"', false)
+            ->assertDontSee('disabled="disabled"', false);
+    }
+
     public function test_catalog_sync_preview_query_only_sync_action_preview_does_not_modify_catalog_or_supplier_data(): void
     {
         $this->actingAsSupplierManager();
