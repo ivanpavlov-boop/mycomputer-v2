@@ -20,7 +20,11 @@
             Catalog Sync Preview Query Only OK
         </div>
 
-        <div class="grid gap-4 md:grid-cols-2">
+        <div class="grid gap-4 md:grid-cols-3 lg:grid-cols-6">
+            <div class="rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-gray-900">
+                <div class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Total Rows</div>
+                <div class="mt-1 text-2xl font-semibold text-gray-950 dark:text-white">{{ $summary['total'] }}</div>
+            </div>
             <div class="rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-gray-900">
                 <div class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Included Rows</div>
                 <div class="mt-1 text-2xl font-semibold text-gray-950 dark:text-white">{{ $summary['included'] }}</div>
@@ -28,6 +32,18 @@
             <div class="rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-gray-900">
                 <div class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Excluded Rows</div>
                 <div class="mt-1 text-2xl font-semibold text-gray-950 dark:text-white">{{ $summary['excluded'] }}</div>
+            </div>
+            <div class="rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-gray-900">
+                <div class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Matched Rows</div>
+                <div class="mt-1 text-2xl font-semibold text-gray-950 dark:text-white">{{ $summary['matched'] }}</div>
+            </div>
+            <div class="rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-gray-900">
+                <div class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Unmatched Rows</div>
+                <div class="mt-1 text-2xl font-semibold text-gray-950 dark:text-white">{{ $summary['unmatched'] }}</div>
+            </div>
+            <div class="rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-gray-900">
+                <div class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Match Errors</div>
+                <div class="mt-1 text-2xl font-semibold text-gray-950 dark:text-white">{{ $summary['match_errors'] }}</div>
             </div>
         </div>
 
@@ -56,6 +72,10 @@
                                 <th class="px-4 py-3">Calculated Price</th>
                                 <th class="px-4 py-3">Excluded</th>
                                 <th class="px-4 py-3">Exclusion Reason</th>
+                                <th class="px-4 py-3">Matched Product ID</th>
+                                <th class="px-4 py-3">Matched Product</th>
+                                <th class="px-4 py-3">Match Type</th>
+                                <th class="px-4 py-3">Match Confidence</th>
                                 <th class="px-4 py-3">Quantity</th>
                                 <th class="px-4 py-3">Availability</th>
                                 <th class="px-4 py-3">Status</th>
@@ -89,6 +109,10 @@
                                             <div class="mt-1 text-xs text-red-600 dark:text-red-400">{{ $row['exclusion_error'] }}</div>
                                         @endif
                                     </td>
+                                    <td class="px-4 py-3">{{ $row['matched_product_id'] ?: '-' }}</td>
+                                    <td class="px-4 py-3">{{ $row['matched_product_name'] ?: '-' }}</td>
+                                    <td class="px-4 py-3">{{ $row['match_type'] ?: '-' }}</td>
+                                    <td class="px-4 py-3">{{ $row['match_confidence'] ?: '-' }}</td>
                                     <td class="px-4 py-3">{{ $row['quantity'] }}</td>
                                     <td class="px-4 py-3">{{ $row['availability'] }}</td>
                                     <td class="px-4 py-3">{{ $row['status'] }}</td>
@@ -96,7 +120,7 @@
                                 </tr>
                             @empty
                                 <tr>
-                                    <td colspan="18" class="px-4 py-8 text-center text-gray-500">No supplier products match the query-only filters.</td>
+                                    <td colspan="22" class="px-4 py-8 text-center text-gray-500">No supplier products match the query-only filters.</td>
                                 </tr>
                             @endforelse
                         </tbody>
