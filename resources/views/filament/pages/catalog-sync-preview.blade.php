@@ -17,57 +17,36 @@
             $headerCell = 'sticky top-0 z-30 whitespace-nowrap bg-gray-50 px-3 py-2 shadow-sm dark:bg-gray-950';
             $cell = 'whitespace-nowrap px-3 py-2';
             $truncateCell = 'max-w-[22rem] truncate px-3 py-2';
+            $summaryCounters = [
+                'Total Rows' => $summary['total'],
+                'Included Rows' => $summary['included'],
+                'Excluded Rows' => $summary['excluded'],
+                'Matched Rows' => $summary['matched'],
+                'Unmatched Rows' => $summary['unmatched'],
+                'Match Errors' => $summary['match_errors'],
+                'Create Rows' => $summary['create_rows'],
+                'Update Rows' => $summary['update_rows'],
+                'Skip Rows' => $summary['skip_rows'],
+                'Conflict Rows' => $summary['conflict_rows'],
+                'Error Rows' => $summary['error_rows'],
+            ];
         @endphp
 
         <div class="rounded-lg border border-gray-200 bg-white p-4 text-sm font-medium text-gray-950 shadow-sm dark:border-gray-800 dark:bg-gray-900 dark:text-white">
             Catalog Sync Preview Query Only OK
         </div>
 
-        <div class="grid gap-4 md:grid-cols-3 lg:grid-cols-6">
-            <div class="rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-gray-900">
-                <div class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Total Rows</div>
-                <div class="mt-1 text-2xl font-semibold text-gray-950 dark:text-white">{{ $summary['total'] }}</div>
-            </div>
-            <div class="rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-gray-900">
-                <div class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Included Rows</div>
-                <div class="mt-1 text-2xl font-semibold text-gray-950 dark:text-white">{{ $summary['included'] }}</div>
-            </div>
-            <div class="rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-gray-900">
-                <div class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Excluded Rows</div>
-                <div class="mt-1 text-2xl font-semibold text-gray-950 dark:text-white">{{ $summary['excluded'] }}</div>
-            </div>
-            <div class="rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-gray-900">
-                <div class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Matched Rows</div>
-                <div class="mt-1 text-2xl font-semibold text-gray-950 dark:text-white">{{ $summary['matched'] }}</div>
-            </div>
-            <div class="rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-gray-900">
-                <div class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Unmatched Rows</div>
-                <div class="mt-1 text-2xl font-semibold text-gray-950 dark:text-white">{{ $summary['unmatched'] }}</div>
-            </div>
-            <div class="rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-gray-900">
-                <div class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Match Errors</div>
-                <div class="mt-1 text-2xl font-semibold text-gray-950 dark:text-white">{{ $summary['match_errors'] }}</div>
-            </div>
-            <div class="rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-gray-900">
-                <div class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Create Rows</div>
-                <div class="mt-1 text-2xl font-semibold text-gray-950 dark:text-white">{{ $summary['create_rows'] }}</div>
-            </div>
-            <div class="rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-gray-900">
-                <div class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Update Rows</div>
-                <div class="mt-1 text-2xl font-semibold text-gray-950 dark:text-white">{{ $summary['update_rows'] }}</div>
-            </div>
-            <div class="rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-gray-900">
-                <div class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Skip Rows</div>
-                <div class="mt-1 text-2xl font-semibold text-gray-950 dark:text-white">{{ $summary['skip_rows'] }}</div>
-            </div>
-            <div class="rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-gray-900">
-                <div class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Conflict Rows</div>
-                <div class="mt-1 text-2xl font-semibold text-gray-950 dark:text-white">{{ $summary['conflict_rows'] }}</div>
-            </div>
-            <div class="rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-gray-900">
-                <div class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Error Rows</div>
-                <div class="mt-1 text-2xl font-semibold text-gray-950 dark:text-white">{{ $summary['error_rows'] }}</div>
-            </div>
+        <div
+            data-catalog-sync-preview-summary-grid
+            class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5"
+            style="display: grid; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); gap: 0.75rem;"
+        >
+            @foreach ($summaryCounters as $label => $value)
+                <div class="rounded-lg border border-gray-200 bg-white p-3 shadow-sm dark:border-gray-800 dark:bg-gray-900">
+                    <div class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">{{ $label }}</div>
+                    <div class="mt-1 text-xl font-semibold text-gray-950 dark:text-white">{{ $value }}</div>
+                </div>
+            @endforeach
         </div>
 
         @if ($queryError)
