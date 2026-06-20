@@ -363,6 +363,9 @@ class CatalogSyncPreviewTest extends TestCase
             ->assertSee('Quick filter')
             ->assertSee('Catalog Sync Preview UI OK')
             ->assertSee('Catalog Sync Preview Query Only OK')
+            ->assertSee('overflow-x-auto', false)
+            ->assertSee('min-w-max', false)
+            ->assertSee('max-w-[22rem]', false)
             ->assertSee('Supplier Product Must Not Render');
     }
 
