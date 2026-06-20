@@ -369,6 +369,9 @@ class CatalogSyncPreviewTest extends TestCase
             ->assertSee('min-w-[2400px]', false)
             ->assertSee('min-width: 2400px', false)
             ->assertSee('sticky top-0', false)
+            ->assertSee('z-20', false)
+            ->assertSee('z-30', false)
+            ->assertSee('shadow-sm', false)
             ->assertSee('max-w-[22rem]', false)
             ->assertSee('Supplier Product Must Not Render');
     }

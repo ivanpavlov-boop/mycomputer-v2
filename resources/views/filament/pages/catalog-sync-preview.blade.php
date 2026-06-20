@@ -14,7 +14,7 @@
             $queryError = $queryOnly['error'];
             $summary = $queryOnly['summary'];
             $money = fn ($value): string => $value !== null ? number_format((float) $value, 2).' EUR' : '-';
-            $headerCell = 'sticky top-0 z-10 whitespace-nowrap bg-gray-50 px-3 py-2 dark:bg-gray-950';
+            $headerCell = 'sticky top-0 z-30 whitespace-nowrap bg-gray-50 px-3 py-2 shadow-sm dark:bg-gray-950';
             $cell = 'whitespace-nowrap px-3 py-2';
             $truncateCell = 'max-w-[22rem] truncate px-3 py-2';
         @endphp
@@ -60,7 +60,7 @@
                 <div class="max-w-full overflow-x-auto overflow-y-auto" style="width: 100%; max-width: 100%; max-height: 70vh; overflow-x: auto; overflow-y: auto;">
                     <div class="block min-w-[2400px]" style="display: block; min-width: 2400px;">
                         <table class="w-full min-w-[2400px] divide-y divide-gray-200 text-xs dark:divide-gray-800" style="width: 100%; min-width: 2400px;">
-                        <thead class="bg-gray-50 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:bg-gray-950 dark:text-gray-400">
+                        <thead class="sticky top-0 z-20 bg-gray-50 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:bg-gray-950 dark:text-gray-400">
                             <tr>
                                 <th class="{{ $headerCell }}">ID</th>
                                 <th class="{{ $headerCell }}">Supplier</th>
