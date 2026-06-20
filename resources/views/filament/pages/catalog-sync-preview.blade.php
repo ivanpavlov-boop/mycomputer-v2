@@ -48,6 +48,26 @@
                 <div class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Match Errors</div>
                 <div class="mt-1 text-2xl font-semibold text-gray-950 dark:text-white">{{ $summary['match_errors'] }}</div>
             </div>
+            <div class="rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-gray-900">
+                <div class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Create Rows</div>
+                <div class="mt-1 text-2xl font-semibold text-gray-950 dark:text-white">{{ $summary['create_rows'] }}</div>
+            </div>
+            <div class="rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-gray-900">
+                <div class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Update Rows</div>
+                <div class="mt-1 text-2xl font-semibold text-gray-950 dark:text-white">{{ $summary['update_rows'] }}</div>
+            </div>
+            <div class="rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-gray-900">
+                <div class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Skip Rows</div>
+                <div class="mt-1 text-2xl font-semibold text-gray-950 dark:text-white">{{ $summary['skip_rows'] }}</div>
+            </div>
+            <div class="rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-gray-900">
+                <div class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Conflict Rows</div>
+                <div class="mt-1 text-2xl font-semibold text-gray-950 dark:text-white">{{ $summary['conflict_rows'] }}</div>
+            </div>
+            <div class="rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-gray-900">
+                <div class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Error Rows</div>
+                <div class="mt-1 text-2xl font-semibold text-gray-950 dark:text-white">{{ $summary['error_rows'] }}</div>
+            </div>
         </div>
 
         @if ($queryError)
@@ -84,6 +104,8 @@
                                 <th class="{{ $headerCell }}">Matched Product</th>
                                 <th class="{{ $headerCell }}">Match Type</th>
                                 <th class="{{ $headerCell }}">Match Confidence</th>
+                                <th class="{{ $headerCell }}">Sync Action</th>
+                                <th class="{{ $headerCell }}">Sync Reason</th>
                                 <th class="{{ $headerCell }}">Quantity</th>
                                 <th class="{{ $headerCell }}">Availability</th>
                                 <th class="{{ $headerCell }}">Status</th>
@@ -121,6 +143,8 @@
                                     <td class="{{ $truncateCell }}" title="{{ $row['matched_product_name'] ?: '-' }}">{{ $row['matched_product_name'] ?: '-' }}</td>
                                     <td class="{{ $cell }}">{{ $row['match_type'] ?: '-' }}</td>
                                     <td class="{{ $cell }}">{{ $row['match_confidence'] ?: '-' }}</td>
+                                    <td class="{{ $cell }}">{{ $row['sync_action'] }}</td>
+                                    <td class="{{ $truncateCell }}" title="{{ $row['sync_reason'] }}">{{ $row['sync_reason'] }}</td>
                                     <td class="{{ $cell }}">{{ $row['quantity'] }}</td>
                                     <td class="{{ $cell }}">{{ $row['availability'] }}</td>
                                     <td class="{{ $cell }}">{{ $row['status'] }}</td>
@@ -128,7 +152,7 @@
                                 </tr>
                             @empty
                                 <tr>
-                                    <td colspan="22" class="px-3 py-8 text-center text-gray-500">No supplier products match the query-only filters.</td>
+                                    <td colspan="24" class="px-3 py-8 text-center text-gray-500">No supplier products match the query-only filters.</td>
                                 </tr>
                             @endforelse
                         </tbody>
