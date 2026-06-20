@@ -101,7 +101,7 @@ class CatalogSyncPreview extends Page
     }
 
     /**
-     * @return array{rows: array<int, array<string, mixed>>, error: string|null, limit: int|string, summary: array{total: int, included: int, excluded: int, matched: int, unmatched: int, match_errors: int}}
+     * @return array{rows: array<int, array<string, mixed>>, error: string|null, limit: int|string, summary: array{total: int, included: int, excluded: int, matched: int, unmatched: int, match_errors: int, create_rows: int, update_rows: int, skip_rows: int, conflict_rows: int, error_rows: int}}
      */
     public function queryOnlySupplierProducts(): array
     {
@@ -141,23 +141,27 @@ class CatalogSyncPreview extends Page
 
             $rows = $query
                 ->get()
-                ->map(fn (SupplierProduct $supplierProduct): array => array_merge([
-                    'supplier_product_id' => $supplierProduct->id,
-                    'supplier' => $supplierProduct->supplier?->company_name ?? '-',
-                    'supplier_sku' => $supplierProduct->supplier_sku ?: '-',
-                    'ean' => $supplierProduct->ean ?: '-',
-                    'mpn' => $supplierProduct->mpn ?: '-',
-                    'name' => $supplierProduct->name ?: '-',
-                    'price' => $supplierProduct->price,
-                    'quantity' => $supplierProduct->quantity ?? 0,
-                    'availability' => $supplierProduct->availabilityStatus?->name
-                        ?? $supplierProduct->external_availability_label
-                        ?? $supplierProduct->external_availability_status
-                        ?? $supplierProduct->status
-                        ?? '-',
-                    'status' => $supplierProduct->status ?: '-',
-                    'updated_at' => $supplierProduct->updated_at?->format('Y-m-d H:i'),
-                ], $this->pricingPreviewForSupplierProduct($supplierProduct), $this->exclusionPreviewForSupplierProduct($supplierProduct), $this->matchingPreviewForSupplierProduct($supplierProduct)))
+                ->map(function (SupplierProduct $supplierProduct): array {
+                    $row = array_merge([
+                        'supplier_product_id' => $supplierProduct->id,
+                        'supplier' => $supplierProduct->supplier?->company_name ?? '-',
+                        'supplier_sku' => $supplierProduct->supplier_sku ?: '-',
+                        'ean' => $supplierProduct->ean ?: '-',
+                        'mpn' => $supplierProduct->mpn ?: '-',
+                        'name' => $supplierProduct->name ?: '-',
+                        'price' => $supplierProduct->price,
+                        'quantity' => $supplierProduct->quantity ?? 0,
+                        'availability' => $supplierProduct->availabilityStatus?->name
+                            ?? $supplierProduct->external_availability_label
+                            ?? $supplierProduct->external_availability_status
+                            ?? $supplierProduct->status
+                            ?? '-',
+                        'status' => $supplierProduct->status ?: '-',
+                        'updated_at' => $supplierProduct->updated_at?->format('Y-m-d H:i'),
+                    ], $this->pricingPreviewForSupplierProduct($supplierProduct), $this->exclusionPreviewForSupplierProduct($supplierProduct), $this->matchingPreviewForSupplierProduct($supplierProduct));
+
+                    return array_merge($row, $this->syncActionPreviewForSupplierProduct($supplierProduct, $row));
+                })
                 ->all();
 
             return [
@@ -180,6 +184,11 @@ class CatalogSyncPreview extends Page
                     'matched' => 0,
                     'unmatched' => 0,
                     'match_errors' => 0,
+                    'create_rows' => 0,
+                    'update_rows' => 0,
+                    'skip_rows' => 0,
+                    'conflict_rows' => 0,
+                    'error_rows' => 0,
                 ],
             ];
         }
@@ -341,8 +350,94 @@ class CatalogSyncPreview extends Page
     }
 
     /**
+     * @param  array<string, mixed>  $row
+     * @return array{sync_action: string, sync_reason: string}
+     */
+    protected function syncActionPreviewForSupplierProduct(SupplierProduct $supplierProduct, array $row): array
+    {
+        try {
+            if ((int) config('services.catalog_sync_preview.force_action_failure_supplier_product_id') === $supplierProduct->id) {
+                throw new RuntimeException('Forced sync action preview failure.');
+            }
+
+            if ((bool) ($row['excluded'] ?? false)) {
+                return [
+                    'sync_action' => 'SKIP',
+                    'sync_reason' => 'excluded_by_rule',
+                ];
+            }
+
+            if (filled($row['pricing_error'] ?? null)) {
+                return [
+                    'sync_action' => 'ERROR',
+                    'sync_reason' => 'pricing_preview_failed',
+                ];
+            }
+
+            if (filled($row['exclusion_error'] ?? null)) {
+                return [
+                    'sync_action' => 'ERROR',
+                    'sync_reason' => 'exclusion_check_failed',
+                ];
+            }
+
+            if (($row['match_type'] ?? null) === 'error') {
+                return [
+                    'sync_action' => 'ERROR',
+                    'sync_reason' => 'matching_check_failed',
+                ];
+            }
+
+            if (($row['match_confidence'] ?? null) === 'multiple_matches') {
+                return [
+                    'sync_action' => 'CONFLICT',
+                    'sync_reason' => 'multiple_possible_matches',
+                ];
+            }
+
+            if (($row['match_type'] ?? null) === 'name_similarity_warning') {
+                return [
+                    'sync_action' => 'CONFLICT',
+                    'sync_reason' => 'name_similarity_requires_review',
+                ];
+            }
+
+            if (! $this->hasMinimumSyncData($supplierProduct)) {
+                return [
+                    'sync_action' => 'SKIP',
+                    'sync_reason' => 'missing_required_data',
+                ];
+            }
+
+            if (filled($row['matched_product_id'] ?? null)) {
+                return $this->matchedProductHasMeaningfulChanges((int) $row['matched_product_id'], $supplierProduct, $row)
+                    ? [
+                        'sync_action' => 'UPDATE',
+                        'sync_reason' => 'matched_catalog_product_can_be_updated',
+                    ]
+                    : [
+                        'sync_action' => 'SKIP',
+                        'sync_reason' => 'no_meaningful_changes',
+                    ];
+            }
+
+            return [
+                'sync_action' => 'CREATE',
+                'sync_reason' => 'new_catalog_product',
+            ];
+        } catch (Throwable $exception) {
+            report($exception);
+
+            return [
+                'sync_action' => 'ERROR',
+                'sync_reason' => 'action_preview_failed',
+            ];
+        }
+    }
+
+    /**
      * @param  array<int, array<string, mixed>>  $rows
-     * @return array{total: int, included: int, excluded: int, matched: int, unmatched: int, match_errors: int}
+     * @return array{total: int, included: int, excluded: int, matched: int, unmatched: int, match_errors: int, create_rows: int, update_rows: int, skip_rows: int, conflict_rows: int, error_rows: int}
      */
     protected function queryOnlySummary(array $rows): array
     {
@@ -359,7 +454,42 @@ class CatalogSyncPreview extends Page
             'matched' => $matched,
             'unmatched' => count($rows) - $matched - $matchErrors,
             'match_errors' => $matchErrors,
+            'create_rows' => collect($rows)->where('sync_action', 'CREATE')->count(),
+            'update_rows' => collect($rows)->where('sync_action', 'UPDATE')->count(),
+            'skip_rows' => collect($rows)->where('sync_action', 'SKIP')->count(),
+            'conflict_rows' => collect($rows)->where('sync_action', 'CONFLICT')->count(),
+            'error_rows' => collect($rows)->where('sync_action', 'ERROR')->count(),
         ];
+    }
+
+    protected function hasMinimumSyncData(SupplierProduct $supplierProduct): bool
+    {
+        return filled($supplierProduct->name)
+            && $supplierProduct->price !== null
+            && (
+                filled($supplierProduct->ean)
+                || filled($supplierProduct->mpn)
+                || filled($supplierProduct->supplier_sku)
+            );
+    }
+
+    /**
+     * @param  array<string, mixed>  $row
+     */
+    protected function matchedProductHasMeaningfulChanges(int $productId, SupplierProduct $supplierProduct, array $row): bool
+    {
+        $product = Product::query()
+            ->select(['id', 'price', 'quantity', 'stock_status', 'supplier_id', 'supplier_sku'])
+            ->find($productId);
+
+        if (! $product) {
+            return true;
+        }
+
+        return (float) ($product->price ?? 0) !== (float) ($row['calculated_price'] ?? $supplierProduct->price ?? 0)
+            || (int) ($product->quantity ?? 0) !== (int) ($supplierProduct->quantity ?? 0)
+            || (string) ($product->supplier_sku ?? '') !== (string) ($supplierProduct->supplier_sku ?? '')
+            || (int) ($product->supplier_id ?? 0) !== (int) ($supplierProduct->supplier_id ?? 0);
     }
 
     protected function findExistingBrand(?string $name): ?Brand

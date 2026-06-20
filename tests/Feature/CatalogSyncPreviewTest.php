@@ -889,6 +889,181 @@ class CatalogSyncPreviewTest extends TestCase
         $this->assertSame($beforeSupplierProduct, $supplierProduct->fresh()->only(['name', 'ean', 'price', 'quantity', 'status']));
     }
 
+    public function test_catalog_sync_preview_query_only_unmatched_valid_product_gets_create_action(): void
+    {
+        $this->actingAsSupplierManager();
+
+        $supplier = Supplier::factory()->create();
+        $this->supplierProduct($supplier, [
+            'name' => 'Create Action Supplier Product',
+            'ean' => null,
+            'mpn' => null,
+            'supplier_sku' => 'CREATE-ACTION-SKU',
+        ]);
+
+        $result = Livewire::test(CatalogSyncPreview::class);
+        $rows = $result->instance()->queryOnlySupplierProducts()['rows'];
+        $summary = $result->instance()->queryOnlySupplierProducts()['summary'];
+
+        $this->assertSame('CREATE', $rows[0]['sync_action']);
+        $this->assertSame('new_catalog_product', $rows[0]['sync_reason']);
+        $this->assertSame(1, $summary['create_rows']);
+
+        $result
+            ->assertSee('Sync Action')
+            ->assertSee('Sync Reason')
+            ->assertSee('Create Rows')
+            ->assertSee('CREATE')
+            ->assertSee('new_catalog_product');
+    }
+
+    public function test_catalog_sync_preview_query_only_matched_valid_product_gets_update_action(): void
+    {
+        $this->actingAsSupplierManager();
+
+        $supplier = Supplier::factory()->create();
+        Product::factory()->create([
+            'name' => 'Update Action Catalog Product',
+            'ean' => '5555555555555',
+            'mpn' => null,
+            'price' => 10,
+            'quantity' => 1,
+        ]);
+        $this->supplierProduct($supplier, [
+            'name' => 'Update Action Supplier Product',
+            'ean' => '5555555555555',
+            'mpn' => null,
+            'price' => 20,
+            'quantity' => 8,
+        ]);
+
+        $result = Livewire::test(CatalogSyncPreview::class);
+        $rows = $result->instance()->queryOnlySupplierProducts()['rows'];
+        $summary = $result->instance()->queryOnlySupplierProducts()['summary'];
+
+        $this->assertSame('UPDATE', $rows[0]['sync_action']);
+        $this->assertSame('matched_catalog_product_can_be_updated', $rows[0]['sync_reason']);
+        $this->assertSame(1, $summary['update_rows']);
+    }
+
+    public function test_catalog_sync_preview_query_only_excluded_product_gets_skip_action(): void
+    {
+        $this->actingAsSupplierManager();
+
+        $supplier = Supplier::factory()->create();
+        $this->supplierProduct($supplier, [
+            'name' => 'Skip Action Excluded Product',
+            'quantity' => 0,
+        ]);
+
+        SupplierExclusionRule::query()->create([
+            'name' => 'Skip action zero stock rule',
+            'is_active' => true,
+            'exclude_zero_stock' => true,
+            'priority' => 10,
+        ]);
+
+        $result = Livewire::test(CatalogSyncPreview::class);
+        $rows = $result->instance()->queryOnlySupplierProducts()['rows'];
+        $summary = $result->instance()->queryOnlySupplierProducts()['summary'];
+
+        $this->assertSame('SKIP', $rows[0]['sync_action']);
+        $this->assertSame('excluded_by_rule', $rows[0]['sync_reason']);
+        $this->assertSame(1, $summary['skip_rows']);
+    }
+
+    public function test_catalog_sync_preview_query_only_ambiguous_match_gets_conflict_action(): void
+    {
+        $this->actingAsSupplierManager();
+
+        $supplier = Supplier::factory()->create();
+        Product::factory()->create([
+            'name' => 'Conflict Action Catalog Product A',
+            'ean' => '6666666666666',
+            'mpn' => null,
+        ]);
+        Product::factory()->create([
+            'name' => 'Conflict Action Catalog Product B',
+            'ean' => '6666666666666',
+            'mpn' => null,
+        ]);
+        $this->supplierProduct($supplier, [
+            'name' => 'Conflict Action Supplier Product',
+            'ean' => '6666666666666',
+            'mpn' => null,
+        ]);
+
+        $result = Livewire::test(CatalogSyncPreview::class);
+        $rows = $result->instance()->queryOnlySupplierProducts()['rows'];
+        $summary = $result->instance()->queryOnlySupplierProducts()['summary'];
+
+        $this->assertSame('CONFLICT', $rows[0]['sync_action']);
+        $this->assertSame('multiple_possible_matches', $rows[0]['sync_reason']);
+        $this->assertSame(1, $summary['conflict_rows']);
+    }
+
+    public function test_catalog_sync_preview_query_only_action_evaluation_failure_does_not_crash_page(): void
+    {
+        $this->actingAsSupplierManager();
+
+        $supplier = Supplier::factory()->create();
+        $broken = $this->supplierProduct($supplier, [
+            'name' => 'Broken Action Product',
+        ]);
+        $this->supplierProduct($supplier, [
+            'name' => 'Healthy Action Product',
+        ]);
+
+        config(['services.catalog_sync_preview.force_action_failure_supplier_product_id' => $broken->id]);
+
+        $result = Livewire::test(CatalogSyncPreview::class);
+        $rows = $result->instance()->queryOnlySupplierProducts()['rows'];
+        $summary = $result->instance()->queryOnlySupplierProducts()['summary'];
+        $brokenRow = collect($rows)->firstWhere('supplier_product_id', $broken->id);
+
+        $this->assertSame('ERROR', $brokenRow['sync_action']);
+        $this->assertSame('action_preview_failed', $brokenRow['sync_reason']);
+        $this->assertSame(1, $summary['error_rows']);
+
+        $result
+            ->assertSee('Broken Action Product')
+            ->assertSee('Healthy Action Product')
+            ->assertSee('action_preview_failed');
+    }
+
+    public function test_catalog_sync_preview_query_only_sync_action_preview_does_not_modify_catalog_or_supplier_data(): void
+    {
+        $this->actingAsSupplierManager();
+
+        $supplier = Supplier::factory()->create();
+        $product = Product::factory()->create([
+            'name' => 'Read Only Action Product',
+            'ean' => '7777777777777',
+            'price' => 88,
+            'quantity' => 2,
+        ]);
+        $supplierProduct = $this->supplierProduct($supplier, [
+            'name' => 'Read Only Action Supplier Product',
+            'ean' => '7777777777777',
+            'price' => 44,
+            'quantity' => 10,
+        ]);
+
+        $beforeProductCount = Product::query()->count();
+        $beforeSupplierProductCount = SupplierProduct::query()->count();
+        $beforeProduct = $product->fresh()->only(['name', 'ean', 'price', 'quantity', 'supplier_id', 'supplier_sku']);
+        $beforeSupplierProduct = $supplierProduct->fresh()->only(['name', 'ean', 'price', 'quantity', 'status']);
+
+        Livewire::test(CatalogSyncPreview::class)
+            ->instance()
+            ->queryOnlySupplierProducts();
+
+        $this->assertSame($beforeProductCount, Product::query()->count());
+        $this->assertSame($beforeSupplierProductCount, SupplierProduct::query()->count());
+        $this->assertSame($beforeProduct, $product->fresh()->only(['name', 'ean', 'price', 'quantity', 'supplier_id', 'supplier_sku']));
+        $this->assertSame($beforeSupplierProduct, $supplierProduct->fresh()->only(['name', 'ean', 'price', 'quantity', 'status']));
+    }
+
     private function actingAsSupplierManager(): User
     {
         $this->seed(RolesAndPermissionsSeeder::class);
