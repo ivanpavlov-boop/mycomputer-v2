@@ -57,10 +57,14 @@
             </div>
         @else
             <div class="max-w-full rounded-lg border border-gray-200 bg-white shadow-sm dark:border-gray-800 dark:bg-gray-900" style="width: 100%; max-width: 100%;">
-                <div class="max-w-full overflow-x-auto overflow-y-auto" style="width: 100%; max-width: 100%; max-height: 70vh; overflow-x: auto; overflow-y: auto;">
+                <div
+                    data-catalog-sync-preview-scroll-panel
+                    class="max-w-full overflow-x-auto overflow-y-auto pb-4"
+                    style="width: 100%; max-width: 100%; max-height: 70vh; overflow-x: auto; overflow-y: auto; padding-bottom: 1rem;"
+                >
                     <div class="block min-w-[2400px]" style="display: block; min-width: 2400px;">
                         <table class="w-full min-w-[2400px] divide-y divide-gray-200 text-xs dark:divide-gray-800" style="width: 100%; min-width: 2400px;">
-                        <thead class="sticky top-0 z-20 bg-gray-50 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:bg-gray-950 dark:text-gray-400">
+                        <thead class="bg-gray-50 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:bg-gray-950 dark:text-gray-400">
                             <tr>
                                 <th class="{{ $headerCell }}">ID</th>
                                 <th class="{{ $headerCell }}">Supplier</th>
