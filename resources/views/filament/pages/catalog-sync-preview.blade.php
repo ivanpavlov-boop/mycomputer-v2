@@ -14,6 +14,9 @@
             $queryError = $queryOnly['error'];
             $summary = $queryOnly['summary'];
             $money = fn ($value): string => $value !== null ? number_format((float) $value, 2).' EUR' : '-';
+            $headerCell = 'whitespace-nowrap px-3 py-2';
+            $cell = 'whitespace-nowrap px-3 py-2';
+            $truncateCell = 'max-w-[22rem] truncate px-3 py-2';
         @endphp
 
         <div class="rounded-lg border border-gray-200 bg-white p-4 text-sm font-medium text-gray-950 shadow-sm dark:border-gray-800 dark:bg-gray-900 dark:text-white">
@@ -53,74 +56,74 @@
                 <div class="mt-1">{{ $queryError }}</div>
             </div>
         @else
-            <div class="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm dark:border-gray-800 dark:bg-gray-900">
-                <div class="overflow-x-auto">
-                    <table class="min-w-full divide-y divide-gray-200 text-sm dark:divide-gray-800">
+            <div class="max-w-full overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm dark:border-gray-800 dark:bg-gray-900">
+                <div class="max-w-full overflow-x-auto">
+                    <table class="min-w-max divide-y divide-gray-200 text-xs dark:divide-gray-800">
                         <thead class="bg-gray-50 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:bg-gray-950 dark:text-gray-400">
                             <tr>
-                                <th class="px-4 py-3">ID</th>
-                                <th class="px-4 py-3">Supplier</th>
-                                <th class="px-4 py-3">Supplier SKU</th>
-                                <th class="px-4 py-3">EAN</th>
-                                <th class="px-4 py-3">MPN</th>
-                                <th class="px-4 py-3">Name</th>
-                                <th class="px-4 py-3">Price</th>
-                                <th class="px-4 py-3">Supplier Cost</th>
-                                <th class="px-4 py-3">Pricing Rule</th>
-                                <th class="px-4 py-3">Margin Type</th>
-                                <th class="px-4 py-3">Margin Value</th>
-                                <th class="px-4 py-3">Calculated Price</th>
-                                <th class="px-4 py-3">Excluded</th>
-                                <th class="px-4 py-3">Exclusion Reason</th>
-                                <th class="px-4 py-3">Matched Product ID</th>
-                                <th class="px-4 py-3">Matched Product</th>
-                                <th class="px-4 py-3">Match Type</th>
-                                <th class="px-4 py-3">Match Confidence</th>
-                                <th class="px-4 py-3">Quantity</th>
-                                <th class="px-4 py-3">Availability</th>
-                                <th class="px-4 py-3">Status</th>
-                                <th class="px-4 py-3">Updated</th>
+                                <th class="{{ $headerCell }}">ID</th>
+                                <th class="{{ $headerCell }}">Supplier</th>
+                                <th class="{{ $headerCell }}">Supplier SKU</th>
+                                <th class="{{ $headerCell }}">EAN</th>
+                                <th class="{{ $headerCell }}">MPN</th>
+                                <th class="{{ $headerCell }}">Name</th>
+                                <th class="{{ $headerCell }}">Price</th>
+                                <th class="{{ $headerCell }}">Supplier Cost</th>
+                                <th class="{{ $headerCell }}">Pricing Rule</th>
+                                <th class="{{ $headerCell }}">Margin Type</th>
+                                <th class="{{ $headerCell }}">Margin Value</th>
+                                <th class="{{ $headerCell }}">Calculated Price</th>
+                                <th class="{{ $headerCell }}">Excluded</th>
+                                <th class="{{ $headerCell }}">Exclusion Reason</th>
+                                <th class="{{ $headerCell }}">Matched Product ID</th>
+                                <th class="{{ $headerCell }}">Matched Product</th>
+                                <th class="{{ $headerCell }}">Match Type</th>
+                                <th class="{{ $headerCell }}">Match Confidence</th>
+                                <th class="{{ $headerCell }}">Quantity</th>
+                                <th class="{{ $headerCell }}">Availability</th>
+                                <th class="{{ $headerCell }}">Status</th>
+                                <th class="{{ $headerCell }}">Updated</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-gray-100 dark:divide-gray-800">
                             @forelse ($rows as $row)
                                 <tr>
-                                    <td class="px-4 py-3">{{ $row['supplier_product_id'] }}</td>
-                                    <td class="px-4 py-3">{{ $row['supplier'] }}</td>
-                                    <td class="px-4 py-3">{{ $row['supplier_sku'] }}</td>
-                                    <td class="px-4 py-3">{{ $row['ean'] }}</td>
-                                    <td class="px-4 py-3">{{ $row['mpn'] }}</td>
-                                    <td class="px-4 py-3 font-medium text-gray-950 dark:text-white">{{ $row['name'] }}</td>
-                                    <td class="px-4 py-3">{{ $money($row['price']) }}</td>
-                                    <td class="px-4 py-3">{{ $money($row['supplier_cost']) }}</td>
-                                    <td class="px-4 py-3">
-                                        <div>{{ $row['pricing_rule_used'] }}</div>
+                                    <td class="{{ $cell }}">{{ $row['supplier_product_id'] }}</td>
+                                    <td class="{{ $cell }}">{{ $row['supplier'] }}</td>
+                                    <td class="{{ $cell }}">{{ $row['supplier_sku'] }}</td>
+                                    <td class="{{ $cell }}">{{ $row['ean'] }}</td>
+                                    <td class="{{ $cell }}">{{ $row['mpn'] }}</td>
+                                    <td class="{{ $truncateCell }} font-medium text-gray-950 dark:text-white" title="{{ $row['name'] }}">{{ $row['name'] }}</td>
+                                    <td class="{{ $cell }}">{{ $money($row['price']) }}</td>
+                                    <td class="{{ $cell }}">{{ $money($row['supplier_cost']) }}</td>
+                                    <td class="{{ $truncateCell }}" title="{{ $row['pricing_rule_used'] }}">
+                                        <div class="truncate">{{ $row['pricing_rule_used'] }}</div>
                                         @if ($row['pricing_error'])
                                             <div class="mt-1 text-xs text-red-600 dark:text-red-400">{{ $row['pricing_error'] }}</div>
                                         @endif
                                     </td>
-                                    <td class="px-4 py-3">{{ $row['margin_type'] ?: '-' }}</td>
-                                    <td class="px-4 py-3">{{ $row['margin_value'] ?: '-' }}</td>
-                                    <td class="px-4 py-3">{{ $money($row['calculated_price']) }}</td>
-                                    <td class="px-4 py-3">{{ $row['excluded'] ? 'Yes' : 'No' }}</td>
-                                    <td class="px-4 py-3">
-                                        <div>{{ $row['exclusion_reason'] }}</div>
+                                    <td class="{{ $cell }}">{{ $row['margin_type'] ?: '-' }}</td>
+                                    <td class="{{ $cell }}">{{ $row['margin_value'] ?: '-' }}</td>
+                                    <td class="{{ $cell }}">{{ $money($row['calculated_price']) }}</td>
+                                    <td class="{{ $cell }}">{{ $row['excluded'] ? 'Yes' : 'No' }}</td>
+                                    <td class="{{ $truncateCell }}" title="{{ $row['exclusion_reason'] }}">
+                                        <div class="truncate">{{ $row['exclusion_reason'] }}</div>
                                         @if ($row['exclusion_error'])
                                             <div class="mt-1 text-xs text-red-600 dark:text-red-400">{{ $row['exclusion_error'] }}</div>
                                         @endif
                                     </td>
-                                    <td class="px-4 py-3">{{ $row['matched_product_id'] ?: '-' }}</td>
-                                    <td class="px-4 py-3">{{ $row['matched_product_name'] ?: '-' }}</td>
-                                    <td class="px-4 py-3">{{ $row['match_type'] ?: '-' }}</td>
-                                    <td class="px-4 py-3">{{ $row['match_confidence'] ?: '-' }}</td>
-                                    <td class="px-4 py-3">{{ $row['quantity'] }}</td>
-                                    <td class="px-4 py-3">{{ $row['availability'] }}</td>
-                                    <td class="px-4 py-3">{{ $row['status'] }}</td>
-                                    <td class="px-4 py-3">{{ $row['updated_at'] ?: '-' }}</td>
+                                    <td class="{{ $cell }}">{{ $row['matched_product_id'] ?: '-' }}</td>
+                                    <td class="{{ $truncateCell }}" title="{{ $row['matched_product_name'] ?: '-' }}">{{ $row['matched_product_name'] ?: '-' }}</td>
+                                    <td class="{{ $cell }}">{{ $row['match_type'] ?: '-' }}</td>
+                                    <td class="{{ $cell }}">{{ $row['match_confidence'] ?: '-' }}</td>
+                                    <td class="{{ $cell }}">{{ $row['quantity'] }}</td>
+                                    <td class="{{ $cell }}">{{ $row['availability'] }}</td>
+                                    <td class="{{ $cell }}">{{ $row['status'] }}</td>
+                                    <td class="{{ $cell }}">{{ $row['updated_at'] ?: '-' }}</td>
                                 </tr>
                             @empty
                                 <tr>
-                                    <td colspan="22" class="px-4 py-8 text-center text-gray-500">No supplier products match the query-only filters.</td>
+                                    <td colspan="22" class="px-3 py-8 text-center text-gray-500">No supplier products match the query-only filters.</td>
                                 </tr>
                             @endforelse
                         </tbody>
