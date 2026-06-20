@@ -9,6 +9,7 @@ use App\Models\Product;
 use App\Models\Supplier;
 use App\Models\SupplierProduct;
 use App\Services\Pricing\PricingEngine;
+use App\Services\Products\CatalogSyncPreviewService;
 use App\Services\Suppliers\SupplierExclusionService;
 use BackedEnum;
 use Filament\Forms\Components\Select;
@@ -100,7 +101,7 @@ class CatalogSyncPreview extends Page
     }
 
     /**
-     * @return array{rows: array<int, array<string, mixed>>, error: string|null, limit: int|string, summary: array{included: int, excluded: int}}
+     * @return array{rows: array<int, array<string, mixed>>, error: string|null, limit: int|string, summary: array{total: int, included: int, excluded: int, matched: int, unmatched: int, match_errors: int}}
      */
     public function queryOnlySupplierProducts(): array
     {
@@ -114,6 +115,7 @@ class CatalogSyncPreview extends Page
                 ->with(['supplier:id,company_name', 'availabilityStatus:id,name,code'])
                 ->select([
                     'id',
+                    'product_id',
                     'supplier_id',
                     'supplier_sku',
                     'ean',
@@ -155,7 +157,7 @@ class CatalogSyncPreview extends Page
                         ?? '-',
                     'status' => $supplierProduct->status ?: '-',
                     'updated_at' => $supplierProduct->updated_at?->format('Y-m-d H:i'),
-                ], $this->pricingPreviewForSupplierProduct($supplierProduct), $this->exclusionPreviewForSupplierProduct($supplierProduct)))
+                ], $this->pricingPreviewForSupplierProduct($supplierProduct), $this->exclusionPreviewForSupplierProduct($supplierProduct), $this->matchingPreviewForSupplierProduct($supplierProduct)))
                 ->all();
 
             return [
@@ -172,8 +174,12 @@ class CatalogSyncPreview extends Page
                 'error' => $exception->getMessage(),
                 'limit' => $this->filters['limit'] ?? 50,
                 'summary' => [
+                    'total' => 0,
                     'included' => 0,
                     'excluded' => 0,
+                    'matched' => 0,
+                    'unmatched' => 0,
+                    'match_errors' => 0,
                 ],
             ];
         }
@@ -284,6 +290,29 @@ class CatalogSyncPreview extends Page
     /**
      * @return array<string, mixed>
      */
+    protected function matchingPreviewForSupplierProduct(SupplierProduct $supplierProduct): array
+    {
+        try {
+            if ((int) config('services.catalog_sync_preview.force_matching_failure_supplier_product_id') === $supplierProduct->id) {
+                throw new RuntimeException('Forced matching failure.');
+            }
+
+            return app(CatalogSyncPreviewService::class)->matchingVisibility($supplierProduct);
+        } catch (Throwable $exception) {
+            report($exception);
+
+            return [
+                'matched_product_id' => null,
+                'matched_product_name' => null,
+                'match_type' => 'error',
+                'match_confidence' => 'matching_check_failed: '.$exception->getMessage(),
+            ];
+        }
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
     protected function exclusionPreviewForSupplierProduct(SupplierProduct $supplierProduct): array
     {
         try {
@@ -313,15 +342,23 @@ class CatalogSyncPreview extends Page
 
     /**
      * @param  array<int, array<string, mixed>>  $rows
-     * @return array{included: int, excluded: int}
+     * @return array{total: int, included: int, excluded: int, matched: int, unmatched: int, match_errors: int}
      */
     protected function queryOnlySummary(array $rows): array
     {
         $excluded = collect($rows)->where('excluded', true)->count();
+        $matchErrors = collect($rows)->where('match_type', 'error')->count();
+        $matched = collect($rows)
+            ->filter(fn (array $row): bool => filled($row['matched_product_id'] ?? null))
+            ->count();
 
         return [
+            'total' => count($rows),
             'included' => count($rows) - $excluded,
             'excluded' => $excluded,
+            'matched' => $matched,
+            'unmatched' => count($rows) - $matched - $matchErrors,
+            'match_errors' => $matchErrors,
         ];
     }
 

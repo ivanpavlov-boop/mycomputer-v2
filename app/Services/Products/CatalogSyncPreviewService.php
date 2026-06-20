@@ -722,6 +722,76 @@ class CatalogSyncPreviewService
     }
 
     /**
+     * @return array{matched_product_id: int|null, matched_product_name: string|null, match_type: string, match_confidence: string}
+     */
+    public function matchingVisibility(SupplierProduct $supplierProduct): array
+    {
+        $matches = $this->matchCatalogProducts($supplierProduct);
+        $product = $matches['products']->first();
+
+        if ($product) {
+            return [
+                'matched_product_id' => $product->id,
+                'matched_product_name' => $product->name,
+                'match_type' => $matches['matched_by'][0] ?? 'matched',
+                'match_confidence' => $matches['products']->count() > 1 ? 'multiple_matches' : 'exact',
+            ];
+        }
+
+        $similarProduct = $this->nameSimilarityWarning($supplierProduct);
+
+        if ($similarProduct) {
+            return [
+                'matched_product_id' => null,
+                'matched_product_name' => $similarProduct->name,
+                'match_type' => 'name_similarity_warning',
+                'match_confidence' => 'warning_only',
+            ];
+        }
+
+        return [
+            'matched_product_id' => null,
+            'matched_product_name' => null,
+            'match_type' => 'no_match',
+            'match_confidence' => 'none',
+        ];
+    }
+
+    protected function nameSimilarityWarning(SupplierProduct $supplierProduct): ?Product
+    {
+        if (blank($supplierProduct->name)) {
+            return null;
+        }
+
+        $supplierName = Str::lower(trim((string) $supplierProduct->name));
+        $firstToken = Str::of($supplierName)
+            ->replaceMatches('/[^\pL\pN]+/u', ' ')
+            ->explode(' ')
+            ->filter(fn (string $token): bool => mb_strlen($token) >= 4)
+            ->first();
+
+        if (! $firstToken) {
+            return null;
+        }
+
+        return Product::query()
+            ->where('name', 'like', '%'.$firstToken.'%')
+            ->limit(20)
+            ->get()
+            ->first(function (Product $product) use ($supplierName): bool {
+                $catalogName = Str::lower(trim((string) $product->name));
+
+                if ($catalogName === '') {
+                    return false;
+                }
+
+                similar_text($supplierName, $catalogName, $percentage);
+
+                return $percentage >= 85.0;
+            });
+    }
+
+    /**
      * @param  array{products: Collection<int, Product>, matched_by: array<int, string>}  $matches
      */
     protected function action(SupplierProduct $supplierProduct, array $matches, bool $duplicateSupplierRows, bool $excluded): string

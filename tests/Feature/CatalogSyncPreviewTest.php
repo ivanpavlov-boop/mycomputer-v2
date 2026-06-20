@@ -7,6 +7,7 @@ use App\Models\Brand;
 use App\Models\Category;
 use App\Models\PricingRule;
 use App\Models\Product;
+use App\Models\ProductSupplierOffer;
 use App\Models\Supplier;
 use App\Models\SupplierExclusionRule;
 use App\Models\SupplierProduct;
@@ -681,6 +682,199 @@ class CatalogSyncPreviewTest extends TestCase
             ->assertSee('Exclusion Error')
             ->assertSee('Forced exclusion failure.')
             ->assertSee('Healthy Exclusion Product');
+    }
+
+    public function test_catalog_sync_preview_query_only_ean_match_renders(): void
+    {
+        $this->actingAsSupplierManager();
+
+        $supplier = Supplier::factory()->create();
+        $product = Product::factory()->create([
+            'name' => 'Existing EAN Catalog Product',
+            'ean' => '879961009533',
+            'mpn' => null,
+        ]);
+        $this->supplierProduct($supplier, [
+            'name' => 'Supplier EAN Product',
+            'ean' => '879961009533',
+            'mpn' => null,
+        ]);
+
+        $result = Livewire::test(CatalogSyncPreview::class);
+        $rows = $result->instance()->queryOnlySupplierProducts()['rows'];
+        $summary = $result->instance()->queryOnlySupplierProducts()['summary'];
+
+        $this->assertSame($product->id, $rows[0]['matched_product_id']);
+        $this->assertSame('Existing EAN Catalog Product', $rows[0]['matched_product_name']);
+        $this->assertSame('ean', $rows[0]['match_type']);
+        $this->assertSame('exact', $rows[0]['match_confidence']);
+        $this->assertSame(1, $summary['matched']);
+
+        $result
+            ->assertSee('Matched Product ID')
+            ->assertSee('Matched Product')
+            ->assertSee('Match Type')
+            ->assertSee('Match Confidence')
+            ->assertSee('Existing EAN Catalog Product');
+    }
+
+    public function test_catalog_sync_preview_query_only_supplier_sku_matches_only_within_same_supplier(): void
+    {
+        $this->actingAsSupplierManager();
+
+        $supplierA = Supplier::factory()->create();
+        $supplierB = Supplier::factory()->create();
+        $product = Product::factory()->create([
+            'name' => 'Supplier A Offer Product',
+            'ean' => null,
+            'mpn' => null,
+        ]);
+        ProductSupplierOffer::query()->create([
+            'product_id' => $product->id,
+            'supplier_id' => $supplierA->id,
+            'supplier_product_id' => null,
+            'supplier_sku' => 'SHARED-SUP-SKU',
+            'price' => 25,
+            'quantity' => 10,
+            'currency' => 'EUR',
+        ]);
+
+        $this->supplierProduct($supplierA, [
+            'name' => 'Supplier A Shared SKU Product',
+            'supplier_sku' => 'SHARED-SUP-SKU',
+            'ean' => null,
+            'mpn' => null,
+        ]);
+        $this->supplierProduct($supplierB, [
+            'name' => 'Supplier B Shared SKU Product',
+            'supplier_sku' => 'SHARED-SUP-SKU',
+            'ean' => null,
+            'mpn' => null,
+        ]);
+
+        $supplierARows = Livewire::test(CatalogSyncPreview::class)
+            ->set('filters.supplier_id', $supplierA->id)
+            ->instance()
+            ->queryOnlySupplierProducts()['rows'];
+        $supplierBRows = Livewire::test(CatalogSyncPreview::class)
+            ->set('filters.supplier_id', $supplierB->id)
+            ->instance()
+            ->queryOnlySupplierProducts()['rows'];
+
+        $this->assertSame($product->id, $supplierARows[0]['matched_product_id']);
+        $this->assertSame('supplier_sku', $supplierARows[0]['match_type']);
+        $this->assertNull($supplierBRows[0]['matched_product_id']);
+        $this->assertSame('no_match', $supplierBRows[0]['match_type']);
+    }
+
+    public function test_catalog_sync_preview_query_only_mpn_brand_match_renders(): void
+    {
+        $this->actingAsSupplierManager();
+
+        $supplier = Supplier::factory()->create();
+        $brand = Brand::factory()->create(['name' => 'ASUS', 'slug' => 'asus']);
+        $product = Product::factory()->create([
+            'brand_id' => $brand->id,
+            'name' => 'Existing ASUS MPN Product',
+            'ean' => null,
+            'mpn' => 'ASUS-MPN-1',
+        ]);
+        $this->supplierProduct($supplier, [
+            'name' => 'Supplier ASUS MPN Product',
+            'ean' => null,
+            'mpn' => 'ASUS-MPN-1',
+            'brand_name' => 'ASUS',
+        ]);
+
+        $rows = Livewire::test(CatalogSyncPreview::class)
+            ->instance()
+            ->queryOnlySupplierProducts()['rows'];
+
+        $this->assertSame($product->id, $rows[0]['matched_product_id']);
+        $this->assertSame('Existing ASUS MPN Product', $rows[0]['matched_product_name']);
+        $this->assertSame('mpn_brand', $rows[0]['match_type']);
+    }
+
+    public function test_catalog_sync_preview_query_only_unmatched_product_renders(): void
+    {
+        $this->actingAsSupplierManager();
+
+        $supplier = Supplier::factory()->create();
+        $this->supplierProduct($supplier, [
+            'name' => 'Unmatched Supplier Product',
+            'ean' => null,
+            'mpn' => null,
+            'supplier_sku' => 'UNMATCHED-SKU',
+        ]);
+
+        $result = Livewire::test(CatalogSyncPreview::class);
+        $rows = $result->instance()->queryOnlySupplierProducts()['rows'];
+        $summary = $result->instance()->queryOnlySupplierProducts()['summary'];
+
+        $this->assertNull($rows[0]['matched_product_id']);
+        $this->assertNull($rows[0]['matched_product_name']);
+        $this->assertSame('no_match', $rows[0]['match_type']);
+        $this->assertSame('none', $rows[0]['match_confidence']);
+        $this->assertSame(1, $summary['unmatched']);
+    }
+
+    public function test_catalog_sync_preview_query_only_matching_failure_does_not_crash_page(): void
+    {
+        $this->actingAsSupplierManager();
+
+        $supplier = Supplier::factory()->create();
+        $broken = $this->supplierProduct($supplier, [
+            'name' => 'Broken Matching Product',
+        ]);
+        $this->supplierProduct($supplier, [
+            'name' => 'Healthy Matching Product',
+        ]);
+
+        config(['services.catalog_sync_preview.force_matching_failure_supplier_product_id' => $broken->id]);
+
+        $result = Livewire::test(CatalogSyncPreview::class);
+        $rows = $result->instance()->queryOnlySupplierProducts()['rows'];
+        $summary = $result->instance()->queryOnlySupplierProducts()['summary'];
+
+        $brokenRow = collect($rows)->firstWhere('supplier_product_id', $broken->id);
+
+        $this->assertSame('error', $brokenRow['match_type']);
+        $this->assertStringContainsString('matching_check_failed', $brokenRow['match_confidence']);
+        $this->assertSame(1, $summary['match_errors']);
+
+        $result
+            ->assertSee('Broken Matching Product')
+            ->assertSee('Healthy Matching Product')
+            ->assertSee('matching_check_failed');
+    }
+
+    public function test_catalog_sync_preview_query_only_matching_does_not_modify_catalog_data(): void
+    {
+        $this->actingAsSupplierManager();
+
+        $supplier = Supplier::factory()->create();
+        $product = Product::factory()->create([
+            'name' => 'Read Only Matched Product',
+            'ean' => '1234567890123',
+            'price' => 99,
+            'quantity' => 3,
+        ]);
+        $supplierProduct = $this->supplierProduct($supplier, [
+            'name' => 'Read Only Supplier Product',
+            'ean' => '1234567890123',
+            'price' => 10,
+            'quantity' => 15,
+        ]);
+
+        $beforeProduct = $product->fresh()->only(['name', 'ean', 'price', 'quantity', 'supplier_id', 'supplier_sku']);
+        $beforeSupplierProduct = $supplierProduct->fresh()->only(['name', 'ean', 'price', 'quantity', 'status']);
+
+        Livewire::test(CatalogSyncPreview::class)
+            ->instance()
+            ->queryOnlySupplierProducts();
+
+        $this->assertSame($beforeProduct, $product->fresh()->only(['name', 'ean', 'price', 'quantity', 'supplier_id', 'supplier_sku']));
+        $this->assertSame($beforeSupplierProduct, $supplierProduct->fresh()->only(['name', 'ean', 'price', 'quantity', 'status']));
     }
 
     private function actingAsSupplierManager(): User
