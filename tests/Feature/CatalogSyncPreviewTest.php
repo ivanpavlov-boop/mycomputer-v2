@@ -1521,8 +1521,10 @@ class CatalogSyncPreviewTest extends TestCase
             ->assertSee('Manual CREATE sync')
             ->assertSee('Only eligible CREATE rows will be processed.')
             ->assertSee('Sync Selected CREATE Products (0)')
+            ->assertSee('data-selected-create-sync-toolbar', false)
             ->assertSee('data-selected-create-sync-button', false)
             ->assertSee('data-selected-create-sync-disabled="true"', false)
+            ->assertSee('border-green-600', false)
             ->assertDontSee('M6.75 18.75h10.5A3.75', false)
             ->assertSee('Select')
             ->assertSee('wire:model="selectedSupplierProductIds"', false);
