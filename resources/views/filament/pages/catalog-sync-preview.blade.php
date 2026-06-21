@@ -93,6 +93,12 @@
                         </div>
                     </div>
 
+                    @php
+                        $createSyncButtonStyle = $selectedCreateCount === 0
+                            ? 'display: inline-flex; align-items: center; justify-content: center; border: 1px solid #d1d5db; color: #6b7280; background: #f3f4f6; padding: 8px 14px; border-radius: 8px; font-weight: 600; font-size: 14px; cursor: not-allowed; opacity: 0.8;'
+                            : 'display: inline-flex; align-items: center; justify-content: center; border: 1px solid #16a34a; color: #15803d; background: #ffffff; padding: 8px 14px; border-radius: 8px; font-weight: 600; font-size: 14px; cursor: pointer;';
+                    @endphp
+
                     <button
                         type="button"
                         wire:click="syncSelectedCreateProducts"
@@ -102,6 +108,7 @@
                         data-selected-create-sync-button
                         data-selected-create-sync-disabled="{{ $selectedCreateCount === 0 ? 'true' : 'false' }}"
                         class="inline-flex items-center justify-center rounded-md border border-green-600 bg-white px-4 py-2 text-sm font-medium text-green-700 shadow-sm transition hover:bg-green-50 focus:outline-none focus:ring-2 focus:ring-green-600 focus:ring-offset-2 disabled:cursor-not-allowed disabled:border-gray-300 disabled:bg-gray-100 disabled:text-gray-500 disabled:shadow-none dark:border-green-500 dark:bg-gray-900 dark:text-green-300 dark:hover:bg-green-950/40 dark:focus:ring-green-400 dark:disabled:border-gray-700 dark:disabled:bg-gray-800 dark:disabled:text-gray-500"
+                        style="{{ $createSyncButtonStyle }}"
                     >
                         Sync Selected CREATE Products ({{ $selectedCreateCount }})
                     </button>
