@@ -1515,19 +1515,35 @@ class CatalogSyncPreviewTest extends TestCase
             'mpn' => null,
         ]);
 
-        $this
-            ->get(CatalogSyncPreview::getUrl())
+        $response = $this->get(CatalogSyncPreview::getUrl());
+
+        $response
             ->assertOk()
             ->assertSee('Manual CREATE sync')
             ->assertSee('Only eligible CREATE rows will be processed.')
             ->assertSee('Sync Selected CREATE Products (0)')
             ->assertSee('data-selected-create-sync-toolbar', false)
+            ->assertSee('<button', false)
             ->assertSee('data-selected-create-sync-button', false)
             ->assertSee('data-selected-create-sync-disabled="true"', false)
             ->assertSee('border-green-600', false)
+            ->assertSee('style="display: inline-flex; align-items: center; justify-content: center; border: 1px solid #d1d5db;', false)
+            ->assertSee('cursor: not-allowed;', false)
             ->assertDontSee('M6.75 18.75h10.5A3.75', false)
             ->assertSee('Select')
             ->assertSee('wire:model="selectedSupplierProductIds"', false);
+
+        $content = $response->getContent();
+        $toolbarStart = strpos($content, 'data-selected-create-sync-toolbar');
+        $toolbarEnd = strpos($content, 'data-catalog-sync-preview-scroll-panel', $toolbarStart);
+
+        $this->assertNotFalse($toolbarStart);
+        $this->assertNotFalse($toolbarEnd);
+
+        $toolbarHtml = substr($content, $toolbarStart, $toolbarEnd - $toolbarStart);
+
+        $this->assertStringNotContainsString('<svg', $toolbarHtml);
+        $this->assertStringNotContainsString('heroicon', $toolbarHtml);
     }
 
     public function test_catalog_sync_preview_manual_create_button_shows_selected_count(): void
@@ -1545,7 +1561,9 @@ class CatalogSyncPreviewTest extends TestCase
         Livewire::test(CatalogSyncPreview::class)
             ->set('selectedSupplierProductIds', [$supplierProduct->id])
             ->assertSee('Sync Selected CREATE Products (1)')
-            ->assertSee('data-selected-create-sync-disabled="false"', false);
+            ->assertSee('data-selected-create-sync-disabled="false"', false)
+            ->assertSee('border: 1px solid #16a34a;', false)
+            ->assertSee('cursor: pointer;', false);
     }
 
     private function actingAsSupplierManager(): User
