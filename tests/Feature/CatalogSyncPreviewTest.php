@@ -1068,6 +1068,8 @@ class CatalogSyncPreviewTest extends TestCase
 
         $result
             ->assertDontSee('Update Only Supplier Product')
+            ->assertSee('Sync Selected CREATE Products (0)')
+            ->assertSee('data-selected-create-sync-disabled="true"', false)
             ->assertSee('No supplier products match the query-only filters.');
     }
 
@@ -1519,6 +1521,7 @@ class CatalogSyncPreviewTest extends TestCase
 
         $response
             ->assertOk()
+            ->assertSee('wire:model.live="filters.action"', false)
             ->assertSee('Manual CREATE sync')
             ->assertSee('Only eligible CREATE rows will be processed.')
             ->assertSee('Sync Selected CREATE Products (0)')
