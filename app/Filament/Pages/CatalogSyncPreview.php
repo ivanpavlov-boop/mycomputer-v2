@@ -94,7 +94,8 @@ class CatalogSyncPreview extends Page
                             'SKIP' => 'Skip',
                             'CONFLICT' => 'Conflict',
                             'ERROR' => 'Error',
-                        ]),
+                        ])
+                        ->live(),
                     Select::make('quick_filter')
                         ->label('Quick filter')
                         ->options([
@@ -223,11 +224,11 @@ class CatalogSyncPreview extends Page
             return $rows;
         }
 
-        $normalizedAction = Str::upper((string) $action);
+        $normalizedAction = Str::upper(trim((string) $action));
 
         return array_values(array_filter(
             $rows,
-            fn (array $row): bool => ($row['sync_action'] ?? null) === $normalizedAction,
+            fn (array $row): bool => Str::upper(trim((string) ($row['sync_action'] ?? ''))) === $normalizedAction,
         ));
     }
 
