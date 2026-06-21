@@ -1523,6 +1523,7 @@ class CatalogSyncPreviewTest extends TestCase
             ->assertSee('Sync Selected CREATE Products (0)')
             ->assertSee('data-selected-create-sync-button', false)
             ->assertSee('data-selected-create-sync-disabled="true"', false)
+            ->assertDontSee('M6.75 18.75h10.5A3.75', false)
             ->assertSee('Select')
             ->assertSee('wire:model="selectedSupplierProductIds"', false);
     }
