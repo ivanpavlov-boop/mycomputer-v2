@@ -1518,9 +1518,31 @@ class CatalogSyncPreviewTest extends TestCase
         $this
             ->get(CatalogSyncPreview::getUrl())
             ->assertOk()
-            ->assertSee('Sync Selected CREATE Products')
+            ->assertSee('Manual CREATE sync')
+            ->assertSee('Only eligible CREATE rows will be processed.')
+            ->assertSee('Sync Selected CREATE Products (0)')
+            ->assertSee('data-selected-create-sync-button', false)
+            ->assertSee('data-selected-create-sync-disabled="true"', false)
             ->assertSee('Select')
             ->assertSee('wire:model="selectedSupplierProductIds"', false);
+    }
+
+    public function test_catalog_sync_preview_manual_create_button_shows_selected_count(): void
+    {
+        $this->actingAsSupplierManager();
+
+        $supplier = Supplier::factory()->create();
+        $supplierProduct = $this->supplierProduct($supplier, [
+            'name' => 'Selected Count Create Product',
+            'supplier_sku' => 'SELECTED-COUNT-CREATE',
+            'ean' => null,
+            'mpn' => null,
+        ]);
+
+        Livewire::test(CatalogSyncPreview::class)
+            ->set('selectedSupplierProductIds', [$supplierProduct->id])
+            ->assertSee('Sync Selected CREATE Products (1)')
+            ->assertSee('data-selected-create-sync-disabled="false"', false);
     }
 
     private function actingAsSupplierManager(): User

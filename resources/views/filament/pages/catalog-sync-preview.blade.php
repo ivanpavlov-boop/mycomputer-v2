@@ -17,6 +17,7 @@
             $headerCell = 'sticky top-0 z-30 whitespace-nowrap bg-gray-50 px-3 py-2 shadow-sm dark:bg-gray-950';
             $cell = 'whitespace-nowrap px-3 py-2';
             $truncateCell = 'max-w-[22rem] truncate px-3 py-2';
+            $selectedCreateCount = count($this->selectedSupplierProductIds);
             $summaryCounters = [
                 'Total Rows' => $summary['total'],
                 'Included Rows' => $summary['included'],
@@ -80,19 +81,32 @@
                 <div class="mt-1">{{ $queryError }}</div>
             </div>
         @else
-            <div class="flex flex-col gap-3 rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-gray-900 sm:flex-row sm:items-center sm:justify-between">
-                <div class="text-sm text-gray-600 dark:text-gray-300">
-                    Select eligible CREATE rows, then run a safe manual create sync. UPDATE, SKIP, CONFLICT and ERROR rows are revalidated and ignored.
+            <div class="rounded-xl border border-green-200 bg-green-50/80 p-4 shadow-sm dark:border-green-900/70 dark:bg-green-950/30">
+                <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                    <div>
+                        <div class="text-sm font-semibold text-green-950 dark:text-green-100">Manual CREATE sync</div>
+                        <div class="mt-1 text-sm text-green-800 dark:text-green-200">
+                            Only eligible CREATE rows will be processed.
+                        </div>
+                    </div>
+
+                    <button
+                        type="button"
+                        wire:click="syncSelectedCreateProducts"
+                        wire:loading.attr="disabled"
+                        wire:target="syncSelectedCreateProducts"
+                        @disabled($selectedCreateCount === 0)
+                        data-selected-create-sync-button
+                        data-selected-create-sync-disabled="{{ $selectedCreateCount === 0 ? 'true' : 'false' }}"
+                        class="inline-flex items-center justify-center gap-2 rounded-lg bg-green-600 px-5 py-3 text-sm font-bold text-white shadow-md shadow-green-900/10 ring-1 ring-inset ring-green-500 transition hover:bg-green-500 focus:outline-none focus:ring-2 focus:ring-green-600 focus:ring-offset-2 disabled:cursor-not-allowed disabled:bg-gray-300 disabled:text-gray-600 disabled:shadow-none dark:bg-green-500 dark:hover:bg-green-400 dark:focus:ring-green-400 dark:disabled:bg-gray-700 dark:disabled:text-gray-400"
+                    >
+                        <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 16.5V9.75m0 0 3 3m-3-3-3 3" />
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M6.75 18.75h10.5A3.75 3.75 0 0 0 18 11.33 5.25 5.25 0 0 0 7.86 9.72 4.5 4.5 0 0 0 6.75 18.75Z" />
+                        </svg>
+                        <span>Sync Selected CREATE Products ({{ $selectedCreateCount }})</span>
+                    </button>
                 </div>
-                <button
-                    type="button"
-                    wire:click="syncSelectedCreateProducts"
-                    wire:loading.attr="disabled"
-                    wire:target="syncSelectedCreateProducts"
-                    class="inline-flex items-center justify-center rounded-md bg-primary-600 px-3 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-primary-500 disabled:cursor-not-allowed disabled:opacity-70 dark:bg-primary-500 dark:hover:bg-primary-400"
-                >
-                    Sync Selected CREATE Products
-                </button>
             </div>
 
             <div class="max-w-full rounded-lg border border-gray-200 bg-white shadow-sm dark:border-gray-800 dark:bg-gray-900" style="width: 100%; max-width: 100%;">
