@@ -27,6 +27,8 @@ Manual selected UPDATE price/stock sync is implemented behind `CATALOG_SYNC_UPDA
 - Counter layout.
 - Catalog sync feature flags and selected CREATE audit trail.
 - Manual selected UPDATE price/stock sync with audit old/new commercial values.
+- Catalog Sync Preview feature flag visibility.
+- Read-only Filament Catalog Sync Batches and Catalog Sync Logs views.
 
 ## Current Safety Position
 
@@ -41,7 +43,7 @@ Manual selected UPDATE price/stock sync is implemented behind `CATALOG_SYNC_UPDA
 ## Next
 
 1. Keep Phase 7.5 documentation lock current.
-2. Fix any diagnostic cosmetic inconsistency if needed.
+2. Keep feature flag/audit visibility read-only.
 3. Rollback tooling based on `catalog_sync_batches` and `catalog_sync_logs`.
 4. Keep feature flags locked down before broader sync work.
 5. Conflict/manual mapping workflow.

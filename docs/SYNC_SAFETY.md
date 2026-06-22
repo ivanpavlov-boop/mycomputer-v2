@@ -49,6 +49,8 @@ Safe defaults:
 
 If `CATALOG_SYNC_CREATE_ENABLED=false`, manual selected CREATE sync is blocked server-side. The UI may also disable the action, but the server guard is authoritative.
 
+Catalog Sync Preview shows the effective feature flag values from `config/catalog_sync.php` so admins can confirm safety state before using manual actions. The panel is read-only and does not write to `.env` or configuration.
+
 ## Active Audit Trail
 
 Manual selected CREATE sync now writes audit records to:
@@ -86,6 +88,8 @@ Manual selected UPDATE logs store old/new values only for the commercial fields 
 - supplier ID / supplier SKU
 - external supplier availability labels
 - selected supplier offer ID
+
+Admins can review audit history in Filament through read-only Catalog Sync Batches and Catalog Sync Logs resources. These resources expose list/detail views only; they do not allow create, edit, delete, rollback, Sync All, or automatic sync actions.
 
 ## What Is Allowed
 

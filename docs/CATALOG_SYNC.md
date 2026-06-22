@@ -22,6 +22,8 @@ Related docs: [Supplier Import](SUPPLIER_IMPORT.md), [Pricing Rules](PRICING_RUL
 - Feature flags exist for CREATE, UPDATE, Sync All, and automatic sync.
 - Manual selected CREATE sync writes `catalog_sync_batches` and `catalog_sync_logs` audit records.
 - Manual selected UPDATE sync exists for price, stock, availability, supplier cost, and supplier offer metadata only.
+- Catalog Sync Preview shows the effective feature flag status from configuration.
+- Filament exposes read-only Catalog Sync Batches and Catalog Sync Logs admin views.
 
 Only selected CREATE sync and feature-flagged selected UPDATE price/stock sync are implemented. Sync All, automatic sync, scheduled sync, and image import are not enabled.
 
@@ -111,6 +113,8 @@ Sample diagnostic rows show:
 ## What Is Allowed
 
 - Read-only diagnostics.
+- Read-only feature flag visibility in Catalog Sync Preview.
+- Read-only review of Catalog Sync Batches and Catalog Sync Logs in Filament.
 - Manual selected CREATE sync for eligible rows.
 - Manual selected UPDATE sync for eligible rows when `CATALOG_SYNC_UPDATE_ENABLED=true`.
 - Per-row try/catch for selected CREATE writes.

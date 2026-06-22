@@ -39,6 +39,8 @@ CATALOG_SYNC_AUTO_ENABLED=false
 
 Set `CATALOG_SYNC_CREATE_ENABLED=false` for an emergency stop of manual selected CREATE sync without disabling read-only preview access.
 
+After deploy, admins can confirm the effective values in the read-only Catalog Sync feature flag panel on Catalog Sync Preview. Do not change real `.env` values through the admin panel; the panel is visibility only. Catalog Sync Batches and Catalog Sync Logs are also visible in Filament as read-only audit history.
+
 ## Safe VPS Deploy Command
 
 ```bash
