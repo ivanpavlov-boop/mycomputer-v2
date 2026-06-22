@@ -29,9 +29,9 @@ Only manual selected CREATE sync is enabled. UPDATE sync, Sync All, automatic sy
 - Tests for skipped, failed, and successful rows.
 - Clear field allowlist.
 
-## Planned Feature Flags
+## Active Feature Flags
 
-These flags are documented as desired safety controls. Treat them as planned unless verified in code.
+Catalog sync write surfaces are controlled by `config/catalog_sync.php`.
 
 ```dotenv
 CATALOG_SYNC_CREATE_ENABLED=true
@@ -39,6 +39,44 @@ CATALOG_SYNC_UPDATE_ENABLED=false
 CATALOG_SYNC_SYNC_ALL_ENABLED=false
 CATALOG_SYNC_AUTO_ENABLED=false
 ```
+
+Safe defaults:
+
+- selected CREATE sync is enabled by default
+- UPDATE sync is disabled
+- Sync All is disabled
+- automatic/scheduled sync is disabled
+
+If `CATALOG_SYNC_CREATE_ENABLED=false`, manual selected CREATE sync is blocked server-side. The UI may also disable the action, but the server guard is authoritative.
+
+## Active Audit Trail
+
+Manual selected CREATE sync now writes audit records to:
+
+- `catalog_sync_batches`
+- `catalog_sync_logs`
+
+Each selected CREATE run creates a batch with:
+
+- user
+- mode
+- selected count
+- created/skipped/failed totals
+- batch UUID
+- start/completion timestamps
+
+Each selected row records:
+
+- supplier product
+- supplier
+- catalog product when created
+- action
+- status
+- reason
+- safe old/new values
+- error message for failures
+
+CREATE logs store no destructive old values because they create new draft catalog products only. Future UPDATE sync must record old and new values before it can be enabled.
 
 ## What Is Allowed
 
@@ -55,6 +93,5 @@ CATALOG_SYNC_AUTO_ENABLED=false
 
 ## Future Work / Open Questions
 
-- Implement actual feature flags if not already present.
-- Add rollback-backed audit tables before broad UPDATE.
+- Add rollback tooling on top of sync batch/log records.
 - Add emergency kill switch documentation to deployment checklist.

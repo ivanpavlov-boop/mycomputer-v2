@@ -19,6 +19,8 @@ Related docs: [Supplier Import](SUPPLIER_IMPORT.md), [Pricing Rules](PRICING_RUL
 - Read-only CREATE diagnostics exist.
 - Catalog action filtering exists.
 - Table scroll panel, sticky header, and counter layout exist.
+- Feature flags exist for CREATE, UPDATE, Sync All, and automatic sync.
+- Manual selected CREATE sync writes `catalog_sync_batches` and `catalog_sync_logs` audit records.
 
 Only selected CREATE sync is enabled. UPDATE sync, Sync All, automatic sync, scheduled sync, and image import are not enabled.
 
@@ -32,6 +34,7 @@ supplier_products staging
 -> matching
 -> sync_action preview
 -> manual selected CREATE sync
+-> catalog sync batch/log audit
 -> catalog products
 ```
 
@@ -110,6 +113,8 @@ Sample diagnostic rows show:
 - Per-row try/catch for selected CREATE writes.
 - Server-side revalidation before writes.
 - Visible created/skipped/failed summary.
+- Batch/log audit records for manual selected CREATE sync.
+- `CATALOG_SYNC_CREATE_ENABLED=false` can disable CREATE sync without removing preview access.
 
 ## What Is Forbidden
 
@@ -124,6 +129,5 @@ Sample diagnostic rows show:
 ## Future Work / Open Questions
 
 - Phase 8: manual selected UPDATE for price, supplier cost, stock, availability, and active supplier offer only.
-- Audit log and rollback support before broader writes.
-- Feature flags or kill switches before any larger sync surface.
+- Rollback tooling before broader writes.
 - Sync All only after explicit design, auditability, and rollback.

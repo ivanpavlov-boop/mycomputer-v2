@@ -8,7 +8,7 @@ Related docs: [Roadmap](ROADMAP.md), [Catalog Sync](CATALOG_SYNC.md), [Sync Safe
 
 ## Current Status
 
-Feature development is paused at Phase 7.5 for architecture, safety, and documentation lock before Phase 8 UPDATE sync.
+Feature development is paused after Phase 7.6 safety infrastructure before Phase 8 UPDATE sync.
 
 ## Completed Phases
 
@@ -23,7 +23,8 @@ Feature development is paused at Phase 7.5 for architecture, safety, and documen
 | Phase 7 | Manual selected CREATE sync | Complete |
 | Phase 7.1 | CREATE candidate discovery | Complete |
 | Phase 7.2 | CREATE diagnostics | Complete |
-| Phase 7.5 | Architecture & Documentation Lock | In progress in this documentation pass |
+| Phase 7.5 | Architecture & Documentation Lock | Complete |
+| Phase 7.6 | Catalog Sync Safety Infrastructure | Complete |
 
 ## Next Planned Phases
 
@@ -37,18 +38,17 @@ Feature development is paused at Phase 7.5 for architecture, safety, and documen
 
 ## Allowed
 
-- Complete Phase 7.5 docs and safety rules.
+- Maintain Phase 7.5 docs and Phase 7.6 safety rules.
 - Add tests/docs before Phase 8.
 
 ## Forbidden
 
-- Do not start Phase 8 inside Phase 7.5.
+- Do not start Phase 8 inside Phase 7.6.
 - Do not add Sync All.
 - Do not enable automatic sync.
 
 ## Future Work / Open Questions
 
 - Exact Phase 8 UI layout.
-- Audit log schema.
+- Rollback tooling on top of the Phase 7.6 sync batch/log audit trail.
 - Rollback execution UX.
-- Feature flag implementation.

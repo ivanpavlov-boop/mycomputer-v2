@@ -227,6 +227,12 @@
                         @endforeach
                     </ul>
                 @endif
+
+                @if (! empty($this->lastManualSyncResult['batch_uuid']))
+                    <div class="mt-3 rounded-md border border-gray-200 bg-gray-50 p-3 text-xs text-gray-600 dark:border-gray-800 dark:bg-gray-950 dark:text-gray-300">
+                        Catalog sync batch: {{ $this->lastManualSyncResult['batch_uuid'] }}
+                    </div>
+                @endif
             </div>
         @endif
 
@@ -262,19 +268,27 @@
                     </div>
 
                     @php
-                        $createSyncButtonStyle = $selectedCreateCount === 0
+                        $createSyncEnabled = (bool) config('catalog_sync.create_enabled', true);
+                        $createSyncButtonDisabled = ! $createSyncEnabled || $selectedCreateCount === 0;
+                        $createSyncButtonStyle = $createSyncButtonDisabled
                             ? 'display: inline-flex; align-items: center; justify-content: center; border: 1px solid #d1d5db; color: #6b7280; background: #f3f4f6; padding: 8px 14px; border-radius: 8px; font-weight: 600; font-size: 14px; cursor: not-allowed; opacity: 0.8;'
                             : 'display: inline-flex; align-items: center; justify-content: center; border: 1px solid #16a34a; color: #15803d; background: #ffffff; padding: 8px 14px; border-radius: 8px; font-weight: 600; font-size: 14px; cursor: pointer;';
                     @endphp
+
+                    @if (! $createSyncEnabled)
+                        <div class="rounded-md border border-yellow-200 bg-yellow-50 px-3 py-2 text-xs font-medium text-yellow-800 dark:border-yellow-900 dark:bg-yellow-950 dark:text-yellow-200">
+                            Manual CREATE sync is disabled by configuration.
+                        </div>
+                    @endif
 
                     <button
                         type="button"
                         wire:click="syncSelectedCreateProducts"
                         wire:loading.attr="disabled"
                         wire:target="syncSelectedCreateProducts"
-                        @disabled($selectedCreateCount === 0)
+                        @disabled($createSyncButtonDisabled)
                         data-selected-create-sync-button
-                        data-selected-create-sync-disabled="{{ $selectedCreateCount === 0 ? 'true' : 'false' }}"
+                        data-selected-create-sync-disabled="{{ $createSyncButtonDisabled ? 'true' : 'false' }}"
                         class="inline-flex items-center justify-center rounded-md border border-green-600 bg-white px-4 py-2 text-sm font-medium text-green-700 shadow-sm transition hover:bg-green-50 focus:outline-none focus:ring-2 focus:ring-green-600 focus:ring-offset-2 disabled:cursor-not-allowed disabled:border-gray-300 disabled:bg-gray-100 disabled:text-gray-500 disabled:shadow-none dark:border-green-500 dark:bg-gray-900 dark:text-green-300 dark:hover:bg-green-950/40 dark:focus:ring-green-400 dark:disabled:border-gray-700 dark:disabled:bg-gray-800 dark:disabled:text-gray-500"
                         style="{{ $createSyncButtonStyle }}"
                     >
