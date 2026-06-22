@@ -23,6 +23,38 @@
                 'skipped_rows' => 0,
                 'matched_update_rows' => 0,
                 'excluded_rows' => 0,
+                'unmatched_not_create_reasons' => [],
+                'skip_reason_summary' => [],
+                'match_type_summary' => [],
+            ];
+            $unmatchedReasonLabels = [
+                'excluded' => 'Excluded',
+                'missing_required_data' => 'Missing required data',
+                'missing_ean' => 'Missing EAN',
+                'missing_name' => 'Missing name',
+                'missing_supplier_sku' => 'Missing supplier SKU',
+                'missing_price' => 'Missing price',
+                'missing_stock_availability' => 'Missing stock / availability',
+                'conflict' => 'Conflict',
+                'not_eligible' => 'Not eligible',
+                'other' => 'Other',
+            ];
+            $skipReasonLabels = [
+                'excluded' => 'Excluded',
+                'matched_existing_product' => 'Matched existing product',
+                'no_meaningful_changes' => 'No meaningful changes',
+                'missing_required_data' => 'Missing required data',
+                'conflict' => 'Conflict',
+                'other' => 'Other',
+            ];
+            $matchTypeLabels = [
+                'exact_ean_match' => 'Exact EAN match',
+                'supplier_sku_match' => 'Supplier SKU match',
+                'mpn_brand_match' => 'MPN + Brand match',
+                'name_similarity_only' => 'Name similarity only',
+                'no_exact_match' => 'No exact match',
+                'match_errors' => 'Match errors',
+                'other' => 'Other',
             ];
             $money = fn ($value): string => $value !== null ? number_format((float) $value, 2).' EUR' : '-';
             $headerCell = 'sticky top-0 z-30 whitespace-nowrap bg-gray-50 px-3 py-2 shadow-sm dark:bg-gray-950';
@@ -68,6 +100,56 @@
                 @if ($discovery['create_candidates_found'] === 0)
                     <div class="mt-3 rounded-md border border-yellow-200 bg-yellow-50 p-3 text-yellow-800 dark:border-yellow-900 dark:bg-yellow-950 dark:text-yellow-100">
                         No eligible CREATE candidates found in the scanned supplier products.
+                    </div>
+
+                    <div
+                        data-create-candidate-zero-diagnostics
+                        class="mt-4 rounded-md border border-gray-200 bg-white p-3 text-gray-800 shadow-sm dark:border-gray-800 dark:bg-gray-900 dark:text-gray-100"
+                    >
+                        <div class="font-semibold">Why no CREATE candidates?</div>
+                        <div class="mt-3 grid grid-cols-1 gap-4 lg:grid-cols-3">
+                            <div>
+                                <div class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                                    Unmatched but not CREATE
+                                </div>
+                                <dl class="mt-2 space-y-1">
+                                    @foreach ($unmatchedReasonLabels as $key => $label)
+                                        <div class="flex justify-between gap-3">
+                                            <dt>{{ $label }}</dt>
+                                            <dd class="font-semibold">{{ $discovery['unmatched_not_create_reasons'][$key] ?? 0 }}</dd>
+                                        </div>
+                                    @endforeach
+                                </dl>
+                            </div>
+
+                            <div>
+                                <div class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                                    Full scan skip reasons
+                                </div>
+                                <dl class="mt-2 space-y-1">
+                                    @foreach ($skipReasonLabels as $key => $label)
+                                        <div class="flex justify-between gap-3">
+                                            <dt>{{ $label }}</dt>
+                                            <dd class="font-semibold">{{ $discovery['skip_reason_summary'][$key] ?? 0 }}</dd>
+                                        </div>
+                                    @endforeach
+                                </dl>
+                            </div>
+
+                            <div>
+                                <div class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                                    Match type summary
+                                </div>
+                                <dl class="mt-2 space-y-1">
+                                    @foreach ($matchTypeLabels as $key => $label)
+                                        <div class="flex justify-between gap-3">
+                                            <dt>{{ $label }}</dt>
+                                            <dd class="font-semibold">{{ $discovery['match_type_summary'][$key] ?? 0 }}</dd>
+                                        </div>
+                                    @endforeach
+                                </dl>
+                            </div>
+                        </div>
                     </div>
                 @endif
             </div>

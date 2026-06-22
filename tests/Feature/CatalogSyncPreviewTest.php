@@ -1757,6 +1757,157 @@ class CatalogSyncPreviewTest extends TestCase
             ->assertSee('data-selected-create-sync-disabled="false"', false);
     }
 
+    public function test_catalog_sync_preview_create_candidate_diagnostics_count_unmatched_missing_required_data(): void
+    {
+        $this->actingAsSupplierManager();
+
+        $supplier = Supplier::factory()->create();
+        $this->supplierProduct($supplier, [
+            'name' => 'Missing Required Discovery Product',
+            'supplier_sku' => null,
+            'ean' => null,
+            'mpn' => null,
+            'price' => 100,
+        ]);
+
+        $result = Livewire::test(CatalogSyncPreview::class)
+            ->set('filters.supplier_id', $supplier->id)
+            ->set('filters.discovery_mode', 'create_candidates');
+        $preview = $result->instance()->queryOnlySupplierProducts();
+
+        $this->assertSame(0, $preview['discovery']['create_candidates_found']);
+        $this->assertSame(1, $preview['discovery']['unmatched_not_create_reasons']['missing_required_data']);
+        $this->assertSame(1, $preview['discovery']['unmatched_not_create_reasons']['missing_ean']);
+        $this->assertSame(1, $preview['discovery']['unmatched_not_create_reasons']['missing_supplier_sku']);
+        $this->assertSame(1, $preview['discovery']['skip_reason_summary']['missing_required_data']);
+        $this->assertSame(1, $preview['discovery']['match_type_summary']['no_exact_match']);
+
+        $result
+            ->assertSee('Why no CREATE candidates?')
+            ->assertSee('Missing required data')
+            ->assertSee('Missing EAN')
+            ->assertSee('Missing supplier SKU');
+    }
+
+    public function test_catalog_sync_preview_create_candidate_diagnostics_count_unmatched_excluded_row(): void
+    {
+        $this->actingAsSupplierManager();
+
+        $supplier = Supplier::factory()->create();
+        $this->supplierProduct($supplier, [
+            'name' => 'Excluded Discovery Product',
+            'supplier_sku' => 'EXCLUDED-DISCOVERY',
+            'ean' => null,
+            'mpn' => null,
+            'quantity' => 0,
+        ]);
+
+        SupplierExclusionRule::query()->create([
+            'name' => 'Discovery zero stock rule',
+            'is_active' => true,
+            'exclude_zero_stock' => true,
+            'priority' => 10,
+        ]);
+
+        $preview = Livewire::test(CatalogSyncPreview::class)
+            ->set('filters.supplier_id', $supplier->id)
+            ->set('filters.discovery_mode', 'create_candidates')
+            ->instance()
+            ->queryOnlySupplierProducts();
+
+        $this->assertSame(0, $preview['discovery']['create_candidates_found']);
+        $this->assertSame(1, $preview['discovery']['unmatched_not_create_reasons']['excluded']);
+        $this->assertSame(1, $preview['discovery']['skip_reason_summary']['excluded']);
+        $this->assertSame(1, $preview['discovery']['match_type_summary']['no_exact_match']);
+    }
+
+    public function test_catalog_sync_preview_create_candidate_diagnostics_count_exact_ean_match_separately(): void
+    {
+        $this->actingAsSupplierManager();
+
+        $supplier = Supplier::factory()->create();
+        Product::factory()->create([
+            'name' => 'Exact EAN Catalog Product',
+            'ean' => '5656565656565',
+            'mpn' => null,
+            'price' => 100,
+            'quantity' => 5,
+        ]);
+        $this->supplierProduct($supplier, [
+            'name' => 'Exact EAN Supplier Product',
+            'ean' => '5656565656565',
+            'mpn' => null,
+        ]);
+
+        $preview = Livewire::test(CatalogSyncPreview::class)
+            ->set('filters.supplier_id', $supplier->id)
+            ->set('filters.discovery_mode', 'create_candidates')
+            ->instance()
+            ->queryOnlySupplierProducts();
+
+        $this->assertSame(0, $preview['discovery']['create_candidates_found']);
+        $this->assertSame(1, $preview['discovery']['match_type_summary']['exact_ean_match']);
+        $this->assertSame(1, $preview['discovery']['skip_reason_summary']['matched_existing_product']);
+    }
+
+    public function test_catalog_sync_preview_name_similarity_is_diagnostic_only_not_safe_update(): void
+    {
+        $this->actingAsSupplierManager();
+
+        $supplier = Supplier::factory()->create();
+        Product::factory()->create([
+            'name' => 'Satechi Duo Wireless Charger Power Bank Stand',
+            'ean' => null,
+            'mpn' => null,
+            'supplier_sku' => null,
+            'price' => 100,
+            'quantity' => 5,
+        ]);
+        $this->supplierProduct($supplier, [
+            'name' => 'Satechi Duo Wireless Charger Power Bank Stand',
+            'supplier_sku' => 'SATECHI-SIMILARITY-ONLY',
+            'ean' => null,
+            'mpn' => null,
+        ]);
+
+        $preview = Livewire::test(CatalogSyncPreview::class)
+            ->set('filters.supplier_id', $supplier->id)
+            ->set('filters.discovery_mode', 'create_candidates')
+            ->instance()
+            ->queryOnlySupplierProducts();
+
+        $this->assertSame(0, $preview['summary']['update_rows']);
+        $this->assertSame(1, $preview['summary']['conflict_rows']);
+        $this->assertSame(1, $preview['discovery']['match_type_summary']['name_similarity_only']);
+        $this->assertSame(1, $preview['discovery']['unmatched_not_create_reasons']['conflict']);
+        $this->assertSame(1, $preview['discovery']['skip_reason_summary']['conflict']);
+    }
+
+    public function test_catalog_sync_preview_create_candidate_diagnostics_are_read_only(): void
+    {
+        $this->actingAsSupplierManager();
+
+        $supplier = Supplier::factory()->create();
+        $supplierProduct = $this->supplierProduct($supplier, [
+            'name' => 'Read Only Diagnostics Product',
+            'supplier_sku' => null,
+            'ean' => null,
+            'mpn' => null,
+        ]);
+
+        $beforeProductCount = Product::query()->count();
+        $beforeSupplierProduct = $supplierProduct->fresh()->only(['name', 'ean', 'mpn', 'supplier_sku', 'price', 'quantity', 'status', 'product_id']);
+
+        Livewire::test(CatalogSyncPreview::class)
+            ->set('filters.supplier_id', $supplier->id)
+            ->set('filters.discovery_mode', 'create_candidates')
+            ->instance()
+            ->queryOnlySupplierProducts();
+
+        $this->assertSame($beforeProductCount, Product::query()->count());
+        $this->assertSame($beforeSupplierProduct, $supplierProduct->fresh()->only(['name', 'ean', 'mpn', 'supplier_sku', 'price', 'quantity', 'status', 'product_id']));
+    }
+
     private function actingAsSupplierManager(): User
     {
         $this->seed(RolesAndPermissionsSeeder::class);

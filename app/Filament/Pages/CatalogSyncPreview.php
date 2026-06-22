@@ -131,7 +131,7 @@ class CatalogSyncPreview extends Page
     }
 
     /**
-     * @return array{rows: array<int, array<string, mixed>>, error: string|null, limit: int|string, summary: array{total: int, included: int, excluded: int, matched: int, unmatched: int, match_errors: int, create_rows: int, update_rows: int, skip_rows: int, conflict_rows: int, error_rows: int}, discovery: array{enabled: bool, scan_limit: int, result_limit: int, scanned_rows: int, create_candidates_found: int, displayed_create_candidates: int, skipped_rows: int, matched_update_rows: int, excluded_rows: int}}
+     * @return array{rows: array<int, array<string, mixed>>, error: string|null, limit: int|string, summary: array{total: int, included: int, excluded: int, matched: int, unmatched: int, match_errors: int, create_rows: int, update_rows: int, skip_rows: int, conflict_rows: int, error_rows: int}, discovery: array<string, mixed>}
      */
     public function queryOnlySupplierProducts(): array
     {
@@ -213,7 +213,7 @@ class CatalogSyncPreview extends Page
 
     /**
      * @param  Builder<SupplierProduct>  $query
-     * @return array{rows: array<int, array<string, mixed>>, error: string|null, limit: int|string, summary: array{total: int, included: int, excluded: int, matched: int, unmatched: int, match_errors: int, create_rows: int, update_rows: int, skip_rows: int, conflict_rows: int, error_rows: int}, discovery: array{enabled: bool, scan_limit: int, result_limit: int, scanned_rows: int, create_candidates_found: int, displayed_create_candidates: int, skipped_rows: int, matched_update_rows: int, excluded_rows: int}}
+     * @return array{rows: array<int, array<string, mixed>>, error: string|null, limit: int|string, summary: array{total: int, included: int, excluded: int, matched: int, unmatched: int, match_errors: int, create_rows: int, update_rows: int, skip_rows: int, conflict_rows: int, error_rows: int}, discovery: array<string, mixed>}
      */
     protected function queryCreateCandidateRows(Builder $query, int|string $limit): array
     {
@@ -234,6 +234,7 @@ class CatalogSyncPreview extends Page
             });
 
         $summary = $this->queryOnlySummary($evaluatedRows);
+        $diagnostics = $this->createCandidateDiagnostics($evaluatedRows);
 
         return [
             'rows' => $candidateRows,
@@ -250,12 +251,15 @@ class CatalogSyncPreview extends Page
                 'skipped_rows' => $summary['skip_rows'],
                 'matched_update_rows' => $summary['update_rows'],
                 'excluded_rows' => $summary['excluded'],
+                'unmatched_not_create_reasons' => $diagnostics['unmatched_not_create_reasons'],
+                'skip_reason_summary' => $diagnostics['skip_reason_summary'],
+                'match_type_summary' => $diagnostics['match_type_summary'],
             ],
         ];
     }
 
     /**
-     * @return array{enabled: bool, scan_limit: int, result_limit: int, scanned_rows: int, create_candidates_found: int, displayed_create_candidates: int, skipped_rows: int, matched_update_rows: int, excluded_rows: int}
+     * @return array<string, mixed>
      */
     protected function emptyCreateCandidateDiscovery(): array
     {
@@ -269,7 +273,177 @@ class CatalogSyncPreview extends Page
             'skipped_rows' => 0,
             'matched_update_rows' => 0,
             'excluded_rows' => 0,
+            'unmatched_not_create_reasons' => $this->emptyUnmatchedNotCreateReasons(),
+            'skip_reason_summary' => $this->emptySkipReasonSummary(),
+            'match_type_summary' => $this->emptyMatchTypeSummary(),
         ];
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $rows
+     * @return array{unmatched_not_create_reasons: array<string, int>, skip_reason_summary: array<string, int>, match_type_summary: array<string, int>}
+     */
+    protected function createCandidateDiagnostics(array $rows): array
+    {
+        $unmatchedNotCreateReasons = $this->emptyUnmatchedNotCreateReasons();
+        $skipReasonSummary = $this->emptySkipReasonSummary();
+        $matchTypeSummary = $this->emptyMatchTypeSummary();
+
+        foreach ($rows as $row) {
+            $syncAction = (string) ($row['sync_action'] ?? '');
+            $syncReason = (string) ($row['sync_reason'] ?? '');
+            $matchType = (string) ($row['match_type'] ?? '');
+
+            match ($matchType) {
+                'ean' => $matchTypeSummary['exact_ean_match']++,
+                'supplier_sku' => $matchTypeSummary['supplier_sku_match']++,
+                'mpn_brand' => $matchTypeSummary['mpn_brand_match']++,
+                'name_similarity_warning' => $matchTypeSummary['name_similarity_only']++,
+                'no_match' => $matchTypeSummary['no_exact_match']++,
+                'error' => $matchTypeSummary['match_errors']++,
+                default => $matchTypeSummary['other']++,
+            };
+
+            if ((bool) ($row['excluded'] ?? false)) {
+                $skipReasonSummary['excluded']++;
+            }
+
+            if (filled($row['matched_product_id'] ?? null)) {
+                $skipReasonSummary['matched_existing_product']++;
+            }
+
+            if ($syncReason === 'no_meaningful_changes') {
+                $skipReasonSummary['no_meaningful_changes']++;
+            } elseif ($syncReason === 'missing_required_data') {
+                $skipReasonSummary['missing_required_data']++;
+            } elseif ($syncAction === 'CONFLICT') {
+                $skipReasonSummary['conflict']++;
+            } elseif ($syncAction !== 'CREATE' && ! (bool) ($row['excluded'] ?? false) && blank($row['matched_product_id'] ?? null)) {
+                $skipReasonSummary['other']++;
+            }
+
+            if (filled($row['matched_product_id'] ?? null) || $syncAction === 'CREATE') {
+                continue;
+            }
+
+            $this->incrementUnmatchedNotCreateReasons($unmatchedNotCreateReasons, $row);
+        }
+
+        return [
+            'unmatched_not_create_reasons' => $unmatchedNotCreateReasons,
+            'skip_reason_summary' => $skipReasonSummary,
+            'match_type_summary' => $matchTypeSummary,
+        ];
+    }
+
+    /**
+     * @return array<string, int>
+     */
+    protected function emptyUnmatchedNotCreateReasons(): array
+    {
+        return [
+            'excluded' => 0,
+            'missing_required_data' => 0,
+            'missing_ean' => 0,
+            'missing_name' => 0,
+            'missing_supplier_sku' => 0,
+            'missing_price' => 0,
+            'missing_stock_availability' => 0,
+            'conflict' => 0,
+            'not_eligible' => 0,
+            'other' => 0,
+        ];
+    }
+
+    /**
+     * @return array<string, int>
+     */
+    protected function emptySkipReasonSummary(): array
+    {
+        return [
+            'excluded' => 0,
+            'matched_existing_product' => 0,
+            'no_meaningful_changes' => 0,
+            'missing_required_data' => 0,
+            'conflict' => 0,
+            'other' => 0,
+        ];
+    }
+
+    /**
+     * @return array<string, int>
+     */
+    protected function emptyMatchTypeSummary(): array
+    {
+        return [
+            'exact_ean_match' => 0,
+            'supplier_sku_match' => 0,
+            'mpn_brand_match' => 0,
+            'name_similarity_only' => 0,
+            'no_exact_match' => 0,
+            'match_errors' => 0,
+            'other' => 0,
+        ];
+    }
+
+    /**
+     * @param  array<string, int>  $reasons
+     * @param  array<string, mixed>  $row
+     */
+    protected function incrementUnmatchedNotCreateReasons(array &$reasons, array $row): void
+    {
+        $matchedSpecificReason = false;
+
+        if ((bool) ($row['excluded'] ?? false)) {
+            $reasons['excluded']++;
+            $matchedSpecificReason = true;
+        }
+
+        if (($row['sync_reason'] ?? null) === 'missing_required_data') {
+            $reasons['missing_required_data']++;
+            $matchedSpecificReason = true;
+        }
+
+        if ($this->previewValueIsBlank($row['ean'] ?? null)) {
+            $reasons['missing_ean']++;
+        }
+
+        if ($this->previewValueIsBlank($row['name'] ?? null)) {
+            $reasons['missing_name']++;
+            $matchedSpecificReason = true;
+        }
+
+        if ($this->previewValueIsBlank($row['supplier_sku'] ?? null)) {
+            $reasons['missing_supplier_sku']++;
+        }
+
+        if (($row['price'] ?? null) === null) {
+            $reasons['missing_price']++;
+            $matchedSpecificReason = true;
+        }
+
+        if (($row['quantity'] ?? null) === null && $this->previewValueIsBlank($row['availability'] ?? null)) {
+            $reasons['missing_stock_availability']++;
+            $matchedSpecificReason = true;
+        }
+
+        if (($row['sync_action'] ?? null) === 'CONFLICT') {
+            $reasons['conflict']++;
+            $matchedSpecificReason = true;
+        }
+
+        if (($row['sync_action'] ?? null) !== 'CREATE') {
+            $reasons['not_eligible']++;
+        }
+
+        if (! $matchedSpecificReason && ($row['sync_action'] ?? null) !== 'CREATE') {
+            $reasons['other']++;
+        }
+    }
+
+    protected function previewValueIsBlank(mixed $value): bool
+    {
+        return blank($value) || $value === '-';
     }
 
     protected function isCreateCandidateDiscoveryMode(): bool
