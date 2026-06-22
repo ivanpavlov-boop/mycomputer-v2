@@ -24,6 +24,20 @@ Deployment is Docker-based. Deploy only from `origin/main` after PR merge and pa
 - Do not deploy before merge into `main`.
 - Do not skip health checks.
 - Do not enable Sync All or automatic sync during deployment.
+- Do not enable UPDATE sync during deployment.
+
+## Catalog Sync Feature Flags
+
+Keep catalog sync kill switches explicit in staging/production:
+
+```dotenv
+CATALOG_SYNC_CREATE_ENABLED=true
+CATALOG_SYNC_UPDATE_ENABLED=false
+CATALOG_SYNC_SYNC_ALL_ENABLED=false
+CATALOG_SYNC_AUTO_ENABLED=false
+```
+
+Set `CATALOG_SYNC_CREATE_ENABLED=false` for an emergency stop of manual selected CREATE sync without disabling read-only preview access.
 
 ## Safe VPS Deploy Command
 
@@ -85,4 +99,4 @@ If `curl` returns connection refused immediately after restart, wait and retry.
 
 - Add scripted deployment guard that confirms branch is `origin/main`.
 - Add post-deploy smoke tests for `/admin/catalog-sync-preview`.
-- Add release checklist for sync feature flags before Phase 8.
+- Add rollback command/admin action before Phase 8 UPDATE sync.

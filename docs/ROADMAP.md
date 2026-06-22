@@ -8,7 +8,7 @@ Related docs: [Phases](PHASES.md), [Sync Safety](SYNC_SAFETY.md), [Architecture]
 
 ## Current Status
 
-Feature development is paused for Phase 7.5 Architecture, Safety & Documentation Lock before Phase 8 UPDATE sync.
+Feature development is paused after Phase 7.6 Catalog Sync Safety Infrastructure before Phase 8 UPDATE sync.
 
 ## Completed
 
@@ -25,6 +25,7 @@ Feature development is paused for Phase 7.5 Architecture, Safety & Documentation
 - Table scroll panel.
 - Sticky header where safe.
 - Counter layout.
+- Catalog sync feature flags and selected CREATE audit trail.
 
 ## Current Safety Position
 
@@ -38,11 +39,11 @@ Feature development is paused for Phase 7.5 Architecture, Safety & Documentation
 
 ## Next
 
-1. Finish Phase 7.5 documentation lock.
+1. Keep Phase 7.5 documentation lock current.
 2. Fix any diagnostic cosmetic inconsistency if needed.
 3. Phase 8: manual selected UPDATE for price/stock only.
-4. Audit log and rollback plan implementation.
-5. Feature flags / kill switch.
+4. Rollback tooling based on `catalog_sync_batches` and `catalog_sync_logs`.
+5. Keep feature flags locked down before Phase 8.
 6. Sync All later.
 7. Automatic sync later.
 

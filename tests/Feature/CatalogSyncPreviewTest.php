@@ -4,6 +4,8 @@ namespace Tests\Feature;
 
 use App\Filament\Pages\CatalogSyncPreview;
 use App\Models\Brand;
+use App\Models\CatalogSyncBatch;
+use App\Models\CatalogSyncLog;
 use App\Models\Category;
 use App\Models\PricingRule;
 use App\Models\Product;
@@ -22,6 +24,14 @@ use Tests\TestCase;
 class CatalogSyncPreviewTest extends TestCase
 {
     use RefreshDatabase;
+
+    public function test_catalog_sync_safety_flags_have_safe_defaults(): void
+    {
+        $this->assertTrue((bool) config('catalog_sync.create_enabled'));
+        $this->assertFalse((bool) config('catalog_sync.update_enabled'));
+        $this->assertFalse((bool) config('catalog_sync.sync_all_enabled'));
+        $this->assertFalse((bool) config('catalog_sync.auto_enabled'));
+    }
 
     public function test_create_preview_does_not_write_catalog_product(): void
     {
@@ -1322,8 +1332,18 @@ class CatalogSyncPreviewTest extends TestCase
             ->assertSet('lastManualSyncResult.failed', 0);
 
         $product = Product::query()->where('supplier_sku', 'MANUAL-CREATE-001')->first();
+        $batch = CatalogSyncBatch::query()->first();
 
         $this->assertNotNull($product);
+        $this->assertNotNull($batch);
+        $this->assertNotEmpty($batch->batch_uuid);
+        $this->assertSame(CatalogSyncBatch::MODE_MANUAL_SELECTED_CREATE, $batch->mode);
+        $this->assertSame(CatalogSyncBatch::STATUS_COMPLETED, $batch->status);
+        $this->assertSame(1, $batch->selected_count);
+        $this->assertSame(1, $batch->created_count);
+        $this->assertSame(0, $batch->updated_count);
+        $this->assertSame(0, $batch->skipped_count);
+        $this->assertSame(0, $batch->failed_count);
         $this->assertSame(Product::SOURCE_SUPPLIER_IMPORT, $product->source);
         $this->assertSame(Product::PRICE_SOURCE_SUPPLIER_IMPORT, $product->price_source);
         $this->assertSame($supplier->id, $product->supplier_id);
@@ -1344,9 +1364,50 @@ class CatalogSyncPreviewTest extends TestCase
             'action' => 'created',
             'strategy' => 'manual_selected_create',
         ]);
+        $auditLog = CatalogSyncLog::query()
+            ->where('catalog_sync_batch_id', $batch->id)
+            ->where('supplier_product_id', $supplierProduct->id)
+            ->first();
+
+        $this->assertNotNull($auditLog);
+        $this->assertSame(CatalogSyncLog::ACTION_CREATE, $auditLog->action);
+        $this->assertSame(CatalogSyncLog::STATUS_SUCCESS, $auditLog->status);
+        $this->assertSame('created', $auditLog->reason);
+        $this->assertNull($auditLog->old_values);
+        $this->assertSame($product->id, $auditLog->new_values['product_id']);
+        $this->assertSame($supplierProduct->id, $auditLog->new_values['supplier_product_id']);
         $this->assertSame($product->id, $supplierProduct->fresh()->product_id);
         $this->assertSame('synced', $supplierProduct->fresh()->status);
         $this->assertSame(0, ProductImage::query()->count());
+    }
+
+    public function test_catalog_sync_preview_selected_create_is_blocked_when_feature_flag_disabled(): void
+    {
+        $this->actingAsSupplierManager();
+
+        config(['catalog_sync.create_enabled' => false]);
+
+        $supplier = Supplier::factory()->create();
+        $supplierProduct = $this->supplierProduct($supplier, [
+            'name' => 'Disabled Create Supplier Product',
+            'supplier_sku' => 'DISABLED-CREATE-001',
+            'ean' => null,
+            'mpn' => null,
+        ]);
+
+        Livewire::test(CatalogSyncPreview::class)
+            ->set('selectedSupplierProductIds', [$supplierProduct->id])
+            ->call('syncSelectedCreateProducts')
+            ->assertSet('lastManualSyncResult.created', 0)
+            ->assertSet('lastManualSyncResult.skipped', 1)
+            ->assertSet('lastManualSyncResult.failed', 0)
+            ->assertSet('lastManualSyncResult.batch_id', null);
+
+        $this->assertSame(0, Product::query()->count());
+        $this->assertSame(0, CatalogSyncBatch::query()->count());
+        $this->assertSame(0, CatalogSyncLog::query()->count());
+        $this->assertNull($supplierProduct->fresh()->product_id);
+        $this->assertSame('new', $supplierProduct->fresh()->status);
     }
 
     public function test_catalog_sync_preview_selected_excluded_row_is_skipped(): void
@@ -1376,6 +1437,18 @@ class CatalogSyncPreviewTest extends TestCase
         $this->assertSame(0, Product::query()->count());
         $this->assertNull($supplierProduct->fresh()->product_id);
         $this->assertSame('new', $supplierProduct->fresh()->status);
+        $this->assertDatabaseHas('catalog_sync_batches', [
+            'mode' => CatalogSyncBatch::MODE_MANUAL_SELECTED_CREATE,
+            'selected_count' => 1,
+            'created_count' => 0,
+            'skipped_count' => 1,
+            'failed_count' => 0,
+        ]);
+        $this->assertDatabaseHas('catalog_sync_logs', [
+            'supplier_product_id' => $supplierProduct->id,
+            'action' => CatalogSyncLog::ACTION_CREATE,
+            'status' => CatalogSyncLog::STATUS_SKIPPED,
+        ]);
     }
 
     public function test_catalog_sync_preview_selected_matched_update_row_is_skipped_and_existing_product_is_not_updated(): void
@@ -1410,6 +1483,12 @@ class CatalogSyncPreviewTest extends TestCase
         $this->assertSame(1, Product::query()->count());
         $this->assertSame($before, $product->fresh()->only(['name', 'ean', 'price', 'quantity', 'supplier_id', 'supplier_sku']));
         $this->assertNull($supplierProduct->fresh()->product_id);
+        $this->assertDatabaseHas('catalog_sync_logs', [
+            'supplier_product_id' => $supplierProduct->id,
+            'product_id' => null,
+            'action' => CatalogSyncLog::ACTION_CREATE,
+            'status' => CatalogSyncLog::STATUS_SKIPPED,
+        ]);
     }
 
     public function test_catalog_sync_preview_selected_conflict_row_is_skipped(): void
@@ -1468,6 +1547,25 @@ class CatalogSyncPreviewTest extends TestCase
         $this->assertDatabaseHas('products', [
             'supplier_sku' => 'HEALTHY-CREATE',
             'source' => Product::SOURCE_SUPPLIER_IMPORT,
+        ]);
+        $this->assertDatabaseHas('catalog_sync_batches', [
+            'mode' => CatalogSyncBatch::MODE_MANUAL_SELECTED_CREATE,
+            'selected_count' => 2,
+            'created_count' => 1,
+            'skipped_count' => 0,
+            'failed_count' => 1,
+            'status' => CatalogSyncBatch::STATUS_PARTIAL,
+        ]);
+        $this->assertDatabaseHas('catalog_sync_logs', [
+            'supplier_product_id' => $broken->id,
+            'action' => CatalogSyncLog::ACTION_CREATE,
+            'status' => CatalogSyncLog::STATUS_FAILED,
+            'reason' => 'manual_create_failed',
+        ]);
+        $this->assertDatabaseHas('catalog_sync_logs', [
+            'supplier_product_id' => $healthy->id,
+            'action' => CatalogSyncLog::ACTION_CREATE,
+            'status' => CatalogSyncLog::STATUS_SUCCESS,
         ]);
     }
 
@@ -1547,6 +1645,40 @@ class CatalogSyncPreviewTest extends TestCase
 
         $this->assertStringNotContainsString('<svg', $toolbarHtml);
         $this->assertStringNotContainsString('heroicon', $toolbarHtml);
+    }
+
+    public function test_catalog_sync_preview_renders_create_action_disabled_when_feature_flag_disabled(): void
+    {
+        $this->actingAsSupplierManager();
+
+        config(['catalog_sync.create_enabled' => false]);
+
+        $supplier = Supplier::factory()->create();
+        $supplierProduct = $this->supplierProduct($supplier, [
+            'name' => 'Disabled Button Create Product',
+            'supplier_sku' => 'DISABLED-BUTTON-CREATE',
+            'ean' => null,
+            'mpn' => null,
+        ]);
+
+        Livewire::test(CatalogSyncPreview::class)
+            ->set('selectedSupplierProductIds', [$supplierProduct->id])
+            ->assertSee('Manual CREATE sync is disabled by configuration.')
+            ->assertSee('Sync Selected CREATE Products (1)')
+            ->assertSee('data-selected-create-sync-disabled="true"', false);
+    }
+
+    public function test_catalog_sync_preview_does_not_render_update_sync_or_sync_all_actions(): void
+    {
+        $this->actingAsSupplierManager();
+
+        $response = $this->get(CatalogSyncPreview::getUrl());
+
+        $response
+            ->assertOk()
+            ->assertDontSee('Sync Selected UPDATE', false)
+            ->assertDontSee('Sync All', false)
+            ->assertDontSee('Automatic sync', false);
     }
 
     public function test_catalog_sync_preview_manual_create_button_shows_selected_count(): void

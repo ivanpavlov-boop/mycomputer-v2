@@ -3,6 +3,8 @@
 namespace App\Filament\Pages;
 
 use App\Models\Brand;
+use App\Models\CatalogSyncBatch;
+use App\Models\CatalogSyncLog;
 use App\Models\Category;
 use App\Models\PricingRule;
 use App\Models\Product;
@@ -12,6 +14,7 @@ use App\Models\Supplier;
 use App\Models\SupplierProduct;
 use App\Services\Availability\AvailabilityStatusMapper;
 use App\Services\Pricing\PricingEngine;
+use App\Services\Products\CatalogSyncAuditService;
 use App\Services\Products\CatalogSyncPreviewService;
 use App\Services\Suppliers\SupplierExclusionService;
 use BackedEnum;
@@ -70,7 +73,7 @@ class CatalogSyncPreview extends Page
     public array $selectedSupplierProductIds = [];
 
     /**
-     * @var array{created: int, skipped: int, failed: int, messages: array<int, string>}|null
+     * @var array{created: int, skipped: int, failed: int, messages: array<int, string>, batch_id?: int|null, batch_uuid?: string|null}|null
      */
     public ?array $lastManualSyncResult = null;
 
@@ -839,14 +842,54 @@ class CatalogSyncPreview extends Page
 
     public function syncSelectedCreateProducts(): void
     {
+        $selectedSupplierProductIds = array_values(array_unique(array_map('intval', $this->selectedSupplierProductIds)));
+
         $result = [
             'created' => 0,
             'skipped' => 0,
             'failed' => 0,
             'messages' => [],
+            'batch_id' => null,
+            'batch_uuid' => null,
         ];
 
-        foreach (array_values(array_unique(array_map('intval', $this->selectedSupplierProductIds))) as $supplierProductId) {
+        if (! (bool) config('catalog_sync.create_enabled', true)) {
+            $result['skipped'] = count($selectedSupplierProductIds);
+            $result['messages'][] = 'Manual CREATE sync is disabled by configuration.';
+
+            $this->selectedSupplierProductIds = [];
+            $this->lastManualSyncResult = $result;
+
+            Notification::make()
+                ->title('Selected CREATE products sync blocked')
+                ->body('Manual CREATE sync is disabled by configuration.')
+                ->warning()
+                ->send();
+
+            return;
+        }
+
+        $auditService = app(CatalogSyncAuditService::class);
+        $batch = $auditService->startBatch(
+            CatalogSyncBatch::MODE_MANUAL_SELECTED_CREATE,
+            auth()->id(),
+            null,
+            count($selectedSupplierProductIds),
+            [
+                'source' => 'catalog_sync_preview',
+                'create_enabled' => true,
+                'update_enabled' => (bool) config('catalog_sync.update_enabled', false),
+                'sync_all_enabled' => (bool) config('catalog_sync.sync_all_enabled', false),
+                'auto_enabled' => (bool) config('catalog_sync.auto_enabled', false),
+            ],
+        );
+
+        $result['batch_id'] = $batch->id;
+        $result['batch_uuid'] = $batch->batch_uuid;
+
+        foreach ($selectedSupplierProductIds as $supplierProductId) {
+            $supplierProduct = null;
+
             try {
                 $supplierProduct = SupplierProduct::query()
                     ->with(['supplier:id,company_name,priority'])
@@ -855,6 +898,14 @@ class CatalogSyncPreview extends Page
                 if (! $supplierProduct) {
                     $result['skipped']++;
                     $result['messages'][] = "Supplier product {$supplierProductId} skipped: row no longer exists.";
+                    $auditService->recordSkipped(
+                        $batch,
+                        null,
+                        null,
+                        CatalogSyncLog::ACTION_CREATE,
+                        'supplier_product_missing',
+                        ['supplier_product_id' => $supplierProductId],
+                    );
 
                     continue;
                 }
@@ -874,6 +925,18 @@ class CatalogSyncPreview extends Page
                 if (! $this->isEligibleForManualCreateSync($supplierProduct, $row)) {
                     $result['skipped']++;
                     $result['messages'][] = "Supplier product {$supplierProduct->id} skipped: {$row['sync_reason']}.";
+                    $auditService->recordSkipped(
+                        $batch,
+                        $supplierProduct,
+                        null,
+                        CatalogSyncLog::ACTION_CREATE,
+                        (string) ($row['sync_reason'] ?? 'not_eligible_for_create'),
+                        [
+                            'sync_action' => $row['sync_action'] ?? null,
+                            'excluded' => (bool) ($row['excluded'] ?? false),
+                            'matched_product_id' => $row['matched_product_id'] ?? null,
+                        ],
+                    );
 
                     continue;
                 }
@@ -882,13 +945,45 @@ class CatalogSyncPreview extends Page
 
                 $result['created']++;
                 $result['messages'][] = "Supplier product {$supplierProduct->id} created catalog product {$product->id}.";
+                $auditService->recordSuccess(
+                    $batch,
+                    $supplierProduct,
+                    $product,
+                    CatalogSyncLog::ACTION_CREATE,
+                    'created',
+                    null,
+                    [
+                        'product_id' => $product->id,
+                        'price' => $product->price,
+                        'quantity' => $product->quantity,
+                        'availability' => $product->stock_status,
+                        'supplier_product_id' => $supplierProduct->id,
+                    ],
+                    [
+                        'sync_action' => $row['sync_action'] ?? 'CREATE',
+                        'sync_reason' => $row['sync_reason'] ?? 'new_catalog_product',
+                    ],
+                );
             } catch (Throwable $exception) {
                 report($exception);
 
                 $result['failed']++;
                 $result['messages'][] = "Supplier product {$supplierProductId} failed: ".$exception->getMessage();
+                $auditService->recordFailure(
+                    $batch,
+                    $supplierProduct,
+                    null,
+                    CatalogSyncLog::ACTION_CREATE,
+                    $exception,
+                    'manual_create_failed',
+                    ['supplier_product_id' => $supplierProductId],
+                );
             }
         }
+
+        $batch = $auditService->finishBatch($batch);
+        $result['batch_id'] = $batch->id;
+        $result['batch_uuid'] = $batch->batch_uuid;
 
         $this->selectedSupplierProductIds = [];
         $this->lastManualSyncResult = $result;
