@@ -26,6 +26,7 @@
                 'unmatched_not_create_reasons' => [],
                 'skip_reason_summary' => [],
                 'match_type_summary' => [],
+                'sample_rows' => [],
             ];
             $unmatchedReasonLabels = [
                 'excluded' => 'Excluded',
@@ -51,10 +52,15 @@
                 'exact_ean_match' => 'Exact EAN match',
                 'supplier_sku_match' => 'Supplier SKU match',
                 'mpn_brand_match' => 'MPN + Brand match',
+                'manual_mapping' => 'Manual mapping',
+                'existing_supplier_mapping' => 'Existing supplier mapping',
+                'existing_product_offer' => 'Existing product offer',
+                'already_linked_supplier_product' => 'Already linked supplier product',
+                'fallback_internal_match' => 'Fallback / internal match',
                 'name_similarity_only' => 'Name similarity only',
                 'no_exact_match' => 'No exact match',
                 'match_errors' => 'Match errors',
-                'other' => 'Other',
+                'unknown_other' => 'Unknown / other',
             ];
             $money = fn ($value): string => $value !== null ? number_format((float) $value, 2).' EUR' : '-';
             $headerCell = 'sticky top-0 z-30 whitespace-nowrap bg-gray-50 px-3 py-2 shadow-sm dark:bg-gray-950';
@@ -150,6 +156,50 @@
                                 </dl>
                             </div>
                         </div>
+
+                        @if (! empty($discovery['sample_rows']))
+                            <div class="mt-4">
+                                <div class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                                    Sample rows that did not become CREATE
+                                </div>
+                                <div
+                                    data-create-candidate-sample-rows
+                                    class="mt-2 max-w-full overflow-x-auto"
+                                    style="width: 100%; max-width: 100%; overflow-x: auto;"
+                                >
+                                    <table class="min-w-[1200px] divide-y divide-gray-200 text-xs dark:divide-gray-800" style="min-width: 1200px;">
+                                        <thead class="bg-gray-50 text-left font-semibold uppercase tracking-wide text-gray-500 dark:bg-gray-950 dark:text-gray-400">
+                                            <tr>
+                                                <th class="whitespace-nowrap px-2 py-2">ID</th>
+                                                <th class="whitespace-nowrap px-2 py-2">Supplier SKU</th>
+                                                <th class="whitespace-nowrap px-2 py-2">EAN</th>
+                                                <th class="whitespace-nowrap px-2 py-2">Name</th>
+                                                <th class="whitespace-nowrap px-2 py-2">Match Type</th>
+                                                <th class="whitespace-nowrap px-2 py-2">Action</th>
+                                                <th class="whitespace-nowrap px-2 py-2">Reason</th>
+                                                <th class="whitespace-nowrap px-2 py-2">Excluded</th>
+                                                <th class="whitespace-nowrap px-2 py-2">Exclusion Reason</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody class="divide-y divide-gray-100 dark:divide-gray-800">
+                                            @foreach ($discovery['sample_rows'] as $sampleRow)
+                                                <tr>
+                                                    <td class="whitespace-nowrap px-2 py-2">{{ $sampleRow['supplier_product_id'] }}</td>
+                                                    <td class="whitespace-nowrap px-2 py-2">{{ $sampleRow['supplier_sku'] }}</td>
+                                                    <td class="whitespace-nowrap px-2 py-2">{{ $sampleRow['ean'] }}</td>
+                                                    <td class="max-w-[22rem] truncate px-2 py-2" title="{{ $sampleRow['name'] }}">{{ $sampleRow['name'] }}</td>
+                                                    <td class="whitespace-nowrap px-2 py-2">{{ $sampleRow['match_type'] }}</td>
+                                                    <td class="whitespace-nowrap px-2 py-2">{{ $sampleRow['sync_action'] }}</td>
+                                                    <td class="whitespace-nowrap px-2 py-2">{{ $sampleRow['sync_reason'] }}</td>
+                                                    <td class="whitespace-nowrap px-2 py-2">{{ $sampleRow['excluded'] ? 'Yes' : 'No' }}</td>
+                                                    <td class="max-w-[18rem] truncate px-2 py-2" title="{{ $sampleRow['exclusion_reason'] }}">{{ $sampleRow['exclusion_reason'] }}</td>
+                                                </tr>
+                                            @endforeach
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        @endif
                     </div>
                 @endif
             </div>

@@ -1678,6 +1678,34 @@ class CatalogSyncPreviewTest extends TestCase
         $this->assertCount(50, $preview['rows']);
     }
 
+    public function test_catalog_sync_preview_create_candidate_scan_supports_configurable_safe_limits(): void
+    {
+        $this->actingAsSupplierManager();
+
+        $supplier = Supplier::factory()->create();
+
+        for ($index = 1; $index <= 120; $index++) {
+            $this->supplierProduct($supplier, [
+                'name' => 'Configurable Scan Candidate '.$index,
+                'supplier_sku' => 'CONFIG-SCAN-'.$index,
+                'ean' => null,
+                'mpn' => null,
+            ]);
+        }
+
+        $preview = Livewire::test(CatalogSyncPreview::class)
+            ->set('filters.supplier_id', $supplier->id)
+            ->set('filters.discovery_mode', 'create_candidates')
+            ->set('filters.discovery_scan_limit', 2000)
+            ->instance()
+            ->queryOnlySupplierProducts();
+
+        $this->assertSame(2000, $preview['discovery']['scan_limit']);
+        $this->assertSame(120, $preview['discovery']['scanned_rows']);
+        $this->assertSame(120, $preview['discovery']['create_candidates_found']);
+        $this->assertCount(50, $preview['rows']);
+    }
+
     public function test_catalog_sync_preview_create_candidate_scan_zero_results_shows_clear_message(): void
     {
         $this->actingAsSupplierManager();
@@ -1705,7 +1733,8 @@ class CatalogSyncPreviewTest extends TestCase
 
         $result
             ->assertSee('No eligible CREATE candidates found in the scanned supplier products.')
-            ->assertDontSee('Only Update Discovery Product');
+            ->assertSee('Sample rows that did not become CREATE')
+            ->assertSee('Only Update Discovery Product');
     }
 
     public function test_catalog_sync_preview_create_candidate_scan_does_not_modify_data(): void
@@ -1848,6 +1877,136 @@ class CatalogSyncPreviewTest extends TestCase
         $this->assertSame(0, $preview['discovery']['create_candidates_found']);
         $this->assertSame(1, $preview['discovery']['match_type_summary']['exact_ean_match']);
         $this->assertSame(1, $preview['discovery']['skip_reason_summary']['matched_existing_product']);
+    }
+
+    public function test_catalog_sync_preview_create_candidate_diagnostics_break_down_supplier_mapping_matches(): void
+    {
+        $this->actingAsSupplierManager();
+
+        $supplier = Supplier::factory()->create();
+        Product::factory()->create([
+            'name' => 'Existing Supplier Mapping Product',
+            'ean' => null,
+            'mpn' => null,
+            'supplier_id' => $supplier->id,
+            'supplier_sku' => 'EXISTING-SUPPLIER-MAPPING',
+            'price' => 100,
+            'quantity' => 5,
+        ]);
+        $this->supplierProduct($supplier, [
+            'name' => 'Existing Supplier Mapping Supplier Product',
+            'supplier_sku' => 'EXISTING-SUPPLIER-MAPPING',
+            'ean' => null,
+            'mpn' => null,
+        ]);
+
+        $preview = Livewire::test(CatalogSyncPreview::class)
+            ->set('filters.supplier_id', $supplier->id)
+            ->set('filters.discovery_mode', 'create_candidates')
+            ->instance()
+            ->queryOnlySupplierProducts();
+
+        $this->assertSame(1, $preview['discovery']['match_type_summary']['existing_supplier_mapping']);
+        $this->assertSame(0, $preview['discovery']['match_type_summary']['unknown_other']);
+    }
+
+    public function test_catalog_sync_preview_create_candidate_diagnostics_break_down_existing_product_offer_matches(): void
+    {
+        $this->actingAsSupplierManager();
+
+        $supplier = Supplier::factory()->create();
+        $product = Product::factory()->create([
+            'name' => 'Existing Product Offer Product',
+            'ean' => null,
+            'mpn' => null,
+            'supplier_id' => null,
+            'supplier_sku' => null,
+            'price' => 100,
+            'quantity' => 5,
+        ]);
+        $supplierProduct = $this->supplierProduct($supplier, [
+            'name' => 'Existing Product Offer Supplier Product',
+            'supplier_sku' => 'EXISTING-OFFER-SKU',
+            'ean' => null,
+            'mpn' => null,
+        ]);
+
+        ProductSupplierOffer::query()->create([
+            'product_id' => $product->id,
+            'supplier_id' => $supplier->id,
+            'supplier_product_id' => $supplierProduct->id,
+            'supplier_sku' => 'EXISTING-OFFER-SKU',
+            'price' => 100,
+            'quantity' => 5,
+            'currency' => 'EUR',
+        ]);
+
+        $preview = Livewire::test(CatalogSyncPreview::class)
+            ->set('filters.supplier_id', $supplier->id)
+            ->set('filters.discovery_mode', 'create_candidates')
+            ->instance()
+            ->queryOnlySupplierProducts();
+
+        $this->assertSame(1, $preview['discovery']['match_type_summary']['existing_product_offer']);
+        $this->assertSame(0, $preview['discovery']['match_type_summary']['unknown_other']);
+    }
+
+    public function test_catalog_sync_preview_create_candidate_diagnostics_break_down_already_linked_supplier_products(): void
+    {
+        $this->actingAsSupplierManager();
+
+        $supplier = Supplier::factory()->create();
+        $product = Product::factory()->create([
+            'name' => 'Already Linked Catalog Product',
+            'ean' => null,
+            'mpn' => null,
+            'price' => 100,
+            'quantity' => 5,
+        ]);
+        $this->supplierProduct($supplier, [
+            'product_id' => $product->id,
+            'name' => 'Already Linked Supplier Product',
+            'supplier_sku' => 'ALREADY-LINKED-SKU',
+            'ean' => null,
+            'mpn' => null,
+        ]);
+
+        $preview = Livewire::test(CatalogSyncPreview::class)
+            ->set('filters.supplier_id', $supplier->id)
+            ->set('filters.discovery_mode', 'create_candidates')
+            ->instance()
+            ->queryOnlySupplierProducts();
+
+        $this->assertSame(1, $preview['discovery']['match_type_summary']['already_linked_supplier_product']);
+        $this->assertSame(0, $preview['discovery']['match_type_summary']['unknown_other']);
+    }
+
+    public function test_catalog_sync_preview_create_candidate_diagnostics_render_sample_rows_when_no_create_candidates(): void
+    {
+        $this->actingAsSupplierManager();
+
+        $supplier = Supplier::factory()->create();
+        $this->supplierProduct($supplier, [
+            'name' => 'Sample Diagnostic Supplier Product',
+            'supplier_sku' => null,
+            'ean' => null,
+            'mpn' => null,
+        ]);
+
+        $result = Livewire::test(CatalogSyncPreview::class)
+            ->set('filters.supplier_id', $supplier->id)
+            ->set('filters.discovery_mode', 'create_candidates');
+        $preview = $result->instance()->queryOnlySupplierProducts();
+
+        $this->assertSame(0, $preview['discovery']['create_candidates_found']);
+        $this->assertCount(1, $preview['discovery']['sample_rows']);
+        $this->assertSame('Sample Diagnostic Supplier Product', $preview['discovery']['sample_rows'][0]['name']);
+        $this->assertSame('SKIP', $preview['discovery']['sample_rows'][0]['sync_action']);
+
+        $result
+            ->assertSee('Sample rows that did not become CREATE')
+            ->assertSee('Sample Diagnostic Supplier Product')
+            ->assertSee('missing_required_data');
     }
 
     public function test_catalog_sync_preview_name_similarity_is_diagnostic_only_not_safe_update(): void

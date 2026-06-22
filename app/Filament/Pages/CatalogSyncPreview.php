@@ -39,7 +39,12 @@ class CatalogSyncPreview extends Page
 
     protected string $view = 'filament.pages.catalog-sync-preview';
 
-    protected const int CREATE_CANDIDATE_SCAN_LIMIT = 1000;
+    protected const int DEFAULT_CREATE_CANDIDATE_SCAN_LIMIT = 1000;
+
+    /**
+     * @var array<int, int>
+     */
+    protected const array CREATE_CANDIDATE_SCAN_LIMITS = [1000, 2000, 5000];
 
     protected const int CREATE_CANDIDATE_RESULT_LIMIT = 100;
 
@@ -51,6 +56,7 @@ class CatalogSyncPreview extends Page
         'supplier_id' => null,
         'action' => null,
         'discovery_mode' => 'batch',
+        'discovery_scan_limit' => self::DEFAULT_CREATE_CANDIDATE_SCAN_LIMIT,
         'quick_filter' => null,
         'stock_status' => null,
         'category' => null,
@@ -108,6 +114,15 @@ class CatalogSyncPreview extends Page
                             'create_candidates' => 'Find CREATE candidates',
                         ])
                         ->default('batch')
+                        ->live(),
+                    Select::make('discovery_scan_limit')
+                        ->label('Discovery scan limit')
+                        ->options([
+                            1000 => 'Scan 1000 rows',
+                            2000 => 'Scan 2000 rows',
+                            5000 => 'Scan 5000 rows',
+                        ])
+                        ->default(self::DEFAULT_CREATE_CANDIDATE_SCAN_LIMIT)
                         ->live(),
                     Select::make('quick_filter')
                         ->label('Quick filter')
@@ -218,11 +233,12 @@ class CatalogSyncPreview extends Page
     protected function queryCreateCandidateRows(Builder $query, int|string $limit): array
     {
         $resultLimit = $this->createCandidateResultLimit($limit);
+        $scanLimit = $this->createCandidateScanLimit();
         $evaluatedRows = [];
         $candidateRows = [];
 
         $query
-            ->limit(self::CREATE_CANDIDATE_SCAN_LIMIT)
+            ->limit($scanLimit)
             ->get()
             ->each(function (SupplierProduct $supplierProduct) use (&$evaluatedRows, &$candidateRows, $resultLimit): void {
                 $row = $this->previewRowForSupplierProduct($supplierProduct);
@@ -243,7 +259,7 @@ class CatalogSyncPreview extends Page
             'summary' => $summary,
             'discovery' => [
                 'enabled' => true,
-                'scan_limit' => self::CREATE_CANDIDATE_SCAN_LIMIT,
+                'scan_limit' => $scanLimit,
                 'result_limit' => $resultLimit,
                 'scanned_rows' => count($evaluatedRows),
                 'create_candidates_found' => $summary['create_rows'],
@@ -254,6 +270,7 @@ class CatalogSyncPreview extends Page
                 'unmatched_not_create_reasons' => $diagnostics['unmatched_not_create_reasons'],
                 'skip_reason_summary' => $diagnostics['skip_reason_summary'],
                 'match_type_summary' => $diagnostics['match_type_summary'],
+                'sample_rows' => $diagnostics['sample_rows'],
             ],
         ];
     }
@@ -265,7 +282,7 @@ class CatalogSyncPreview extends Page
     {
         return [
             'enabled' => false,
-            'scan_limit' => self::CREATE_CANDIDATE_SCAN_LIMIT,
+            'scan_limit' => $this->createCandidateScanLimit(),
             'result_limit' => 0,
             'scanned_rows' => 0,
             'create_candidates_found' => 0,
@@ -276,33 +293,29 @@ class CatalogSyncPreview extends Page
             'unmatched_not_create_reasons' => $this->emptyUnmatchedNotCreateReasons(),
             'skip_reason_summary' => $this->emptySkipReasonSummary(),
             'match_type_summary' => $this->emptyMatchTypeSummary(),
+            'sample_rows' => [],
         ];
     }
 
     /**
      * @param  array<int, array<string, mixed>>  $rows
-     * @return array{unmatched_not_create_reasons: array<string, int>, skip_reason_summary: array<string, int>, match_type_summary: array<string, int>}
+     * @return array{unmatched_not_create_reasons: array<string, int>, skip_reason_summary: array<string, int>, match_type_summary: array<string, int>, sample_rows: array<int, array<string, mixed>>}
      */
     protected function createCandidateDiagnostics(array $rows): array
     {
         $unmatchedNotCreateReasons = $this->emptyUnmatchedNotCreateReasons();
         $skipReasonSummary = $this->emptySkipReasonSummary();
         $matchTypeSummary = $this->emptyMatchTypeSummary();
+        $sampleRows = [];
 
         foreach ($rows as $row) {
             $syncAction = (string) ($row['sync_action'] ?? '');
             $syncReason = (string) ($row['sync_reason'] ?? '');
-            $matchType = (string) ($row['match_type'] ?? '');
+            $matchTypeSummary[$this->diagnosticMatchTypeBucket($row)]++;
 
-            match ($matchType) {
-                'ean' => $matchTypeSummary['exact_ean_match']++,
-                'supplier_sku' => $matchTypeSummary['supplier_sku_match']++,
-                'mpn_brand' => $matchTypeSummary['mpn_brand_match']++,
-                'name_similarity_warning' => $matchTypeSummary['name_similarity_only']++,
-                'no_match' => $matchTypeSummary['no_exact_match']++,
-                'error' => $matchTypeSummary['match_errors']++,
-                default => $matchTypeSummary['other']++,
-            };
+            if ($syncAction !== 'CREATE' && count($sampleRows) < 10) {
+                $sampleRows[] = $this->createCandidateDiagnosticSampleRow($row);
+            }
 
             if ((bool) ($row['excluded'] ?? false)) {
                 $skipReasonSummary['excluded']++;
@@ -333,6 +346,7 @@ class CatalogSyncPreview extends Page
             'unmatched_not_create_reasons' => $unmatchedNotCreateReasons,
             'skip_reason_summary' => $skipReasonSummary,
             'match_type_summary' => $matchTypeSummary,
+            'sample_rows' => $sampleRows,
         ];
     }
 
@@ -379,10 +393,86 @@ class CatalogSyncPreview extends Page
             'exact_ean_match' => 0,
             'supplier_sku_match' => 0,
             'mpn_brand_match' => 0,
+            'manual_mapping' => 0,
+            'existing_supplier_mapping' => 0,
+            'existing_product_offer' => 0,
+            'already_linked_supplier_product' => 0,
+            'fallback_internal_match' => 0,
             'name_similarity_only' => 0,
             'no_exact_match' => 0,
             'match_errors' => 0,
-            'other' => 0,
+            'unknown_other' => 0,
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $row
+     */
+    protected function diagnosticMatchTypeBucket(array $row): string
+    {
+        $matchType = (string) ($row['match_type'] ?? '');
+
+        return match ($matchType) {
+            'ean' => 'exact_ean_match',
+            'mpn_brand' => 'mpn_brand_match',
+            'manual_mapping' => filled($row['linked_product_id'] ?? null)
+                ? 'already_linked_supplier_product'
+                : 'manual_mapping',
+            'supplier_sku' => $this->diagnosticSupplierSkuMatchBucket($row),
+            'matched' => 'fallback_internal_match',
+            'name_similarity_warning' => 'name_similarity_only',
+            'no_match' => 'no_exact_match',
+            'error' => 'match_errors',
+            default => filled($matchType) ? 'unknown_other' : 'no_exact_match',
+        };
+    }
+
+    /**
+     * @param  array<string, mixed>  $row
+     */
+    protected function diagnosticSupplierSkuMatchBucket(array $row): string
+    {
+        if (filled($row['linked_product_id'] ?? null)) {
+            return 'already_linked_supplier_product';
+        }
+
+        $matchedProductId = $row['matched_product_id'] ?? null;
+        $supplierId = $row['supplier_id'] ?? null;
+        $supplierSku = $row['supplier_sku'] ?? null;
+
+        if (filled($matchedProductId) && filled($supplierId) && ! $this->previewValueIsBlank($supplierSku)) {
+            $hasExistingOffer = ProductSupplierOffer::query()
+                ->where('product_id', $matchedProductId)
+                ->where('supplier_id', $supplierId)
+                ->where('supplier_sku', $supplierSku)
+                ->exists();
+
+            if ($hasExistingOffer) {
+                return 'existing_product_offer';
+            }
+
+            return 'existing_supplier_mapping';
+        }
+
+        return 'supplier_sku_match';
+    }
+
+    /**
+     * @param  array<string, mixed>  $row
+     * @return array<string, mixed>
+     */
+    protected function createCandidateDiagnosticSampleRow(array $row): array
+    {
+        return [
+            'supplier_product_id' => $row['supplier_product_id'] ?? null,
+            'supplier_sku' => $row['supplier_sku'] ?? '-',
+            'ean' => $row['ean'] ?? '-',
+            'name' => $row['name'] ?? '-',
+            'match_type' => $row['match_type'] ?? '-',
+            'sync_action' => $row['sync_action'] ?? '-',
+            'sync_reason' => $row['sync_reason'] ?? '-',
+            'excluded' => (bool) ($row['excluded'] ?? false),
+            'exclusion_reason' => $row['exclusion_reason'] ?? '-',
         ];
     }
 
@@ -458,6 +548,17 @@ class CatalogSyncPreview extends Page
         }
 
         return min(max((int) $limit, 1), self::CREATE_CANDIDATE_RESULT_LIMIT);
+    }
+
+    protected function createCandidateScanLimit(): int
+    {
+        $scanLimit = (int) ($this->filters['discovery_scan_limit'] ?? self::DEFAULT_CREATE_CANDIDATE_SCAN_LIMIT);
+
+        if (! in_array($scanLimit, self::CREATE_CANDIDATE_SCAN_LIMITS, true)) {
+            return self::DEFAULT_CREATE_CANDIDATE_SCAN_LIMIT;
+        }
+
+        return $scanLimit;
     }
 
     /**
@@ -835,6 +936,8 @@ class CatalogSyncPreview extends Page
 
         return [
             'supplier_product_id' => $supplierProduct->id,
+            'supplier_id' => $supplierProduct->supplier_id,
+            'linked_product_id' => $supplierProduct->product_id,
             'supplier' => $supplierProduct->supplier?->company_name ?? '-',
             'supplier_sku' => $supplierProduct->supplier_sku ?: '-',
             'ean' => $supplierProduct->ean ?: '-',
