@@ -2,169 +2,165 @@
 
 Guidance for coding agents working on `mycomputer.bg` v2.
 
-## Project
+## Purpose
 
-`mycomputer.bg` v2 is a Laravel 12 e-commerce backend for computer hardware, laptops, components, printers, monitors, and accessories. The admin surface is Filament, the database target is MySQL, and the public frontend is expected to be a future Nuxt app consuming JSON APIs.
+This file defines project-specific safety rules for Codex and other coding agents. Read it before changing supplier import, catalog sync, pricing, exclusions, matching, deployment, or Filament admin behavior.
 
-Current phase scope:
+Start with these docs:
 
-- Catalog foundation
-- Categories
-- Brands
-- Products
-- Product images
-- Product attributes
-- Suppliers
-- Supplier XML/CSV feed structure
-- Basic read-only catalog API endpoints
+- [Architecture](docs/ARCHITECTURE.md)
+- [Catalog Sync](docs/CATALOG_SYNC.md)
+- [Sync Safety](docs/SYNC_SAFETY.md)
+- [Data Ownership](docs/DATA_OWNERSHIP.md)
+- [Supplier Import](docs/SUPPLIER_IMPORT.md)
+- [Testing](docs/TESTING.md)
+- [Deployment](docs/DEPLOYMENT.md)
+- [Roadmap](docs/ROADMAP.md)
+- [Phases](docs/PHASES.md)
 
-Do not build orders, payments, carts, customer accounts, or Nuxt frontend screens unless the user explicitly asks for that phase.
+## Current Status
 
-## Local Runtime
+The supplier-to-catalog flow is intentionally staged and controlled:
 
-This workspace includes a portable PHP and Composer setup under `.tools/`. It is intentionally ignored by git.
+Supplier XML/CSV -> `supplier_products` staging -> Catalog Sync Preview -> pricing rules -> exclusion rules -> matching -> `sync_action` preview -> manual selected CREATE sync -> catalog products.
 
-Preferred Windows commands from the repository root:
+Only selected CREATE sync is enabled. UPDATE sync, Sync All, automatic sync, scheduled sync, and image sync are not enabled.
 
-```powershell
-.\.tools\php\php.exe .\.tools\composer.phar install
-.\.tools\php\php.exe artisan key:generate
-.\.tools\php\php.exe artisan migrate --seed
-.\.tools\php\php.exe artisan serve
-```
+## General Rules
 
-If global PHP and Composer are available, normal Laravel commands are also fine:
+- Before coding, read `AGENTS.md` and the relevant docs.
+- Documentation-only changes must remain documentation-only.
+- UI-only changes must remain UI-only.
+- Supplier import must not directly create or update catalog products.
+- Preview must happen before real catalog sync writes.
+- Do not add Sync All unless explicitly requested.
+- Do not add UPDATE sync unless there is a dedicated design and safety plan.
+- Do not enable automatic or scheduled catalog sync unless explicitly requested and documented.
+- Every PR must run tests and Pint.
+- No merge with failing CI.
+- No VPS deploy before merge into `main`.
 
-```powershell
-composer install
-php artisan migrate --seed
-php artisan serve
-```
+## Project Architect
 
-The default `.env.example` uses MySQL:
+Allowed:
 
-```dotenv
-DB_CONNECTION=mysql
-DB_HOST=127.0.0.1
-DB_PORT=3306
-DB_DATABASE=mycomputer_v2
-DB_USERNAME=root
-DB_PASSWORD=
-```
+- Clarify architecture in docs.
+- Add ADRs for sync, ownership, import, rollback, or deployment decisions.
+- Propose future phases in [Roadmap](docs/ROADMAP.md) and [Phases](docs/PHASES.md).
 
-For quick local validation without MySQL, use SQLite only as a temporary test runtime:
+Forbidden:
 
-```powershell
-$env:DB_CONNECTION='sqlite'
-$env:DB_DATABASE=(Resolve-Path database\database.sqlite).Path
-.\.tools\php\php.exe artisan migrate:fresh --seed
-```
+- Adding write paths without safety docs, tests, and explicit user request.
+- Treating planned feature flags as implemented until code exists.
 
-## Testing And Quality
+## Supplier Import
 
-Run these before handing work back:
+Allowed:
+
+- Import XML/CSV supplier data into staging.
+- Preserve raw supplier payloads in `supplier_products.raw_data`.
+- Improve validation, logging, and safe feed handling.
+
+Forbidden:
+
+- Creating or updating catalog products directly from supplier import.
+- Storing live feed secrets in source control or docs.
+- Running destructive catalog changes from import jobs.
+
+See [Supplier Import](docs/SUPPLIER_IMPORT.md).
+
+## Catalog Sync
+
+Rules:
+
+- CREATE and UPDATE sync are separate phases.
+- Manual selected CREATE sync is currently allowed.
+- UPDATE sync is not currently allowed.
+- Sync All is not currently allowed.
+- Automatic sync is not currently allowed.
+- Real write operations require server-side validation.
+- Do not trust UI-selected state.
+- Per-row try/catch is required for batch actions.
+- Batch result summary is required.
+
+See [Catalog Sync](docs/CATALOG_SYNC.md) and [Sync Safety](docs/SYNC_SAFETY.md).
+
+## Data Ownership / Content Safety
+
+Supplier data may update only safe supplier-controlled fields unless explicitly approved.
+
+Supplier data may update:
+
+- supplier cost
+- calculated price
+- stock / quantity
+- availability
+- supplier offer
+- source metadata
+
+Supplier data must not automatically overwrite:
+
+- product name
+- slug
+- SEO title
+- SEO description
+- short description
+- full description
+- manually edited content
+- images
+- categories
+- attributes/specifications
+
+Existing locks: `lock_name`, `lock_seo`, `lock_descriptions`.
+
+See [Data Ownership](docs/DATA_OWNERSHIP.md) and [Content Locks](docs/CONTENT_LOCKS.md).
+
+## QA / Testing
+
+Run before handing work back:
 
 ```powershell
 .\.tools\php\php.exe artisan test
-.\.tools\php\php.exe vendor\bin\pint --dirty
+.\.tools\php\php.exe vendor\bin\pint --test
 ```
 
-Useful checks:
+Catalog Sync changes require feature tests. Risky sync behavior requires regression tests that prove no unintended products or `supplier_products` are modified.
 
-```powershell
-.\.tools\php\php.exe artisan route:list --path=api
-.\.tools\php\php.exe artisan migrate:fresh --seed
-```
+See [Testing](docs/TESTING.md).
 
-Testing rules:
-
-- Add feature tests for API behavior and important admin-adjacent workflows.
-- Use `RefreshDatabase` for database-backed tests.
-- Keep seeders deterministic enough to support tests and local demos.
-- Do not require a live supplier feed, external API, or production service in tests.
-
-## Architecture Rules
-
-### Laravel Backend
-
-- Keep business data in Eloquent models with explicit relationships, casts, and fillable fields.
-- Prefer Laravel conventions over custom infrastructure.
-- Put reusable domain constants or small contracts in `app/Support`.
-- Keep controllers thin. Query, authorize, transform, and return resources.
-- Use API Resources for JSON responses. Do not return raw model payloads from public API controllers.
-- Public frontend routes belong under `routes/api.php`, versioned under `/api/v1`.
-
-### Catalog Domain
-
-Current core models:
-
-- `Category`: hierarchical catalog taxonomy.
-- `Brand`: product manufacturer/brand.
-- `Product`: sellable catalog item.
-- `ProductImage`: ordered product media.
-- `ProductAttribute`: flexible product specs/filter data.
-- `Supplier`: vendor/distributor.
-- `SupplierFeed`: XML/CSV feed definition and mapping.
-- `SupplierFeedItem`: raw imported feed item staging.
+## DevOps / Deployment
 
 Rules:
 
-- Keep category slugs and product slugs unique.
-- Keep SKUs unique and stable.
-- Supplier credentials must stay encrypted or otherwise protected.
-- Preserve raw supplier payloads in staging structures when adding import logic.
-- Do not overload `ProductAttribute` for every possible future concept if a first-class model becomes necessary.
-- Keep CSV product column structure aligned with `App\Support\Catalog\ProductCsvSchema`.
+- Deploy only from `origin/main`.
+- Start app containers before nginx.
+- Verify with `curl -I http://localhost:8080`.
+- If nginx cannot resolve upstream `app`, start `app` first, wait, then start nginx.
 
-### Filament Admin
+See [Deployment](docs/DEPLOYMENT.md).
 
-Filament resources live under `app/Filament/Resources`.
+## Filament UI
 
-Rules:
+Allowed:
 
-- Keep resource form schema classes in `Schemas/*Form.php`.
-- Keep table definitions in `Tables/*Table.php`.
-- Use relationship fields/repeaters rather than manual ID entry where practical.
-- Keep navigation grouped by domain, currently `Catalog` and `Suppliers`.
-- Do not put frontend/customer UX into Filament resources.
+- Improve readability, spacing, filters, tables, and safe diagnostics.
+- Add view tests for admin pages when useful.
 
-### API For Future Nuxt Frontend
+Forbidden:
 
-Current endpoints:
-
-- `GET /api/v1/categories`
-- `GET /api/v1/brands`
-- `GET /api/v1/products`
-- `GET /api/v1/products/{slug}`
-
-Rules:
-
-- Return only active/published catalog data from public endpoints.
-- Use pagination for product lists.
-- Keep response shapes stable once consumed by Nuxt.
-- Avoid leaking supplier cost, supplier credentials, raw payloads, or admin-only fields.
-
-## Coding Standards
-
-- Follow Laravel 12 and Filament 5 patterns already present in the repository.
-- Use strict, readable names over abbreviations.
-- Keep comments rare and useful; explain non-obvious import/feed mapping behavior when needed.
-- Prefer migrations that can run cleanly from an empty database.
-- Add indexes for fields used in filters, slugs, statuses, and foreign-key lookups.
-- Avoid broad refactors while implementing a focused feature.
-- Do not commit generated caches, local databases for production use, `.env`, `.tools`, `vendor`, or `node_modules`.
+- Hiding business logic changes inside UI changes.
+- Enabling write actions from the UI without server-side validation and tests.
+- Adding UPDATE sync or Sync All buttons unless explicitly requested.
 
 ## Safe Change Boundaries
 
-Before changing architecture, ask or clearly explain the choice when it affects:
+Ask or document clearly before changing:
 
-- Authentication strategy beyond Filament admin login
-- Customer accounts
-- Orders and payments
-- Inventory reservation
-- Supplier import execution jobs
-- Search engine choice
-- Nuxt frontend structure
-- Production deployment setup
-
-When in doubt, extend the current catalog foundation conservatively and leave future phases prepared rather than partially built.
+- Authentication strategy.
+- Customer/order/payment behavior.
+- Inventory reservation.
+- Supplier import execution jobs.
+- Search engine choice.
+- Nuxt frontend structure.
+- Production deployment setup.
+- Catalog sync write behavior.

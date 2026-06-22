@@ -2,6 +2,75 @@
 
 This document is the single source of truth for future development of mycomputer.bg v2. It describes the current Laravel backend, Filament admin, Nuxt frontend, import/sync systems, public API, and planned search evolution.
 
+## Phase 7.5 Catalog Sync Architecture Lock
+
+Purpose: define the current supplier-to-catalog architecture and the safety limits that must be respected before Phase 8 UPDATE sync.
+
+Phase 7.5 pauses feature development before Phase 8 UPDATE sync. The current supplier-to-catalog architecture is:
+
+```text
+Supplier XML/CSV
+-> supplier_products staging
+-> Catalog Sync Preview
+-> pricing rules
+-> exclusion rules
+-> matching
+-> sync_action preview
+-> manual selected CREATE sync
+-> catalog products
+```
+
+Current write capability:
+
+- Manual selected CREATE sync is enabled for eligible selected rows only.
+- UPDATE sync is not enabled.
+- Sync All is not enabled.
+- Automatic sync is not enabled.
+- Scheduled catalog sync is not enabled.
+- Image import through sync is not enabled.
+- CREATE diagnostics are read-only.
+
+Allowed:
+
+- Supplier import into `supplier_products` staging.
+- Read-only preview and diagnostics.
+- Manual selected CREATE sync for server-side validated eligible rows.
+
+Forbidden:
+
+- UPDATE sync.
+- Sync All.
+- Automatic or scheduled catalog sync.
+- Image import through sync.
+- Direct supplier import writes to catalog products.
+
+Important links:
+
+- [Catalog Sync](CATALOG_SYNC.md)
+- [Supplier Import](SUPPLIER_IMPORT.md)
+- [Data Ownership](DATA_OWNERSHIP.md)
+- [Content Locks](CONTENT_LOCKS.md)
+- [Pricing Rules](PRICING_RULES.md)
+- [Supplier Exclusions](SUPPLIER_EXCLUSIONS.md)
+- [Matching Rules](MATCHING_RULES.md)
+- [Sync Safety](SYNC_SAFETY.md)
+- [Rollback Plan](ROLLBACK_PLAN.md)
+- [Roadmap](ROADMAP.md)
+- [Phases](PHASES.md)
+
+Supplier import and staging are separate from catalog products. Supplier import writes to `supplier_products`; catalog products change only through controlled Catalog Sync paths. Preview is the control layer before writes.
+
+APCOM staging diagnostics on VPS recently scanned `1859` supplier products and found `0` CREATE candidates. Most rows were matched, excluded, already linked, or had no meaningful changes. Unmatched rows do not automatically become CREATE candidates, and name similarity remains diagnostic/warning only.
+
+Future UPDATE sync must start with a narrow allowlist: price, supplier cost, stock/quantity, availability, and active supplier offer. It must not update name, slug, descriptions, SEO, images, categories, or attributes without separate design and approval.
+
+Future work / open questions:
+
+- Phase 8 manual selected UPDATE design.
+- Audit log and rollback implementation.
+- Feature flags and kill switches for broader sync operations.
+- Separate ownership designs for images, categories, and attributes.
+
 ## System Overview
 
 mycomputer.bg v2 is a modular e-commerce platform for computer hardware, laptops, components, monitors, printers and accessories.

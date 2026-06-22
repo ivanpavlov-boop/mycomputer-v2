@@ -7,6 +7,36 @@
 <a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
 </p>
 
+## mycomputer.bg v2 Project Docs
+
+This repository is a Laravel 12 / Filament e-commerce backend for mycomputer.bg v2.
+
+Read these before changing supplier import or catalog sync:
+
+- [Architecture](docs/ARCHITECTURE.md)
+- [Catalog Sync](docs/CATALOG_SYNC.md)
+- [Supplier Import](docs/SUPPLIER_IMPORT.md)
+- [Data Ownership](docs/DATA_OWNERSHIP.md)
+- [Sync Safety](docs/SYNC_SAFETY.md)
+- [Roadmap](docs/ROADMAP.md)
+- [Phases](docs/PHASES.md)
+
+Current catalog sync safety position:
+
+- Supplier feeds stage data in `supplier_products`.
+- Catalog Sync Preview is required before catalog writes.
+- Only manual selected CREATE sync is enabled.
+- UPDATE sync, Sync All, automatic sync, scheduled sync, and image sync are not enabled.
+
+Validation commands:
+
+```powershell
+.\.tools\php\php.exe artisan test
+.\.tools\php\php.exe vendor\bin\pint --test
+```
+
+Deployment reference: [Deployment](docs/DEPLOYMENT.md).
+
 ## About Laravel
 
 Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:

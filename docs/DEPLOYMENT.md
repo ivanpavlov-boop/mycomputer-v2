@@ -1,0 +1,88 @@
+# Deployment
+
+## Purpose
+
+Document the current safe VPS deployment process and common container startup issues.
+
+Related docs: [Testing](TESTING.md), [Sync Safety](SYNC_SAFETY.md), [Rollback Plan](ROLLBACK_PLAN.md).
+
+## Current Status
+
+Deployment is Docker-based. Deploy only from `origin/main` after PR merge and passing CI.
+
+## Allowed
+
+- Deploy merged `origin/main`.
+- Build app, queue, and scheduler containers.
+- Start app before nginx.
+- Run migrations with `--force`.
+- Rebuild Laravel caches after deploy.
+
+## Forbidden
+
+- Do not deploy from feature branches for normal release.
+- Do not deploy before merge into `main`.
+- Do not skip health checks.
+- Do not enable Sync All or automatic sync during deployment.
+
+## Safe VPS Deploy Command
+
+```bash
+cd /var/www/mycomputer-v2
+
+git fetch origin
+git reset --hard origin/main
+
+docker compose build app queue scheduler
+docker compose up -d app queue scheduler
+
+sleep 10
+
+docker compose up -d nginx
+
+docker compose exec app php artisan optimize:clear
+
+docker compose exec app php artisan migrate --force
+
+docker compose exec app php artisan config:cache
+docker compose exec app php artisan route:cache
+docker compose exec app php artisan view:cache
+
+docker compose restart queue scheduler
+docker compose restart nginx
+
+sleep 10
+
+curl -I http://localhost:8080
+```
+
+## Common Issue: nginx Upstream App Not Found
+
+Symptom:
+
+```text
+host not found in upstream "app"
+```
+
+Fix:
+
+1. Start `app` first.
+2. Wait for PHP-FPM to be ready.
+3. Start or restart `nginx`.
+
+Useful checks:
+
+```bash
+docker compose ps
+docker compose logs app --tail=100
+docker compose logs nginx --tail=100
+curl -I http://localhost:8080
+```
+
+If `curl` returns connection refused immediately after restart, wait and retry.
+
+## Future Work / Open Questions
+
+- Add scripted deployment guard that confirms branch is `origin/main`.
+- Add post-deploy smoke tests for `/admin/catalog-sync-preview`.
+- Add release checklist for sync feature flags before Phase 8.
