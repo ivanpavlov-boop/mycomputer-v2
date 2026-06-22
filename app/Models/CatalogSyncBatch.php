@@ -10,6 +10,8 @@ class CatalogSyncBatch extends Model
 {
     public const string MODE_MANUAL_SELECTED_CREATE = 'manual_selected_create';
 
+    public const string MODE_MANUAL_SELECTED_UPDATE_PRICE_STOCK = 'manual_selected_update_price_stock';
+
     public const string STATUS_RUNNING = 'running';
 
     public const string STATUS_COMPLETED = 'completed';

@@ -53,6 +53,7 @@ Supplier data is staged first. Catalog products are the public product records. 
 ## Allowed
 
 - Updating safe commercial fields through explicitly allowed sync phases.
+- Manual selected UPDATE may update only price, supplier cost, quantity, availability, and supplier offer metadata.
 - Preserving raw supplier data in staging.
 - Using preview diagnostics to show what would happen.
 
@@ -61,9 +62,9 @@ Supplier data is staged first. Catalog products are the public product records. 
 - Treating supplier text as the owner of Bulgarian product names/descriptions.
 - Overwriting manually curated content because a supplier feed changed.
 - Replacing images/categories/specifications during current CREATE/diagnostic work without explicit design.
+- Updating product name, slug, SEO, descriptions, images, categories, or attributes during Phase 8 selected UPDATE.
 
 ## Future Work / Open Questions
 
-- Phase 8 UPDATE sync must initially update only price/stock/availability/supplier offer fields.
 - Image, category, and attribute ownership need separate designs before sync writes.
 - More granular locks may be needed for images, categories, and attributes.

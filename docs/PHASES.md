@@ -8,7 +8,7 @@ Related docs: [Roadmap](ROADMAP.md), [Catalog Sync](CATALOG_SYNC.md), [Sync Safe
 
 ## Current Status
 
-Feature development is paused after Phase 7.6 safety infrastructure before Phase 8 UPDATE sync.
+Phase 8 manual selected UPDATE price/stock sync has been implemented behind a feature flag. Broader sync work remains paused until rollback tooling and additional designs are complete.
 
 ## Completed Phases
 
@@ -25,12 +25,12 @@ Feature development is paused after Phase 7.6 safety infrastructure before Phase
 | Phase 7.2 | CREATE diagnostics | Complete |
 | Phase 7.5 | Architecture & Documentation Lock | Complete |
 | Phase 7.6 | Catalog Sync Safety Infrastructure | Complete |
+| Phase 8 | Manual selected UPDATE for price/stock only | Complete |
 
 ## Next Planned Phases
 
 | Phase | Name | Notes |
 | --- | --- | --- |
-| Phase 8 | Manual selected UPDATE for price/stock only | Must not update content/images/categories/attributes. |
 | Phase 9 | Audit log and rollback support | Required before broad writes. |
 | Phase 10 | Manual Sync All eligible CREATE | Later, after stronger audit controls. |
 | Phase 11 | Scheduled preview generation | Preview only before scheduled writes. |
@@ -38,14 +38,14 @@ Feature development is paused after Phase 7.6 safety infrastructure before Phase
 
 ## Allowed
 
-- Maintain Phase 7.5 docs and Phase 7.6 safety rules.
-- Add tests/docs before Phase 8.
+- Maintain Phase 7.5 docs, Phase 7.6 safety rules, and Phase 8 commercial-field allowlist.
+- Add tests/docs before rollback or broader sync phases.
 
 ## Forbidden
 
-- Do not start Phase 8 inside Phase 7.6.
 - Do not add Sync All.
 - Do not enable automatic sync.
+- Do not broaden UPDATE beyond price/stock/availability/supplier offer fields.
 
 ## Future Work / Open Questions
 

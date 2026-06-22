@@ -16,6 +16,7 @@ use App\Services\Availability\AvailabilityStatusMapper;
 use App\Services\Pricing\PricingEngine;
 use App\Services\Products\CatalogSyncAuditService;
 use App\Services\Products\CatalogSyncPreviewService;
+use App\Services\Products\SupplierOfferSelectionService;
 use App\Services\Suppliers\SupplierExclusionService;
 use BackedEnum;
 use Filament\Forms\Components\Select;
@@ -73,9 +74,19 @@ class CatalogSyncPreview extends Page
     public array $selectedSupplierProductIds = [];
 
     /**
+     * @var array<int, int|string>
+     */
+    public array $selectedUpdateSupplierProductIds = [];
+
+    /**
      * @var array{created: int, skipped: int, failed: int, messages: array<int, string>, batch_id?: int|null, batch_uuid?: string|null}|null
      */
     public ?array $lastManualSyncResult = null;
+
+    /**
+     * @var array{updated: int, skipped: int, failed: int, messages: array<int, string>, batch_id?: int|null, batch_uuid?: string|null}|null
+     */
+    public ?array $lastManualUpdateResult = null;
 
     public static function canAccess(): bool
     {
@@ -596,7 +607,11 @@ class CatalogSyncPreview extends Page
             $this->matchingPreviewForSupplierProduct($supplierProduct),
         );
 
-        return array_merge($row, $this->syncActionPreviewForSupplierProduct($supplierProduct, $row));
+        $row = array_merge($row, $this->syncActionPreviewForSupplierProduct($supplierProduct, $row));
+
+        return array_merge($row, [
+            'manual_update_eligible' => $this->isEligibleForManualUpdateSync($supplierProduct, $row),
+        ]);
     }
 
     /**
@@ -995,6 +1010,183 @@ class CatalogSyncPreview extends Page
             ->send();
     }
 
+    public function syncSelectedUpdateProducts(): void
+    {
+        $selectedSupplierProductIds = array_values(array_unique(array_map('intval', $this->selectedUpdateSupplierProductIds)));
+
+        $result = [
+            'updated' => 0,
+            'skipped' => 0,
+            'failed' => 0,
+            'messages' => [],
+            'batch_id' => null,
+            'batch_uuid' => null,
+        ];
+
+        if (! (bool) config('catalog_sync.update_enabled', false)) {
+            $result['skipped'] = count($selectedSupplierProductIds);
+            $result['messages'][] = 'Manual UPDATE sync is disabled by configuration.';
+
+            $this->selectedUpdateSupplierProductIds = [];
+            $this->lastManualUpdateResult = $result;
+
+            Notification::make()
+                ->title('Selected UPDATE products sync blocked')
+                ->body('Manual UPDATE sync is disabled by configuration.')
+                ->warning()
+                ->send();
+
+            return;
+        }
+
+        $auditService = app(CatalogSyncAuditService::class);
+        $batch = $auditService->startBatch(
+            CatalogSyncBatch::MODE_MANUAL_SELECTED_UPDATE_PRICE_STOCK,
+            auth()->id(),
+            null,
+            count($selectedSupplierProductIds),
+            [
+                'source' => 'catalog_sync_preview',
+                'create_enabled' => (bool) config('catalog_sync.create_enabled', true),
+                'update_enabled' => true,
+                'sync_all_enabled' => (bool) config('catalog_sync.sync_all_enabled', false),
+                'auto_enabled' => (bool) config('catalog_sync.auto_enabled', false),
+                'allowed_fields' => [
+                    'price',
+                    'purchase_price',
+                    'supplier_price_raw',
+                    'recommended_price',
+                    'final_selling_price',
+                    'regular_price',
+                    'quantity',
+                    'stock_status',
+                    'availability_status_id',
+                    'supplier_id',
+                    'supplier_sku',
+                    'external_availability_status',
+                    'external_availability_label',
+                    'selected_supplier_offer_id',
+                ],
+            ],
+        );
+
+        $result['batch_id'] = $batch->id;
+        $result['batch_uuid'] = $batch->batch_uuid;
+
+        foreach ($selectedSupplierProductIds as $supplierProductId) {
+            $supplierProduct = null;
+            $product = null;
+
+            try {
+                $supplierProduct = SupplierProduct::query()
+                    ->with(['supplier:id,company_name,priority'])
+                    ->find($supplierProductId);
+
+                if (! $supplierProduct) {
+                    $result['skipped']++;
+                    $result['messages'][] = "Supplier product {$supplierProductId} skipped: row no longer exists.";
+                    $auditService->recordSkipped(
+                        $batch,
+                        null,
+                        null,
+                        CatalogSyncLog::ACTION_UPDATE,
+                        'supplier_product_missing',
+                        ['supplier_product_id' => $supplierProductId],
+                    );
+
+                    continue;
+                }
+
+                if ((int) config('services.catalog_sync_preview.force_manual_update_failure_supplier_product_id') === $supplierProduct->id) {
+                    throw new RuntimeException('Forced manual update sync failure.');
+                }
+
+                $row = array_merge(
+                    $this->basePreviewRowForSupplierProduct($supplierProduct),
+                    $this->pricingPreviewForSupplierProduct($supplierProduct),
+                    $this->exclusionPreviewForSupplierProduct($supplierProduct),
+                    $this->matchingPreviewForSupplierProduct($supplierProduct),
+                );
+                $row = array_merge($row, $this->syncActionPreviewForSupplierProduct($supplierProduct, $row));
+
+                $product = filled($row['matched_product_id'] ?? null)
+                    ? Product::query()->find((int) $row['matched_product_id'])
+                    : null;
+
+                if (! $this->isEligibleForManualUpdateSync($supplierProduct, $row) || ! $product) {
+                    $reason = (string) ($row['sync_reason'] ?? 'not_eligible_for_update');
+                    $result['skipped']++;
+                    $result['messages'][] = "Supplier product {$supplierProduct->id} skipped: {$reason}.";
+                    $auditService->recordSkipped(
+                        $batch,
+                        $supplierProduct,
+                        $product,
+                        CatalogSyncLog::ACTION_UPDATE,
+                        $reason,
+                        [
+                            'sync_action' => $row['sync_action'] ?? null,
+                            'excluded' => (bool) ($row['excluded'] ?? false),
+                            'matched_product_id' => $row['matched_product_id'] ?? null,
+                            'match_type' => $row['match_type'] ?? null,
+                            'match_confidence' => $row['match_confidence'] ?? null,
+                        ],
+                    );
+
+                    continue;
+                }
+
+                $oldValues = $this->manualUpdateAuditValues($product);
+
+                $product = DB::transaction(fn (): Product => $this->updateCatalogProductCommercialFieldsFromSupplierProduct($product, $supplierProduct, $row));
+
+                $result['updated']++;
+                $result['messages'][] = "Supplier product {$supplierProduct->id} updated catalog product {$product->id}.";
+                $auditService->recordSuccess(
+                    $batch,
+                    $supplierProduct,
+                    $product,
+                    CatalogSyncLog::ACTION_UPDATE,
+                    'updated_price_stock',
+                    $oldValues,
+                    $this->manualUpdateAuditValues($product->fresh()),
+                    [
+                        'sync_action' => $row['sync_action'] ?? 'UPDATE',
+                        'sync_reason' => $row['sync_reason'] ?? 'matched_catalog_product_can_be_updated',
+                        'match_type' => $row['match_type'] ?? null,
+                        'match_confidence' => $row['match_confidence'] ?? null,
+                    ],
+                );
+            } catch (Throwable $exception) {
+                report($exception);
+
+                $result['failed']++;
+                $result['messages'][] = "Supplier product {$supplierProductId} failed: ".$exception->getMessage();
+                $auditService->recordFailure(
+                    $batch,
+                    $supplierProduct,
+                    $product,
+                    CatalogSyncLog::ACTION_UPDATE,
+                    $exception,
+                    'manual_update_failed',
+                    ['supplier_product_id' => $supplierProductId],
+                );
+            }
+        }
+
+        $batch = $auditService->finishBatch($batch);
+        $result['batch_id'] = $batch->id;
+        $result['batch_uuid'] = $batch->batch_uuid;
+
+        $this->selectedUpdateSupplierProductIds = [];
+        $this->lastManualUpdateResult = $result;
+
+        Notification::make()
+            ->title('Selected UPDATE products sync completed')
+            ->body("Updated {$result['updated']}, skipped {$result['skipped']}, failed {$result['failed']}.")
+            ->success()
+            ->send();
+    }
+
     /**
      * @param  array<int, array<string, mixed>>  $rows
      * @return array{total: int, included: int, excluded: int, matched: int, unmatched: int, match_errors: int, create_rows: int, update_rows: int, skip_rows: int, conflict_rows: int, error_rows: int}
@@ -1059,6 +1251,49 @@ class CatalogSyncPreview extends Page
             && ! (bool) ($row['excluded'] ?? false)
             && blank($row['matched_product_id'] ?? null)
             && $this->hasMinimumSyncData($supplierProduct);
+    }
+
+    /**
+     * @param  array<string, mixed>  $row
+     */
+    protected function isEligibleForManualUpdateSync(SupplierProduct $supplierProduct, array $row): bool
+    {
+        return (bool) config('catalog_sync.update_enabled', false)
+            && ($row['sync_action'] ?? null) === 'UPDATE'
+            && ! (bool) ($row['excluded'] ?? false)
+            && filled($row['matched_product_id'] ?? null)
+            && $this->isSafeManualUpdateMatch($row)
+            && $this->hasRequiredUpdateData($supplierProduct, $row);
+    }
+
+    /**
+     * @param  array<string, mixed>  $row
+     */
+    protected function isSafeManualUpdateMatch(array $row): bool
+    {
+        if (($row['match_confidence'] ?? null) !== 'exact') {
+            return false;
+        }
+
+        return in_array($row['match_type'] ?? null, [
+            'manual_mapping',
+            'ean',
+            'mpn_brand',
+            'supplier_sku',
+            'existing_supplier_mapping',
+            'existing_product_offer',
+            'already_linked_supplier_product',
+        ], true);
+    }
+
+    /**
+     * @param  array<string, mixed>  $row
+     */
+    protected function hasRequiredUpdateData(SupplierProduct $supplierProduct, array $row): bool
+    {
+        return $supplierProduct->price !== null
+            && $supplierProduct->quantity !== null
+            && ($row['calculated_price'] ?? null) !== null;
     }
 
     /**
@@ -1164,6 +1399,109 @@ class CatalogSyncPreview extends Page
         ]);
 
         return $product;
+    }
+
+    /**
+     * @param  array<string, mixed>  $row
+     */
+    protected function updateCatalogProductCommercialFieldsFromSupplierProduct(Product $product, SupplierProduct $supplierProduct, array $row): Product
+    {
+        $supplierProduct->loadMissing('supplier');
+
+        $offer = ProductSupplierOffer::query()->updateOrCreate(
+            [
+                'product_id' => $product->id,
+                'supplier_id' => $supplierProduct->supplier_id,
+                'supplier_product_id' => $supplierProduct->id,
+            ],
+            [
+                'supplier_sku' => $supplierProduct->supplier_sku,
+                'price' => $supplierProduct->price,
+                'quantity' => $supplierProduct->quantity ?? 0,
+                'currency' => $supplierProduct->currency ?: Product::CATALOG_CURRENCY,
+                'supplier_priority' => $supplierProduct->supplier?->priority ?? 100,
+                'last_seen_at' => now(),
+            ],
+        );
+
+        $selection = app(SupplierOfferSelectionService::class)->select($product->fresh(['supplierOffers.supplier', 'supplierOffers.supplierProduct']));
+        $selectedOffer = $selection['offer'];
+        $selectedSupplierProduct = $selectedOffer?->supplierProduct ?: $supplierProduct;
+        $selectedSupplierProduct->loadMissing('supplier');
+
+        $pricingProduct = $product->replicate();
+        $pricingProduct->id = $product->id;
+        $pricing = app(PricingEngine::class)->calculateForSupplierProduct($selectedSupplierProduct, $pricingProduct);
+        $selectedQuantity = (int) ($selectedOffer?->quantity ?? 0);
+        $availability = app(AvailabilityStatusMapper::class)->mapWithFallback(
+            'supplier',
+            $selectedSupplierProduct->supplier?->company_name,
+            $selectedSupplierProduct->external_availability_status,
+            $selectedQuantity,
+        );
+
+        $updates = [
+            'supplier_id' => $selectedOffer?->supplier_id,
+            'supplier_sku' => $selectedOffer?->supplier_sku,
+            'purchase_price' => $pricing['purchase_price'],
+            'supplier_price_raw' => $pricing['supplier_price_raw'],
+            'recommended_price' => $pricing['recommended_price'],
+            'final_selling_price' => $pricing['final_selling_price'],
+            'regular_price' => $pricing['regular_price'],
+            'price_source' => Product::PRICE_SOURCE_SUPPLIER_IMPORT,
+            'price' => $pricing['final_selling_price'],
+            'quantity' => $selectedQuantity,
+            'availability_status_id' => $product->manual_override ? $product->availability_status_id : $availability?->id,
+            'stock_status' => $product->manual_override ? $product->stock_status : ($availability?->code ?? ($selectedQuantity > 0 ? 'in_stock' : 'out_of_stock')),
+            'external_availability_status' => $selectedSupplierProduct->external_availability_status,
+            'external_availability_label' => $selectedSupplierProduct->external_availability_label,
+            'source_payload' => array_merge($product->source_payload ?? [], [
+                'sync_strategy' => CatalogSyncBatch::MODE_MANUAL_SELECTED_UPDATE_PRICE_STOCK,
+                'selected_supplier_offer_id' => $selectedOffer?->id,
+                'supplier_offer_candidates' => $selection['candidates'],
+                'offer_selection_reason' => $selection['reason'],
+                'last_supplier_product_id' => $supplierProduct->id,
+                'selected_supplier_product_id' => $selectedSupplierProduct->id,
+                'pricing' => $pricing,
+            ]),
+        ];
+
+        $product->update($updates);
+
+        ProductSupplierOffer::query()
+            ->where('product_id', $product->id)
+            ->update(['is_preferred' => false]);
+
+        if ($selectedOffer) {
+            $selectedOffer->update(['is_preferred' => true]);
+        } else {
+            $offer->update(['is_preferred' => false]);
+        }
+
+        return $product->fresh();
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected function manualUpdateAuditValues(Product $product): array
+    {
+        return [
+            'price' => $product->price,
+            'regular_price' => $product->regular_price,
+            'final_selling_price' => $product->final_selling_price,
+            'purchase_price' => $product->purchase_price,
+            'supplier_price_raw' => $product->supplier_price_raw,
+            'recommended_price' => $product->recommended_price,
+            'quantity' => $product->quantity,
+            'stock_status' => $product->stock_status,
+            'availability_status_id' => $product->availability_status_id,
+            'supplier_id' => $product->supplier_id,
+            'supplier_sku' => $product->supplier_sku,
+            'external_availability_status' => $product->external_availability_status,
+            'external_availability_label' => $product->external_availability_label,
+            'selected_supplier_offer_id' => $product->source_payload['selected_supplier_offer_id'] ?? null,
+        ];
     }
 
     protected function uniqueSku(string $sku): string

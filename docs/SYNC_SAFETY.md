@@ -8,7 +8,7 @@ Related docs: [Catalog Sync](CATALOG_SYNC.md), [Data Ownership](DATA_OWNERSHIP.m
 
 ## Current Status
 
-Only manual selected CREATE sync is enabled. UPDATE sync, Sync All, automatic sync, scheduled sync, and image sync are not enabled.
+Manual selected CREATE sync is enabled. Manual selected UPDATE sync exists only for price, supplier cost, stock, availability, and supplier offer metadata, and remains disabled unless `CATALOG_SYNC_UPDATE_ENABLED=true`. Sync All, automatic sync, scheduled sync, and image sync are not enabled.
 
 ## Required Rules Before Any Write
 
@@ -76,17 +76,27 @@ Each selected row records:
 - safe old/new values
 - error message for failures
 
-CREATE logs store no destructive old values because they create new draft catalog products only. Future UPDATE sync must record old and new values before it can be enabled.
+CREATE logs store no destructive old values because they create new draft catalog products only.
+
+Manual selected UPDATE logs store old/new values only for the commercial fields this phase may change:
+
+- price / regular price / final selling price
+- purchase price / supplier raw price / recommended price
+- quantity / stock status / availability status
+- supplier ID / supplier SKU
+- external supplier availability labels
+- selected supplier offer ID
 
 ## What Is Allowed
 
 - CREATE can be enabled independently.
+- UPDATE can be enabled independently for selected price/stock rows only.
 - Read-only preview/diagnostics can run without write flags.
-- Future UPDATE may be added only with explicit scope and tests.
+- UPDATE must revalidate safe exact matching server-side before every write.
 
 ## What Is Forbidden
 
-- UPDATE sync before Phase 8 design.
+- UPDATE sync for name, slug, SEO, descriptions, images, categories, attributes, or media.
 - Sync All before audit/rollback/feature flags.
 - Automatic sync before controlled scheduled preview and rollback exist.
 - Image/category/attribute sync without explicit ownership design.

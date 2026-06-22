@@ -21,8 +21,9 @@ Related docs: [Supplier Import](SUPPLIER_IMPORT.md), [Pricing Rules](PRICING_RUL
 - Table scroll panel, sticky header, and counter layout exist.
 - Feature flags exist for CREATE, UPDATE, Sync All, and automatic sync.
 - Manual selected CREATE sync writes `catalog_sync_batches` and `catalog_sync_logs` audit records.
+- Manual selected UPDATE sync exists for price, stock, availability, supplier cost, and supplier offer metadata only.
 
-Only selected CREATE sync is enabled. UPDATE sync, Sync All, automatic sync, scheduled sync, and image import are not enabled.
+Only selected CREATE sync and feature-flagged selected UPDATE price/stock sync are implemented. Sync All, automatic sync, scheduled sync, and image import are not enabled.
 
 ## Current Flow
 
@@ -34,6 +35,7 @@ supplier_products staging
 -> matching
 -> sync_action preview
 -> manual selected CREATE sync
+-> manual selected UPDATE price/stock sync
 -> catalog sync batch/log audit
 -> catalog products
 ```
@@ -43,7 +45,7 @@ supplier_products staging
 | Action | Meaning | Write enabled now |
 | --- | --- | --- |
 | `CREATE` | No safe catalog match exists and minimum data is present. | Yes, selected rows only. |
-| `UPDATE` | Safe existing catalog match exists. | No. Preview only. |
+| `UPDATE` | Safe existing catalog match exists. | Yes, selected rows only, behind `CATALOG_SYNC_UPDATE_ENABLED`, price/stock fields only. |
 | `SKIP` | Excluded, no meaningful change, or not eligible. | No write. |
 | `CONFLICT` | Ambiguous or unsafe automatic decision. | No write. |
 | `ERROR` | Row evaluation failed. | No write. |
@@ -110,15 +112,19 @@ Sample diagnostic rows show:
 
 - Read-only diagnostics.
 - Manual selected CREATE sync for eligible rows.
+- Manual selected UPDATE sync for eligible rows when `CATALOG_SYNC_UPDATE_ENABLED=true`.
 - Per-row try/catch for selected CREATE writes.
+- Per-row try/catch for selected UPDATE writes.
 - Server-side revalidation before writes.
 - Visible created/skipped/failed summary.
 - Batch/log audit records for manual selected CREATE sync.
+- Batch/log audit records for manual selected UPDATE sync.
 - `CATALOG_SYNC_CREATE_ENABLED=false` can disable CREATE sync without removing preview access.
+- `CATALOG_SYNC_UPDATE_ENABLED=false` disables UPDATE sync without removing preview access.
 
 ## What Is Forbidden
 
-- UPDATE sync.
+- UPDATE sync for content, images, categories, attributes, or media.
 - Sync All.
 - Automatic sync.
 - Scheduled sync.
@@ -128,6 +134,5 @@ Sample diagnostic rows show:
 
 ## Future Work / Open Questions
 
-- Phase 8: manual selected UPDATE for price, supplier cost, stock, availability, and active supplier offer only.
 - Rollback tooling before broader writes.
 - Sync All only after explicit design, auditability, and rollback.
