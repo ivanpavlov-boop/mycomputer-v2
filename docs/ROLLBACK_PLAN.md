@@ -8,14 +8,14 @@ Related docs: [Sync Safety](SYNC_SAFETY.md), [Catalog Sync](CATALOG_SYNC.md), [R
 
 ## Current Status
 
-Manual selected CREATE sync exists. Broad UPDATE rollback is not implemented yet. This document defines required data before UPDATE sync is allowed.
+Manual selected CREATE sync exists. Manual selected UPDATE price/stock sync exists behind `CATALOG_SYNC_UPDATE_ENABLED`. Broad UPDATE rollback is not implemented yet.
 
 Phase 7.6 adds the first audit infrastructure:
 
 - `catalog_sync_batches`
 - `catalog_sync_logs`
 
-Manual selected CREATE sync records created/skipped/failed rows and safe CREATE summaries. This is audit support, not a full rollback tool.
+Manual selected CREATE sync records created/skipped/failed rows and safe CREATE summaries. Manual selected UPDATE price/stock sync records old/new commercial values for each row. This is audit support, not a full rollback tool.
 
 ## Required Audit Data Before UPDATE Sync
 
@@ -49,11 +49,13 @@ Every sync write should store:
 
 - Manual review of existing logs.
 - CREATE-only sync without UPDATE rollback if CREATE remains selected/manual and audited enough for current pilot needs.
+- Selected UPDATE price/stock sync if it remains manually selected, feature-flagged, audited, and limited to commercial fields.
 - CREATE batch/log records exist for traceability.
 
 ## What Is Forbidden
 
 - Broad UPDATE sync without old/new values.
+- UPDATE sync that touches content, images, categories, or attributes.
 - Sync All without rollback plan.
 - Automatic sync without batch-level audit and rollback.
 

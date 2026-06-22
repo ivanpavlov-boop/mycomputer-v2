@@ -67,6 +67,7 @@
             $cell = 'whitespace-nowrap px-3 py-2';
             $truncateCell = 'max-w-[22rem] truncate px-3 py-2';
             $selectedCreateCount = count($this->selectedSupplierProductIds);
+            $selectedUpdateCount = count($this->selectedUpdateSupplierProductIds);
             $summaryCounters = [
                 'Total Rows' => $summary['total'],
                 'Included Rows' => $summary['included'],
@@ -236,6 +237,37 @@
             </div>
         @endif
 
+        @if ($this->lastManualUpdateResult)
+            <div class="rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-gray-900">
+                <div class="text-sm font-semibold text-gray-950 dark:text-white">Manual UPDATE sync result</div>
+                <div class="mt-3 grid grid-cols-1 gap-3 text-sm sm:grid-cols-3">
+                    <div class="rounded-md border border-blue-200 bg-blue-50 p-3 text-blue-800 dark:border-blue-900 dark:bg-blue-950 dark:text-blue-200">
+                        Updated: {{ $this->lastManualUpdateResult['updated'] }}
+                    </div>
+                    <div class="rounded-md border border-yellow-200 bg-yellow-50 p-3 text-yellow-800 dark:border-yellow-900 dark:bg-yellow-950 dark:text-yellow-200">
+                        Skipped: {{ $this->lastManualUpdateResult['skipped'] }}
+                    </div>
+                    <div class="rounded-md border border-red-200 bg-red-50 p-3 text-red-800 dark:border-red-900 dark:bg-red-950 dark:text-red-200">
+                        Failed: {{ $this->lastManualUpdateResult['failed'] }}
+                    </div>
+                </div>
+
+                @if (! empty($this->lastManualUpdateResult['messages']))
+                    <ul class="mt-3 list-disc space-y-1 pl-5 text-sm text-gray-600 dark:text-gray-300">
+                        @foreach ($this->lastManualUpdateResult['messages'] as $message)
+                            <li>{{ $message }}</li>
+                        @endforeach
+                    </ul>
+                @endif
+
+                @if (! empty($this->lastManualUpdateResult['batch_uuid']))
+                    <div class="mt-3 rounded-md border border-gray-200 bg-gray-50 p-3 text-xs text-gray-600 dark:border-gray-800 dark:bg-gray-950 dark:text-gray-300">
+                        Catalog sync batch: {{ $this->lastManualUpdateResult['batch_uuid'] }}
+                    </div>
+                @endif
+            </div>
+        @endif
+
         <div
             data-catalog-sync-preview-summary-grid
             class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5"
@@ -297,6 +329,48 @@
                 </div>
             </div>
 
+            <div
+                data-selected-update-sync-toolbar
+                class="rounded-lg border border-gray-200 bg-white px-3 py-2 shadow-sm dark:border-gray-800 dark:bg-gray-900"
+            >
+                <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                    <div>
+                        <div class="text-sm font-semibold text-gray-950 dark:text-white">Manual UPDATE sync</div>
+                        <div class="mt-1 text-xs text-gray-600 dark:text-gray-400">
+                            Only eligible UPDATE rows will update price, stock, availability, and supplier offer fields.
+                        </div>
+                    </div>
+
+                    @php
+                        $updateSyncEnabled = (bool) config('catalog_sync.update_enabled', false);
+                        $updateSyncButtonDisabled = ! $updateSyncEnabled || $selectedUpdateCount === 0;
+                        $updateSyncButtonStyle = $updateSyncButtonDisabled
+                            ? 'display: inline-flex; align-items: center; justify-content: center; border: 1px solid #d1d5db; color: #6b7280; background: #f3f4f6; padding: 8px 14px; border-radius: 8px; font-weight: 600; font-size: 14px; cursor: not-allowed; opacity: 0.8;'
+                            : 'display: inline-flex; align-items: center; justify-content: center; border: 1px solid #2563eb; color: #1d4ed8; background: #ffffff; padding: 8px 14px; border-radius: 8px; font-weight: 600; font-size: 14px; cursor: pointer;';
+                    @endphp
+
+                    @if (! $updateSyncEnabled)
+                        <div class="rounded-md border border-yellow-200 bg-yellow-50 px-3 py-2 text-xs font-medium text-yellow-800 dark:border-yellow-900 dark:bg-yellow-950 dark:text-yellow-200">
+                            Manual UPDATE sync is disabled by configuration.
+                        </div>
+                    @endif
+
+                    <button
+                        type="button"
+                        wire:click="syncSelectedUpdateProducts"
+                        wire:loading.attr="disabled"
+                        wire:target="syncSelectedUpdateProducts"
+                        @disabled($updateSyncButtonDisabled)
+                        data-selected-update-sync-button
+                        data-selected-update-sync-disabled="{{ $updateSyncButtonDisabled ? 'true' : 'false' }}"
+                        class="inline-flex items-center justify-center rounded-md border border-blue-600 bg-white px-4 py-2 text-sm font-medium text-blue-700 shadow-sm transition hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:ring-offset-2 disabled:cursor-not-allowed disabled:border-gray-300 disabled:bg-gray-100 disabled:text-gray-500 disabled:shadow-none dark:border-blue-500 dark:bg-gray-900 dark:text-blue-300 dark:hover:bg-blue-950/40 dark:focus:ring-blue-400 dark:disabled:border-gray-700 dark:disabled:bg-gray-800 dark:disabled:text-gray-500"
+                        style="{{ $updateSyncButtonStyle }}"
+                    >
+                        Sync Selected UPDATE Price/Stock ({{ $selectedUpdateCount }})
+                    </button>
+                </div>
+            </div>
+
             <div class="max-w-full rounded-lg border border-gray-200 bg-white shadow-sm dark:border-gray-800 dark:bg-gray-900" style="width: 100%; max-width: 100%;">
                 <div
                     data-catalog-sync-preview-scroll-panel
@@ -307,7 +381,8 @@
                         <table class="w-full min-w-[2400px] divide-y divide-gray-200 text-xs dark:divide-gray-800" style="width: 100%; min-width: 2400px;">
                         <thead class="bg-gray-50 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:bg-gray-950 dark:text-gray-400">
                             <tr>
-                                <th class="{{ $headerCell }}">Select</th>
+                                <th class="{{ $headerCell }}">Create</th>
+                                <th class="{{ $headerCell }}">Update</th>
                                 <th class="{{ $headerCell }}">ID</th>
                                 <th class="{{ $headerCell }}">Supplier</th>
                                 <th class="{{ $headerCell }}">Supplier SKU</th>
@@ -347,6 +422,16 @@
                                             class="rounded border-gray-300 text-primary-600 shadow-sm focus:ring-primary-600 disabled:cursor-not-allowed disabled:opacity-40 dark:border-gray-700 dark:bg-gray-900"
                                         >
                                     </td>
+                                    <td class="{{ $cell }}">
+                                        <input
+                                            type="checkbox"
+                                            wire:model="selectedUpdateSupplierProductIds"
+                                            value="{{ $row['supplier_product_id'] }}"
+                                            @disabled(! $row['manual_update_eligible'])
+                                            aria-label="Select supplier product {{ $row['supplier_product_id'] }} for update"
+                                            class="rounded border-gray-300 text-blue-600 shadow-sm focus:ring-blue-600 disabled:cursor-not-allowed disabled:opacity-40 dark:border-gray-700 dark:bg-gray-900"
+                                        >
+                                    </td>
                                     <td class="{{ $cell }}">{{ $row['supplier_product_id'] }}</td>
                                     <td class="{{ $cell }}">{{ $row['supplier'] }}</td>
                                     <td class="{{ $cell }}">{{ $row['supplier_sku'] }}</td>
@@ -384,7 +469,7 @@
                                 </tr>
                             @empty
                                 <tr>
-                                    <td colspan="25" class="px-3 py-8 text-center text-gray-500">
+                                    <td colspan="26" class="px-3 py-8 text-center text-gray-500">
                                         {{ $discovery['enabled'] ? 'No eligible CREATE candidates found in the scanned supplier products.' : 'No supplier products match the query-only filters.' }}
                                     </td>
                                 </tr>

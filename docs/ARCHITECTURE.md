@@ -23,7 +23,7 @@ Supplier XML/CSV
 Current write capability:
 
 - Manual selected CREATE sync is enabled for eligible selected rows only.
-- UPDATE sync is not enabled.
+- Manual selected UPDATE price/stock sync is implemented for eligible selected rows only and is guarded by `CATALOG_SYNC_UPDATE_ENABLED`.
 - Sync All is not enabled.
 - Automatic sync is not enabled.
 - Scheduled catalog sync is not enabled.
@@ -35,10 +35,11 @@ Allowed:
 - Supplier import into `supplier_products` staging.
 - Read-only preview and diagnostics.
 - Manual selected CREATE sync for server-side validated eligible rows.
+- Manual selected UPDATE sync for server-side validated eligible rows, limited to price, supplier cost, stock, availability, and supplier offer metadata.
 
 Forbidden:
 
-- UPDATE sync.
+- UPDATE sync for content, images, categories, attributes, or media.
 - Sync All.
 - Automatic or scheduled catalog sync.
 - Image import through sync.
@@ -62,7 +63,7 @@ Supplier import and staging are separate from catalog products. Supplier import 
 
 APCOM staging diagnostics on VPS recently scanned `1859` supplier products and found `0` CREATE candidates. Most rows were matched, excluded, already linked, or had no meaningful changes. Unmatched rows do not automatically become CREATE candidates, and name similarity remains diagnostic/warning only.
 
-Future UPDATE sync must start with a narrow allowlist: price, supplier cost, stock/quantity, availability, and active supplier offer. It must not update name, slug, descriptions, SEO, images, categories, or attributes without separate design and approval.
+Phase 8 UPDATE sync uses a narrow allowlist: price, supplier cost, stock/quantity, availability, and active supplier offer. It must not update name, slug, descriptions, SEO, images, categories, or attributes without separate design and approval.
 
 Future work / open questions:
 

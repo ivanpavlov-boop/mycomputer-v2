@@ -8,7 +8,7 @@ Related docs: [Phases](PHASES.md), [Sync Safety](SYNC_SAFETY.md), [Architecture]
 
 ## Current Status
 
-Feature development is paused after Phase 7.6 Catalog Sync Safety Infrastructure before Phase 8 UPDATE sync.
+Manual selected UPDATE price/stock sync is implemented behind `CATALOG_SYNC_UPDATE_ENABLED`. Broader sync work remains paused until rollback tooling and additional ownership designs are complete.
 
 ## Completed
 
@@ -26,11 +26,12 @@ Feature development is paused after Phase 7.6 Catalog Sync Safety Infrastructure
 - Sticky header where safe.
 - Counter layout.
 - Catalog sync feature flags and selected CREATE audit trail.
+- Manual selected UPDATE price/stock sync with audit old/new commercial values.
 
 ## Current Safety Position
 
-- Only selected CREATE sync is enabled.
-- UPDATE sync is not enabled.
+- Selected CREATE sync is enabled.
+- Selected UPDATE price/stock sync is feature-flagged and disabled by default unless `CATALOG_SYNC_UPDATE_ENABLED=true`.
 - Sync All is not enabled.
 - Automatic sync is not enabled.
 - Scheduled sync is not enabled.
@@ -41,9 +42,9 @@ Feature development is paused after Phase 7.6 Catalog Sync Safety Infrastructure
 
 1. Keep Phase 7.5 documentation lock current.
 2. Fix any diagnostic cosmetic inconsistency if needed.
-3. Phase 8: manual selected UPDATE for price/stock only.
-4. Rollback tooling based on `catalog_sync_batches` and `catalog_sync_logs`.
-5. Keep feature flags locked down before Phase 8.
+3. Rollback tooling based on `catalog_sync_batches` and `catalog_sync_logs`.
+4. Keep feature flags locked down before broader sync work.
+5. Conflict/manual mapping workflow.
 6. Sync All later.
 7. Automatic sync later.
 

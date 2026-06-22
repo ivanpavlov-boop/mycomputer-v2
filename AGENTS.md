@@ -22,9 +22,9 @@ Start with these docs:
 
 The supplier-to-catalog flow is intentionally staged and controlled:
 
-Supplier XML/CSV -> `supplier_products` staging -> Catalog Sync Preview -> pricing rules -> exclusion rules -> matching -> `sync_action` preview -> manual selected CREATE sync -> catalog products.
+Supplier XML/CSV -> `supplier_products` staging -> Catalog Sync Preview -> pricing rules -> exclusion rules -> matching -> `sync_action` preview -> manual selected CREATE/UPDATE sync -> catalog products.
 
-Only selected CREATE sync is enabled. UPDATE sync, Sync All, automatic sync, scheduled sync, and image sync are not enabled.
+Selected CREATE sync is enabled. Selected UPDATE price/stock sync is feature-flagged and limited to supplier-controlled commercial fields. Sync All, automatic sync, scheduled sync, and image sync are not enabled.
 
 ## General Rules
 
@@ -34,7 +34,7 @@ Only selected CREATE sync is enabled. UPDATE sync, Sync All, automatic sync, sch
 - Supplier import must not directly create or update catalog products.
 - Preview must happen before real catalog sync writes.
 - Do not add Sync All unless explicitly requested.
-- Do not add UPDATE sync unless there is a dedicated design and safety plan.
+- Do not broaden UPDATE sync beyond the documented Phase 8 commercial-field allowlist unless there is a dedicated design and safety plan.
 - Do not enable automatic or scheduled catalog sync unless explicitly requested and documented.
 - Every PR must run tests and Pint.
 - No merge with failing CI.
@@ -75,7 +75,7 @@ Rules:
 
 - CREATE and UPDATE sync are separate phases.
 - Manual selected CREATE sync is currently allowed.
-- UPDATE sync is not currently allowed.
+- Manual selected UPDATE sync is allowed only for price, supplier cost, stock, availability, and supplier offer metadata when `CATALOG_SYNC_UPDATE_ENABLED=true`.
 - Sync All is not currently allowed.
 - Automatic sync is not currently allowed.
 - Real write operations require server-side validation.

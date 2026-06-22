@@ -1676,9 +1676,414 @@ class CatalogSyncPreviewTest extends TestCase
 
         $response
             ->assertOk()
-            ->assertDontSee('Sync Selected UPDATE', false)
+            ->assertSee('Sync Selected UPDATE Price/Stock (0)')
+            ->assertSee('Manual UPDATE sync is disabled by configuration.')
+            ->assertSee('data-selected-update-sync-disabled="true"', false)
             ->assertDontSee('Sync All', false)
             ->assertDontSee('Automatic sync', false);
+    }
+
+    public function test_catalog_sync_preview_selected_update_is_blocked_when_feature_flag_disabled(): void
+    {
+        $this->actingAsSupplierManager();
+
+        config(['catalog_sync.update_enabled' => false]);
+
+        $supplier = Supplier::factory()->create();
+        $product = Product::factory()->create([
+            'source' => Product::SOURCE_SUPPLIER_IMPORT,
+            'ean' => '1212121212121',
+            'price' => 50,
+            'quantity' => 2,
+        ]);
+        $supplierProduct = $this->supplierProduct($supplier, [
+            'name' => 'Disabled Update Supplier Product',
+            'ean' => '1212121212121',
+            'price' => 150,
+            'quantity' => 9,
+        ]);
+        $beforeProduct = $product->fresh()->only(['price', 'quantity', 'supplier_id', 'supplier_sku']);
+        $beforeSupplierProduct = $supplierProduct->fresh()->only(['product_id', 'status', 'synced_at', 'mapping_notes']);
+
+        Livewire::test(CatalogSyncPreview::class)
+            ->set('selectedUpdateSupplierProductIds', [$supplierProduct->id])
+            ->call('syncSelectedUpdateProducts')
+            ->assertSet('lastManualUpdateResult.updated', 0)
+            ->assertSet('lastManualUpdateResult.skipped', 1)
+            ->assertSet('lastManualUpdateResult.failed', 0)
+            ->assertSet('lastManualUpdateResult.batch_id', null);
+
+        $this->assertSame($beforeProduct, $product->fresh()->only(['price', 'quantity', 'supplier_id', 'supplier_sku']));
+        $this->assertSame($beforeSupplierProduct, $supplierProduct->fresh()->only(['product_id', 'status', 'synced_at', 'mapping_notes']));
+        $this->assertSame(0, CatalogSyncBatch::query()->count());
+        $this->assertSame(0, CatalogSyncLog::query()->count());
+    }
+
+    public function test_catalog_sync_preview_exact_ean_update_row_is_eligible_when_feature_flag_enabled(): void
+    {
+        $this->actingAsSupplierManager();
+
+        config(['catalog_sync.update_enabled' => true]);
+
+        $supplier = Supplier::factory()->create();
+        Product::factory()->create([
+            'source' => Product::SOURCE_SUPPLIER_IMPORT,
+            'ean' => '3434343434343',
+            'price' => 50,
+            'quantity' => 2,
+        ]);
+        $supplierProduct = $this->supplierProduct($supplier, [
+            'name' => 'Eligible EAN Update Product',
+            'ean' => '3434343434343',
+            'price' => 150,
+            'quantity' => 9,
+        ]);
+
+        $preview = Livewire::test(CatalogSyncPreview::class)
+            ->set('filters.supplier_id', $supplier->id)
+            ->set('filters.action', 'UPDATE')
+            ->instance()
+            ->queryOnlySupplierProducts();
+        $row = collect($preview['rows'])->firstWhere('supplier_product_id', $supplierProduct->id);
+
+        $this->assertNotNull($row);
+        $this->assertSame('UPDATE', $row['sync_action']);
+        $this->assertSame('ean', $row['match_type']);
+        $this->assertSame('exact', $row['match_confidence']);
+        $this->assertTrue($row['manual_update_eligible']);
+    }
+
+    public function test_catalog_sync_preview_safe_non_ean_update_matches_are_eligible_when_feature_flag_enabled(): void
+    {
+        $this->actingAsSupplierManager();
+
+        config(['catalog_sync.update_enabled' => true]);
+
+        $supplier = Supplier::factory()->create();
+        $brand = Brand::factory()->create(['name' => 'Safe Match Brand', 'slug' => 'safe-match-brand']);
+        $supplierSkuProduct = Product::factory()->create([
+            'source' => Product::SOURCE_SUPPLIER_IMPORT,
+            'supplier_id' => $supplier->id,
+            'supplier_sku' => 'SAFE-SUPPLIER-SKU',
+            'ean' => null,
+            'mpn' => null,
+            'price' => 50,
+            'quantity' => 2,
+        ]);
+        $mpnBrandProduct = Product::factory()->create([
+            'source' => Product::SOURCE_SUPPLIER_IMPORT,
+            'brand_id' => $brand->id,
+            'ean' => null,
+            'mpn' => 'SAFE-MPN-BRAND',
+            'price' => 60,
+            'quantity' => 3,
+        ]);
+        $linkedProduct = Product::factory()->create([
+            'source' => Product::SOURCE_SUPPLIER_IMPORT,
+            'price' => 70,
+            'quantity' => 4,
+        ]);
+
+        $supplierSku = $this->supplierProduct($supplier, [
+            'name' => 'Safe Supplier SKU Update Product',
+            'supplier_sku' => 'SAFE-SUPPLIER-SKU',
+            'ean' => null,
+            'mpn' => null,
+            'price' => 150,
+            'quantity' => 9,
+        ]);
+        $mpnBrand = $this->supplierProduct($supplier, [
+            'name' => 'Safe MPN Brand Update Product',
+            'ean' => null,
+            'mpn' => 'SAFE-MPN-BRAND',
+            'brand_name' => 'Safe Match Brand',
+            'price' => 160,
+            'quantity' => 10,
+        ]);
+        $linked = $this->supplierProduct($supplier, [
+            'product_id' => $linkedProduct->id,
+            'name' => 'Already Linked Update Product',
+            'price' => 170,
+            'quantity' => 11,
+        ]);
+
+        $preview = Livewire::test(CatalogSyncPreview::class)
+            ->set('filters.supplier_id', $supplier->id)
+            ->set('filters.action', 'UPDATE')
+            ->instance()
+            ->queryOnlySupplierProducts();
+        $rows = collect($preview['rows'])->keyBy('supplier_product_id');
+
+        $this->assertSame($supplierSkuProduct->id, $rows[$supplierSku->id]['matched_product_id']);
+        $this->assertSame('supplier_sku', $rows[$supplierSku->id]['match_type']);
+        $this->assertTrue($rows[$supplierSku->id]['manual_update_eligible']);
+        $this->assertSame($mpnBrandProduct->id, $rows[$mpnBrand->id]['matched_product_id']);
+        $this->assertSame('mpn_brand', $rows[$mpnBrand->id]['match_type']);
+        $this->assertTrue($rows[$mpnBrand->id]['manual_update_eligible']);
+        $this->assertSame($linkedProduct->id, $rows[$linked->id]['matched_product_id']);
+        $this->assertSame('manual_mapping', $rows[$linked->id]['match_type']);
+        $this->assertTrue($rows[$linked->id]['manual_update_eligible']);
+    }
+
+    public function test_catalog_sync_preview_selected_update_changes_only_commercial_fields(): void
+    {
+        $this->actingAsSupplierManager();
+
+        config(['catalog_sync.update_enabled' => true]);
+
+        $supplier = Supplier::factory()->create(['company_name' => 'APCOM', 'priority' => 10]);
+        $category = Category::factory()->create(['name' => 'Original Category']);
+        $brand = Brand::factory()->create(['name' => 'Original Brand']);
+        $product = Product::factory()->create([
+            'source' => Product::SOURCE_SUPPLIER_IMPORT,
+            'category_id' => $category->id,
+            'brand_id' => $brand->id,
+            'ean' => '5656565656565',
+            'name' => 'Curated Bulgarian Product Name',
+            'slug' => 'curated-bulgarian-product-name',
+            'short_description' => 'Curated short description',
+            'description' => 'Curated full description',
+            'meta_title' => 'Curated meta title',
+            'meta_description' => 'Curated meta description',
+            'lock_name' => true,
+            'lock_seo' => true,
+            'lock_descriptions' => true,
+            'price' => 50,
+            'regular_price' => 50,
+            'final_selling_price' => 50,
+            'purchase_price' => 40,
+            'supplier_price_raw' => 40,
+            'quantity' => 2,
+            'stock_status' => 'in_stock',
+            'supplier_id' => null,
+            'supplier_sku' => null,
+            'source_payload' => ['existing' => 'metadata'],
+        ]);
+        ProductImage::query()->create([
+            'product_id' => $product->id,
+            'path' => 'products/original.jpg',
+            'sort_order' => 1,
+            'is_primary' => true,
+        ]);
+        $supplierProduct = $this->supplierProduct($supplier, [
+            'name' => 'Supplier English Name Must Not Win',
+            'supplier_sku' => 'UPDATE-PRICE-STOCK-001',
+            'ean' => '5656565656565',
+            'price' => 100,
+            'quantity' => 7,
+            'external_availability_status' => 'available',
+            'external_availability_label' => 'Available',
+            'brand_name' => 'Different Supplier Brand',
+            'category_name' => 'Different Supplier Category',
+            'raw_data' => [
+                'images' => ['https://example.test/new-image.jpg'],
+            ],
+        ]);
+
+        PricingRule::query()->create([
+            'name' => 'Global update margin',
+            'scope_type' => PricingRule::SCOPE_GLOBAL,
+            'margin_type' => PricingRule::MARGIN_PERCENTAGE,
+            'margin_value' => 20,
+            'rounding_rule' => PricingRule::ROUND_NONE,
+            'is_active' => true,
+        ]);
+
+        $beforeContent = $product->fresh()->only([
+            'name',
+            'slug',
+            'short_description',
+            'description',
+            'meta_title',
+            'meta_description',
+            'category_id',
+            'brand_id',
+            'lock_name',
+            'lock_seo',
+            'lock_descriptions',
+        ]);
+        $beforeSupplierProduct = $supplierProduct->fresh()->only(['product_id', 'status', 'synced_at', 'mapping_notes']);
+
+        Livewire::test(CatalogSyncPreview::class)
+            ->set('selectedUpdateSupplierProductIds', [$supplierProduct->id])
+            ->call('syncSelectedUpdateProducts')
+            ->assertSet('lastManualUpdateResult.updated', 1)
+            ->assertSet('lastManualUpdateResult.skipped', 0)
+            ->assertSet('lastManualUpdateResult.failed', 0);
+
+        $product->refresh();
+        $batch = CatalogSyncBatch::query()->first();
+        $log = CatalogSyncLog::query()->where('action', CatalogSyncLog::ACTION_UPDATE)->first();
+
+        $this->assertNotNull($batch);
+        $this->assertSame(CatalogSyncBatch::MODE_MANUAL_SELECTED_UPDATE_PRICE_STOCK, $batch->mode);
+        $this->assertSame(CatalogSyncBatch::STATUS_COMPLETED, $batch->status);
+        $this->assertSame(1, $batch->selected_count);
+        $this->assertSame(0, $batch->created_count);
+        $this->assertSame(1, $batch->updated_count);
+        $this->assertSame(0, $batch->skipped_count);
+        $this->assertSame(0, $batch->failed_count);
+        $this->assertNotNull($log);
+        $this->assertSame(CatalogSyncLog::STATUS_SUCCESS, $log->status);
+        $this->assertSame('updated_price_stock', $log->reason);
+        $this->assertSame('50.00', $log->old_values['price']);
+        $this->assertSame('120.00', $log->new_values['price']);
+        $this->assertSame(2, $log->old_values['quantity']);
+        $this->assertSame(7, $log->new_values['quantity']);
+        $this->assertSame($beforeContent, $product->only(array_keys($beforeContent)));
+        $this->assertSame('120.00', $product->price);
+        $this->assertSame('120.00', $product->regular_price);
+        $this->assertSame('120.00', $product->final_selling_price);
+        $this->assertSame('100.00', $product->purchase_price);
+        $this->assertSame('100.00', $product->supplier_price_raw);
+        $this->assertSame(7, $product->quantity);
+        $this->assertSame($supplier->id, $product->supplier_id);
+        $this->assertSame('UPDATE-PRICE-STOCK-001', $product->supplier_sku);
+        $this->assertSame(1, Product::query()->count());
+        $this->assertSame(1, ProductImage::query()->count());
+        $this->assertSame($beforeSupplierProduct, $supplierProduct->fresh()->only(['product_id', 'status', 'synced_at', 'mapping_notes']));
+        $this->assertDatabaseHas('product_supplier_offers', [
+            'product_id' => $product->id,
+            'supplier_id' => $supplier->id,
+            'supplier_product_id' => $supplierProduct->id,
+            'supplier_sku' => 'UPDATE-PRICE-STOCK-001',
+            'is_preferred' => true,
+        ]);
+    }
+
+    public function test_catalog_sync_preview_update_skips_unsafe_rows(): void
+    {
+        $this->actingAsSupplierManager();
+
+        config(['catalog_sync.update_enabled' => true]);
+
+        $supplier = Supplier::factory()->create();
+        Product::factory()->create(['name' => 'Similarity Only Product', 'ean' => null, 'mpn' => null]);
+        $similar = $this->supplierProduct($supplier, [
+            'name' => 'Similarity Only Product Extra',
+            'ean' => null,
+            'mpn' => null,
+            'supplier_sku' => 'SIMILAR-ONLY',
+        ]);
+        Product::factory()->create(['ean' => '4545454545454', 'mpn' => null]);
+        Product::factory()->create(['ean' => '4545454545454', 'mpn' => null]);
+        $conflict = $this->supplierProduct($supplier, [
+            'name' => 'Conflict Update Product',
+            'ean' => '4545454545454',
+            'mpn' => null,
+        ]);
+        $excludedProduct = Product::factory()->create([
+            'source' => Product::SOURCE_SUPPLIER_IMPORT,
+            'ean' => '7878787878787',
+        ]);
+        $excluded = $this->supplierProduct($supplier, [
+            'name' => 'Excluded Update Product',
+            'ean' => '7878787878787',
+            'quantity' => 0,
+        ]);
+        SupplierExclusionRule::query()->create([
+            'name' => 'Exclude zero stock updates',
+            'is_active' => true,
+            'exclude_zero_stock' => true,
+            'priority' => 10,
+        ]);
+        $missingProduct = Product::factory()->create([
+            'source' => Product::SOURCE_SUPPLIER_IMPORT,
+            'ean' => '8989898989898',
+        ]);
+        $missingData = $this->supplierProduct($supplier, [
+            'name' => 'Missing Price Update Product',
+            'ean' => '8989898989898',
+            'price' => null,
+        ]);
+
+        Livewire::test(CatalogSyncPreview::class)
+            ->set('selectedUpdateSupplierProductIds', [$similar->id, $conflict->id, $excluded->id, $missingData->id])
+            ->call('syncSelectedUpdateProducts')
+            ->assertSet('lastManualUpdateResult.updated', 0)
+            ->assertSet('lastManualUpdateResult.skipped', 4)
+            ->assertSet('lastManualUpdateResult.failed', 0);
+
+        $this->assertSame(5, Product::query()->count());
+        $this->assertNull($similar->fresh()->product_id);
+        $this->assertNull($conflict->fresh()->product_id);
+        $this->assertNull($excluded->fresh()->product_id);
+        $this->assertNull($missingData->fresh()->product_id);
+        $this->assertNotNull($excludedProduct->fresh());
+        $this->assertNotNull($missingProduct->fresh());
+        $this->assertDatabaseHas('catalog_sync_batches', [
+            'mode' => CatalogSyncBatch::MODE_MANUAL_SELECTED_UPDATE_PRICE_STOCK,
+            'selected_count' => 4,
+            'updated_count' => 0,
+            'skipped_count' => 4,
+            'failed_count' => 0,
+        ]);
+    }
+
+    public function test_catalog_sync_preview_selected_update_failure_does_not_stop_other_rows(): void
+    {
+        $this->actingAsSupplierManager();
+
+        config(['catalog_sync.update_enabled' => true]);
+
+        $supplier = Supplier::factory()->create();
+        $brokenProduct = Product::factory()->create([
+            'source' => Product::SOURCE_SUPPLIER_IMPORT,
+            'ean' => '1010101010101',
+            'price' => 50,
+            'quantity' => 2,
+        ]);
+        $healthyProduct = Product::factory()->create([
+            'source' => Product::SOURCE_SUPPLIER_IMPORT,
+            'ean' => '2020202020202',
+            'price' => 60,
+            'quantity' => 3,
+        ]);
+        $broken = $this->supplierProduct($supplier, [
+            'name' => 'Broken Update Supplier Product',
+            'ean' => '1010101010101',
+            'price' => 150,
+            'quantity' => 9,
+        ]);
+        $healthy = $this->supplierProduct($supplier, [
+            'name' => 'Healthy Update Supplier Product',
+            'ean' => '2020202020202',
+            'price' => 160,
+            'quantity' => 10,
+        ]);
+
+        config(['services.catalog_sync_preview.force_manual_update_failure_supplier_product_id' => $broken->id]);
+
+        Livewire::test(CatalogSyncPreview::class)
+            ->set('selectedUpdateSupplierProductIds', [$broken->id, $healthy->id])
+            ->call('syncSelectedUpdateProducts')
+            ->assertSet('lastManualUpdateResult.updated', 1)
+            ->assertSet('lastManualUpdateResult.skipped', 0)
+            ->assertSet('lastManualUpdateResult.failed', 1);
+
+        $this->assertSame('50.00', $brokenProduct->fresh()->price);
+        $this->assertSame(2, $brokenProduct->fresh()->quantity);
+        $this->assertSame('160.00', $healthyProduct->fresh()->price);
+        $this->assertSame(10, $healthyProduct->fresh()->quantity);
+        $this->assertDatabaseHas('catalog_sync_batches', [
+            'mode' => CatalogSyncBatch::MODE_MANUAL_SELECTED_UPDATE_PRICE_STOCK,
+            'selected_count' => 2,
+            'updated_count' => 1,
+            'skipped_count' => 0,
+            'failed_count' => 1,
+            'status' => CatalogSyncBatch::STATUS_PARTIAL,
+        ]);
+        $this->assertDatabaseHas('catalog_sync_logs', [
+            'supplier_product_id' => $broken->id,
+            'action' => CatalogSyncLog::ACTION_UPDATE,
+            'status' => CatalogSyncLog::STATUS_FAILED,
+            'reason' => 'manual_update_failed',
+        ]);
+        $this->assertDatabaseHas('catalog_sync_logs', [
+            'supplier_product_id' => $healthy->id,
+            'action' => CatalogSyncLog::ACTION_UPDATE,
+            'status' => CatalogSyncLog::STATUS_SUCCESS,
+        ]);
     }
 
     public function test_catalog_sync_preview_manual_create_button_shows_selected_count(): void
