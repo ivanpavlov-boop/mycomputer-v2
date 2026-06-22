@@ -39,6 +39,10 @@ class CatalogSyncPreview extends Page
 
     protected string $view = 'filament.pages.catalog-sync-preview';
 
+    protected const int CREATE_CANDIDATE_SCAN_LIMIT = 1000;
+
+    protected const int CREATE_CANDIDATE_RESULT_LIMIT = 100;
+
     /**
      * @var array<string, mixed>
      */
@@ -46,6 +50,7 @@ class CatalogSyncPreview extends Page
         'limit' => 50,
         'supplier_id' => null,
         'action' => null,
+        'discovery_mode' => 'batch',
         'quick_filter' => null,
         'stock_status' => null,
         'category' => null,
@@ -96,6 +101,14 @@ class CatalogSyncPreview extends Page
                             'ERROR' => 'Error',
                         ])
                         ->live(),
+                    Select::make('discovery_mode')
+                        ->label('Discovery')
+                        ->options([
+                            'batch' => 'Current batch',
+                            'create_candidates' => 'Find CREATE candidates',
+                        ])
+                        ->default('batch')
+                        ->live(),
                     Select::make('quick_filter')
                         ->label('Quick filter')
                         ->options([
@@ -118,7 +131,7 @@ class CatalogSyncPreview extends Page
     }
 
     /**
-     * @return array{rows: array<int, array<string, mixed>>, error: string|null, limit: int|string, summary: array{total: int, included: int, excluded: int, matched: int, unmatched: int, match_errors: int, create_rows: int, update_rows: int, skip_rows: int, conflict_rows: int, error_rows: int}}
+     * @return array{rows: array<int, array<string, mixed>>, error: string|null, limit: int|string, summary: array{total: int, included: int, excluded: int, matched: int, unmatched: int, match_errors: int, create_rows: int, update_rows: int, skip_rows: int, conflict_rows: int, error_rows: int}, discovery: array{enabled: bool, scan_limit: int, result_limit: int, scanned_rows: int, create_candidates_found: int, displayed_create_candidates: int, skipped_rows: int, matched_update_rows: int, excluded_rows: int}}
      */
     public function queryOnlySupplierProducts(): array
     {
@@ -152,33 +165,17 @@ class CatalogSyncPreview extends Page
 
             $this->applyQueryOnlyFilters($query);
 
+            if ($this->isCreateCandidateDiscoveryMode()) {
+                return $this->queryCreateCandidateRows($query, $limit);
+            }
+
             if ($limit !== 'all') {
                 $query->limit((int) $limit);
             }
 
             $rows = $query
                 ->get()
-                ->map(function (SupplierProduct $supplierProduct): array {
-                    $row = array_merge([
-                        'supplier_product_id' => $supplierProduct->id,
-                        'supplier' => $supplierProduct->supplier?->company_name ?? '-',
-                        'supplier_sku' => $supplierProduct->supplier_sku ?: '-',
-                        'ean' => $supplierProduct->ean ?: '-',
-                        'mpn' => $supplierProduct->mpn ?: '-',
-                        'name' => $supplierProduct->name ?: '-',
-                        'price' => $supplierProduct->price,
-                        'quantity' => $supplierProduct->quantity ?? 0,
-                        'availability' => $supplierProduct->availabilityStatus?->name
-                            ?? $supplierProduct->external_availability_label
-                            ?? $supplierProduct->external_availability_status
-                            ?? $supplierProduct->status
-                            ?? '-',
-                        'status' => $supplierProduct->status ?: '-',
-                        'updated_at' => $supplierProduct->updated_at?->format('Y-m-d H:i'),
-                    ], $this->pricingPreviewForSupplierProduct($supplierProduct), $this->exclusionPreviewForSupplierProduct($supplierProduct), $this->matchingPreviewForSupplierProduct($supplierProduct));
-
-                    return array_merge($row, $this->syncActionPreviewForSupplierProduct($supplierProduct, $row));
-                })
+                ->map(fn (SupplierProduct $supplierProduct): array => $this->previewRowForSupplierProduct($supplierProduct))
                 ->all();
             $filteredRows = $this->applyCatalogActionFilter($rows);
 
@@ -187,6 +184,7 @@ class CatalogSyncPreview extends Page
                 'error' => null,
                 'limit' => $limit,
                 'summary' => $this->queryOnlySummary($rows),
+                'discovery' => $this->emptyCreateCandidateDiscovery(),
             ];
         } catch (Throwable $exception) {
             report($exception);
@@ -208,8 +206,84 @@ class CatalogSyncPreview extends Page
                     'conflict_rows' => 0,
                     'error_rows' => 0,
                 ],
+                'discovery' => $this->emptyCreateCandidateDiscovery(),
             ];
         }
+    }
+
+    /**
+     * @param  Builder<SupplierProduct>  $query
+     * @return array{rows: array<int, array<string, mixed>>, error: string|null, limit: int|string, summary: array{total: int, included: int, excluded: int, matched: int, unmatched: int, match_errors: int, create_rows: int, update_rows: int, skip_rows: int, conflict_rows: int, error_rows: int}, discovery: array{enabled: bool, scan_limit: int, result_limit: int, scanned_rows: int, create_candidates_found: int, displayed_create_candidates: int, skipped_rows: int, matched_update_rows: int, excluded_rows: int}}
+     */
+    protected function queryCreateCandidateRows(Builder $query, int|string $limit): array
+    {
+        $resultLimit = $this->createCandidateResultLimit($limit);
+        $evaluatedRows = [];
+        $candidateRows = [];
+
+        $query
+            ->limit(self::CREATE_CANDIDATE_SCAN_LIMIT)
+            ->get()
+            ->each(function (SupplierProduct $supplierProduct) use (&$evaluatedRows, &$candidateRows, $resultLimit): void {
+                $row = $this->previewRowForSupplierProduct($supplierProduct);
+                $evaluatedRows[] = $row;
+
+                if (($row['sync_action'] ?? null) === 'CREATE' && count($candidateRows) < $resultLimit) {
+                    $candidateRows[] = $row;
+                }
+            });
+
+        $summary = $this->queryOnlySummary($evaluatedRows);
+
+        return [
+            'rows' => $candidateRows,
+            'error' => null,
+            'limit' => $limit,
+            'summary' => $summary,
+            'discovery' => [
+                'enabled' => true,
+                'scan_limit' => self::CREATE_CANDIDATE_SCAN_LIMIT,
+                'result_limit' => $resultLimit,
+                'scanned_rows' => count($evaluatedRows),
+                'create_candidates_found' => $summary['create_rows'],
+                'displayed_create_candidates' => count($candidateRows),
+                'skipped_rows' => $summary['skip_rows'],
+                'matched_update_rows' => $summary['update_rows'],
+                'excluded_rows' => $summary['excluded'],
+            ],
+        ];
+    }
+
+    /**
+     * @return array{enabled: bool, scan_limit: int, result_limit: int, scanned_rows: int, create_candidates_found: int, displayed_create_candidates: int, skipped_rows: int, matched_update_rows: int, excluded_rows: int}
+     */
+    protected function emptyCreateCandidateDiscovery(): array
+    {
+        return [
+            'enabled' => false,
+            'scan_limit' => self::CREATE_CANDIDATE_SCAN_LIMIT,
+            'result_limit' => 0,
+            'scanned_rows' => 0,
+            'create_candidates_found' => 0,
+            'displayed_create_candidates' => 0,
+            'skipped_rows' => 0,
+            'matched_update_rows' => 0,
+            'excluded_rows' => 0,
+        ];
+    }
+
+    protected function isCreateCandidateDiscoveryMode(): bool
+    {
+        return ($this->filters['discovery_mode'] ?? 'batch') === 'create_candidates';
+    }
+
+    protected function createCandidateResultLimit(int|string $limit): int
+    {
+        if ($limit === 'all') {
+            return self::CREATE_CANDIDATE_RESULT_LIMIT;
+        }
+
+        return min(max((int) $limit, 1), self::CREATE_CANDIDATE_RESULT_LIMIT);
     }
 
     /**
@@ -230,6 +304,21 @@ class CatalogSyncPreview extends Page
             $rows,
             fn (array $row): bool => Str::upper(trim((string) ($row['sync_action'] ?? ''))) === $normalizedAction,
         ));
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected function previewRowForSupplierProduct(SupplierProduct $supplierProduct): array
+    {
+        $row = array_merge(
+            $this->basePreviewRowForSupplierProduct($supplierProduct),
+            $this->pricingPreviewForSupplierProduct($supplierProduct),
+            $this->exclusionPreviewForSupplierProduct($supplierProduct),
+            $this->matchingPreviewForSupplierProduct($supplierProduct),
+        );
+
+        return array_merge($row, $this->syncActionPreviewForSupplierProduct($supplierProduct, $row));
     }
 
     /**

@@ -1569,6 +1569,194 @@ class CatalogSyncPreviewTest extends TestCase
             ->assertSee('cursor: pointer;', false);
     }
 
+    public function test_catalog_sync_preview_create_candidate_scan_finds_rows_beyond_first_batch(): void
+    {
+        $this->actingAsSupplierManager();
+
+        $supplier = Supplier::factory()->create(['company_name' => 'APCOM']);
+
+        for ($index = 1; $index <= 50; $index++) {
+            $ean = '7700000000'.str_pad((string) $index, 3, '0', STR_PAD_LEFT);
+
+            Product::factory()->create([
+                'name' => 'Matched Catalog Product '.$index,
+                'ean' => $ean,
+                'mpn' => null,
+                'price' => 10,
+                'quantity' => 1,
+            ]);
+
+            $this->supplierProduct($supplier, [
+                'name' => 'Matched Batch Product '.$index,
+                'supplier_sku' => 'MATCHED-BATCH-'.$index,
+                'ean' => $ean,
+                'mpn' => null,
+            ]);
+        }
+
+        $candidate = $this->supplierProduct($supplier, [
+            'name' => 'CREATE Candidate Beyond First Batch',
+            'supplier_sku' => 'CREATE-BEYOND-FIRST-BATCH',
+            'ean' => null,
+            'mpn' => null,
+        ]);
+
+        $result = Livewire::test(CatalogSyncPreview::class)
+            ->set('filters.supplier_id', $supplier->id)
+            ->set('filters.discovery_mode', 'create_candidates');
+        $preview = $result->instance()->queryOnlySupplierProducts();
+
+        $this->assertSame(51, $preview['discovery']['scanned_rows']);
+        $this->assertSame(1, $preview['discovery']['create_candidates_found']);
+        $this->assertSame($candidate->id, $preview['rows'][0]['supplier_product_id']);
+        $this->assertSame('CREATE', $preview['rows'][0]['sync_action']);
+
+        $result
+            ->assertSee('CREATE candidate scan')
+            ->assertSee('CREATE Candidate Beyond First Batch')
+            ->assertDontSee('Matched Batch Product 1');
+    }
+
+    public function test_catalog_sync_preview_create_candidate_scan_respects_supplier_filter(): void
+    {
+        $this->actingAsSupplierManager();
+
+        $apcom = Supplier::factory()->create(['company_name' => 'APCOM']);
+        $other = Supplier::factory()->create(['company_name' => 'Other Supplier']);
+
+        $this->supplierProduct($apcom, [
+            'name' => 'APCOM Discovery CREATE Candidate',
+            'supplier_sku' => 'APCOM-DISCOVERY-CREATE',
+            'ean' => null,
+            'mpn' => null,
+        ]);
+        $this->supplierProduct($other, [
+            'name' => 'Other Discovery CREATE Candidate',
+            'supplier_sku' => 'OTHER-DISCOVERY-CREATE',
+            'ean' => null,
+            'mpn' => null,
+        ]);
+
+        $result = Livewire::test(CatalogSyncPreview::class)
+            ->set('filters.supplier_id', $apcom->id)
+            ->set('filters.discovery_mode', 'create_candidates');
+        $rows = $result->instance()->queryOnlySupplierProducts()['rows'];
+
+        $this->assertCount(1, $rows);
+        $this->assertSame('APCOM Discovery CREATE Candidate', $rows[0]['name']);
+
+        $result
+            ->assertSee('APCOM Discovery CREATE Candidate')
+            ->assertDontSee('Other Discovery CREATE Candidate');
+    }
+
+    public function test_catalog_sync_preview_create_candidate_scan_exposes_safe_limits(): void
+    {
+        $this->actingAsSupplierManager();
+
+        $supplier = Supplier::factory()->create();
+
+        for ($index = 1; $index <= 60; $index++) {
+            $this->supplierProduct($supplier, [
+                'name' => 'Safe Limit CREATE Candidate '.$index,
+                'supplier_sku' => 'SAFE-LIMIT-CREATE-'.$index,
+                'ean' => null,
+                'mpn' => null,
+            ]);
+        }
+
+        $preview = Livewire::test(CatalogSyncPreview::class)
+            ->set('filters.supplier_id', $supplier->id)
+            ->set('filters.discovery_mode', 'create_candidates')
+            ->instance()
+            ->queryOnlySupplierProducts();
+
+        $this->assertSame(1000, $preview['discovery']['scan_limit']);
+        $this->assertSame(50, $preview['discovery']['result_limit']);
+        $this->assertSame(60, $preview['discovery']['scanned_rows']);
+        $this->assertSame(60, $preview['discovery']['create_candidates_found']);
+        $this->assertCount(50, $preview['rows']);
+    }
+
+    public function test_catalog_sync_preview_create_candidate_scan_zero_results_shows_clear_message(): void
+    {
+        $this->actingAsSupplierManager();
+
+        $supplier = Supplier::factory()->create();
+        Product::factory()->create([
+            'ean' => '7878787878787',
+            'mpn' => null,
+            'price' => 10,
+            'quantity' => 1,
+        ]);
+        $this->supplierProduct($supplier, [
+            'name' => 'Only Update Discovery Product',
+            'ean' => '7878787878787',
+            'mpn' => null,
+        ]);
+
+        $result = Livewire::test(CatalogSyncPreview::class)
+            ->set('filters.supplier_id', $supplier->id)
+            ->set('filters.discovery_mode', 'create_candidates');
+        $preview = $result->instance()->queryOnlySupplierProducts();
+
+        $this->assertSame(0, $preview['discovery']['create_candidates_found']);
+        $this->assertSame([], $preview['rows']);
+
+        $result
+            ->assertSee('No eligible CREATE candidates found in the scanned supplier products.')
+            ->assertDontSee('Only Update Discovery Product');
+    }
+
+    public function test_catalog_sync_preview_create_candidate_scan_does_not_modify_data(): void
+    {
+        $this->actingAsSupplierManager();
+
+        $supplier = Supplier::factory()->create();
+        $supplierProduct = $this->supplierProduct($supplier, [
+            'name' => 'Read Only Discovery Candidate',
+            'supplier_sku' => 'READ-ONLY-DISCOVERY',
+            'ean' => null,
+            'mpn' => null,
+        ]);
+
+        $beforeProductCount = Product::query()->count();
+        $beforeSupplierProductCount = SupplierProduct::query()->count();
+        $beforeSupplierProduct = $supplierProduct->fresh()->only(['name', 'ean', 'mpn', 'supplier_sku', 'price', 'quantity', 'status', 'product_id']);
+
+        Livewire::test(CatalogSyncPreview::class)
+            ->set('filters.supplier_id', $supplier->id)
+            ->set('filters.discovery_mode', 'create_candidates')
+            ->instance()
+            ->queryOnlySupplierProducts();
+
+        $this->assertSame($beforeProductCount, Product::query()->count());
+        $this->assertSame($beforeSupplierProductCount, SupplierProduct::query()->count());
+        $this->assertSame($beforeSupplierProduct, $supplierProduct->fresh()->only(['name', 'ean', 'mpn', 'supplier_sku', 'price', 'quantity', 'status', 'product_id']));
+    }
+
+    public function test_catalog_sync_preview_create_candidate_scan_rows_remain_selectable_and_enable_button(): void
+    {
+        $this->actingAsSupplierManager();
+
+        $supplier = Supplier::factory()->create();
+        $supplierProduct = $this->supplierProduct($supplier, [
+            'name' => 'Selectable Discovery CREATE Candidate',
+            'supplier_sku' => 'SELECTABLE-DISCOVERY-CREATE',
+            'ean' => null,
+            'mpn' => null,
+        ]);
+
+        Livewire::test(CatalogSyncPreview::class)
+            ->set('filters.supplier_id', $supplier->id)
+            ->set('filters.discovery_mode', 'create_candidates')
+            ->assertSee('Selectable Discovery CREATE Candidate')
+            ->assertSee('wire:model="selectedSupplierProductIds"', false)
+            ->set('selectedSupplierProductIds', [$supplierProduct->id])
+            ->assertSee('Sync Selected CREATE Products (1)')
+            ->assertSee('data-selected-create-sync-disabled="false"', false);
+    }
+
     private function actingAsSupplierManager(): User
     {
         $this->seed(RolesAndPermissionsSeeder::class);
