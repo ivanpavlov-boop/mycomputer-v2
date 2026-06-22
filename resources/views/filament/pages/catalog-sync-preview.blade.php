@@ -13,6 +13,17 @@
             $rows = $queryOnly['rows'];
             $queryError = $queryOnly['error'];
             $summary = $queryOnly['summary'];
+            $discovery = $queryOnly['discovery'] ?? [
+                'enabled' => false,
+                'scan_limit' => 0,
+                'result_limit' => 0,
+                'scanned_rows' => 0,
+                'create_candidates_found' => 0,
+                'displayed_create_candidates' => 0,
+                'skipped_rows' => 0,
+                'matched_update_rows' => 0,
+                'excluded_rows' => 0,
+            ];
             $money = fn ($value): string => $value !== null ? number_format((float) $value, 2).' EUR' : '-';
             $headerCell = 'sticky top-0 z-30 whitespace-nowrap bg-gray-50 px-3 py-2 shadow-sm dark:bg-gray-950';
             $cell = 'whitespace-nowrap px-3 py-2';
@@ -36,6 +47,31 @@
         <div class="rounded-lg border border-gray-200 bg-white p-4 text-sm font-medium text-gray-950 shadow-sm dark:border-gray-800 dark:bg-gray-900 dark:text-white">
             Catalog Sync Preview Query Only OK
         </div>
+
+        @if ($discovery['enabled'])
+            <div
+                data-create-candidate-discovery-summary
+                class="rounded-lg border border-green-200 bg-green-50 p-4 text-sm text-green-900 shadow-sm dark:border-green-900 dark:bg-green-950 dark:text-green-100"
+            >
+                <div class="font-semibold">CREATE candidate scan</div>
+                <div class="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                    <div>Scanned rows: {{ $discovery['scanned_rows'] }}</div>
+                    <div>Scan limit: {{ $discovery['scan_limit'] }}</div>
+                    <div>CREATE candidates found: {{ $discovery['create_candidates_found'] }}</div>
+                    <div>Displayed candidates: {{ $discovery['displayed_create_candidates'] }}</div>
+                    <div>Skipped rows: {{ $discovery['skipped_rows'] }}</div>
+                    <div>Matched/update rows: {{ $discovery['matched_update_rows'] }}</div>
+                    <div>Excluded rows: {{ $discovery['excluded_rows'] }}</div>
+                    <div>Display limit: {{ $discovery['result_limit'] }}</div>
+                </div>
+
+                @if ($discovery['create_candidates_found'] === 0)
+                    <div class="mt-3 rounded-md border border-yellow-200 bg-yellow-50 p-3 text-yellow-800 dark:border-yellow-900 dark:bg-yellow-950 dark:text-yellow-100">
+                        No eligible CREATE candidates found in the scanned supplier products.
+                    </div>
+                @endif
+            </div>
+        @endif
 
         @if ($this->lastManualSyncResult)
             <div class="rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-gray-900">
@@ -202,7 +238,9 @@
                                 </tr>
                             @empty
                                 <tr>
-                                    <td colspan="25" class="px-3 py-8 text-center text-gray-500">No supplier products match the query-only filters.</td>
+                                    <td colspan="25" class="px-3 py-8 text-center text-gray-500">
+                                        {{ $discovery['enabled'] ? 'No eligible CREATE candidates found in the scanned supplier products.' : 'No supplier products match the query-only filters.' }}
+                                    </td>
                                 </tr>
                             @endforelse
                         </tbody>
