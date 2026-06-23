@@ -613,7 +613,97 @@ class CatalogSyncPreview extends Page
 
         return array_merge($row, [
             'manual_update_eligible' => $this->isEligibleForManualUpdateSync($supplierProduct, $row),
+            'update_diff' => $this->updateDiffPreviewForSupplierProduct($supplierProduct, $row),
         ]);
+    }
+
+    /**
+     * @param  array<string, mixed>  $row
+     * @return array<string, mixed>
+     */
+    protected function updateDiffPreviewForSupplierProduct(SupplierProduct $supplierProduct, array $row): array
+    {
+        $empty = [
+            'current_price' => null,
+            'new_price' => null,
+            'price_change' => null,
+            'price_changed' => false,
+            'current_quantity' => null,
+            'new_quantity' => null,
+            'quantity_change' => null,
+            'quantity_changed' => false,
+            'current_availability' => null,
+            'new_availability' => null,
+            'availability_changed' => false,
+            'current_supplier_cost' => null,
+            'new_supplier_cost' => null,
+            'supplier_cost_changed' => false,
+            'current_selected_supplier_offer' => null,
+            'new_selected_supplier_offer' => null,
+            'selected_supplier_offer_changed' => false,
+        ];
+
+        $matchedProductId = $row['matched_product_id'] ?? null;
+
+        if (blank($matchedProductId)) {
+            return $empty;
+        }
+
+        $product = Product::query()
+            ->with([
+                'availabilityStatus:id,name,code',
+                'supplierOffers' => fn ($query) => $query->select([
+                    'id',
+                    'product_id',
+                    'supplier_id',
+                    'supplier_product_id',
+                    'supplier_sku',
+                    'is_preferred',
+                ]),
+            ])
+            ->find((int) $matchedProductId);
+
+        if (! $product) {
+            return $empty;
+        }
+
+        $currentSelectedOfferId = $product->source_payload['selected_supplier_offer_id'] ?? null;
+        $currentSelectedOffer = filled($currentSelectedOfferId)
+            ? $product->supplierOffers->firstWhere('id', (int) $currentSelectedOfferId)
+            : $product->supplierOffers->firstWhere('is_preferred', true);
+        $currentPrice = $this->numericDiffValue($product->price);
+        $newPrice = $this->numericDiffValue($row['calculated_price'] ?? null);
+        $currentSupplierCost = $this->numericDiffValue($product->supplier_price_raw ?? $product->purchase_price);
+        $newSupplierCost = $this->numericDiffValue($row['supplier_cost'] ?? $supplierProduct->price);
+        $currentQuantity = $product->quantity !== null ? (int) $product->quantity : null;
+        $newQuantity = $supplierProduct->quantity !== null ? (int) $supplierProduct->quantity : null;
+        $currentAvailability = $product->availabilityStatus?->name
+            ?? $product->external_availability_label
+            ?? $product->external_availability_status
+            ?? $product->stock_status;
+        $newAvailability = $row['availability'] ?? null;
+        $currentOfferLabel = $this->supplierOfferDiffLabel($currentSelectedOffer?->id, $currentSelectedOffer?->supplier_sku);
+        $newOfferLabel = $this->supplierOfferDiffLabel(null, $supplierProduct->supplier_sku, $supplierProduct->id);
+
+        return [
+            'current_price' => $currentPrice,
+            'new_price' => $newPrice,
+            'price_change' => $currentPrice !== null && $newPrice !== null ? round($newPrice - $currentPrice, 2) : null,
+            'price_changed' => $this->numericValuesDiffer($currentPrice, $newPrice),
+            'current_quantity' => $currentQuantity,
+            'new_quantity' => $newQuantity,
+            'quantity_change' => $currentQuantity !== null && $newQuantity !== null ? $newQuantity - $currentQuantity : null,
+            'quantity_changed' => $currentQuantity !== $newQuantity,
+            'current_availability' => $currentAvailability,
+            'new_availability' => $newAvailability,
+            'availability_changed' => (string) ($currentAvailability ?? '') !== (string) ($newAvailability ?? ''),
+            'current_supplier_cost' => $currentSupplierCost,
+            'new_supplier_cost' => $newSupplierCost,
+            'supplier_cost_changed' => $this->numericValuesDiffer($currentSupplierCost, $newSupplierCost),
+            'current_selected_supplier_offer' => $currentOfferLabel,
+            'new_selected_supplier_offer' => $newOfferLabel,
+            'selected_supplier_offer_changed' => $currentOfferLabel !== $newOfferLabel,
+        ];
     }
 
     /**
@@ -1619,6 +1709,43 @@ class CatalogSyncPreview extends Page
             || (int) ($product->quantity ?? 0) !== (int) ($supplierProduct->quantity ?? 0)
             || (string) ($product->supplier_sku ?? '') !== (string) ($supplierProduct->supplier_sku ?? '')
             || (int) ($product->supplier_id ?? 0) !== (int) ($supplierProduct->supplier_id ?? 0);
+    }
+
+    protected function numericDiffValue(mixed $value): ?float
+    {
+        return $value !== null ? round((float) $value, 2) : null;
+    }
+
+    protected function numericValuesDiffer(?float $current, ?float $new): bool
+    {
+        if ($current === null || $new === null) {
+            return $current !== $new;
+        }
+
+        return abs($current - $new) > 0.009;
+    }
+
+    protected function supplierOfferDiffLabel(?int $offerId, ?string $supplierSku, ?int $supplierProductId = null): ?string
+    {
+        if ($offerId === null && blank($supplierSku) && $supplierProductId === null) {
+            return null;
+        }
+
+        $parts = [];
+
+        if ($offerId !== null) {
+            $parts[] = 'Offer #'.$offerId;
+        }
+
+        if ($supplierProductId !== null) {
+            $parts[] = 'Supplier Product #'.$supplierProductId;
+        }
+
+        if (filled($supplierSku)) {
+            $parts[] = $supplierSku;
+        }
+
+        return implode(' / ', $parts);
     }
 
     protected function findExistingBrand(?string $name): ?Brand

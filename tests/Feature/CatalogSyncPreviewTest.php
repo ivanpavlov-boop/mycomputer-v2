@@ -1723,6 +1723,164 @@ class CatalogSyncPreviewTest extends TestCase
         $this->assertSame(0, CatalogSyncLog::query()->count());
     }
 
+    public function test_catalog_sync_preview_update_diff_preview_shows_commercial_changes_without_writes(): void
+    {
+        $this->actingAsSupplierManager();
+
+        $supplier = Supplier::factory()->create(['company_name' => 'APCOM']);
+        $product = Product::factory()->create([
+            'source' => Product::SOURCE_SUPPLIER_IMPORT,
+            'ean' => '4141414141415',
+            'price' => 50,
+            'regular_price' => 50,
+            'final_selling_price' => 50,
+            'purchase_price' => 40,
+            'supplier_price_raw' => 40,
+            'quantity' => 7,
+            'stock_status' => 'in_stock',
+            'name' => 'Curated Diff Product Name',
+            'slug' => 'curated-diff-product-name',
+            'short_description' => 'Curated short copy',
+            'description' => 'Curated long copy',
+            'meta_title' => 'Curated SEO title',
+            'meta_description' => 'Curated SEO description',
+        ]);
+        $supplierProduct = $this->supplierProduct($supplier, [
+            'name' => 'Supplier Diff Product Name',
+            'supplier_sku' => 'DIFF-PREVIEW-UPDATE',
+            'ean' => '4141414141415',
+            'price' => 100,
+            'quantity' => 7,
+            'external_availability_status' => 'available',
+            'external_availability_label' => 'Available',
+        ]);
+
+        PricingRule::query()->create([
+            'name' => 'Global diff preview margin',
+            'scope_type' => PricingRule::SCOPE_GLOBAL,
+            'margin_type' => PricingRule::MARGIN_PERCENTAGE,
+            'margin_value' => 20,
+            'rounding_rule' => PricingRule::ROUND_NONE,
+            'is_active' => true,
+        ]);
+
+        $beforeProduct = $product->fresh()->only([
+            'name',
+            'slug',
+            'short_description',
+            'description',
+            'meta_title',
+            'meta_description',
+            'price',
+            'quantity',
+            'supplier_price_raw',
+        ]);
+        $beforeSupplierProduct = $supplierProduct->fresh()->only(['product_id', 'status', 'synced_at', 'mapping_notes']);
+        $preview = Livewire::test(CatalogSyncPreview::class)
+            ->set('filters.supplier_id', $supplier->id)
+            ->set('filters.action', 'UPDATE');
+        $rows = $preview->instance()->queryOnlySupplierProducts()['rows'];
+        $row = collect($rows)->firstWhere('supplier_product_id', $supplierProduct->id);
+
+        $this->assertNotNull($row);
+        $this->assertSame('UPDATE', $row['sync_action']);
+        $this->assertSame(50.0, $row['update_diff']['current_price']);
+        $this->assertSame(120.0, $row['update_diff']['new_price']);
+        $this->assertSame(70.0, $row['update_diff']['price_change']);
+        $this->assertTrue($row['update_diff']['price_changed']);
+        $this->assertSame(7, $row['update_diff']['current_quantity']);
+        $this->assertSame(7, $row['update_diff']['new_quantity']);
+        $this->assertSame(0, $row['update_diff']['quantity_change']);
+        $this->assertFalse($row['update_diff']['quantity_changed']);
+        $this->assertSame(40.0, $row['update_diff']['current_supplier_cost']);
+        $this->assertSame(100.0, $row['update_diff']['new_supplier_cost']);
+        $this->assertArrayNotHasKey('current_name', $row['update_diff']);
+        $this->assertArrayNotHasKey('new_name', $row['update_diff']);
+        $this->assertArrayNotHasKey('current_description', $row['update_diff']);
+        $this->assertArrayNotHasKey('new_description', $row['update_diff']);
+
+        $preview
+            ->assertSee('data-update-diff-preview', false)
+            ->assertSee('Current price')
+            ->assertSee('50.00 EUR')
+            ->assertSee('New price')
+            ->assertSee('120.00 EUR')
+            ->assertSee('Price change')
+            ->assertSee('+70.00 EUR')
+            ->assertSee('Current quantity')
+            ->assertSee('New quantity')
+            ->assertSee('Quantity change')
+            ->assertSee('Current supplier cost')
+            ->assertSee('40.00 EUR')
+            ->assertSee('New supplier cost')
+            ->assertSee('100.00 EUR')
+            ->assertDontSee('Current product name')
+            ->assertDontSee('New product name')
+            ->assertDontSee('Current SEO')
+            ->assertDontSee('New SEO')
+            ->assertDontSee('Current description')
+            ->assertDontSee('New description');
+
+        $this->assertSame($beforeProduct, $product->fresh()->only(array_keys($beforeProduct)));
+        $this->assertSame($beforeSupplierProduct, $supplierProduct->fresh()->only(array_keys($beforeSupplierProduct)));
+        $this->assertSame(0, CatalogSyncBatch::query()->count());
+        $this->assertSame(0, CatalogSyncLog::query()->count());
+        $this->assertSame(0, ProductSupplierOffer::query()->count());
+    }
+
+    public function test_catalog_sync_preview_update_confirmation_modal_shows_commercial_change_summary(): void
+    {
+        $this->actingAsSupplierManager();
+
+        config(['catalog_sync.update_enabled' => true]);
+
+        $supplier = Supplier::factory()->create(['company_name' => 'APCOM']);
+        Product::factory()->create([
+            'source' => Product::SOURCE_SUPPLIER_IMPORT,
+            'ean' => '4141414141416',
+            'price' => 50,
+            'quantity' => 7,
+            'stock_status' => 'in_stock',
+        ]);
+        $supplierProduct = $this->supplierProduct($supplier, [
+            'name' => 'Modal Diff Supplier Product',
+            'supplier_sku' => 'MODAL-DIFF-UPDATE',
+            'ean' => '4141414141416',
+            'price' => 100,
+            'quantity' => 9,
+            'external_availability_status' => 'available',
+            'external_availability_label' => 'Available',
+        ]);
+
+        PricingRule::query()->create([
+            'name' => 'Global modal diff margin',
+            'scope_type' => PricingRule::SCOPE_GLOBAL,
+            'margin_type' => PricingRule::MARGIN_PERCENTAGE,
+            'margin_value' => 20,
+            'rounding_rule' => PricingRule::ROUND_NONE,
+            'is_active' => true,
+        ]);
+
+        Livewire::test(CatalogSyncPreview::class)
+            ->set('filters.supplier_id', $supplier->id)
+            ->set('filters.action', 'UPDATE')
+            ->set('selectedUpdateSupplierProductIds', [$supplierProduct->id])
+            ->call('openUpdateConfirmationModal')
+            ->assertSet('showUpdateConfirmationModal', true)
+            ->assertSee('data-update-confirmation-change-summary', false)
+            ->assertSee('Rows with price change')
+            ->assertSee('Rows with stock change')
+            ->assertSee('Rows with availability change')
+            ->assertSee('Only commercial fields will be updated:')
+            ->assertSee('Protected content will NOT be updated:')
+            ->assertSee('Confirm UPDATE Price/Stock');
+
+        $this->assertSame(1, Product::query()->count());
+        $this->assertSame(1, SupplierProduct::query()->count());
+        $this->assertSame(0, CatalogSyncBatch::query()->count());
+        $this->assertSame(0, CatalogSyncLog::query()->count());
+    }
+
     public function test_catalog_sync_preview_update_button_opens_confirmation_modal_for_selected_update_row(): void
     {
         $this->actingAsSupplierManager();
