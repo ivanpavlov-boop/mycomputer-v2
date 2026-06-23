@@ -445,11 +445,11 @@
                         </thead>
                         <tbody class="divide-y divide-gray-100 dark:divide-gray-800">
                             @forelse ($rows as $row)
-                                <tr>
+                                <tr wire:key="catalog-sync-preview-row-{{ $row['supplier_product_id'] }}">
                                     <td class="{{ $cell }}">
                                         <input
                                             type="checkbox"
-                                            wire:model="selectedSupplierProductIds"
+                                            wire:model.live="selectedSupplierProductIds"
                                             value="{{ $row['supplier_product_id'] }}"
                                             @disabled($row['sync_action'] !== 'CREATE')
                                             aria-label="Select supplier product {{ $row['supplier_product_id'] }}"
@@ -459,9 +459,11 @@
                                     <td class="{{ $cell }}">
                                         <input
                                             type="checkbox"
-                                            wire:model="selectedUpdateSupplierProductIds"
+                                            wire:model.live="selectedUpdateSupplierProductIds"
                                             value="{{ $row['supplier_product_id'] }}"
                                             @disabled(! $row['manual_update_eligible'])
+                                            data-update-select-supplier-product-id="{{ $row['supplier_product_id'] }}"
+                                            data-update-select-disabled="{{ $row['manual_update_eligible'] ? 'false' : 'true' }}"
                                             aria-label="Select supplier product {{ $row['supplier_product_id'] }} for update"
                                             class="rounded border-gray-300 text-blue-600 shadow-sm focus:ring-blue-600 disabled:cursor-not-allowed disabled:opacity-40 dark:border-gray-700 dark:bg-gray-900"
                                         >

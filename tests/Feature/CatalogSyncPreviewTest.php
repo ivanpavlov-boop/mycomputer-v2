@@ -1259,7 +1259,7 @@ class CatalogSyncPreviewTest extends TestCase
         Livewire::test(CatalogSyncPreview::class)
             ->set('filters.action', 'CREATE')
             ->assertSee('Selectable CREATE Filter Product')
-            ->assertSee('wire:model="selectedSupplierProductIds"', false)
+            ->assertSee('wire:model.live="selectedSupplierProductIds"', false)
             ->assertDontSee('disabled="disabled"', false);
     }
 
@@ -1632,7 +1632,7 @@ class CatalogSyncPreviewTest extends TestCase
             ->assertSee('cursor: not-allowed;', false)
             ->assertDontSee('M6.75 18.75h10.5A3.75', false)
             ->assertSee('Select')
-            ->assertSee('wire:model="selectedSupplierProductIds"', false);
+            ->assertSee('wire:model.live="selectedSupplierProductIds"', false);
 
         $content = $response->getContent();
         $toolbarStart = strpos($content, 'data-selected-create-sync-toolbar');
@@ -1755,6 +1755,127 @@ class CatalogSyncPreviewTest extends TestCase
         $this->assertSame('ean', $row['match_type']);
         $this->assertSame('exact', $row['match_confidence']);
         $this->assertTrue($row['manual_update_eligible']);
+    }
+
+    public function test_catalog_sync_preview_update_selection_updates_button_count(): void
+    {
+        $this->actingAsSupplierManager();
+
+        config(['catalog_sync.update_enabled' => true]);
+
+        $supplier = Supplier::factory()->create();
+        Product::factory()->create([
+            'source' => Product::SOURCE_SUPPLIER_IMPORT,
+            'ean' => '3131313131313',
+        ]);
+        Product::factory()->create([
+            'source' => Product::SOURCE_SUPPLIER_IMPORT,
+            'ean' => '3232323232323',
+        ]);
+        $first = $this->supplierProduct($supplier, [
+            'name' => 'First Selectable UPDATE Product',
+            'ean' => '3131313131313',
+            'price' => 150,
+            'quantity' => 9,
+        ]);
+        $second = $this->supplierProduct($supplier, [
+            'name' => 'Second Selectable UPDATE Product',
+            'ean' => '3232323232323',
+            'price' => 160,
+            'quantity' => 10,
+        ]);
+
+        Livewire::test(CatalogSyncPreview::class)
+            ->set('filters.supplier_id', $supplier->id)
+            ->set('filters.action', 'UPDATE')
+            ->assertSee('wire:model.live="selectedUpdateSupplierProductIds"', false)
+            ->assertSee('value="'.$first->id.'"', false)
+            ->assertSee('value="'.$second->id.'"', false)
+            ->assertSee('data-update-select-disabled="false"', false)
+            ->assertSee('Sync Selected UPDATE Price/Stock (0)')
+            ->assertSee('data-selected-update-sync-disabled="true"', false)
+            ->set('selectedUpdateSupplierProductIds', [$first->id])
+            ->assertSee('Sync Selected UPDATE Price/Stock (1)')
+            ->assertSee('data-selected-update-sync-disabled="false"', false)
+            ->set('selectedUpdateSupplierProductIds', [$first->id, $second->id])
+            ->assertSee('Sync Selected UPDATE Price/Stock (2)')
+            ->assertSee('data-selected-update-sync-disabled="false"', false)
+            ->set('selectedUpdateSupplierProductIds', [])
+            ->assertSee('Sync Selected UPDATE Price/Stock (0)')
+            ->assertSee('data-selected-update-sync-disabled="true"', false);
+    }
+
+    public function test_catalog_sync_preview_create_and_update_selections_are_independent(): void
+    {
+        $this->actingAsSupplierManager();
+
+        config(['catalog_sync.update_enabled' => true]);
+
+        $supplier = Supplier::factory()->create();
+        $create = $this->supplierProduct($supplier, [
+            'name' => 'Independent CREATE Selection Product',
+            'supplier_sku' => 'INDEPENDENT-CREATE',
+            'ean' => null,
+            'mpn' => null,
+        ]);
+        Product::factory()->create([
+            'source' => Product::SOURCE_SUPPLIER_IMPORT,
+            'ean' => '3333333333333',
+        ]);
+        $update = $this->supplierProduct($supplier, [
+            'name' => 'Independent UPDATE Selection Product',
+            'ean' => '3333333333333',
+            'price' => 170,
+            'quantity' => 11,
+        ]);
+
+        Livewire::test(CatalogSyncPreview::class)
+            ->set('filters.supplier_id', $supplier->id)
+            ->set('selectedSupplierProductIds', [$create->id])
+            ->assertSee('Sync Selected CREATE Products (1)')
+            ->assertSee('Sync Selected UPDATE Price/Stock (0)')
+            ->set('selectedUpdateSupplierProductIds', [$update->id])
+            ->assertSee('Sync Selected CREATE Products (1)')
+            ->assertSee('Sync Selected UPDATE Price/Stock (1)')
+            ->set('selectedSupplierProductIds', [])
+            ->assertSee('Sync Selected CREATE Products (0)')
+            ->assertSee('Sync Selected UPDATE Price/Stock (1)')
+            ->set('selectedUpdateSupplierProductIds', [])
+            ->assertSee('Sync Selected CREATE Products (0)')
+            ->assertSee('Sync Selected UPDATE Price/Stock (0)');
+    }
+
+    public function test_catalog_sync_preview_update_checkbox_is_disabled_when_feature_flag_disabled(): void
+    {
+        $this->actingAsSupplierManager();
+
+        config(['catalog_sync.update_enabled' => false]);
+
+        $supplier = Supplier::factory()->create();
+        Product::factory()->create([
+            'source' => Product::SOURCE_SUPPLIER_IMPORT,
+            'ean' => '3434343434344',
+        ]);
+        $supplierProduct = $this->supplierProduct($supplier, [
+            'name' => 'Disabled UPDATE Checkbox Product',
+            'ean' => '3434343434344',
+            'price' => 150,
+            'quantity' => 9,
+        ]);
+
+        $component = Livewire::test(CatalogSyncPreview::class)
+            ->set('filters.supplier_id', $supplier->id)
+            ->set('filters.action', 'UPDATE')
+            ->assertSee('data-update-select-supplier-product-id="'.$supplierProduct->id.'"', false)
+            ->assertSee('data-update-select-disabled="true"', false)
+            ->assertSee('Sync Selected UPDATE Price/Stock (0)')
+            ->assertSee('data-selected-update-sync-disabled="true"', false);
+        $preview = $component->instance()->queryOnlySupplierProducts();
+        $row = collect($preview['rows'])->firstWhere('supplier_product_id', $supplierProduct->id);
+
+        $this->assertNotNull($row);
+        $this->assertSame('UPDATE', $row['sync_action']);
+        $this->assertFalse($row['manual_update_eligible']);
     }
 
     public function test_catalog_sync_preview_safe_non_ean_update_matches_are_eligible_when_feature_flag_enabled(): void
@@ -2321,7 +2442,7 @@ class CatalogSyncPreviewTest extends TestCase
             ->set('filters.supplier_id', $supplier->id)
             ->set('filters.discovery_mode', 'create_candidates')
             ->assertSee('Selectable Discovery CREATE Candidate')
-            ->assertSee('wire:model="selectedSupplierProductIds"', false)
+            ->assertSee('wire:model.live="selectedSupplierProductIds"', false)
             ->set('selectedSupplierProductIds', [$supplierProduct->id])
             ->assertSee('Sync Selected CREATE Products (1)')
             ->assertSee('data-selected-create-sync-disabled="false"', false);
