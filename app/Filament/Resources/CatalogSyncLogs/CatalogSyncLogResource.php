@@ -60,25 +60,45 @@ class CatalogSyncLogResource extends Resource
                     TextEntry::make('error_message')->placeholder('None')->columnSpanFull(),
                 ]),
             Section::make('Old values')
+                ->label('Field comparison')
+                ->schema([
+                    TextEntry::make('value_comparison')
+                        ->label('Old and new values')
+                        ->state(fn (CatalogSyncLog $record): string => static::formatValueComparison($record))
+                        ->html()
+                        ->columnSpanFull(),
+                ]),
+            Section::make('Metadata summary')
+                ->schema([
+                    TextEntry::make('metadata_summary')
+                        ->label('Metadata summary')
+                        ->state(fn (CatalogSyncLog $record): string => static::formatMetadataSummary($record))
+                        ->html()
+                        ->columnSpanFull(),
+                ]),
+            Section::make('Raw old values')
+                ->collapsed()
                 ->schema([
                     TextEntry::make('old_values')
-                        ->label('Old values')
+                        ->label('Raw old values')
                         ->state(fn (CatalogSyncLog $record): string => json_encode($record->old_values ?? [], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE))
                         ->placeholder('{}')
                         ->columnSpanFull(),
                 ]),
-            Section::make('New values')
+            Section::make('Raw new values')
+                ->collapsed()
                 ->schema([
                     TextEntry::make('new_values')
-                        ->label('New values')
+                        ->label('Raw new values')
                         ->state(fn (CatalogSyncLog $record): string => json_encode($record->new_values ?? [], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE))
                         ->placeholder('{}')
                         ->columnSpanFull(),
                 ]),
-            Section::make('Metadata')
+            Section::make('Raw metadata')
+                ->collapsed()
                 ->schema([
                     TextEntry::make('metadata')
-                        ->label('Metadata')
+                        ->label('Raw metadata')
                         ->state(fn (CatalogSyncLog $record): string => json_encode($record->metadata ?? [], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE))
                         ->placeholder('{}')
                         ->columnSpanFull(),
@@ -162,5 +182,131 @@ class CatalogSyncLogResource extends Resource
             'index' => ListCatalogSyncLogs::route('/'),
             'view' => ViewCatalogSyncLog::route('/{record}'),
         ];
+    }
+
+    protected static function formatValueComparison(CatalogSyncLog $record): string
+    {
+        $oldValues = $record->old_values ?? [];
+        $newValues = $record->new_values ?? [];
+        $labels = static::valueLabels();
+        $keys = collect(array_keys($labels))
+            ->filter(fn (string $key): bool => array_key_exists($key, $oldValues) || array_key_exists($key, $newValues))
+            ->values();
+
+        if ($keys->isEmpty()) {
+            return '<div class="text-sm text-gray-500 dark:text-gray-400">No old or new values were recorded.</div>';
+        }
+
+        $rows = $keys->map(function (string $key) use ($oldValues, $newValues, $labels): string {
+            $old = $oldValues[$key] ?? null;
+            $new = $newValues[$key] ?? null;
+            $changed = static::normalizeComparableValue($old) !== static::normalizeComparableValue($new);
+            $rowClass = $changed
+                ? 'background: #fefce8;'
+                : '';
+            $badge = $changed
+                ? '<span style="display: inline-flex; margin-left: 0.5rem; border-radius: 9999px; background: #fef3c7; color: #92400e; padding: 0.125rem 0.5rem; font-size: 0.75rem; font-weight: 600;">changed</span>'
+                : '';
+
+            return '<tr style="'.$rowClass.'">'
+                .'<td style="padding: 0.5rem 0.75rem; font-weight: 600;">'.e($labels[$key]).$badge.'</td>'
+                .'<td style="padding: 0.5rem 0.75rem;">'.e(static::formatDisplayValue($old)).'</td>'
+                .'<td style="padding: 0.5rem 0.75rem;">'.e(static::formatDisplayValue($new)).'</td>'
+                .'</tr>';
+        })->implode('');
+
+        return '<div style="max-width: 100%; overflow-x: auto;">'
+            .'<table data-catalog-sync-log-value-comparison style="width: 100%; min-width: 680px; border-collapse: collapse; font-size: 0.875rem;">'
+            .'<thead><tr style="background: #f9fafb;">'
+            .'<th style="padding: 0.5rem 0.75rem; text-align: left;">Field</th>'
+            .'<th style="padding: 0.5rem 0.75rem; text-align: left;">Old value</th>'
+            .'<th style="padding: 0.5rem 0.75rem; text-align: left;">New value</th>'
+            .'</tr></thead>'
+            .'<tbody>'.$rows.'</tbody>'
+            .'</table>'
+            .'</div>';
+    }
+
+    protected static function formatMetadataSummary(CatalogSyncLog $record): string
+    {
+        $metadata = $record->metadata ?? [];
+        $labels = [
+            'match_type' => 'Match type',
+            'sync_action' => 'Sync action',
+            'sync_reason' => 'Sync reason',
+            'match_confidence' => 'Match confidence',
+        ];
+        $keys = collect(array_keys($labels))
+            ->filter(fn (string $key): bool => array_key_exists($key, $metadata))
+            ->values();
+
+        if ($keys->isEmpty()) {
+            return '<div class="text-sm text-gray-500 dark:text-gray-400">No common sync metadata was recorded.</div>';
+        }
+
+        $rows = $keys->map(fn (string $key): string => '<tr>'
+            .'<td style="padding: 0.5rem 0.75rem; font-weight: 600;">'.e($labels[$key]).'</td>'
+            .'<td style="padding: 0.5rem 0.75rem;">'.e(static::formatDisplayValue($metadata[$key])).'</td>'
+            .'</tr>')->implode('');
+
+        return '<div style="max-width: 100%; overflow-x: auto;">'
+            .'<table data-catalog-sync-log-metadata-summary style="width: 100%; min-width: 480px; border-collapse: collapse; font-size: 0.875rem;">'
+            .'<thead><tr style="background: #f9fafb;">'
+            .'<th style="padding: 0.5rem 0.75rem; text-align: left;">Metadata</th>'
+            .'<th style="padding: 0.5rem 0.75rem; text-align: left;">Value</th>'
+            .'</tr></thead>'
+            .'<tbody>'.$rows.'</tbody>'
+            .'</table>'
+            .'</div>';
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    protected static function valueLabels(): array
+    {
+        return [
+            'price' => 'Price',
+            'regular_price' => 'Regular price',
+            'reguar_price' => 'Regular price',
+            'final_selling_price' => 'Final selling price',
+            'supplier_price_raw' => 'Supplier cost',
+            'purchase_price' => 'Purchase price',
+            'recommended_price' => 'Recommended price',
+            'quantity' => 'Quantity',
+            'stock_status' => 'Stock status',
+            'availability_status_id' => 'Availability status ID',
+            'external_availability_label' => 'External availability label',
+            'external_availability_status' => 'External availability status',
+            'selected_supplier_offer_id' => 'Selected supplier offer',
+            'supplier_id' => 'Supplier',
+            'supplier_sku' => 'Supplier SKU',
+        ];
+    }
+
+    protected static function formatDisplayValue(mixed $value): string
+    {
+        if ($value === null) {
+            return '-';
+        }
+
+        if (is_bool($value)) {
+            return $value ? 'Yes' : 'No';
+        }
+
+        if (is_array($value)) {
+            return json_encode($value, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '-';
+        }
+
+        return (string) $value;
+    }
+
+    protected static function normalizeComparableValue(mixed $value): string
+    {
+        if (is_array($value)) {
+            return json_encode($value, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '';
+        }
+
+        return (string) $value;
     }
 }

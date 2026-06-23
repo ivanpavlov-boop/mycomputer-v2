@@ -90,11 +90,28 @@ class CatalogSyncAdminVisibilityTest extends TestCase
         $this->get(CatalogSyncLogResource::getUrl('view', ['record' => $log]))
             ->assertOk()
             ->assertSee($batch->batch_uuid)
-            ->assertSee('Old values')
-            ->assertSee('New values')
-            ->assertSee('Metadata')
+            ->assertSee('Field comparison')
+            ->assertSee('Field')
+            ->assertSee('Old value')
+            ->assertSee('New value')
+            ->assertSee('Price')
             ->assertSee('99.99')
             ->assertSee('129.99')
+            ->assertSee('Quantity')
+            ->assertSee('Final selling price')
+            ->assertSee('Supplier cost')
+            ->assertSee('Selected supplier offer')
+            ->assertSee('Regular price')
+            ->assertSee('Metadata summary')
+            ->assertSee('Match type')
+            ->assertSee('Sync action')
+            ->assertSee('Sync reason')
+            ->assertSee('Match confidence')
+            ->assertSee('Raw old values')
+            ->assertSee('Raw new values')
+            ->assertSee('Raw metadata')
+            ->assertSee('unknown_extra_field')
+            ->assertSee('unknown_metadata_key')
             ->assertSee('selected_supplier_offer_id');
     }
 
@@ -200,9 +217,31 @@ class CatalogSyncAdminVisibilityTest extends TestCase
             'action' => CatalogSyncLog::ACTION_UPDATE,
             'status' => CatalogSyncLog::STATUS_SUCCESS,
             'reason' => 'updated_price_stock',
-            'old_values' => ['price' => 99.99, 'quantity' => 2],
-            'new_values' => ['price' => 129.99, 'quantity' => 5],
-            'metadata' => ['selected_supplier_offer_id' => 123],
+            'old_values' => [
+                'price' => 99.99,
+                'final_selling_price' => 99.99,
+                'supplier_price_raw' => 80,
+                'quantity' => 2,
+                'reguar_price' => 99.99,
+                'unknown_extra_field' => 'legacy old value',
+            ],
+            'new_values' => [
+                'price' => 129.99,
+                'final_selling_price' => 129.99,
+                'supplier_price_raw' => 100,
+                'quantity' => 2,
+                'reguar_price' => 129.99,
+                'selected_supplier_offer_id' => 123,
+                'unknown_extra_field' => 'legacy new value',
+            ],
+            'metadata' => [
+                'selected_supplier_offer_id' => 123,
+                'match_type' => 'ean',
+                'sync_action' => 'UPDATE',
+                'sync_reason' => 'matched_catalog_product_can_be_updated',
+                'match_confidence' => 'exact',
+                'unknown_metadata_key' => 'fallback metadata value',
+            ],
         ]);
 
         return [$batch, $log];
