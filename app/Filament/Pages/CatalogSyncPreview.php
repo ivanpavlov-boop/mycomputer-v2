@@ -78,6 +78,8 @@ class CatalogSyncPreview extends Page
      */
     public array $selectedUpdateSupplierProductIds = [];
 
+    public bool $showUpdateConfirmationModal = false;
+
     /**
      * @var array{created: int, skipped: int, failed: int, messages: array<int, string>, batch_id?: int|null, batch_uuid?: string|null}|null
      */
@@ -853,6 +855,63 @@ class CatalogSyncPreview extends Page
                 'sync_reason' => 'action_preview_failed',
             ];
         }
+    }
+
+    public function openUpdateConfirmationModal(): void
+    {
+        $selectedSupplierProductIds = array_values(array_unique(array_map('intval', $this->selectedUpdateSupplierProductIds)));
+
+        if (! (bool) config('catalog_sync.update_enabled', false)) {
+            $this->showUpdateConfirmationModal = false;
+
+            Notification::make()
+                ->title('Manual UPDATE sync blocked')
+                ->body('Manual UPDATE sync is disabled by configuration.')
+                ->warning()
+                ->send();
+
+            return;
+        }
+
+        if ($selectedSupplierProductIds === []) {
+            $this->showUpdateConfirmationModal = false;
+
+            Notification::make()
+                ->title('No UPDATE rows selected')
+                ->body('Select at least one eligible UPDATE row before continuing.')
+                ->warning()
+                ->send();
+
+            return;
+        }
+
+        $this->showUpdateConfirmationModal = true;
+    }
+
+    public function closeUpdateConfirmationModal(): void
+    {
+        $this->showUpdateConfirmationModal = false;
+    }
+
+    public function confirmSelectedUpdateProducts(): void
+    {
+        $selectedSupplierProductIds = array_values(array_unique(array_map('intval', $this->selectedUpdateSupplierProductIds)));
+
+        if ($selectedSupplierProductIds === []) {
+            $this->showUpdateConfirmationModal = false;
+
+            Notification::make()
+                ->title('No UPDATE rows selected')
+                ->body('Select at least one eligible UPDATE row before continuing.')
+                ->warning()
+                ->send();
+
+            return;
+        }
+
+        $this->showUpdateConfirmationModal = false;
+
+        $this->syncSelectedUpdateProducts();
     }
 
     public function syncSelectedCreateProducts(): void
