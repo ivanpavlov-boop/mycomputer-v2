@@ -1723,6 +1723,196 @@ class CatalogSyncPreviewTest extends TestCase
         $this->assertSame(0, CatalogSyncLog::query()->count());
     }
 
+    public function test_catalog_sync_preview_update_button_opens_confirmation_modal_for_selected_update_row(): void
+    {
+        $this->actingAsSupplierManager();
+
+        config(['catalog_sync.update_enabled' => true]);
+
+        $supplier = Supplier::factory()->create(['company_name' => 'APCOM']);
+        $product = Product::factory()->create([
+            'source' => Product::SOURCE_SUPPLIER_IMPORT,
+            'ean' => '4141414141414',
+        ]);
+        $supplierProduct = $this->supplierProduct($supplier, [
+            'name' => 'Modal Confirmation Supplier Product',
+            'supplier_sku' => 'MODAL-CONFIRM-UPDATE',
+            'ean' => '4141414141414',
+            'price' => 150,
+            'quantity' => 9,
+        ]);
+
+        Livewire::test(CatalogSyncPreview::class)
+            ->set('filters.supplier_id', $supplier->id)
+            ->set('filters.action', 'UPDATE')
+            ->set('selectedUpdateSupplierProductIds', [$supplierProduct->id])
+            ->call('openUpdateConfirmationModal')
+            ->assertSet('showUpdateConfirmationModal', true)
+            ->assertSee('Confirm UPDATE Price/Stock sync')
+            ->assertSee('You are about to update price/stock fields for selected products.')
+            ->assertSee('Selected UPDATE rows')
+            ->assertSee('1')
+            ->assertSee('APCOM')
+            ->assertSee('#'.$supplierProduct->id.' / MODAL-CONFIRM-UPDATE')
+            ->assertSee('Product #'.$product->id)
+            ->assertSee('Only commercial fields will be updated:')
+            ->assertSee('price')
+            ->assertSee('supplier cost')
+            ->assertSee('quantity / stock')
+            ->assertSee('availability')
+            ->assertSee('selected supplier offer metadata')
+            ->assertSee('Protected content will NOT be updated:')
+            ->assertSee('product name')
+            ->assertSee('slug')
+            ->assertSee('SEO')
+            ->assertSee('descriptions')
+            ->assertSee('images')
+            ->assertSee('categories')
+            ->assertSee('attributes')
+            ->assertSee('Cancel')
+            ->assertSee('Confirm UPDATE Price/Stock');
+
+        $this->assertSame(0, CatalogSyncBatch::query()->count());
+        $this->assertSame(0, CatalogSyncLog::query()->count());
+    }
+
+    public function test_catalog_sync_preview_update_confirmation_cancel_does_not_run_update(): void
+    {
+        $this->actingAsSupplierManager();
+
+        config(['catalog_sync.update_enabled' => true]);
+
+        $supplier = Supplier::factory()->create();
+        $product = Product::factory()->create([
+            'source' => Product::SOURCE_SUPPLIER_IMPORT,
+            'ean' => '4242424242424',
+            'price' => 50,
+            'quantity' => 2,
+        ]);
+        $supplierProduct = $this->supplierProduct($supplier, [
+            'name' => 'Cancel Confirmation Supplier Product',
+            'ean' => '4242424242424',
+            'price' => 150,
+            'quantity' => 9,
+        ]);
+
+        Livewire::test(CatalogSyncPreview::class)
+            ->set('filters.supplier_id', $supplier->id)
+            ->set('filters.action', 'UPDATE')
+            ->set('selectedUpdateSupplierProductIds', [$supplierProduct->id])
+            ->call('openUpdateConfirmationModal')
+            ->assertSet('showUpdateConfirmationModal', true)
+            ->call('closeUpdateConfirmationModal')
+            ->assertSet('showUpdateConfirmationModal', false)
+            ->assertSet('lastManualUpdateResult', null);
+
+        $this->assertSame('50.00', $product->fresh()->price);
+        $this->assertSame(2, $product->fresh()->quantity);
+        $this->assertSame(0, CatalogSyncBatch::query()->count());
+        $this->assertSame(0, CatalogSyncLog::query()->count());
+        $this->assertNull($supplierProduct->fresh()->product_id);
+    }
+
+    public function test_catalog_sync_preview_update_confirmation_confirm_runs_existing_update_method(): void
+    {
+        $this->actingAsSupplierManager();
+
+        config(['catalog_sync.update_enabled' => true]);
+
+        $supplier = Supplier::factory()->create();
+        $product = Product::factory()->create([
+            'source' => Product::SOURCE_SUPPLIER_IMPORT,
+            'ean' => '4343434343434',
+            'price' => 50,
+            'quantity' => 2,
+        ]);
+        $supplierProduct = $this->supplierProduct($supplier, [
+            'name' => 'Confirm Existing Update Supplier Product',
+            'supplier_sku' => 'CONFIRM-EXISTING-UPDATE',
+            'ean' => '4343434343434',
+            'price' => 150,
+            'quantity' => 9,
+        ]);
+
+        Livewire::test(CatalogSyncPreview::class)
+            ->set('filters.supplier_id', $supplier->id)
+            ->set('filters.action', 'UPDATE')
+            ->set('selectedUpdateSupplierProductIds', [$supplierProduct->id])
+            ->call('openUpdateConfirmationModal')
+            ->assertSet('showUpdateConfirmationModal', true)
+            ->call('confirmSelectedUpdateProducts')
+            ->assertSet('showUpdateConfirmationModal', false)
+            ->assertSet('lastManualUpdateResult.updated', 1)
+            ->assertSet('lastManualUpdateResult.skipped', 0)
+            ->assertSet('lastManualUpdateResult.failed', 0);
+
+        $this->assertSame('150.00', $product->fresh()->price);
+        $this->assertSame(9, $product->fresh()->quantity);
+        $this->assertDatabaseHas('catalog_sync_batches', [
+            'mode' => CatalogSyncBatch::MODE_MANUAL_SELECTED_UPDATE_PRICE_STOCK,
+            'selected_count' => 1,
+            'updated_count' => 1,
+        ]);
+        $this->assertDatabaseHas('catalog_sync_logs', [
+            'supplier_product_id' => $supplierProduct->id,
+            'product_id' => $product->id,
+            'action' => CatalogSyncLog::ACTION_UPDATE,
+            'status' => CatalogSyncLog::STATUS_SUCCESS,
+        ]);
+    }
+
+    public function test_catalog_sync_preview_update_confirmation_modal_is_blocked_when_feature_flag_disabled(): void
+    {
+        $this->actingAsSupplierManager();
+
+        config(['catalog_sync.update_enabled' => false]);
+
+        $supplier = Supplier::factory()->create();
+        Product::factory()->create([
+            'source' => Product::SOURCE_SUPPLIER_IMPORT,
+            'ean' => '4444444444444',
+        ]);
+        $supplierProduct = $this->supplierProduct($supplier, [
+            'name' => 'Blocked Modal Supplier Product',
+            'ean' => '4444444444444',
+            'price' => 150,
+            'quantity' => 9,
+        ]);
+
+        Livewire::test(CatalogSyncPreview::class)
+            ->set('filters.supplier_id', $supplier->id)
+            ->set('filters.action', 'UPDATE')
+            ->set('selectedUpdateSupplierProductIds', [$supplierProduct->id])
+            ->call('openUpdateConfirmationModal')
+            ->assertSet('showUpdateConfirmationModal', false)
+            ->assertDontSee('Confirm UPDATE Price/Stock sync');
+
+        $this->assertSame(0, CatalogSyncBatch::query()->count());
+        $this->assertSame(0, CatalogSyncLog::query()->count());
+    }
+
+    public function test_catalog_sync_preview_create_flow_remains_direct_and_separate_from_update_modal(): void
+    {
+        $this->actingAsSupplierManager();
+
+        config(['catalog_sync.update_enabled' => true]);
+
+        $supplier = Supplier::factory()->create();
+        $supplierProduct = $this->supplierProduct($supplier, [
+            'name' => 'Create Flow Still Direct Product',
+            'supplier_sku' => 'CREATE-FLOW-DIRECT',
+            'ean' => null,
+            'mpn' => null,
+        ]);
+
+        Livewire::test(CatalogSyncPreview::class)
+            ->set('selectedSupplierProductIds', [$supplierProduct->id])
+            ->assertSee('wire:click="syncSelectedCreateProducts"', false)
+            ->assertSee('Sync Selected CREATE Products (1)')
+            ->assertSee('Sync Selected UPDATE Price/Stock (0)')
+            ->assertSet('showUpdateConfirmationModal', false);
+    }
+
     public function test_catalog_sync_preview_exact_ean_update_row_is_eligible_when_feature_flag_enabled(): void
     {
         $this->actingAsSupplierManager();

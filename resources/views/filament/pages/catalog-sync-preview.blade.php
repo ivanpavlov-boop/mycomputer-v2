@@ -68,6 +68,23 @@
             $truncateCell = 'max-w-[22rem] truncate px-3 py-2';
             $selectedCreateCount = count($this->selectedSupplierProductIds);
             $selectedUpdateCount = count($this->selectedUpdateSupplierProductIds);
+            $selectedUpdateIds = array_values(array_unique(array_map('intval', $this->selectedUpdateSupplierProductIds)));
+            $selectedUpdateRows = collect($rows)
+                ->filter(fn (array $row): bool => in_array((int) $row['supplier_product_id'], $selectedUpdateIds, true))
+                ->values();
+            $selectedUpdateSuppliers = $selectedUpdateRows
+                ->pluck('supplier')
+                ->filter()
+                ->unique()
+                ->values();
+            $selectedUpdateSupplierProducts = $selectedUpdateRows
+                ->map(fn (array $row): string => trim('#'.$row['supplier_product_id'].' '.($row['supplier_sku'] ? '/ '.$row['supplier_sku'] : '')))
+                ->values();
+            $selectedUpdateMatchedProductIds = $selectedUpdateRows
+                ->pluck('matched_product_id')
+                ->filter(fn ($value): bool => filled($value))
+                ->unique()
+                ->values();
             $featureFlags = [
                 'CREATE sync' => (bool) config('catalog_sync.create_enabled', true),
                 'UPDATE sync' => (bool) config('catalog_sync.update_enabled', false),
@@ -391,9 +408,9 @@
 
                     <button
                         type="button"
-                        wire:click="syncSelectedUpdateProducts"
+                        wire:click="openUpdateConfirmationModal"
                         wire:loading.attr="disabled"
-                        wire:target="syncSelectedUpdateProducts"
+                        wire:target="openUpdateConfirmationModal"
                         @disabled($updateSyncButtonDisabled)
                         data-selected-update-sync-button
                         data-selected-update-sync-disabled="{{ $updateSyncButtonDisabled ? 'true' : 'false' }}"
@@ -404,6 +421,122 @@
                     </button>
                 </div>
             </div>
+
+            @if ($this->showUpdateConfirmationModal)
+                <div
+                    data-update-confirmation-modal
+                    class="fixed inset-0 z-50 flex items-center justify-center bg-gray-950/60 p-4"
+                    role="dialog"
+                    aria-modal="true"
+                    aria-labelledby="catalog-sync-update-confirmation-title"
+                >
+                    <div class="w-full max-w-3xl rounded-xl border border-gray-200 bg-white p-5 shadow-xl dark:border-gray-800 dark:bg-gray-900">
+                        <div class="flex flex-col gap-1">
+                            <h2 id="catalog-sync-update-confirmation-title" class="text-lg font-semibold text-gray-950 dark:text-white">
+                                Confirm UPDATE Price/Stock sync
+                            </h2>
+                            <p class="text-sm text-gray-600 dark:text-gray-300">
+                                You are about to update price/stock fields for selected products.
+                            </p>
+                        </div>
+
+                        <div class="mt-4 grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
+                            <div class="rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-gray-800 dark:bg-gray-950">
+                                <div class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Selected UPDATE rows</div>
+                                <div class="mt-1 text-xl font-semibold text-gray-950 dark:text-white">{{ $selectedUpdateCount }}</div>
+                            </div>
+
+                            <div class="rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-gray-800 dark:bg-gray-950">
+                                <div class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Supplier</div>
+                                <div class="mt-1 text-sm font-medium text-gray-950 dark:text-white">
+                                    {{ $selectedUpdateSuppliers->isNotEmpty() ? $selectedUpdateSuppliers->join(', ') : 'Available after row evaluation' }}
+                                </div>
+                            </div>
+                        </div>
+
+                        @if ($selectedUpdateCount > 1)
+                            <div class="mt-4 rounded-lg border border-yellow-200 bg-yellow-50 p-3 text-sm font-medium text-yellow-800 dark:border-yellow-900 dark:bg-yellow-950 dark:text-yellow-100">
+                                Multiple products selected. Review carefully before confirming.
+                            </div>
+                        @endif
+
+                        <div class="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
+                            <div>
+                                <div class="text-sm font-semibold text-gray-950 dark:text-white">Affected supplier products</div>
+                                <ul class="mt-2 max-h-32 space-y-1 overflow-y-auto rounded-lg border border-gray-200 bg-gray-50 p-3 text-xs text-gray-700 dark:border-gray-800 dark:bg-gray-950 dark:text-gray-300">
+                                    @forelse ($selectedUpdateSupplierProducts->take(10) as $supplierProductLabel)
+                                        <li>{{ $supplierProductLabel }}</li>
+                                    @empty
+                                        <li>Selected row details are available after row evaluation.</li>
+                                    @endforelse
+                                    @if ($selectedUpdateSupplierProducts->count() > 10)
+                                        <li>+ {{ $selectedUpdateSupplierProducts->count() - 10 }} more</li>
+                                    @endif
+                                </ul>
+                            </div>
+
+                            <div>
+                                <div class="text-sm font-semibold text-gray-950 dark:text-white">Matched catalog products</div>
+                                <ul class="mt-2 max-h-32 space-y-1 overflow-y-auto rounded-lg border border-gray-200 bg-gray-50 p-3 text-xs text-gray-700 dark:border-gray-800 dark:bg-gray-950 dark:text-gray-300">
+                                    @forelse ($selectedUpdateMatchedProductIds->take(10) as $matchedProductId)
+                                        <li>Product #{{ $matchedProductId }}</li>
+                                    @empty
+                                        <li>Matched product IDs are available after row evaluation.</li>
+                                    @endforelse
+                                    @if ($selectedUpdateMatchedProductIds->count() > 10)
+                                        <li>+ {{ $selectedUpdateMatchedProductIds->count() - 10 }} more</li>
+                                    @endif
+                                </ul>
+                            </div>
+                        </div>
+
+                        <div class="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
+                            <div class="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900 dark:border-blue-900 dark:bg-blue-950 dark:text-blue-100">
+                                <div class="font-semibold">Only commercial fields will be updated:</div>
+                                <ul class="mt-2 list-disc space-y-1 pl-5">
+                                    <li>price</li>
+                                    <li>supplier cost</li>
+                                    <li>quantity / stock</li>
+                                    <li>availability</li>
+                                    <li>selected supplier offer metadata</li>
+                                </ul>
+                            </div>
+
+                            <div class="rounded-lg border border-green-200 bg-green-50 p-3 text-sm text-green-900 dark:border-green-900 dark:bg-green-950 dark:text-green-100">
+                                <div class="font-semibold">Protected content will NOT be updated:</div>
+                                <ul class="mt-2 list-disc space-y-1 pl-5">
+                                    <li>product name</li>
+                                    <li>slug</li>
+                                    <li>SEO</li>
+                                    <li>descriptions</li>
+                                    <li>images</li>
+                                    <li>categories</li>
+                                    <li>attributes</li>
+                                </ul>
+                            </div>
+                        </div>
+
+                        <div class="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                            <button
+                                type="button"
+                                wire:click="closeUpdateConfirmationModal"
+                                class="inline-flex items-center justify-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm transition hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200 dark:hover:bg-gray-800"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="button"
+                                wire:click="confirmSelectedUpdateProducts"
+                                wire:loading.attr="disabled"
+                                wire:target="confirmSelectedUpdateProducts"
+                                class="inline-flex items-center justify-center rounded-md border border-blue-600 bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-70 dark:border-blue-500 dark:bg-blue-600 dark:hover:bg-blue-500"
+                            >
+                                Confirm UPDATE Price/Stock
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            @endif
 
             <div class="max-w-full rounded-lg border border-gray-200 bg-white shadow-sm dark:border-gray-800 dark:bg-gray-900" style="width: 100%; max-width: 100%;">
                 <div
