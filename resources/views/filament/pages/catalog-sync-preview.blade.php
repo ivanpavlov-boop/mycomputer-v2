@@ -520,7 +520,9 @@
                             <button
                                 type="button"
                                 wire:click="closeUpdateConfirmationModal"
+                                data-update-confirmation-cancel-button
                                 class="inline-flex items-center justify-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm transition hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200 dark:hover:bg-gray-800"
+                                style="display: inline-flex; align-items: center; justify-content: center; border: 1px solid #6b7280; color: #374151; background: #ffffff; padding: 8px 14px; border-radius: 8px; font-weight: 600; font-size: 14px; cursor: pointer;"
                             >
                                 Cancel
                             </button>
