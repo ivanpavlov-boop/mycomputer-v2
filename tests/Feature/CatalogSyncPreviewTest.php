@@ -1668,7 +1668,7 @@ class CatalogSyncPreviewTest extends TestCase
             ->assertSee('data-selected-create-sync-disabled="true"', false);
     }
 
-    public function test_catalog_sync_preview_does_not_render_update_sync_or_sync_all_actions(): void
+    public function test_catalog_sync_preview_does_not_render_sync_all_or_automatic_actions(): void
     {
         $this->actingAsSupplierManager();
 
@@ -1679,8 +1679,12 @@ class CatalogSyncPreviewTest extends TestCase
             ->assertSee('Sync Selected UPDATE Price/Stock (0)')
             ->assertSee('Manual UPDATE sync is disabled by configuration.')
             ->assertSee('data-selected-update-sync-disabled="true"', false)
-            ->assertDontSee('Sync All', false)
-            ->assertDontSee('Automatic sync', false);
+            ->assertSee('Sync All')
+            ->assertSee('Automatic sync')
+            ->assertSee('data-catalog-sync-feature-flag="sync-all"', false)
+            ->assertSee('data-catalog-sync-feature-flag="automatic-sync"', false)
+            ->assertDontSee('wire:click="syncAll', false)
+            ->assertDontSee('wire:click="syncAutomatic', false);
     }
 
     public function test_catalog_sync_preview_selected_update_is_blocked_when_feature_flag_disabled(): void

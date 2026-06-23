@@ -68,6 +68,12 @@
             $truncateCell = 'max-w-[22rem] truncate px-3 py-2';
             $selectedCreateCount = count($this->selectedSupplierProductIds);
             $selectedUpdateCount = count($this->selectedUpdateSupplierProductIds);
+            $featureFlags = [
+                'CREATE sync' => (bool) config('catalog_sync.create_enabled', true),
+                'UPDATE sync' => (bool) config('catalog_sync.update_enabled', false),
+                'Sync All' => (bool) config('catalog_sync.sync_all_enabled', false),
+                'Automatic sync' => (bool) config('catalog_sync.auto_enabled', false),
+            ];
             $summaryCounters = [
                 'Total Rows' => $summary['total'],
                 'Included Rows' => $summary['included'],
@@ -85,6 +91,34 @@
 
         <div class="rounded-lg border border-gray-200 bg-white p-4 text-sm font-medium text-gray-950 shadow-sm dark:border-gray-800 dark:bg-gray-900 dark:text-white">
             Catalog Sync Preview Query Only OK
+        </div>
+
+        <div
+            data-catalog-sync-feature-flags
+            class="rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-gray-900"
+        >
+            <div class="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                    <div class="text-sm font-semibold text-gray-950 dark:text-white">Catalog Sync feature flags</div>
+                    <div class="mt-1 text-xs text-gray-600 dark:text-gray-400">
+                        Effective config values are shown for visibility only. Change flags through deployment configuration, not this page.
+                    </div>
+                </div>
+            </div>
+
+            <div class="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                @foreach ($featureFlags as $label => $enabled)
+                    <div
+                        data-catalog-sync-feature-flag="{{ \Illuminate\Support\Str::slug($label) }}"
+                        class="rounded-md border p-3 {{ $enabled ? 'border-green-200 bg-green-50 dark:border-green-900 dark:bg-green-950' : 'border-gray-200 bg-gray-50 dark:border-gray-800 dark:bg-gray-950' }}"
+                    >
+                        <div class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">{{ $label }}</div>
+                        <div class="mt-1 text-sm font-semibold {{ $enabled ? 'text-green-700 dark:text-green-300' : 'text-gray-700 dark:text-gray-300' }}">
+                            {{ $enabled ? 'enabled' : 'disabled' }}
+                        </div>
+                    </div>
+                @endforeach
+            </div>
         </div>
 
         @if ($discovery['enabled'])
