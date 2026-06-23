@@ -1770,6 +1770,8 @@ class CatalogSyncPreviewTest extends TestCase
             ->assertSee('categories')
             ->assertSee('attributes')
             ->assertSee('Cancel')
+            ->assertSee('data-update-confirmation-cancel-button', false)
+            ->assertSee('border: 1px solid #6b7280;', false)
             ->assertSee('Confirm UPDATE Price/Stock');
 
         $this->assertSame(0, CatalogSyncBatch::query()->count());
