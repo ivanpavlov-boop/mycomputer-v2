@@ -164,7 +164,7 @@ class CatalogSyncAdminVisibilityTest extends TestCase
     private function catalogSyncBatch(?User $user = null, ?Supplier $supplier = null): CatalogSyncBatch
     {
         return CatalogSyncBatch::query()->create([
-            'batch_uuid' => 'batch-visibility-'.fake()->unique()->uuid(),
+            'batch_uuid' => fake()->unique()->uuid(),
             'user_id' => $user?->id,
             'supplier_id' => $supplier?->id,
             'mode' => CatalogSyncBatch::MODE_MANUAL_SELECTED_UPDATE_PRICE_STOCK,
