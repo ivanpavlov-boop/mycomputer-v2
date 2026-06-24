@@ -665,42 +665,80 @@
                                     <td class="{{ $cell }}">{{ $row['match_confidence'] ?: '-' }}</td>
                                     <td class="{{ $cell }}">{{ $row['sync_action'] }}</td>
                                     <td class="{{ $truncateCell }}" title="{{ $row['sync_reason'] }}">{{ $row['sync_reason'] }}</td>
-                                    <td class="min-w-[24rem] px-3 py-2">
+                                    <td class="max-w-[34rem] px-3 py-2 align-middle">
                                         @php
                                             $diff = $row['update_diff'] ?? [];
+                                            $diffItems = [];
+
+                                            if (is_array($diff) && ! empty($diff)) {
+                                                if ((bool) ($diff['price_changed'] ?? false)) {
+                                                    $diffItems[] = [
+                                                        'label' => 'Price',
+                                                        'value' => $money($diff['current_price'] ?? null).' -> '.$money($diff['new_price'] ?? null).' ('.$delta($diff['price_change'] ?? null, true).')',
+                                                        'changed' => true,
+                                                    ];
+                                                }
+
+                                                if ((bool) ($diff['quantity_changed'] ?? false)) {
+                                                    $diffItems[] = [
+                                                        'label' => 'Qty',
+                                                        'value' => ($diff['current_quantity'] ?? '-').' -> '.($diff['new_quantity'] ?? '-').' ('.$delta($diff['quantity_change'] ?? null).')',
+                                                        'changed' => true,
+                                                    ];
+                                                }
+
+                                                if ((bool) ($diff['availability_changed'] ?? false)) {
+                                                    $diffItems[] = [
+                                                        'label' => 'Availability',
+                                                        'value' => ($diff['current_availability'] ?? '-').' -> '.($diff['new_availability'] ?? '-'),
+                                                        'changed' => true,
+                                                    ];
+                                                }
+
+                                                if ((bool) ($diff['supplier_cost_changed'] ?? false)) {
+                                                    $diffItems[] = [
+                                                        'label' => 'Supplier cost',
+                                                        'value' => $money($diff['current_supplier_cost'] ?? null).' -> '.$money($diff['new_supplier_cost'] ?? null),
+                                                        'changed' => true,
+                                                    ];
+                                                }
+
+                                                if ((bool) ($diff['selected_supplier_offer_changed'] ?? false)) {
+                                                    $diffItems[] = [
+                                                        'label' => 'Selected offer',
+                                                        'value' => ($diff['current_selected_supplier_offer'] ?? '-').' -> '.($diff['new_selected_supplier_offer'] ?? '-'),
+                                                        'changed' => true,
+                                                    ];
+                                                }
+                                            }
                                         @endphp
 
                                         @if ($row['sync_action'] === 'UPDATE' && is_array($diff) && ! empty($diff))
-                                            <div
-                                                data-update-diff-preview
-                                                data-update-diff-supplier-product-id="{{ $row['supplier_product_id'] }}"
-                                                class="grid grid-cols-2 gap-x-4 gap-y-1 text-xs"
-                                            >
-                                                <div class="text-gray-500 dark:text-gray-400">Current price</div>
-                                                <div class="{{ $diffValueClass((bool) ($diff['price_changed'] ?? false)) }}">{{ $money($diff['current_price'] ?? null) }}</div>
-                                                <div class="text-gray-500 dark:text-gray-400">New price</div>
-                                                <div class="{{ $diffValueClass((bool) ($diff['price_changed'] ?? false)) }}">{{ $money($diff['new_price'] ?? null) }}</div>
-                                                <div class="text-gray-500 dark:text-gray-400">Price change</div>
-                                                <div class="{{ $diffValueClass((bool) ($diff['price_changed'] ?? false)) }}">{{ $delta($diff['price_change'] ?? null, true) }}</div>
-                                                <div class="text-gray-500 dark:text-gray-400">Current quantity</div>
-                                                <div class="{{ $diffValueClass((bool) ($diff['quantity_changed'] ?? false)) }}">{{ $diff['current_quantity'] ?? '-' }}</div>
-                                                <div class="text-gray-500 dark:text-gray-400">New quantity</div>
-                                                <div class="{{ $diffValueClass((bool) ($diff['quantity_changed'] ?? false)) }}">{{ $diff['new_quantity'] ?? '-' }}</div>
-                                                <div class="text-gray-500 dark:text-gray-400">Quantity change</div>
-                                                <div class="{{ $diffValueClass((bool) ($diff['quantity_changed'] ?? false)) }}">{{ $delta($diff['quantity_change'] ?? null) }}</div>
-                                                <div class="text-gray-500 dark:text-gray-400">Current availability</div>
-                                                <div class="{{ $diffValueClass((bool) ($diff['availability_changed'] ?? false)) }}">{{ $diff['current_availability'] ?? '-' }}</div>
-                                                <div class="text-gray-500 dark:text-gray-400">New availability</div>
-                                                <div class="{{ $diffValueClass((bool) ($diff['availability_changed'] ?? false)) }}">{{ $diff['new_availability'] ?? '-' }}</div>
-                                                <div class="text-gray-500 dark:text-gray-400">Current supplier cost</div>
-                                                <div class="{{ $diffValueClass((bool) ($diff['supplier_cost_changed'] ?? false)) }}">{{ $money($diff['current_supplier_cost'] ?? null) }}</div>
-                                                <div class="text-gray-500 dark:text-gray-400">New supplier cost</div>
-                                                <div class="{{ $diffValueClass((bool) ($diff['supplier_cost_changed'] ?? false)) }}">{{ $money($diff['new_supplier_cost'] ?? null) }}</div>
-                                                <div class="text-gray-500 dark:text-gray-400">Current selected supplier offer</div>
-                                                <div class="{{ $diffValueClass((bool) ($diff['selected_supplier_offer_changed'] ?? false)) }}">{{ $diff['current_selected_supplier_offer'] ?? '-' }}</div>
-                                                <div class="text-gray-500 dark:text-gray-400">New selected supplier offer</div>
-                                                <div class="{{ $diffValueClass((bool) ($diff['selected_supplier_offer_changed'] ?? false)) }}">{{ $diff['new_selected_supplier_offer'] ?? '-' }}</div>
-                                            </div>
+                                            @if (filled($diffItems))
+                                                <div
+                                                    data-update-diff-preview
+                                                    data-update-diff-supplier-product-id="{{ $row['supplier_product_id'] }}"
+                                                    class="flex max-w-[34rem] flex-wrap gap-1 text-xs leading-5"
+                                                >
+                                                    @foreach ($diffItems as $item)
+                                                        <span
+                                                            class="inline-flex max-w-[22rem] items-center gap-1 truncate rounded border border-blue-200 bg-blue-50 px-2 py-0.5 {{ $diffValueClass((bool) $item['changed']) }} dark:border-blue-900 dark:bg-blue-950"
+                                                            title="{{ $item['label'].': '.$item['value'] }}"
+                                                        >
+                                                            <span class="font-semibold">{{ $item['label'] }}:</span>
+                                                            <span class="truncate">{{ $item['value'] }}</span>
+                                                        </span>
+                                                    @endforeach
+                                                </div>
+                                            @else
+                                                <span
+                                                    data-update-diff-preview
+                                                    data-update-diff-supplier-product-id="{{ $row['supplier_product_id'] }}"
+                                                    class="whitespace-nowrap text-xs text-gray-500 dark:text-gray-400"
+                                                >
+                                                    No commercial changes
+                                                </span>
+                                            @endif
                                         @else
                                             <span class="text-gray-400">-</span>
                                         @endif
