@@ -29,7 +29,7 @@ class CatalogSyncLogResource extends Resource
 
     protected static ?string $model = CatalogSyncLog::class;
 
-    protected static ?string $permission = 'manage suppliers';
+    protected static ?string $permission = null;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedDocumentText;
 
@@ -182,6 +182,11 @@ class CatalogSyncLogResource extends Resource
             'index' => ListCatalogSyncLogs::route('/'),
             'view' => ViewCatalogSyncLog::route('/{record}'),
         ];
+    }
+
+    protected static function canAccessResource(): bool
+    {
+        return (bool) auth()->user()?->canViewAuditLogs();
     }
 
     protected static function formatValueComparison(CatalogSyncLog $record): string

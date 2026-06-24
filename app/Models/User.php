@@ -19,6 +19,54 @@ class User extends Authenticatable implements FilamentUser
     /** @use HasFactory<UserFactory> */
     use HasApiTokens, HasFactory, HasRoles, Notifiable;
 
+    public const ROLE_SUPER_ADMIN = 'super_admin';
+
+    public const ROLE_CATALOG_MANAGER = 'catalog_manager';
+
+    public const ROLE_PRODUCT_EDITOR = 'product_editor';
+
+    public const ROLE_PRODUCT_DATA_ENTRY = 'product_data_entry';
+
+    public const ROLE_PRICING_MANAGER = 'pricing_manager';
+
+    public const ROLE_INVENTORY_MANAGER = 'inventory_manager';
+
+    public const ROLE_SEO_MARKETING = 'seo_marketing';
+
+    public const ROLE_ORDER_MANAGER = 'order_manager';
+
+    public const ROLE_VIEWER_AUDITOR = 'viewer_auditor';
+
+    public const ADMIN_ROLES = [
+        self::ROLE_SUPER_ADMIN,
+        self::ROLE_CATALOG_MANAGER,
+        self::ROLE_PRODUCT_EDITOR,
+        self::ROLE_PRODUCT_DATA_ENTRY,
+        self::ROLE_PRICING_MANAGER,
+        self::ROLE_INVENTORY_MANAGER,
+        self::ROLE_SEO_MARKETING,
+        self::ROLE_ORDER_MANAGER,
+        self::ROLE_VIEWER_AUDITOR,
+    ];
+
+    public const ROLE_LABELS = [
+        self::ROLE_SUPER_ADMIN => 'Super Admin',
+        self::ROLE_CATALOG_MANAGER => 'Catalog Manager',
+        self::ROLE_PRODUCT_EDITOR => 'Product Editor',
+        self::ROLE_PRODUCT_DATA_ENTRY => 'Product Data Entry',
+        self::ROLE_PRICING_MANAGER => 'Pricing Manager',
+        self::ROLE_INVENTORY_MANAGER => 'Inventory Manager',
+        self::ROLE_SEO_MARKETING => 'SEO / Marketing',
+        self::ROLE_ORDER_MANAGER => 'Order Manager',
+        self::ROLE_VIEWER_AUDITOR => 'Viewer / Auditor',
+    ];
+
+    public const LEGACY_ROLE_MAP = [
+        'admin' => self::ROLE_SUPER_ADMIN,
+        'manager' => self::ROLE_CATALOG_MANAGER,
+        'support' => self::ROLE_ORDER_MANAGER,
+    ];
+
     /**
      * The attributes that are mass assignable.
      *
@@ -34,6 +82,7 @@ class User extends Authenticatable implements FilamentUser
         'vat_number',
         'is_active',
         'last_login_at',
+        'role',
         'password',
     ];
 
@@ -134,6 +183,150 @@ class User extends Authenticatable implements FilamentUser
 
     public function canAccessPanel(Panel $panel): bool
     {
-        return $this->is_active && $this->hasAnyRole(['admin', 'manager', 'support']);
+        return $this->is_active && (
+            in_array($this->primaryRole(), self::ADMIN_ROLES, true)
+            || $this->hasAnyRole(array_keys(self::LEGACY_ROLE_MAP))
+        );
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public static function roleOptions(): array
+    {
+        return self::ROLE_LABELS;
+    }
+
+    public static function roleLabel(?string $role): string
+    {
+        return self::ROLE_LABELS[$role] ?? 'Unassigned';
+    }
+
+    public function primaryRole(): ?string
+    {
+        if (filled($this->role)) {
+            return $this->role;
+        }
+
+        foreach (self::LEGACY_ROLE_MAP as $legacyRole => $primaryRole) {
+            if ($this->hasRole($legacyRole)) {
+                return $primaryRole;
+            }
+        }
+
+        return null;
+    }
+
+    public function hasPrimaryRole(string|array $roles): bool
+    {
+        return in_array($this->primaryRole(), (array) $roles, true);
+    }
+
+    public function isSuperAdmin(): bool
+    {
+        return $this->hasPrimaryRole(self::ROLE_SUPER_ADMIN);
+    }
+
+    public function canManageUsers(): bool
+    {
+        return $this->isSuperAdmin();
+    }
+
+    public function canManageRoles(): bool
+    {
+        return $this->isSuperAdmin();
+    }
+
+    public function canViewCatalogSync(): bool
+    {
+        return $this->hasPrimaryRole([
+            self::ROLE_SUPER_ADMIN,
+            self::ROLE_CATALOG_MANAGER,
+            self::ROLE_VIEWER_AUDITOR,
+        ]);
+    }
+
+    public function canRunCreateSync(): bool
+    {
+        return $this->isSuperAdmin();
+    }
+
+    public function canRunUpdateSync(): bool
+    {
+        return $this->isSuperAdmin();
+    }
+
+    public function canViewAuditLogs(): bool
+    {
+        return $this->hasPrimaryRole([
+            self::ROLE_SUPER_ADMIN,
+            self::ROLE_VIEWER_AUDITOR,
+        ]);
+    }
+
+    public function canManageProducts(): bool
+    {
+        return $this->hasPrimaryRole([
+            self::ROLE_SUPER_ADMIN,
+            self::ROLE_CATALOG_MANAGER,
+            self::ROLE_PRODUCT_EDITOR,
+            self::ROLE_PRODUCT_DATA_ENTRY,
+            self::ROLE_PRICING_MANAGER,
+            self::ROLE_INVENTORY_MANAGER,
+        ]);
+    }
+
+    public function canEditProductContent(): bool
+    {
+        return $this->hasPrimaryRole([
+            self::ROLE_SUPER_ADMIN,
+            self::ROLE_CATALOG_MANAGER,
+            self::ROLE_PRODUCT_EDITOR,
+            self::ROLE_PRODUCT_DATA_ENTRY,
+        ]);
+    }
+
+    public function canEditProductPrices(): bool
+    {
+        return $this->hasPrimaryRole([
+            self::ROLE_SUPER_ADMIN,
+            self::ROLE_CATALOG_MANAGER,
+            self::ROLE_PRICING_MANAGER,
+        ]);
+    }
+
+    public function canEditProductStock(): bool
+    {
+        return $this->hasPrimaryRole([
+            self::ROLE_SUPER_ADMIN,
+            self::ROLE_CATALOG_MANAGER,
+            self::ROLE_INVENTORY_MANAGER,
+        ]);
+    }
+
+    public function canEditProductSeo(): bool
+    {
+        return $this->hasPrimaryRole([
+            self::ROLE_SUPER_ADMIN,
+            self::ROLE_CATALOG_MANAGER,
+            self::ROLE_PRODUCT_EDITOR,
+            self::ROLE_SEO_MARKETING,
+        ]);
+    }
+
+    public function canApproveProducts(): bool
+    {
+        return $this->hasPrimaryRole([
+            self::ROLE_SUPER_ADMIN,
+            self::ROLE_CATALOG_MANAGER,
+        ]);
+    }
+
+    public function canPublishProducts(): bool
+    {
+        return $this->hasPrimaryRole([
+            self::ROLE_SUPER_ADMIN,
+            self::ROLE_CATALOG_MANAGER,
+        ]);
     }
 }

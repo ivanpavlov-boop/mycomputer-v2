@@ -61,4 +61,9 @@ class PermissionResource extends Resource
             'edit' => EditPermission::route('/{record}/edit'),
         ];
     }
+
+    protected static function canAccessResource(): bool
+    {
+        return (bool) auth()->user()?->canManageRoles();
+    }
 }

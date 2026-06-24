@@ -92,7 +92,7 @@ class CatalogSyncPreview extends Page
 
     public static function canAccess(): bool
     {
-        return (bool) auth()->user()?->can('manage suppliers');
+        return (bool) auth()->user()?->canViewCatalogSync();
     }
 
     public function form(Schema $schema): Schema
@@ -951,6 +951,18 @@ class CatalogSyncPreview extends Page
     {
         $selectedSupplierProductIds = array_values(array_unique(array_map('intval', $this->selectedUpdateSupplierProductIds)));
 
+        if (! auth()->user()?->canRunUpdateSync()) {
+            $this->showUpdateConfirmationModal = false;
+
+            Notification::make()
+                ->title('Manual UPDATE sync blocked')
+                ->body('Only Super Admins can run selected UPDATE sync.')
+                ->warning()
+                ->send();
+
+            return;
+        }
+
         if (! (bool) config('catalog_sync.update_enabled', false)) {
             $this->showUpdateConfirmationModal = false;
 
@@ -1016,6 +1028,22 @@ class CatalogSyncPreview extends Page
             'batch_id' => null,
             'batch_uuid' => null,
         ];
+
+        if (! auth()->user()?->canRunCreateSync()) {
+            $result['skipped'] = count($selectedSupplierProductIds);
+            $result['messages'][] = 'Only Super Admins can run selected CREATE sync.';
+
+            $this->selectedSupplierProductIds = [];
+            $this->lastManualSyncResult = $result;
+
+            Notification::make()
+                ->title('Selected CREATE products sync blocked')
+                ->body('Only Super Admins can run selected CREATE sync.')
+                ->warning()
+                ->send();
+
+            return;
+        }
 
         if (! (bool) config('catalog_sync.create_enabled', true)) {
             $result['skipped'] = count($selectedSupplierProductIds);
@@ -1171,6 +1199,22 @@ class CatalogSyncPreview extends Page
             'batch_id' => null,
             'batch_uuid' => null,
         ];
+
+        if (! auth()->user()?->canRunUpdateSync()) {
+            $result['skipped'] = count($selectedSupplierProductIds);
+            $result['messages'][] = 'Only Super Admins can run selected UPDATE sync.';
+
+            $this->selectedUpdateSupplierProductIds = [];
+            $this->lastManualUpdateResult = $result;
+
+            Notification::make()
+                ->title('Selected UPDATE products sync blocked')
+                ->body('Only Super Admins can run selected UPDATE sync.')
+                ->warning()
+                ->send();
+
+            return;
+        }
 
         if (! (bool) config('catalog_sync.update_enabled', false)) {
             $result['skipped'] = count($selectedSupplierProductIds);
