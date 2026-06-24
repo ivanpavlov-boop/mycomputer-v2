@@ -6,6 +6,7 @@ use App\Filament\Concerns\RequiresFilamentPermission;
 use App\Filament\Resources\Roles\Pages\CreateRole;
 use App\Filament\Resources\Roles\Pages\EditRole;
 use App\Filament\Resources\Roles\Pages\ListRoles;
+use App\Models\User;
 use BackedEnum;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
@@ -66,12 +67,17 @@ class RoleResource extends Resource
     {
         return static::canAccessResource()
             && $record instanceof Role
-            && ! in_array($record->name, ['admin', 'manager', 'support', 'customer', 'b2b_customer'], true);
+            && ! in_array($record->name, array_merge(User::ADMIN_ROLES, ['admin', 'manager', 'support', 'customer', 'b2b_customer']), true);
     }
 
     public static function canDeleteAny(): bool
     {
         return false;
+    }
+
+    protected static function canAccessResource(): bool
+    {
+        return (bool) auth()->user()?->canManageRoles();
     }
 
     public static function getPages(): array

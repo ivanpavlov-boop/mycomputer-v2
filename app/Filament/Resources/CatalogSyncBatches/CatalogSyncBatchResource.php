@@ -28,7 +28,7 @@ class CatalogSyncBatchResource extends Resource
 
     protected static ?string $model = CatalogSyncBatch::class;
 
-    protected static ?string $permission = 'manage suppliers';
+    protected static ?string $permission = null;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedClipboardDocumentList;
 
@@ -147,5 +147,10 @@ class CatalogSyncBatchResource extends Resource
             'index' => ListCatalogSyncBatches::route('/'),
             'view' => ViewCatalogSyncBatch::route('/{record}'),
         ];
+    }
+
+    protected static function canAccessResource(): bool
+    {
+        return (bool) auth()->user()?->canViewAuditLogs();
     }
 }

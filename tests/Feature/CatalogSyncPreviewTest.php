@@ -3083,8 +3083,8 @@ class CatalogSyncPreviewTest extends TestCase
     {
         $this->seed(RolesAndPermissionsSeeder::class);
 
-        $user = User::factory()->create();
-        $user->assignRole('manager');
+        $user = User::factory()->create(['role' => User::ROLE_SUPER_ADMIN]);
+        $user->assignRole(User::ROLE_SUPER_ADMIN);
 
         $this->actingAs($user);
 

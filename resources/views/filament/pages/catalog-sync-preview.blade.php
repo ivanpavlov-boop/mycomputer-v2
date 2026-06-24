@@ -92,6 +92,8 @@
             $selectedUpdatePriceChangeCount = $selectedUpdateDiffs->where('price_changed', true)->count();
             $selectedUpdateQuantityChangeCount = $selectedUpdateDiffs->where('quantity_changed', true)->count();
             $selectedUpdateAvailabilityChangeCount = $selectedUpdateDiffs->where('availability_changed', true)->count();
+            $canRunCreateSync = (bool) auth()->user()?->canRunCreateSync();
+            $canRunUpdateSync = (bool) auth()->user()?->canRunUpdateSync();
             $featureFlags = [
                 'CREATE sync' => (bool) config('catalog_sync.create_enabled', true),
                 'UPDATE sync' => (bool) config('catalog_sync.update_enabled', false),
@@ -362,7 +364,7 @@
 
                     @php
                         $createSyncEnabled = (bool) config('catalog_sync.create_enabled', true);
-                        $createSyncButtonDisabled = ! $createSyncEnabled || $selectedCreateCount === 0;
+                        $createSyncButtonDisabled = ! $createSyncEnabled || ! $canRunCreateSync || $selectedCreateCount === 0;
                         $createSyncButtonStyle = $createSyncButtonDisabled
                             ? 'display: inline-flex; align-items: center; justify-content: center; border: 1px solid #d1d5db; color: #6b7280; background: #f3f4f6; padding: 8px 14px; border-radius: 8px; font-weight: 600; font-size: 14px; cursor: not-allowed; opacity: 0.8;'
                             : 'display: inline-flex; align-items: center; justify-content: center; border: 1px solid #16a34a; color: #15803d; background: #ffffff; padding: 8px 14px; border-radius: 8px; font-weight: 600; font-size: 14px; cursor: pointer;';
@@ -371,6 +373,10 @@
                     @if (! $createSyncEnabled)
                         <div class="rounded-md border border-yellow-200 bg-yellow-50 px-3 py-2 text-xs font-medium text-yellow-800 dark:border-yellow-900 dark:bg-yellow-950 dark:text-yellow-200">
                             Manual CREATE sync is disabled by configuration.
+                        </div>
+                    @elseif (! $canRunCreateSync)
+                        <div class="rounded-md border border-yellow-200 bg-yellow-50 px-3 py-2 text-xs font-medium text-yellow-800 dark:border-yellow-900 dark:bg-yellow-950 dark:text-yellow-200">
+                            Only Super Admins can run selected CREATE sync.
                         </div>
                     @endif
 
@@ -404,7 +410,7 @@
 
                     @php
                         $updateSyncEnabled = (bool) config('catalog_sync.update_enabled', false);
-                        $updateSyncButtonDisabled = ! $updateSyncEnabled || $selectedUpdateCount === 0;
+                        $updateSyncButtonDisabled = ! $updateSyncEnabled || ! $canRunUpdateSync || $selectedUpdateCount === 0;
                         $updateSyncButtonStyle = $updateSyncButtonDisabled
                             ? 'display: inline-flex; align-items: center; justify-content: center; border: 1px solid #d1d5db; color: #6b7280; background: #f3f4f6; padding: 8px 14px; border-radius: 8px; font-weight: 600; font-size: 14px; cursor: not-allowed; opacity: 0.8;'
                             : 'display: inline-flex; align-items: center; justify-content: center; border: 1px solid #2563eb; color: #1d4ed8; background: #ffffff; padding: 8px 14px; border-radius: 8px; font-weight: 600; font-size: 14px; cursor: pointer;';
@@ -413,6 +419,10 @@
                     @if (! $updateSyncEnabled)
                         <div class="rounded-md border border-yellow-200 bg-yellow-50 px-3 py-2 text-xs font-medium text-yellow-800 dark:border-yellow-900 dark:bg-yellow-950 dark:text-yellow-200">
                             Manual UPDATE sync is disabled by configuration.
+                        </div>
+                    @elseif (! $canRunUpdateSync)
+                        <div class="rounded-md border border-yellow-200 bg-yellow-50 px-3 py-2 text-xs font-medium text-yellow-800 dark:border-yellow-900 dark:bg-yellow-950 dark:text-yellow-200">
+                            Only Super Admins can run selected UPDATE sync.
                         </div>
                     @endif
 
@@ -615,7 +625,7 @@
                                             type="checkbox"
                                             wire:model.live="selectedSupplierProductIds"
                                             value="{{ $row['supplier_product_id'] }}"
-                                            @disabled($row['sync_action'] !== 'CREATE')
+                                            @disabled(! $canRunCreateSync || $row['sync_action'] !== 'CREATE')
                                             aria-label="Select supplier product {{ $row['supplier_product_id'] }}"
                                             class="rounded border-gray-300 text-primary-600 shadow-sm focus:ring-primary-600 disabled:cursor-not-allowed disabled:opacity-40 dark:border-gray-700 dark:bg-gray-900"
                                         >
@@ -625,7 +635,7 @@
                                             type="checkbox"
                                             wire:model.live="selectedUpdateSupplierProductIds"
                                             value="{{ $row['supplier_product_id'] }}"
-                                            @disabled(! $row['manual_update_eligible'])
+                                            @disabled(! $canRunUpdateSync || ! $row['manual_update_eligible'])
                                             data-update-select-supplier-product-id="{{ $row['supplier_product_id'] }}"
                                             data-update-select-disabled="{{ $row['manual_update_eligible'] ? 'false' : 'true' }}"
                                             aria-label="Select supplier product {{ $row['supplier_product_id'] }} for update"

@@ -21,7 +21,7 @@ class CatalogSyncAdminVisibilityTest extends TestCase
 
     public function test_catalog_sync_preview_renders_effective_feature_flag_statuses(): void
     {
-        $this->actingAsSupplierManager();
+        $this->actingAsCatalogManager();
 
         $this->get(CatalogSyncPreview::getUrl())
             ->assertOk()
@@ -42,7 +42,7 @@ class CatalogSyncAdminVisibilityTest extends TestCase
 
     public function test_catalog_sync_batch_resource_is_read_only_and_visible_to_authorized_admin(): void
     {
-        $this->actingAsSupplierManager();
+        $this->actingAsViewerAuditor();
 
         $batch = $this->catalogSyncBatch();
 
@@ -68,7 +68,7 @@ class CatalogSyncAdminVisibilityTest extends TestCase
 
     public function test_catalog_sync_log_resource_is_read_only_and_displays_audit_values(): void
     {
-        $this->actingAsSupplierManager();
+        $this->actingAsViewerAuditor();
 
         [$batch, $log] = $this->catalogSyncLog();
 
@@ -115,7 +115,7 @@ class CatalogSyncAdminVisibilityTest extends TestCase
             ->assertSee('selected_supplier_offer_id');
     }
 
-    public function test_catalog_sync_admin_visibility_requires_supplier_permission(): void
+    public function test_catalog_sync_admin_visibility_requires_audit_role(): void
     {
         $this->seed(RolesAndPermissionsSeeder::class);
 
@@ -135,7 +135,7 @@ class CatalogSyncAdminVisibilityTest extends TestCase
 
     public function test_catalog_sync_admin_visibility_does_not_modify_products_or_supplier_products(): void
     {
-        $this->actingAsSupplierManager();
+        $this->actingAsViewerAuditor();
 
         $product = Product::factory()->create(['price' => 100, 'quantity' => 4]);
         $supplierProduct = $this->supplierProduct(Supplier::factory()->create(), ['price' => 90, 'quantity' => 7]);
@@ -166,12 +166,24 @@ class CatalogSyncAdminVisibilityTest extends TestCase
         $this->assertFalse((bool) config('catalog_sync.auto_enabled'));
     }
 
-    private function actingAsSupplierManager(): User
+    private function actingAsCatalogManager(): User
     {
         $this->seed(RolesAndPermissionsSeeder::class);
 
-        $user = User::factory()->create();
-        $user->assignRole('manager');
+        $user = User::factory()->create(['role' => User::ROLE_CATALOG_MANAGER]);
+        $user->assignRole(User::ROLE_CATALOG_MANAGER);
+
+        $this->actingAs($user);
+
+        return $user;
+    }
+
+    private function actingAsViewerAuditor(): User
+    {
+        $this->seed(RolesAndPermissionsSeeder::class);
+
+        $user = User::factory()->create(['role' => User::ROLE_VIEWER_AUDITOR]);
+        $user->assignRole(User::ROLE_VIEWER_AUDITOR);
 
         $this->actingAs($user);
 

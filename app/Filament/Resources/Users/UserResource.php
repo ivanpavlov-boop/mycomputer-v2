@@ -25,6 +25,8 @@ use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rules\Password;
+use Illuminate\Validation\ValidationException;
+use Spatie\Permission\Models\Role;
 use UnitEnum;
 
 class UserResource extends Resource
@@ -54,6 +56,12 @@ class UserResource extends Resource
                     TextInput::make('company_name'),
                     TextInput::make('vat_number'),
                     Toggle::make('is_active')->default(true),
+                    Select::make('role')
+                        ->label('Role')
+                        ->options(User::roleOptions())
+                        ->default(User::ROLE_PRODUCT_DATA_ENTRY)
+                        ->required()
+                        ->rule('in:'.implode(',', array_keys(User::roleOptions()))),
                     DateTimePicker::make('last_login_at')->disabled()->dehydrated(false),
                     TextInput::make('password')
                         ->password()
@@ -61,11 +69,6 @@ class UserResource extends Resource
                         ->dehydrated(fn (?string $state): bool => filled($state))
                         ->required(fn (string $operation): bool => $operation === 'create')
                         ->rule(Password::min(8)->mixedCase()->numbers()),
-                    Select::make('roles')
-                        ->relationship('roles', 'name')
-                        ->multiple()
-                        ->preload()
-                        ->searchable(),
                 ]),
             ]),
         ]);
@@ -77,15 +80,19 @@ class UserResource extends Resource
             ->columns([
                 TextColumn::make('name')->searchable()->sortable(),
                 TextColumn::make('email')->searchable()->sortable(),
+                TextColumn::make('role')
+                    ->label('Role')
+                    ->badge()
+                    ->formatStateUsing(fn (?string $state): string => User::roleLabel($state))
+                    ->sortable(),
                 TextColumn::make('phone')->searchable()->toggleable(),
-                TextColumn::make('roles.name')->badge(),
                 IconColumn::make('is_active')->boolean()->sortable(),
                 TextColumn::make('last_login_at')->dateTime()->sortable()->toggleable(),
                 TextColumn::make('addresses_count')->counts('addresses')->label('Addresses'),
                 TextColumn::make('created_at')->dateTime()->sortable(),
             ])
             ->filters([
-                SelectFilter::make('roles')->relationship('roles', 'name')->multiple(),
+                SelectFilter::make('role')->options(User::roleOptions()),
                 SelectFilter::make('is_active')->options([1 => 'Active', 0 => 'Inactive']),
             ])
             ->recordActions([
@@ -119,7 +126,7 @@ class UserResource extends Resource
         return static::canAccessResource()
             && $record instanceof User
             && ! static::isCurrentUser($record)
-            && ! static::isLastAdmin($record);
+            && ! static::isLastActiveSuperAdmin($record);
     }
 
     public static function canDeleteAny(): bool
@@ -131,7 +138,34 @@ class UserResource extends Resource
     {
         return static::canAccessResource()
             && ! static::isCurrentUser($record)
-            && ! static::isLastAdmin($record);
+            && ! static::isLastActiveSuperAdmin($record);
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     *
+     * @throws ValidationException
+     */
+    public static function validateRoleSafety(User $record, array $data): void
+    {
+        $newRole = $data['role'] ?? $record->role;
+        $newActiveState = (bool) ($data['is_active'] ?? $record->is_active);
+
+        if (static::wasLastActiveSuperAdmin($record) && ($newRole !== User::ROLE_SUPER_ADMIN || ! $newActiveState)) {
+            throw ValidationException::withMessages([
+                'role' => 'The last active Super Admin cannot be downgraded or deactivated.',
+            ]);
+        }
+    }
+
+    public static function syncPrimaryRole(User $record): void
+    {
+        if (! $record->role || ! array_key_exists($record->role, User::roleOptions())) {
+            return;
+        }
+
+        Role::findOrCreate($record->role, 'web');
+        $record->syncRoles([$record->role]);
     }
 
     public static function getPages(): array
@@ -148,9 +182,39 @@ class UserResource extends Resource
         return auth()->id() === $record->id;
     }
 
-    private static function isLastAdmin(User $record): bool
+    private static function isLastActiveSuperAdmin(User $record): bool
     {
-        return $record->hasRole('admin')
-            && User::role('admin')->where('is_active', true)->count() <= 1;
+        if (! $record->is_active || $record->primaryRole() !== User::ROLE_SUPER_ADMIN) {
+            return false;
+        }
+
+        return static::activeSuperAdminCount() <= 1;
+    }
+
+    private static function wasLastActiveSuperAdmin(User $record): bool
+    {
+        $originalRole = $record->getOriginal('role');
+        $originalActiveState = (bool) $record->getOriginal('is_active');
+        $wasSuperAdmin = $originalRole === User::ROLE_SUPER_ADMIN
+            || (blank($originalRole) && $record->hasAnyRole([User::ROLE_SUPER_ADMIN, 'admin']));
+
+        return $originalActiveState && $wasSuperAdmin && static::activeSuperAdminCount() <= 1;
+    }
+
+    private static function activeSuperAdminCount(): int
+    {
+        return User::query()
+            ->where('is_active', true)
+            ->where(function ($query): void {
+                $query
+                    ->where('role', User::ROLE_SUPER_ADMIN)
+                    ->orWhereHas('roles', fn ($roles) => $roles->whereIn('name', [User::ROLE_SUPER_ADMIN, 'admin']));
+            })
+            ->count();
+    }
+
+    protected static function canAccessResource(): bool
+    {
+        return (bool) auth()->user()?->canManageUsers();
     }
 }
