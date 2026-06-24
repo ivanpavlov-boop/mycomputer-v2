@@ -111,9 +111,6 @@
                 'Conflict Rows' => $summary['conflict_rows'],
                 'Error Rows' => $summary['error_rows'],
             ];
-            $diffValueClass = fn (bool $changed): string => $changed
-                ? 'font-semibold text-blue-700 dark:text-blue-300'
-                : 'text-gray-700 dark:text-gray-300';
             $delta = fn ($value, bool $moneyValue = false): string => $value === null
                 ? '-'
                 : (($value > 0 ? '+' : '').($moneyValue ? number_format((float) $value, 2).' EUR' : (string) $value));
@@ -665,71 +662,53 @@
                                     <td class="{{ $cell }}">{{ $row['match_confidence'] ?: '-' }}</td>
                                     <td class="{{ $cell }}">{{ $row['sync_action'] }}</td>
                                     <td class="{{ $truncateCell }}" title="{{ $row['sync_reason'] }}">{{ $row['sync_reason'] }}</td>
-                                    <td class="max-w-[34rem] px-3 py-2 align-middle">
+                                    <td class="max-w-[28rem] px-3 py-2 align-middle">
                                         @php
                                             $diff = $row['update_diff'] ?? [];
-                                            $diffItems = [];
+                                            $diffSummaryItems = [];
+                                            $diffDetailItems = [];
 
                                             if (is_array($diff) && ! empty($diff)) {
                                                 if ((bool) ($diff['price_changed'] ?? false)) {
-                                                    $diffItems[] = [
-                                                        'label' => 'Price',
-                                                        'value' => $money($diff['current_price'] ?? null).' -> '.$money($diff['new_price'] ?? null).' ('.$delta($diff['price_change'] ?? null, true).')',
-                                                        'changed' => true,
-                                                    ];
+                                                    $diffSummaryItems[] = 'Price '.$delta($diff['price_change'] ?? null, true);
+                                                    $diffDetailItems[] = 'Price: '.$money($diff['current_price'] ?? null).' -> '.$money($diff['new_price'] ?? null);
                                                 }
 
                                                 if ((bool) ($diff['quantity_changed'] ?? false)) {
-                                                    $diffItems[] = [
-                                                        'label' => 'Qty',
-                                                        'value' => ($diff['current_quantity'] ?? '-').' -> '.($diff['new_quantity'] ?? '-').' ('.$delta($diff['quantity_change'] ?? null).')',
-                                                        'changed' => true,
-                                                    ];
+                                                    $diffSummaryItems[] = 'Qty '.$delta($diff['quantity_change'] ?? null);
+                                                    $diffDetailItems[] = 'Quantity: '.($diff['current_quantity'] ?? '-').' -> '.($diff['new_quantity'] ?? '-');
                                                 }
 
                                                 if ((bool) ($diff['availability_changed'] ?? false)) {
-                                                    $diffItems[] = [
-                                                        'label' => 'Availability',
-                                                        'value' => ($diff['current_availability'] ?? '-').' -> '.($diff['new_availability'] ?? '-'),
-                                                        'changed' => true,
-                                                    ];
+                                                    $diffSummaryItems[] = 'Availability changed';
+                                                    $diffDetailItems[] = 'Availability: '.($diff['current_availability'] ?? '-').' -> '.($diff['new_availability'] ?? '-');
                                                 }
 
                                                 if ((bool) ($diff['supplier_cost_changed'] ?? false)) {
-                                                    $diffItems[] = [
-                                                        'label' => 'Supplier cost',
-                                                        'value' => $money($diff['current_supplier_cost'] ?? null).' -> '.$money($diff['new_supplier_cost'] ?? null),
-                                                        'changed' => true,
-                                                    ];
+                                                    $diffSummaryItems[] = 'Supplier cost changed';
+                                                    $diffDetailItems[] = 'Supplier cost: '.$money($diff['current_supplier_cost'] ?? null).' -> '.$money($diff['new_supplier_cost'] ?? null);
                                                 }
 
                                                 if ((bool) ($diff['selected_supplier_offer_changed'] ?? false)) {
-                                                    $diffItems[] = [
-                                                        'label' => 'Selected offer',
-                                                        'value' => ($diff['current_selected_supplier_offer'] ?? '-').' -> '.($diff['new_selected_supplier_offer'] ?? '-'),
-                                                        'changed' => true,
-                                                    ];
+                                                    $diffSummaryItems[] = 'Offer changed';
+                                                    $diffDetailItems[] = 'Selected offer: '.($diff['current_selected_supplier_offer'] ?? '-').' -> '.($diff['new_selected_supplier_offer'] ?? '-');
                                                 }
                                             }
+
+                                            $diffSummary = implode(' · ', $diffSummaryItems);
+                                            $diffDetails = implode(' | ', $diffDetailItems);
                                         @endphp
 
                                         @if ($row['sync_action'] === 'UPDATE' && is_array($diff) && ! empty($diff))
-                                            @if (filled($diffItems))
-                                                <div
+                                            @if (filled($diffSummary))
+                                                <span
                                                     data-update-diff-preview
                                                     data-update-diff-supplier-product-id="{{ $row['supplier_product_id'] }}"
-                                                    class="flex max-w-[34rem] flex-wrap gap-1 text-xs leading-5"
+                                                    class="inline-flex max-w-[28rem] items-center truncate whitespace-nowrap rounded border border-blue-200 bg-blue-50 px-2 py-0.5 text-xs font-semibold leading-5 text-blue-700 dark:border-blue-900 dark:bg-blue-950 dark:text-blue-300"
+                                                    title="{{ $diffDetails }}"
                                                 >
-                                                    @foreach ($diffItems as $item)
-                                                        <span
-                                                            class="inline-flex max-w-[22rem] items-center gap-1 truncate rounded border border-blue-200 bg-blue-50 px-2 py-0.5 {{ $diffValueClass((bool) $item['changed']) }} dark:border-blue-900 dark:bg-blue-950"
-                                                            title="{{ $item['label'].': '.$item['value'] }}"
-                                                        >
-                                                            <span class="font-semibold">{{ $item['label'] }}:</span>
-                                                            <span class="truncate">{{ $item['value'] }}</span>
-                                                        </span>
-                                                    @endforeach
-                                                </div>
+                                                    <span class="truncate">{{ $diffSummary }}</span>
+                                                </span>
                                             @else
                                                 <span
                                                     data-update-diff-preview
