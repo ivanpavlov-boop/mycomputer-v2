@@ -84,6 +84,19 @@ class AdminRoleManagementTest extends TestCase
         $this->get(UserResource::getUrl('edit', ['record' => $target]))->assertForbidden();
     }
 
+    public function test_regular_users_without_admin_role_cannot_access_admin_panel(): void
+    {
+        $customer = User::factory()->create(['role' => null, 'is_active' => true]);
+        $customer->assignRole('customer');
+
+        $this->assertNull($customer->primaryRole());
+        $this->assertFalse($customer->canAccessPanel(filament()->getPanel('admin')));
+        $this->assertFalse($customer->canManageUsers());
+        $this->assertFalse($customer->canViewCatalogSync());
+        $this->assertFalse($customer->canRunCreateSync());
+        $this->assertFalse($customer->canRunUpdateSync());
+    }
+
     public function test_last_active_super_admin_cannot_be_downgraded_or_deactivated(): void
     {
         $superAdmin = $this->superAdmin();

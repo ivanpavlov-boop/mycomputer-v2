@@ -14,8 +14,32 @@ return new class extends Migration
             $table->string('role')->nullable()->after('is_active')->index();
         });
 
+        foreach ([
+            'admin' => User::ROLE_SUPER_ADMIN,
+            'manager' => User::ROLE_CATALOG_MANAGER,
+            'support' => User::ROLE_ORDER_MANAGER,
+        ] as $legacyRole => $primaryRole) {
+            $roleId = DB::table('roles')->where('name', $legacyRole)->value('id');
+
+            if (! $roleId) {
+                continue;
+            }
+
+            DB::table('users')
+                ->whereNull('role')
+                ->whereIn('id', function ($query) use ($roleId): void {
+                    $query
+                        ->select('model_id')
+                        ->from('model_has_roles')
+                        ->where('role_id', $roleId)
+                        ->where('model_type', User::class);
+                })
+                ->update(['role' => $primaryRole]);
+        }
+
         DB::table('users')
             ->whereNull('role')
+            ->where('email', 'admin@mycomputer.bg')
             ->update(['role' => User::ROLE_SUPER_ADMIN]);
     }
 
