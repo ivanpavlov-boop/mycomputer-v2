@@ -9,7 +9,6 @@ use Database\Seeders\RolesAndPermissionsSeeder;
 use Filament\Auth\Notifications\ResetPassword as FilamentResetPasswordNotification;
 use Filament\Auth\Pages\PasswordReset\RequestPasswordReset;
 use Filament\Auth\Pages\PasswordReset\ResetPassword;
-use Illuminate\Auth\Notifications\ResetPassword as LaravelResetPasswordNotification;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Notification;
@@ -145,7 +144,9 @@ class AdminPasswordRecoveryTest extends TestCase
         $superAdmin = $this->superAdmin();
         $target = $this->adminUser(User::ROLE_PRODUCT_DATA_ENTRY, [
             'email' => 'managed-user-reset@example.test',
+            'password' => Hash::make('Password1'),
         ]);
+        $resetUrl = null;
 
         $this->actingAs($superAdmin);
 
@@ -155,7 +156,38 @@ class AdminPasswordRecoveryTest extends TestCase
             ->callTableAction('sendPasswordResetLink', $target)
             ->assertHasNoTableActionErrors();
 
-        Notification::assertSentTo($target, LaravelResetPasswordNotification::class);
+        Notification::assertSentTo($target, FilamentResetPasswordNotification::class, function (FilamentResetPasswordNotification $notification) use (&$resetUrl): bool {
+            $resetUrl = $notification->url;
+
+            return str_contains((string) $resetUrl, '/admin/password-reset/reset')
+                && str_contains((string) $resetUrl, 'token=')
+                && str_contains((string) $resetUrl, 'email=');
+        });
+
+        $this->assertNotNull($resetUrl);
+        auth()->guard('web')->logout();
+        $this->flushSession();
+
+        $this->get($resetUrl)->assertOk();
+
+        $query = [];
+        parse_str((string) parse_url($resetUrl, PHP_URL_QUERY), $query);
+
+        Livewire::test(ResetPassword::class, [
+            'email' => $query['email'] ?? null,
+            'token' => $query['token'] ?? null,
+        ])
+            ->fillForm([
+                'password' => 'Newpass1',
+                'passwordConfirmation' => 'Newpass1',
+            ])
+            ->call('resetPassword');
+
+        $target->refresh();
+
+        $this->assertTrue(Hash::check('Newpass1', $target->password));
+        $this->assertFalse(Hash::check('Password1', $target->password));
+        $this->assertSame(User::ROLE_PRODUCT_DATA_ENTRY, $target->role);
     }
 
     public function test_non_super_admin_and_inactive_users_cannot_send_admin_reset_links(): void

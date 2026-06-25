@@ -10,6 +10,8 @@ use App\Models\User;
 use BackedEnum;
 use Filament\Actions\Action;
 use Filament\Actions\DeleteAction;
+use Filament\Auth\Notifications\ResetPassword as FilamentResetPasswordNotification;
+use Filament\Facades\Filament;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
@@ -24,6 +26,8 @@ use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
+use Illuminate\Auth\Events\PasswordResetLinkSent;
+use Illuminate\Contracts\Auth\CanResetPassword;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Password as PasswordBroker;
@@ -173,7 +177,24 @@ class UserResource extends Resource
         }
 
         try {
-            $status = PasswordBroker::sendResetLink(['email' => $record->email]);
+            $adminPanel = Filament::getPanel('admin');
+            $status = PasswordBroker::broker($adminPanel->getAuthPasswordBroker())->sendResetLink(
+                ['email' => $record->email],
+                function (CanResetPassword $user, #[\SensitiveParameter] string $token) use ($adminPanel): void {
+                    if (! $user instanceof User || ! $user->isActiveAdminAccount() || ! $user->canAccessPanel($adminPanel)) {
+                        return;
+                    }
+
+                    $notification = app(FilamentResetPasswordNotification::class, ['token' => $token]);
+                    $notification->url = $adminPanel->getResetPasswordUrl($token, $user);
+
+                    $user->notify($notification);
+
+                    if (class_exists(PasswordResetLinkSent::class)) {
+                        event(new PasswordResetLinkSent($user));
+                    }
+                },
+            );
         } catch (Throwable $exception) {
             report($exception);
 
