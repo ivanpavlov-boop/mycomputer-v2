@@ -4,8 +4,10 @@ namespace Tests\Feature;
 
 use App\Filament\Pages\CatalogSyncPreview;
 use App\Filament\Resources\Users\Pages\EditUser;
+use App\Filament\Resources\Users\Pages\ListUsers;
 use App\Filament\Resources\Users\UserResource;
 use App\Models\CatalogSyncBatch;
+use App\Models\Order;
 use App\Models\Product;
 use App\Models\Supplier;
 use App\Models\SupplierProduct;
@@ -123,6 +125,94 @@ class AdminRoleManagementTest extends TestCase
         $this->assertTrue($superAdmin->fresh()->is_active);
     }
 
+    public function test_super_admin_can_soft_delete_another_non_super_admin_user_without_removing_history(): void
+    {
+        $superAdmin = $this->superAdmin();
+        $target = User::factory()->create([
+            'role' => User::ROLE_PRODUCT_EDITOR,
+            'email' => 'soft-delete-target@example.test',
+            'is_active' => true,
+        ]);
+        $target->assignRole(User::ROLE_PRODUCT_EDITOR);
+        $order = Order::query()->create(array_merge($this->orderPayload('soft-delete-target@example.test'), [
+            'user_id' => $target->id,
+        ]));
+
+        $this->actingAs($superAdmin);
+
+        Livewire::test(ListUsers::class)
+            ->assertTableActionExists('delete', null, $target)
+            ->callTableAction('delete', $target)
+            ->assertHasNoTableActionErrors();
+
+        $this->assertSoftDeleted('users', ['id' => $target->id]);
+        $this->assertFalse(User::query()->whereKey($target)->exists());
+        $this->assertDatabaseHas('orders', [
+            'id' => $order->id,
+            'user_id' => $target->id,
+        ]);
+    }
+
+    public function test_non_super_admin_cannot_delete_users(): void
+    {
+        $catalogManager = User::factory()->create(['role' => User::ROLE_CATALOG_MANAGER]);
+        $catalogManager->assignRole(User::ROLE_CATALOG_MANAGER);
+        $target = User::factory()->create(['role' => User::ROLE_PRODUCT_EDITOR]);
+
+        $this->actingAs($catalogManager);
+
+        $this->assertFalse(UserResource::canDelete($target));
+        $this->assertFalse(UserResource::canDeleteAny());
+    }
+
+    public function test_deleted_user_cannot_access_admin_or_catalog_sync_actions(): void
+    {
+        $activeSuperAdmin = $this->superAdmin();
+        $deletedSuperAdmin = User::factory()->create([
+            'role' => User::ROLE_SUPER_ADMIN,
+            'is_active' => true,
+        ]);
+        $deletedSuperAdmin->assignRole(User::ROLE_SUPER_ADMIN);
+
+        $deletedSuperAdmin->delete();
+        $deletedSuperAdmin = User::withTrashed()->findOrFail($deletedSuperAdmin->id);
+
+        $this->assertTrue($deletedSuperAdmin->trashed());
+        $this->assertFalse($deletedSuperAdmin->canAccessPanel(filament()->getPanel('admin')));
+        $this->assertFalse($deletedSuperAdmin->canManageUsers());
+        $this->assertFalse($deletedSuperAdmin->canViewCatalogSync());
+        $this->assertFalse($deletedSuperAdmin->canRunCreateSync());
+        $this->assertFalse($deletedSuperAdmin->canRunUpdateSync());
+
+        $this->actingAs($activeSuperAdmin);
+
+        $this->assertTrue(CatalogSyncPreview::canAccess());
+    }
+
+    public function test_super_admin_cannot_delete_self_and_last_super_admin_is_protected(): void
+    {
+        $firstSuperAdmin = $this->superAdmin();
+        $secondSuperAdmin = User::factory()->create([
+            'role' => User::ROLE_SUPER_ADMIN,
+            'is_active' => true,
+        ]);
+        $secondSuperAdmin->assignRole(User::ROLE_SUPER_ADMIN);
+
+        $this->actingAs($firstSuperAdmin);
+
+        $this->assertFalse(UserResource::canDelete($firstSuperAdmin));
+        $this->assertTrue(UserResource::canDelete($secondSuperAdmin));
+
+        $secondSuperAdmin->delete();
+
+        $this->assertSoftDeleted('users', ['id' => $secondSuperAdmin->id]);
+        $this->assertFalse(UserResource::canDelete($firstSuperAdmin->refresh()));
+        $this->assertSame(1, User::query()
+            ->where('role', User::ROLE_SUPER_ADMIN)
+            ->where('is_active', true)
+            ->count());
+    }
+
     public function test_catalog_sync_permissions_allow_preview_but_block_writes_for_viewer_auditor(): void
     {
         $viewer = User::factory()->create(['role' => User::ROLE_VIEWER_AUDITOR]);
@@ -207,5 +297,29 @@ class AdminRoleManagementTest extends TestCase
             'received_at' => now(),
             'status' => 'new',
         ], $overrides));
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function orderPayload(string $email): array
+    {
+        return [
+            'order_number' => 'MC'.fake()->unique()->numerify('######'),
+            'customer_email' => $email,
+            'customer_phone' => '0888123456',
+            'customer_name' => 'Ivan Petrov',
+            'billing_address' => 'Sofia',
+            'shipping_address' => 'Sofia',
+            'subtotal' => 100,
+            'shipping_price' => 5,
+            'discount_total' => 0,
+            'grand_total' => 105,
+            'payment_method' => 'cash_on_delivery',
+            'payment_status' => 'pending',
+            'shipping_method' => 'office',
+            'shipping_status' => 'pending',
+            'status' => 'pending',
+        ];
     }
 }

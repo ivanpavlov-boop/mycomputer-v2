@@ -170,6 +170,20 @@ class AuthApiTest extends TestCase
         ])->assertUnprocessable();
     }
 
+    public function test_deleted_user_login_is_blocked(): void
+    {
+        $user = User::factory()->create([
+            'password' => Hash::make('Password1'),
+            'is_active' => true,
+        ]);
+        $user->delete();
+
+        $this->postJson('/api/v1/auth/login', [
+            'email' => $user->email,
+            'password' => 'Password1',
+        ])->assertUnprocessable();
+    }
+
     public function test_order_history_returns_only_own_orders(): void
     {
         $user = User::factory()->create(['email' => 'client@example.com']);

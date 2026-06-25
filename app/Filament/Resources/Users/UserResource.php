@@ -9,6 +9,7 @@ use App\Filament\Resources\Users\Pages\ListUsers;
 use App\Models\User;
 use BackedEnum;
 use Filament\Actions\Action;
+use Filament\Actions\DeleteAction;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
@@ -118,7 +119,18 @@ class UserResource extends Resource
                     ->visible(fn (User $record): bool => $record->is_active && static::canDeactivate($record))
                     ->requiresConfirmation()
                     ->action(fn (User $record) => $record->update(['is_active' => false])),
+                static::deleteUserAction(),
             ]);
+    }
+
+    public static function deleteUserAction(): DeleteAction
+    {
+        return DeleteAction::make()
+            ->label('Delete user')
+            ->modalHeading('Delete user')
+            ->modalDescription('This will remove the user from active admin access but keep historical records.')
+            ->modalSubmitActionLabel('Delete user')
+            ->visible(fn (User $record): bool => static::canDelete($record));
     }
 
     public static function canDelete(Model $record): bool
