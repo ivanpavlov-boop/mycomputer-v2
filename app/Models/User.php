@@ -9,6 +9,7 @@ use Filament\Panel;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
@@ -17,7 +18,7 @@ use Spatie\Permission\Traits\HasRoles;
 class User extends Authenticatable implements FilamentUser
 {
     /** @use HasFactory<UserFactory> */
-    use HasApiTokens, HasFactory, HasRoles, Notifiable;
+    use HasApiTokens, HasFactory, HasRoles, Notifiable, SoftDeletes;
 
     public const ROLE_SUPER_ADMIN = 'super_admin';
 
@@ -107,6 +108,7 @@ class User extends Authenticatable implements FilamentUser
             'email_verified_at' => 'datetime',
             'is_active' => 'boolean',
             'last_login_at' => 'datetime',
+            'deleted_at' => 'datetime',
             'password' => 'hashed',
         ];
     }
@@ -183,7 +185,7 @@ class User extends Authenticatable implements FilamentUser
 
     public function canAccessPanel(Panel $panel): bool
     {
-        return $this->is_active && (
+        return $this->isActiveAdminAccount() && (
             in_array($this->primaryRole(), self::ADMIN_ROLES, true)
             || $this->hasAnyRole(array_keys(self::LEGACY_ROLE_MAP))
         );
@@ -227,19 +229,24 @@ class User extends Authenticatable implements FilamentUser
         return $this->hasPrimaryRole(self::ROLE_SUPER_ADMIN);
     }
 
+    public function isActiveAdminAccount(): bool
+    {
+        return $this->is_active && ! $this->trashed();
+    }
+
     public function canManageUsers(): bool
     {
-        return $this->isSuperAdmin();
+        return $this->isActiveAdminAccount() && $this->isSuperAdmin();
     }
 
     public function canManageRoles(): bool
     {
-        return $this->isSuperAdmin();
+        return $this->isActiveAdminAccount() && $this->isSuperAdmin();
     }
 
     public function canViewCatalogSync(): bool
     {
-        return $this->hasPrimaryRole([
+        return $this->isActiveAdminAccount() && $this->hasPrimaryRole([
             self::ROLE_SUPER_ADMIN,
             self::ROLE_CATALOG_MANAGER,
             self::ROLE_VIEWER_AUDITOR,
@@ -248,17 +255,17 @@ class User extends Authenticatable implements FilamentUser
 
     public function canRunCreateSync(): bool
     {
-        return $this->isSuperAdmin();
+        return $this->isActiveAdminAccount() && $this->isSuperAdmin();
     }
 
     public function canRunUpdateSync(): bool
     {
-        return $this->isSuperAdmin();
+        return $this->isActiveAdminAccount() && $this->isSuperAdmin();
     }
 
     public function canViewAuditLogs(): bool
     {
-        return $this->hasPrimaryRole([
+        return $this->isActiveAdminAccount() && $this->hasPrimaryRole([
             self::ROLE_SUPER_ADMIN,
             self::ROLE_VIEWER_AUDITOR,
         ]);
@@ -266,7 +273,7 @@ class User extends Authenticatable implements FilamentUser
 
     public function canManageProducts(): bool
     {
-        return $this->hasPrimaryRole([
+        return $this->isActiveAdminAccount() && $this->hasPrimaryRole([
             self::ROLE_SUPER_ADMIN,
             self::ROLE_CATALOG_MANAGER,
             self::ROLE_PRODUCT_EDITOR,
@@ -278,7 +285,7 @@ class User extends Authenticatable implements FilamentUser
 
     public function canEditProductContent(): bool
     {
-        return $this->hasPrimaryRole([
+        return $this->isActiveAdminAccount() && $this->hasPrimaryRole([
             self::ROLE_SUPER_ADMIN,
             self::ROLE_CATALOG_MANAGER,
             self::ROLE_PRODUCT_EDITOR,
@@ -288,7 +295,7 @@ class User extends Authenticatable implements FilamentUser
 
     public function canEditProductPrices(): bool
     {
-        return $this->hasPrimaryRole([
+        return $this->isActiveAdminAccount() && $this->hasPrimaryRole([
             self::ROLE_SUPER_ADMIN,
             self::ROLE_CATALOG_MANAGER,
             self::ROLE_PRICING_MANAGER,
@@ -297,7 +304,7 @@ class User extends Authenticatable implements FilamentUser
 
     public function canEditProductStock(): bool
     {
-        return $this->hasPrimaryRole([
+        return $this->isActiveAdminAccount() && $this->hasPrimaryRole([
             self::ROLE_SUPER_ADMIN,
             self::ROLE_CATALOG_MANAGER,
             self::ROLE_INVENTORY_MANAGER,
@@ -306,7 +313,7 @@ class User extends Authenticatable implements FilamentUser
 
     public function canEditProductSeo(): bool
     {
-        return $this->hasPrimaryRole([
+        return $this->isActiveAdminAccount() && $this->hasPrimaryRole([
             self::ROLE_SUPER_ADMIN,
             self::ROLE_CATALOG_MANAGER,
             self::ROLE_PRODUCT_EDITOR,
@@ -316,7 +323,7 @@ class User extends Authenticatable implements FilamentUser
 
     public function canApproveProducts(): bool
     {
-        return $this->hasPrimaryRole([
+        return $this->isActiveAdminAccount() && $this->hasPrimaryRole([
             self::ROLE_SUPER_ADMIN,
             self::ROLE_CATALOG_MANAGER,
         ]);
@@ -324,7 +331,7 @@ class User extends Authenticatable implements FilamentUser
 
     public function canPublishProducts(): bool
     {
-        return $this->hasPrimaryRole([
+        return $this->isActiveAdminAccount() && $this->hasPrimaryRole([
             self::ROLE_SUPER_ADMIN,
             self::ROLE_CATALOG_MANAGER,
         ]);
