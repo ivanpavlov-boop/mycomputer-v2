@@ -701,7 +701,7 @@ Account API:
 - registration and login return a Sanctum token
 - logout revokes API tokens
 - inactive users cannot log in
-- password reset uses Laravel's password broker
+- password reset uses Laravel's password broker and one-time reset tokens
 - password changes revoke API tokens
 - account order history is restricted to orders matching the authenticated user email
 
@@ -754,7 +754,8 @@ Filament access:
 
 - `User::canAccessPanel()` allows active users with `admin`, `manager` or `support`.
 - Filament resources exist for users, roles and permissions.
-- Users can be activated/deactivated, assigned roles and reset from the admin panel.
+- Users can be activated/deactivated and assigned roles from the admin panel.
+- Super Admins can send password reset links to active users; plaintext passwords are not displayed, emailed or logged.
 - Major Filament resources enforce Spatie permissions through resource authorization.
 - Laravel policies map catalog, order, customer, supplier, import, user and role models to their matching permissions.
 
@@ -780,6 +781,8 @@ Current hardening rules:
 - Admin users cannot delete or deactivate themselves.
 - The last active admin cannot be deleted or deactivated.
 - Default roles cannot be deleted from Filament.
+- Password reset links use Laravel's broker token table, expiration and one-time-use semantics.
+- Inactive and soft-deleted users cannot request usable reset links or reset passwords.
 - Password changes and password resets revoke API tokens.
 - Inactive users cannot log in.
 

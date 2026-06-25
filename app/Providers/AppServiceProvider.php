@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Auth\ActiveUserProvider;
 use App\Events\OrderCancelled;
 use App\Events\OrderCreated;
 use App\Events\OrderPaymentStatusChanged;
@@ -85,6 +86,7 @@ use App\Services\Search\MeilisearchSearchService;
 use App\Support\Api\ApiCache;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\RateLimiter;
@@ -116,6 +118,11 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        Auth::provider('active_eloquent', fn ($app, array $config): ActiveUserProvider => new ActiveUserProvider(
+            $app['hash'],
+            $config['model'],
+        ));
+
         if (str_starts_with((string) config('app.url'), 'https://')) {
             URL::forceScheme('https');
         }
