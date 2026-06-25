@@ -41,6 +41,23 @@ Set `CATALOG_SYNC_CREATE_ENABLED=false` for an emergency stop of manual selected
 
 After deploy, admins can confirm the effective values in the read-only Catalog Sync feature flag panel on Catalog Sync Preview. Do not change real `.env` values through the admin panel; the panel is visibility only. Catalog Sync Batches and Catalog Sync Logs are also visible in Filament as read-only audit history.
 
+## Password Reset Mail
+
+Admin password recovery uses Laravel's password broker and queued mail/notification delivery. Configure VPS mail settings before relying on reset links:
+
+```dotenv
+MAIL_MAILER=smtp
+MAIL_HOST=
+MAIL_PORT=587
+MAIL_USERNAME=
+MAIL_PASSWORD=
+MAIL_ENCRYPTION=tls
+MAIL_FROM_ADDRESS=
+MAIL_FROM_NAME="${APP_NAME}"
+```
+
+Do not hard-code mail credentials in source control. If mail delivery fails, the admin action reports the failure without exposing tokens, passwords or mail credentials.
+
 ## Safe VPS Deploy Command
 
 ```bash

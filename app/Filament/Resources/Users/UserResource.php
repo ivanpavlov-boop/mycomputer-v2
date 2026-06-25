@@ -14,6 +14,7 @@ use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
+use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Section;
@@ -25,9 +26,11 @@ use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Password as PasswordBroker;
 use Illuminate\Validation\Rules\Password;
 use Illuminate\Validation\ValidationException;
 use Spatie\Permission\Models\Role;
+use Throwable;
 use UnitEnum;
 
 class UserResource extends Resource
@@ -97,18 +100,15 @@ class UserResource extends Resource
                 SelectFilter::make('is_active')->options([1 => 'Active', 0 => 'Inactive']),
             ])
             ->recordActions([
-                Action::make('resetPassword')
-                    ->label('Reset password')
-                    ->icon('heroicon-o-key')
-                    ->schema([
-                        TextInput::make('password')
-                            ->password()
-                            ->required()
-                            ->confirmed()
-                            ->rule(Password::min(8)->mixedCase()->numbers()),
-                        TextInput::make('password_confirmation')->password()->required(),
-                    ])
-                    ->action(fn (User $record, array $data) => $record->update(['password' => $data['password']])),
+                Action::make('sendPasswordResetLink')
+                    ->label('Send password reset link')
+                    ->icon('heroicon-o-envelope')
+                    ->requiresConfirmation()
+                    ->modalHeading('Send password reset link')
+                    ->modalDescription('A secure password reset link will be emailed to the active user. Plaintext passwords are never shown or emailed.')
+                    ->modalSubmitActionLabel('Send reset link')
+                    ->visible(fn (User $record): bool => static::canSendPasswordResetLink($record))
+                    ->action(fn (User $record) => static::sendPasswordResetLink($record)),
                 Action::make('activate')
                     ->icon('heroicon-o-check-circle')
                     ->visible(fn (User $record): bool => ! $record->is_active)
@@ -151,6 +151,52 @@ class UserResource extends Resource
         return static::canAccessResource()
             && ! static::isCurrentUser($record)
             && ! static::isLastActiveSuperAdmin($record);
+    }
+
+    public static function canSendPasswordResetLink(User $record): bool
+    {
+        return static::canAccessResource()
+            && $record->is_active
+            && ! $record->trashed();
+    }
+
+    public static function sendPasswordResetLink(User $record): void
+    {
+        if (! static::canSendPasswordResetLink($record)) {
+            Notification::make()
+                ->title('Password reset link was not sent')
+                ->body('Only active users can receive password reset links.')
+                ->danger()
+                ->send();
+
+            return;
+        }
+
+        try {
+            $status = PasswordBroker::sendResetLink(['email' => $record->email]);
+        } catch (Throwable $exception) {
+            report($exception);
+
+            Notification::make()
+                ->title('Password reset link could not be sent')
+                ->body('Check the mail configuration and try again.')
+                ->danger()
+                ->send();
+
+            return;
+        }
+
+        $notification = Notification::make()
+            ->title($status === PasswordBroker::RESET_LINK_SENT ? 'Password reset link sent' : 'Password reset link was not sent')
+            ->body($status === PasswordBroker::RESET_LINK_SENT ? 'The user will receive a secure password reset link by email.' : __($status));
+
+        if ($status === PasswordBroker::RESET_LINK_SENT) {
+            $notification->success();
+        } else {
+            $notification->danger();
+        }
+
+        $notification->send();
     }
 
     /**
