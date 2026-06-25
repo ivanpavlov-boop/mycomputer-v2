@@ -53,6 +53,30 @@ class AdminPasswordRecoveryTest extends TestCase
         $this->assertDatabaseHas('password_reset_tokens', ['email' => $admin->email]);
     }
 
+    public function test_password_broker_generates_filament_admin_reset_url_for_active_admin(): void
+    {
+        Notification::fake();
+
+        $admin = $this->adminUser(User::ROLE_PRODUCT_EDITOR, [
+            'email' => 'broker-admin-reset@example.test',
+        ]);
+        $resetUrl = null;
+
+        $status = Password::broker('users')->sendResetLink(['email' => $admin->email]);
+
+        $this->assertSame(Password::RESET_LINK_SENT, $status);
+        Notification::assertSentTo($admin, FilamentResetPasswordNotification::class, function (FilamentResetPasswordNotification $notification) use (&$resetUrl, $admin): bool {
+            $resetUrl = $notification->url;
+
+            return str_starts_with((string) $resetUrl, config('app.url').'/admin/password-reset/reset')
+                && str_contains((string) $resetUrl, 'token=')
+                && str_contains((string) $resetUrl, 'email='.urlencode($admin->email));
+        });
+
+        $this->assertNotNull($resetUrl);
+        $this->assertSame('filament.admin.auth.password-reset.reset', app('router')->getRoutes()->match(request()->create($resetUrl))->getName());
+    }
+
     public function test_inactive_admin_does_not_receive_or_use_password_reset_link(): void
     {
         Notification::fake();

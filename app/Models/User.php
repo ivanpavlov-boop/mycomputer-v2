@@ -4,6 +4,8 @@ namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Database\Factories\UserFactory;
+use Filament\Auth\Notifications\ResetPassword as FilamentResetPasswordNotification;
+use Filament\Facades\Filament;
 use Filament\Models\Contracts\FilamentUser;
 use Filament\Panel;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -232,6 +234,20 @@ class User extends Authenticatable implements FilamentUser
     public function isActiveAdminAccount(): bool
     {
         return $this->is_active && ! $this->trashed();
+    }
+
+    public function sendPasswordResetNotification(#[\SensitiveParameter] $token): void
+    {
+        $adminPanel = Filament::getPanel('admin');
+
+        if (! $this->isActiveAdminAccount() || ! $this->canAccessPanel($adminPanel)) {
+            return;
+        }
+
+        $notification = app(FilamentResetPasswordNotification::class, ['token' => $token]);
+        $notification->url = $adminPanel->getResetPasswordUrl($token, $this);
+
+        $this->notify($notification);
     }
 
     public function canManageUsers(): bool
