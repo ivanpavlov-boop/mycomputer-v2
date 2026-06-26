@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Filament\Pages\CatalogSyncPreview;
 use App\Filament\Resources\Products\ProductResource;
 use App\Models\AttributeGroup;
 use App\Models\Category;
@@ -12,6 +13,7 @@ use App\Support\Localization\Locales;
 use App\Support\Seo\HreflangLinks;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Route;
 use Tests\TestCase;
 
 class MultilingualFoundationTest extends TestCase
@@ -27,6 +29,41 @@ class MultilingualFoundationTest extends TestCase
         $this->assertSame(['bg', 'en'], Locales::codes());
         $this->assertSame('Български', config('locales.supported.bg.label'));
         $this->assertSame('English', config('locales.supported.en.label'));
+    }
+
+    public function test_default_and_english_storefront_entrypoints_render_with_expected_locales(): void
+    {
+        $this
+            ->get('/')
+            ->assertOk()
+            ->assertHeader('Content-Language', 'bg')
+            ->assertSee('<html lang="bg"', false);
+
+        $this
+            ->get('/en')
+            ->assertOk()
+            ->assertHeader('Content-Language', 'en')
+            ->assertSee('<html lang="en"', false);
+    }
+
+    public function test_admin_password_reset_and_catalog_sync_routes_are_not_affected_by_en_entrypoint(): void
+    {
+        $this->assertTrue(Route::has('storefront.en'));
+        $this->assertTrue(Route::has('filament.admin.auth.password-reset.request'));
+        $this->assertTrue(Route::has('filament.admin.auth.password-reset.reset'));
+
+        $this
+            ->get(route('filament.admin.auth.password-reset.request'))
+            ->assertOk();
+
+        $this->actingAsSuperAdmin();
+
+        $this
+            ->get(CatalogSyncPreview::getUrl())
+            ->assertOk();
+
+        $this->assertFalse((bool) config('catalog_sync.sync_all_enabled'));
+        $this->assertFalse((bool) config('catalog_sync.auto_enabled'));
     }
 
     public function test_existing_product_and_category_content_remains_bg_fallback(): void
@@ -182,6 +219,21 @@ class MultilingualFoundationTest extends TestCase
 
         $user = User::factory()->create();
         $user->assignRole('manager');
+
+        $this->actingAs($user);
+
+        return $user;
+    }
+
+    private function actingAsSuperAdmin(): User
+    {
+        $this->seed(RolesAndPermissionsSeeder::class);
+
+        $user = User::factory()->create([
+            'role' => User::ROLE_SUPER_ADMIN,
+            'is_active' => true,
+        ]);
+        $user->assignRole(User::ROLE_SUPER_ADMIN);
 
         $this->actingAs($user);
 

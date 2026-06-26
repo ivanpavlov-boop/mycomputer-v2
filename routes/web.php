@@ -8,12 +8,27 @@ use App\Services\Content\SitemapService;
 use App\Services\Csv\CsvImportService;
 use App\Services\Csv\CsvMappingService;
 use App\Services\Storage\StorageSecurityService;
+use App\Support\Localization\Locales;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
-    return view('welcome');
+    $locale = Locales::default();
+
+    app()->setLocale($locale);
+
+    return response()
+        ->view('welcome')
+        ->header('Content-Language', $locale);
 });
+
+Route::get('/en', function () {
+    app()->setLocale('en');
+
+    return response()
+        ->view('welcome')
+        ->header('Content-Language', 'en');
+})->name('storefront.en');
 
 Route::middleware(['auth', 'can:manage imports'])->group(function (): void {
     Route::get('/admin/csv/exports/{csvExportJob}/download', function (CsvExportJob $csvExportJob, CsvMappingService $mappingService, StorageSecurityService $storageSecurity) {
