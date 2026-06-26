@@ -175,8 +175,8 @@ class UserResource extends Resource
     {
         if (! static::canSendPasswordResetLink($record)) {
             Notification::make()
-                ->title('Password reset link was not sent')
-                ->body('Only active users can receive password reset links.')
+                ->title('Линкът за смяна на парола не беше изпратен')
+                ->body('Само активни потребители могат да получат линк за смяна на парола.')
                 ->danger()
                 ->send();
 
@@ -191,8 +191,8 @@ class UserResource extends Resource
             report($exception);
 
             Notification::make()
-                ->title('Password reset link could not be sent')
-                ->body('Check the mail configuration and try again.')
+                ->title('Линкът за смяна на парола не можа да бъде изпратен')
+                ->body('Проверете настройките за имейл и опитайте отново.')
                 ->danger()
                 ->send();
 
@@ -200,8 +200,8 @@ class UserResource extends Resource
         }
 
         $notification = Notification::make()
-            ->title($status === PasswordBroker::RESET_LINK_SENT ? 'Password reset link sent' : 'Password reset link was not sent')
-            ->body($status === PasswordBroker::RESET_LINK_SENT ? 'The user will receive a secure password reset link by email.' : __($status));
+            ->title($status === PasswordBroker::RESET_LINK_SENT ? 'Линкът за смяна на парола е изпратен' : 'Линкът за смяна на парола не беше изпратен')
+            ->body($status === PasswordBroker::RESET_LINK_SENT ? 'Ако потребителят е активен и има право на достъп, ще получи имейл с линк за смяна на парола.' : __($status));
 
         if ($status === PasswordBroker::RESET_LINK_SENT) {
             $notification->success();
