@@ -2,8 +2,11 @@
 
 namespace Tests\Feature;
 
+use App\Filament\Resources\Brands\BrandResource;
 use App\Filament\Resources\Categories\CategoryResource;
 use App\Filament\Resources\Orders\OrderResource;
+use App\Filament\Resources\ProductAttributes\ProductAttributeResource;
+use App\Filament\Resources\ProductQualityFlags\ProductQualityFlagResource;
 use App\Filament\Resources\Products\ProductResource;
 use App\Filament\Resources\Roles\RoleResource;
 use App\Filament\Resources\Users\UserResource;
@@ -47,6 +50,28 @@ class FilamentAuthorizationTest extends TestCase
         $this->actingAs($support);
         $this->assertFalse(ProductResource::canViewAny());
         $this->assertTrue(OrderResource::canViewAny());
+    }
+
+    public function test_super_admin_primary_role_can_view_core_catalog_resources_without_synced_permissions(): void
+    {
+        $superAdmin = User::factory()->create([
+            'role' => User::ROLE_SUPER_ADMIN,
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($superAdmin);
+
+        $this->assertTrue(ProductResource::canViewAny());
+        $this->assertTrue(ProductResource::shouldRegisterNavigation());
+        $this->assertTrue(CategoryResource::canViewAny());
+        $this->assertTrue(CategoryResource::shouldRegisterNavigation());
+        $this->assertTrue(BrandResource::canViewAny());
+        $this->assertTrue(BrandResource::shouldRegisterNavigation());
+        $this->assertTrue(ProductAttributeResource::canViewAny());
+        $this->assertTrue(ProductAttributeResource::shouldRegisterNavigation());
+        $this->assertTrue(ProductQualityFlagResource::canViewAny());
+        $this->assertTrue(ProductQualityFlagResource::shouldRegisterNavigation());
+        $this->assertTrue($superAdmin->can('update', new Product));
     }
 
     public function test_policies_use_permissions(): void
