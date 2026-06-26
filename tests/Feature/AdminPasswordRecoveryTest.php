@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Filament\Pages\Auth\ResetAdminPassword as ResetPassword;
+use App\Filament\Pages\CatalogSyncPreview;
 use App\Filament\Resources\Users\Pages\CreateUser;
 use App\Filament\Resources\Users\Pages\EditUser;
 use App\Filament\Resources\Users\Pages\ListUsers;
@@ -11,6 +12,7 @@ use App\Models\User;
 use App\Notifications\AdminPasswordResetNotification;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Filament\Auth\Pages\PasswordReset\RequestPasswordReset;
+use Filament\Notifications\Notification as FilamentNotification;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Mail\Markdown;
 use Illuminate\Support\Facades\Hash;
@@ -54,6 +56,39 @@ class AdminPasswordRecoveryTest extends TestCase
 
         Notification::assertSentTo($admin, AdminPasswordResetNotification::class);
         $this->assertDatabaseHas('password_reset_tokens', ['email' => $admin->email]);
+    }
+
+    public function test_admin_password_reset_success_notification_is_bulgarian(): void
+    {
+        app()->setLocale('bg');
+        Notification::fake();
+
+        $admin = $this->adminUser(User::ROLE_PRODUCT_EDITOR, [
+            'email' => 'localized-admin-reset@example.test',
+        ]);
+
+        Livewire::test(RequestPasswordReset::class)
+            ->fillForm(['email' => $admin->email])
+            ->call('request')
+            ->assertNotified(
+                FilamentNotification::make()
+                    ->title('Линкът за смяна на парола е изпратен')
+                    ->body('Ако този имейл съществува и акаунтът е активен, ще получите линк за смяна на парола.')
+                    ->success(),
+            );
+
+        $this->assertSame('Линкът за смяна на парола е изпратен', __('passwords.sent'));
+        $this->assertSame(
+            'Ако този имейл съществува и акаунтът е активен, ще получите линк за смяна на парола.',
+            __('filament-panels::auth/pages/password-reset/request-password-reset.notifications.sent.body'),
+        );
+        $this->assertNotSame('passwords.sent', __('passwords.sent'));
+        $this->assertNotSame(
+            'filament-panels::auth/pages/password-reset/request-password-reset.notifications.sent.body',
+            __('filament-panels::auth/pages/password-reset/request-password-reset.notifications.sent.body'),
+        );
+
+        Notification::assertSentTo($admin, AdminPasswordResetNotification::class);
     }
 
     public function test_admin_password_reset_email_is_bulgarian_and_branded(): void
@@ -244,6 +279,12 @@ class AdminPasswordRecoveryTest extends TestCase
             ->assertTableActionExists('sendPasswordResetLink', null, $target)
             ->assertTableActionDoesNotExist('resetPassword', null, $target)
             ->callTableAction('sendPasswordResetLink', $target)
+            ->assertNotified(
+                FilamentNotification::make()
+                    ->title('Линкът за смяна на парола е изпратен')
+                    ->body('Ако потребителят е активен и има право на достъп, ще получи имейл с линк за смяна на парола.')
+                    ->success(),
+            )
             ->assertHasNoTableActionErrors();
 
         Notification::assertSentTo($target, AdminPasswordResetNotification::class, function (AdminPasswordResetNotification $notification) use (&$resetUrl): bool {
@@ -344,6 +385,16 @@ class AdminPasswordRecoveryTest extends TestCase
         $this->assertTrue($superAdmin->canAccessPanel(filament()->getPanel('admin')));
         $this->get(route('filament.admin.pages.dashboard'))->assertOk();
         $this->get(UserResource::getUrl('index'))->assertOk();
+    }
+
+    public function test_catalog_sync_preview_still_renders_without_sync_all_or_automatic_actions(): void
+    {
+        $this->actingAs($this->superAdmin());
+
+        $this->get(CatalogSyncPreview::getUrl())
+            ->assertOk()
+            ->assertSee('Catalog Sync Preview')
+            ->assertSee('No supplier products match the query-only filters.');
     }
 
     public function test_non_super_admin_and_inactive_users_cannot_send_admin_reset_links(): void
