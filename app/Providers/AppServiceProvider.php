@@ -57,6 +57,7 @@ use App\Models\User;
 use App\Models\Wishlist;
 use App\Models\WishlistItem;
 use App\Models\XmlMappingTemplate;
+use App\Notifications\AdminPasswordResetNotification;
 use App\Policies\AiPolicy;
 use App\Policies\BlogPolicy;
 use App\Policies\BrandPolicy;
@@ -84,6 +85,7 @@ use App\Services\Erp\ErpService;
 use App\Services\Search\Contracts\SearchServiceInterface;
 use App\Services\Search\MeilisearchSearchService;
 use App\Support\Api\ApiCache;
+use Filament\Auth\Notifications\ResetPassword as FilamentResetPasswordNotification;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -102,6 +104,11 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
+        $this->app->bind(
+            FilamentResetPasswordNotification::class,
+            fn ($app, array $parameters): AdminPasswordResetNotification => new AdminPasswordResetNotification($parameters['token']),
+        );
+
         $this->app->bind(SearchServiceInterface::class, MeilisearchSearchService::class);
         $this->app->bind(AiProviderInterface::class, MockAiProvider::class);
         $this->app->bind(EmailProviderInterface::class, fn () => match (config('email-marketing.provider')) {

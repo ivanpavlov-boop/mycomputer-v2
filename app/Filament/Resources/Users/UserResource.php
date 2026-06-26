@@ -7,6 +7,7 @@ use App\Filament\Resources\Users\Pages\CreateUser;
 use App\Filament\Resources\Users\Pages\EditUser;
 use App\Filament\Resources\Users\Pages\ListUsers;
 use App\Models\User;
+use App\Rules\AdminStaffPassword;
 use BackedEnum;
 use Filament\Actions\Action;
 use Filament\Actions\DeleteAction;
@@ -19,6 +20,7 @@ use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Section;
+use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\IconColumn;
@@ -28,7 +30,6 @@ use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Password as PasswordBroker;
-use Illuminate\Validation\Rules\Password;
 use Illuminate\Validation\ValidationException;
 use Spatie\Permission\Models\Role;
 use Throwable;
@@ -73,7 +74,16 @@ class UserResource extends Resource
                         ->dehydrateStateUsing(fn (?string $state) => filled($state) ? Hash::make($state) : null)
                         ->dehydrated(fn (?string $state): bool => filled($state))
                         ->required(fn (string $operation): bool => $operation === 'create')
-                        ->rule(Password::min(8)->mixedCase()->numbers()),
+                        ->rules(fn (?string $state, string $operation): array => filled($state) || $operation === 'create' ? [new AdminStaffPassword] : [])
+                        ->same('password_confirmation')
+                        ->validationMessages([
+                            'same' => 'Потвърждението на паролата не съвпада.',
+                        ]),
+                    TextInput::make('password_confirmation')
+                        ->label('Password confirmation')
+                        ->password()
+                        ->dehydrated(false)
+                        ->required(fn (string $operation, Get $get): bool => $operation === 'create' || filled($get('password'))),
                 ]),
             ]),
         ]);

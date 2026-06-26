@@ -704,6 +704,9 @@ Account API:
 - password reset uses Laravel's password broker and one-time reset tokens
 - password changes revoke API tokens
 - account order history is restricted to orders matching the authenticated user email
+- Filament admin password reset emails are Bulgarian and branded for COMPUTER2U.
+- Admin/back-office/staff passwords require at least 10 characters, mixed case, a number and a symbol when a new password is set.
+- Staff password rules apply to users who can access the Filament admin panel; customer storefront password rules are separate and unchanged.
 
 ```mermaid
 sequenceDiagram
@@ -782,6 +785,8 @@ Current hardening rules:
 - The last active admin cannot be deleted or deactivated.
 - Default roles cannot be deleted from Filament.
 - Password reset links use Laravel's broker token table, expiration and one-time-use semantics.
+- Admin password reset links point to the Filament admin reset route and use the COMPUTER2U Bulgarian notification.
+- New admin/back-office/staff passwords must meet the staff password rule, but existing passwords and sessions are not invalidated.
 - Inactive and soft-deleted users cannot request usable reset links or reset passwords.
 - Password changes and password resets revoke API tokens.
 - Inactive users cannot log in.
