@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\HasLocalizedFields;
 use Database\Factories\AttributeGroupFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -13,12 +14,15 @@ class AttributeGroup extends Model
     /** @use HasFactory<AttributeGroupFactory> */
     use HasFactory;
 
+    use HasLocalizedFields;
     use SoftDeletes;
 
     protected $fillable = [
         'name',
+        'name_translations',
         'slug',
         'description',
+        'description_translations',
         'sort_order',
         'is_active',
     ];
@@ -27,6 +31,8 @@ class AttributeGroup extends Model
     {
         return [
             'is_active' => 'boolean',
+            'name_translations' => 'array',
+            'description_translations' => 'array',
         ];
     }
 

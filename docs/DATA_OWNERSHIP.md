@@ -24,6 +24,7 @@ Supplier data is staged first. Catalog products are the public product records. 
 | Slug | Catalog/editorial | Must not be overwritten automatically. |
 | SEO title/description | Catalog/editorial | Must not be overwritten automatically. |
 | Short/full description | Catalog/editorial | Must not be overwritten automatically. |
+| Localized content fields | Catalog/editorial | Must not be overwritten automatically. |
 | Images | Catalog/editorial | Not enabled through current sync. |
 | Categories | Catalog/editorial/category mapping | Must not be overwritten automatically. |
 | Attributes/specifications | Catalog/editorial/normalization | Must not be overwritten automatically without design. |
@@ -45,6 +46,7 @@ Supplier data is staged first. Catalog products are the public product records. 
 - SEO description
 - short description
 - full description
+- localized names, slugs, descriptions and SEO fields
 - manually edited content
 - images
 - categories

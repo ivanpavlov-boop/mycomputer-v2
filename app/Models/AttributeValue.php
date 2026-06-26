@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\HasLocalizedFields;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -9,11 +10,13 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 
 class AttributeValue extends Model
 {
+    use HasLocalizedFields;
     use SoftDeletes;
 
     protected $fillable = [
         'product_attribute_id',
         'value',
+        'value_translations',
         'slug',
         'sort_order',
         'is_active',
@@ -23,6 +26,7 @@ class AttributeValue extends Model
     {
         return [
             'is_active' => 'boolean',
+            'value_translations' => 'array',
         ];
     }
 

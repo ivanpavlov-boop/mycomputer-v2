@@ -35,6 +35,15 @@ class AttributeValueForm
                         ]),
                         Toggle::make('is_active')->default(true),
                     ]),
+                Section::make('English localization')
+                    ->description('Translate option labels only; technical slugs remain shared.')
+                    ->schema([
+                        TextInput::make('value_translations.en')
+                            ->label('English option label')
+                            ->maxLength(255),
+                    ])
+                    ->collapsible()
+                    ->collapsed(),
             ]);
     }
 }

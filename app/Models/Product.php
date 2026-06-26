@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\HasLocalizedFields;
 use Database\Factories\ProductFactory;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -20,6 +21,7 @@ class Product extends Model
     /** @use HasFactory<ProductFactory> */
     use HasFactory;
 
+    use HasLocalizedFields;
     use Searchable;
     use SoftDeletes;
 
@@ -50,10 +52,14 @@ class Product extends Model
         'ean',
         'mpn',
         'name',
+        'name_translations',
         'lock_name',
         'slug',
+        'slug_translations',
         'short_description',
+        'short_description_translations',
         'description',
+        'description_translations',
         'lock_descriptions',
         'weight',
         'purchase_price',
@@ -89,7 +95,9 @@ class Product extends Model
         'new_product',
         'bestseller',
         'meta_title',
+        'meta_title_translations',
         'meta_description',
+        'meta_description_translations',
         'meta_keywords',
         'lock_seo',
         'searchable_keywords',
@@ -115,12 +123,18 @@ class Product extends Model
             'sale_price' => 'decimal:2',
             'sale_price_starts_at' => 'datetime',
             'sale_price_ends_at' => 'datetime',
+            'name_translations' => 'array',
+            'slug_translations' => 'array',
+            'short_description_translations' => 'array',
+            'description_translations' => 'array',
             'lock_name' => 'boolean',
             'lock_descriptions' => 'boolean',
             'active' => 'boolean',
             'featured' => 'boolean',
             'new_product' => 'boolean',
             'bestseller' => 'boolean',
+            'meta_title_translations' => 'array',
+            'meta_description_translations' => 'array',
             'lock_seo' => 'boolean',
             'expected_date' => 'date',
             'manual_override' => 'boolean',

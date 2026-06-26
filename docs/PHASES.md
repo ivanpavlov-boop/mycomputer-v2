@@ -27,6 +27,7 @@ Phase 8 manual selected UPDATE price/stock sync has been implemented behind a fe
 | Phase 7.6 | Catalog Sync Safety Infrastructure | Complete |
 | Phase 8 | Manual selected UPDATE for price/stock only | Complete |
 | Phase 8.1 | Catalog Sync admin visibility | Complete |
+| Phase 8.6A | Multilingual foundation | Complete |
 
 ## Next Planned Phases
 
@@ -42,6 +43,7 @@ Phase 8 manual selected UPDATE price/stock sync has been implemented behind a fe
 - Maintain Phase 7.5 docs, Phase 7.6 safety rules, and Phase 8 commercial-field allowlist.
 - Maintain read-only Phase 8.1 feature flag and audit visibility.
 - Add tests/docs before rollback or broader sync phases.
+- Add multilingual docs/config/schema without changing catalog sync execution behavior.
 
 ## Forbidden
 

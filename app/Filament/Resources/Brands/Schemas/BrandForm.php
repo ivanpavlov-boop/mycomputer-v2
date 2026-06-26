@@ -40,6 +40,24 @@ class BrandForm
                         Textarea::make('description')->rows(3)->columnSpanFull(),
                         Toggle::make('is_active')->default(true),
                     ]),
+                Section::make('English localization')
+                    ->description('English brand content is optional. Technical brand identifiers remain shared.')
+                    ->schema([
+                        Textarea::make('description_translations.en')
+                            ->label('English description')
+                            ->rows(3)
+                            ->columnSpanFull(),
+                        Grid::make(2)->schema([
+                            TextInput::make('meta_title_translations.en')
+                                ->label('English SEO title')
+                                ->maxLength(255),
+                            Textarea::make('meta_description_translations.en')
+                                ->label('English SEO description')
+                                ->rows(2),
+                        ]),
+                    ])
+                    ->collapsible()
+                    ->collapsed(),
                 Section::make('SEO')
                     ->schema([
                         TextInput::make('meta_title')->maxLength(255),
