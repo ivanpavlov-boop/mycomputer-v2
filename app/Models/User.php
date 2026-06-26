@@ -352,4 +352,12 @@ class User extends Authenticatable implements FilamentUser
             self::ROLE_CATALOG_MANAGER,
         ]);
     }
+
+    public function canManageProductQualityFlags(): bool
+    {
+        return $this->isActiveAdminAccount() && $this->hasPrimaryRole([
+            self::ROLE_SUPER_ADMIN,
+            self::ROLE_CATALOG_MANAGER,
+        ]);
+    }
 }

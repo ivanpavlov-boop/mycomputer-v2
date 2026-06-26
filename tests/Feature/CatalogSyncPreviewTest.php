@@ -1351,7 +1351,9 @@ class CatalogSyncPreviewTest extends TestCase
         $this->assertSame('120.00', $product->regular_price);
         $this->assertSame('100.00', $product->purchase_price);
         $this->assertSame(6, $product->quantity);
-        $this->assertFalse((bool) $product->active);
+        $this->assertTrue((bool) $product->active);
+        $this->assertSame(Product::WORKFLOW_PUBLISHED, $product->workflow_status);
+        $this->assertNotNull($product->published_at);
         $this->assertDatabaseHas('product_supplier_offers', [
             'product_id' => $product->id,
             'supplier_id' => $supplier->id,

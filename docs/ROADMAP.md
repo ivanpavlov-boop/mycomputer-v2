@@ -29,6 +29,8 @@ Manual selected UPDATE price/stock sync is implemented behind `CATALOG_SYNC_UPDA
 - Manual selected UPDATE price/stock sync with audit old/new commercial values.
 - Catalog Sync Preview feature flag visibility.
 - Read-only Filament Catalog Sync Batches and Catalog Sync Logs views.
+- Product workflow for manual product approval and publishing.
+- Configurable non-blocking Product Quality Flags.
 - Multilingual foundation for BG primary and EN secondary content.
 
 ## Current Safety Position
@@ -40,6 +42,8 @@ Manual selected UPDATE price/stock sync is implemented behind `CATALOG_SYNC_UPDA
 - Scheduled sync is not enabled.
 - Image import through sync is not enabled.
 - Diagnostics are read-only.
+- Manual products start as drafts and must be explicitly reviewed/published.
+- Supplier-created products do not require manual approval by default.
 
 ## Next
 

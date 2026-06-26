@@ -43,6 +43,16 @@ class Product extends Model
 
     public const SALE_PRICE_SOURCE_SUPPLIER_FEED = 'supplier_feed';
 
+    public const WORKFLOW_DRAFT = 'draft';
+
+    public const WORKFLOW_PENDING_REVIEW = 'pending_review';
+
+    public const WORKFLOW_CHANGES_REQUESTED = 'changes_requested';
+
+    public const WORKFLOW_APPROVED = 'approved';
+
+    public const WORKFLOW_PUBLISHED = 'published';
+
     protected $fillable = [
         'category_id',
         'brand_id',
@@ -83,6 +93,17 @@ class Product extends Model
         'stock_status',
         'availability_status_id',
         'product_status',
+        'workflow_status',
+        'created_by',
+        'submitted_by',
+        'approved_by',
+        'published_by',
+        'returned_by',
+        'assigned_to',
+        'submitted_at',
+        'approved_at',
+        'returned_at',
+        'review_notes',
         'availability_message',
         'expected_date',
         'supplier_lead_time_days',
@@ -140,6 +161,9 @@ class Product extends Model
             'manual_override' => 'boolean',
             'specifications' => 'array',
             'source_payload' => 'array',
+            'submitted_at' => 'datetime',
+            'approved_at' => 'datetime',
+            'returned_at' => 'datetime',
             'published_at' => 'datetime',
         ];
     }
@@ -151,7 +175,7 @@ class Product extends Model
 
     public function shouldBeSearchable(): bool
     {
-        return $this->active && $this->published_at !== null;
+        return $this->active && $this->published_at !== null && $this->workflow_status === self::WORKFLOW_PUBLISHED;
     }
 
     public function shouldApplyPricingEngine(): bool
@@ -337,6 +361,54 @@ class Product extends Model
         return $this->hasMany(ProductDiscountRule::class);
     }
 
+    public function createdBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'created_by');
+    }
+
+    public function submittedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'submitted_by');
+    }
+
+    public function approvedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'approved_by');
+    }
+
+    public function publishedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'published_by');
+    }
+
+    public function returnedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'returned_by');
+    }
+
+    public function assignedTo(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'assigned_to');
+    }
+
+    public function qualityFlagAssignments(): HasMany
+    {
+        return $this->hasMany(ProductQualityFlagAssignment::class);
+    }
+
+    public function activeQualityFlagAssignments(): HasMany
+    {
+        return $this->qualityFlagAssignments()->active();
+    }
+
+    public function qualityFlags(): BelongsToMany
+    {
+        return $this
+            ->belongsToMany(ProductQualityFlag::class, 'product_quality_flag_assignments')
+            ->withPivot(['status', 'note', 'assigned_by', 'resolved_by', 'resolved_at', 'metadata'])
+            ->withTimestamps();
+    }
+
     public function cartItems(): HasMany
     {
         return $this->hasMany(CartItem::class);
@@ -386,12 +458,96 @@ class Product extends Model
     {
         return $query
             ->where('active', true)
-            ->whereNotNull('published_at');
+            ->whereNotNull('published_at')
+            ->where('workflow_status', self::WORKFLOW_PUBLISHED);
     }
 
     public function scopeInStock(Builder $query): Builder
     {
         return $query->where('stock_status', 'in_stock');
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public static function workflowStatusOptions(): array
+    {
+        return [
+            self::WORKFLOW_DRAFT => 'Чернова',
+            self::WORKFLOW_PENDING_REVIEW => 'За преглед',
+            self::WORKFLOW_CHANGES_REQUESTED => 'Върнат за корекции',
+            self::WORKFLOW_APPROVED => 'Одобрен',
+            self::WORKFLOW_PUBLISHED => 'Публикуван',
+        ];
+    }
+
+    public static function workflowStatusLabel(?string $status): string
+    {
+        return self::workflowStatusOptions()[$status] ?? 'Неизвестен';
+    }
+
+    public function canTransitionWorkflowTo(string $status, ?User $user = null): bool
+    {
+        $user ??= auth()->user();
+
+        if (! $user?->isActiveAdminAccount()) {
+            return false;
+        }
+
+        return match ($status) {
+            self::WORKFLOW_PENDING_REVIEW => $user->canEditProductContent()
+                && in_array($this->workflow_status, [self::WORKFLOW_DRAFT, self::WORKFLOW_CHANGES_REQUESTED], true),
+            self::WORKFLOW_CHANGES_REQUESTED => $user->canApproveProducts()
+                && in_array($this->workflow_status, [self::WORKFLOW_PENDING_REVIEW, self::WORKFLOW_APPROVED, self::WORKFLOW_PUBLISHED], true),
+            self::WORKFLOW_APPROVED => $user->canApproveProducts()
+                && in_array($this->workflow_status, [self::WORKFLOW_PENDING_REVIEW, self::WORKFLOW_PUBLISHED], true),
+            self::WORKFLOW_PUBLISHED => $user->canPublishProducts()
+                && $this->workflow_status === self::WORKFLOW_APPROVED,
+            default => false,
+        };
+    }
+
+    public function transitionWorkflowTo(string $status, ?User $user = null, ?string $notes = null): void
+    {
+        $user ??= auth()->user();
+
+        if (! $this->canTransitionWorkflowTo($status, $user)) {
+            return;
+        }
+
+        $updates = ['workflow_status' => $status];
+
+        if ($notes !== null) {
+            $updates['review_notes'] = $notes;
+        }
+
+        match ($status) {
+            self::WORKFLOW_PENDING_REVIEW => $updates = array_merge($updates, [
+                'submitted_by' => $user?->id,
+                'submitted_at' => now(),
+            ]),
+            self::WORKFLOW_CHANGES_REQUESTED => $updates = array_merge($updates, [
+                'returned_by' => $user?->id,
+                'returned_at' => now(),
+                'active' => false,
+                'product_status' => 'hidden',
+            ]),
+            self::WORKFLOW_APPROVED => $updates = array_merge($updates, [
+                'approved_by' => $user?->id,
+                'approved_at' => now(),
+                'active' => false,
+                'product_status' => 'hidden',
+            ]),
+            self::WORKFLOW_PUBLISHED => $updates = array_merge($updates, [
+                'published_by' => $user?->id,
+                'published_at' => now(),
+                'active' => true,
+                'product_status' => 'active',
+            ]),
+            default => null,
+        };
+
+        $this->forceFill($updates)->save();
     }
 
     private function searchableCategoryPath(): array
