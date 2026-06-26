@@ -29,6 +29,7 @@ Manual selected UPDATE price/stock sync is implemented behind `CATALOG_SYNC_UPDA
 - Manual selected UPDATE price/stock sync with audit old/new commercial values.
 - Catalog Sync Preview feature flag visibility.
 - Read-only Filament Catalog Sync Batches and Catalog Sync Logs views.
+- Multilingual foundation for BG primary and EN secondary content.
 
 ## Current Safety Position
 
@@ -49,6 +50,7 @@ Manual selected UPDATE price/stock sync is implemented behind `CATALOG_SYNC_UPDA
 5. Conflict/manual mapping workflow.
 6. Sync All later.
 7. Automatic sync later.
+8. Nuxt i18n route integration and localized sitemap expansion.
 
 ## Phase 8 Initial UPDATE Scope
 
@@ -78,3 +80,4 @@ UPDATE sync must not update:
 - Supplier image import strategy.
 - Controlled Sync All for eligible CREATE rows only.
 - Scheduled preview generation before any scheduled writes.
+- English content completion workflow and translation completeness reports.

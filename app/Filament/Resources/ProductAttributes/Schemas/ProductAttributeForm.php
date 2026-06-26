@@ -47,6 +47,15 @@ class ProductAttributeForm
                         Toggle::make('is_required')->default(false),
                         Toggle::make('is_active')->default(true),
                     ]),
+                Section::make('English localization')
+                    ->description('Translate the attribute label only. Technical units and numeric values remain shared.')
+                    ->schema([
+                        TextInput::make('name_translations.en')
+                            ->label('English attribute label')
+                            ->maxLength(255),
+                    ])
+                    ->collapsible()
+                    ->collapsed(),
             ]);
     }
 }

@@ -48,6 +48,32 @@ class CategoryForm
                             ->image(),
                         Toggle::make('is_active')->default(true),
                     ]),
+                Section::make('English localization')
+                    ->description('Bulgarian remains the primary content in the main fields. English values are optional.')
+                    ->schema([
+                        Grid::make(2)->schema([
+                            TextInput::make('name_translations.en')
+                                ->label('English category name')
+                                ->maxLength(255),
+                            TextInput::make('slug_translations.en')
+                                ->label('English slug')
+                                ->maxLength(255),
+                        ]),
+                        Textarea::make('description_translations.en')
+                            ->label('English description')
+                            ->rows(3)
+                            ->columnSpanFull(),
+                        Grid::make(2)->schema([
+                            TextInput::make('meta_title_translations.en')
+                                ->label('English SEO title')
+                                ->maxLength(255),
+                            Textarea::make('meta_description_translations.en')
+                                ->label('English SEO description')
+                                ->rows(2),
+                        ]),
+                    ])
+                    ->collapsible()
+                    ->collapsed(),
                 Section::make('SEO')
                     ->schema([
                         TextInput::make('meta_title')->maxLength(255),

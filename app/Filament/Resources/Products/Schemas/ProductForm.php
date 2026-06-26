@@ -78,6 +78,42 @@ class ProductForm
                             ])
                             ->columnSpanFull(),
                     ]),
+                Section::make('English localization')
+                    ->description('Bulgarian remains the primary content in the main fields. English values are optional and are never filled by supplier sync.')
+                    ->schema([
+                        Grid::make(2)->schema([
+                            TextInput::make('name_translations.en')
+                                ->label('English product name')
+                                ->maxLength(255),
+                            TextInput::make('slug_translations.en')
+                                ->label('English slug')
+                                ->maxLength(255),
+                        ]),
+                        RichEditor::make('short_description_translations.en')
+                            ->label('English short description')
+                            ->toolbarButtons(self::shortDescriptionToolbar())
+                            ->extraInputAttributes([
+                                'style' => 'min-height: 8rem; max-height: 18rem; overflow-y: auto;',
+                            ])
+                            ->columnSpanFull(),
+                        RichEditor::make('description_translations.en')
+                            ->label('English description')
+                            ->toolbarButtons(self::productDescriptionToolbar())
+                            ->extraInputAttributes([
+                                'style' => 'min-height: 18rem; max-height: 36rem; overflow-y: auto;',
+                            ])
+                            ->columnSpanFull(),
+                        Grid::make(2)->schema([
+                            TextInput::make('meta_title_translations.en')
+                                ->label('English SEO title')
+                                ->maxLength(255),
+                            Textarea::make('meta_description_translations.en')
+                                ->label('English SEO description')
+                                ->rows(2),
+                        ]),
+                    ])
+                    ->collapsible()
+                    ->collapsed(),
                 Section::make('Pricing and inventory')
                     ->schema([
                         Grid::make(4)->schema([

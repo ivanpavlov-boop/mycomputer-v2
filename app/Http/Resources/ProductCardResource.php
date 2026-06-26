@@ -4,6 +4,7 @@ namespace App\Http\Resources;
 
 use App\Models\Product;
 use App\Services\Reviews\ReviewStatsService;
+use App\Support\Localization\Locales;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -12,6 +13,7 @@ class ProductCardResource extends JsonResource
     public function toArray(Request $request): array
     {
         $reviewSummary = app(ReviewStatsService::class)->summary($this->resource);
+        $locale = Locales::fromRequest($request);
 
         return [
             'id' => $this->id,
@@ -21,6 +23,13 @@ class ProductCardResource extends JsonResource
             'name' => $this->name,
             'slug' => $this->slug,
             'short_description' => $this->short_description,
+            'locale' => $locale,
+            'localized' => [
+                'name' => $this->localizedField('name', $locale, fallbackToPrimary: $locale === Locales::default()),
+                'slug' => $this->localizedField('slug', $locale, fallbackToPrimary: $locale === Locales::default()),
+                'short_description' => $this->localizedField('short_description', $locale, fallbackToPrimary: $locale === Locales::default()),
+                'has_translation' => $locale === Locales::default() || $this->hasLocalizedField('name', $locale),
+            ],
             'currency' => Product::CATALOG_CURRENCY,
             'price' => $this->price,
             'regular_price' => $this->regular_price ?? $this->price,

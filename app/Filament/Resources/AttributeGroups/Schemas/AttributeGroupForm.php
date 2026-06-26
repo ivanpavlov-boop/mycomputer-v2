@@ -31,6 +31,18 @@ class AttributeGroupForm
                         Textarea::make('description')->rows(3)->columnSpanFull(),
                         Toggle::make('is_active')->default(true),
                     ]),
+                Section::make('English localization')
+                    ->description('Translate labels for storefront filters; numeric values and units stay technical.')
+                    ->schema([
+                        TextInput::make('name_translations.en')
+                            ->label('English group label')
+                            ->maxLength(255),
+                        Textarea::make('description_translations.en')
+                            ->label('English description')
+                            ->rows(2),
+                    ])
+                    ->collapsible()
+                    ->collapsed(),
             ]);
     }
 }

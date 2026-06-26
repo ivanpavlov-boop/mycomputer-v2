@@ -5,6 +5,8 @@ namespace App\Http\Resources;
 use App\Models\Product;
 use App\Services\Availability\AvailabilityStatusService;
 use App\Services\Reviews\ReviewStatsService;
+use App\Support\Localization\Locales;
+use App\Support\Seo\HreflangLinks;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -14,6 +16,7 @@ class ProductDetailResource extends JsonResource
     {
         $reviewSummary = app(ReviewStatsService::class)->summary($this->resource);
         $availability = app(AvailabilityStatusService::class);
+        $locale = Locales::fromRequest($request);
 
         return [
             'id' => $this->id,
@@ -24,6 +27,16 @@ class ProductDetailResource extends JsonResource
             'slug' => $this->slug,
             'short_description' => $this->short_description,
             'description' => $this->description,
+            'locale' => $locale,
+            'localized' => [
+                'name' => $this->localizedField('name', $locale, fallbackToPrimary: $locale === Locales::default()),
+                'slug' => $this->localizedField('slug', $locale, fallbackToPrimary: $locale === Locales::default()),
+                'short_description' => $this->localizedField('short_description', $locale, fallbackToPrimary: $locale === Locales::default()),
+                'description' => $this->localizedField('description', $locale, fallbackToPrimary: $locale === Locales::default()),
+                'meta_title' => $this->localizedField('meta_title', $locale, fallbackToPrimary: $locale === Locales::default()),
+                'meta_description' => $this->localizedField('meta_description', $locale, fallbackToPrimary: $locale === Locales::default()),
+                'has_translation' => $locale === Locales::default() || $this->hasLocalizedField('name', $locale),
+            ],
             'weight' => $this->weight,
             'currency' => Product::CATALOG_CURRENCY,
             'price' => $this->price,
@@ -54,6 +67,10 @@ class ProductDetailResource extends JsonResource
                 'meta_title' => $this->meta_title,
                 'meta_description' => $this->meta_description,
                 'meta_keywords' => $this->meta_keywords,
+                'hreflang' => HreflangLinks::forPath('/p/'.$this->slug, [
+                    'bg' => '/p/'.$this->localizedField('slug', 'bg'),
+                    'en' => $this->hasLocalizedField('slug', 'en') ? '/p/'.$this->localizedField('slug', 'en', fallbackToPrimary: false) : null,
+                ]),
             ],
             'structured_data' => [
                 '@type' => 'Product',
