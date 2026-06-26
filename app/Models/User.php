@@ -3,8 +3,8 @@
 namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
+use App\Notifications\AdminPasswordResetNotification;
 use Database\Factories\UserFactory;
-use Filament\Auth\Notifications\ResetPassword as FilamentResetPasswordNotification;
 use Filament\Facades\Filament;
 use Filament\Models\Contracts\FilamentUser;
 use Filament\Panel;
@@ -244,7 +244,7 @@ class User extends Authenticatable implements FilamentUser
             return;
         }
 
-        $notification = app(FilamentResetPasswordNotification::class, ['token' => $token]);
+        $notification = app(AdminPasswordResetNotification::class, ['token' => $token]);
         $notification->url = $adminPanel->getResetPasswordUrl($token, $this);
 
         $this->notify($notification);
