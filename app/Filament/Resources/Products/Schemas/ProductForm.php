@@ -186,7 +186,11 @@ class ProductForm
                                 ])
                                 ->default('draft')
                                 ->required(),
-                            TextInput::make('stock_status')->helperText('Legacy mirrored status for older integrations.'),
+                            Select::make('stock_status')
+                                ->options(Product::stockStatusOptions())
+                                ->default(Product::STOCK_STATUS_IN_STOCK)
+                                ->required()
+                                ->helperText('Legacy mirrored status for older integrations.'),
                             Toggle::make('manual_override')->default(false),
                             TextInput::make('availability_message')->maxLength(255),
                             DateTimePicker::make('expected_date'),

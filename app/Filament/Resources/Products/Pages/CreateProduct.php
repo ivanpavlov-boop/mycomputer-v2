@@ -18,6 +18,12 @@ class CreateProduct extends CreateRecord
     {
         $source = $data['source'] ?? Product::SOURCE_MANUAL;
         $data['created_by'] = auth()->id();
+        $quantity = (int) ($data['quantity'] ?? 0);
+        $stockStatus = $data['stock_status'] ?? null;
+
+        if (blank($stockStatus) || ($stockStatus === Product::STOCK_STATUS_IN_STOCK && $quantity <= 0)) {
+            $data['stock_status'] = Product::defaultStockStatusForQuantity($quantity);
+        }
 
         if ($source === Product::SOURCE_SUPPLIER_IMPORT) {
             $data['workflow_status'] = Product::WORKFLOW_PUBLISHED;
