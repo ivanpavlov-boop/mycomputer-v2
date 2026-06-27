@@ -51,6 +51,78 @@ class ProductWorkflowQualityFlagsTest extends TestCase
         $this->assertNull($product->published_at);
     }
 
+    public function test_super_admin_can_create_manual_product_without_stock_status_and_quantity_defaults_to_in_stock(): void
+    {
+        $this->actingAsRole(User::ROLE_SUPER_ADMIN);
+
+        Livewire::test(CreateProduct::class)
+            ->fillForm([
+                'name' => 'Manual In Stock Product',
+                'slug' => 'manual-in-stock-product',
+                'sku' => 'MANUAL-IN-STOCK-001',
+                'source' => Product::SOURCE_MANUAL,
+                'price' => 49,
+                'price_source' => Product::PRICE_SOURCE_MANUAL,
+                'quantity' => 1,
+                'reserved_quantity' => 0,
+                'product_status' => 'active',
+            ])
+            ->call('create')
+            ->assertHasNoFormErrors();
+
+        $product = Product::query()->where('sku', 'MANUAL-IN-STOCK-001')->firstOrFail();
+
+        $this->assertSame(Product::SOURCE_MANUAL, $product->source);
+        $this->assertSame(Product::WORKFLOW_DRAFT, $product->workflow_status);
+        $this->assertSame('draft', $product->product_status);
+        $this->assertSame(Product::STOCK_STATUS_IN_STOCK, $product->stock_status);
+        $this->assertFalse((bool) $product->active);
+        $this->assertNull($product->published_at);
+    }
+
+    public function test_manual_product_without_stock_status_and_zero_quantity_defaults_to_out_of_stock(): void
+    {
+        $this->actingAsRole(User::ROLE_SUPER_ADMIN);
+
+        Livewire::test(CreateProduct::class)
+            ->fillForm([
+                'name' => 'Manual Out Of Stock Product',
+                'slug' => 'manual-out-of-stock-product',
+                'sku' => 'MANUAL-OUT-STOCK-001',
+                'source' => Product::SOURCE_MANUAL,
+                'price' => 49,
+                'price_source' => Product::PRICE_SOURCE_MANUAL,
+                'quantity' => 0,
+                'reserved_quantity' => 0,
+                'product_status' => 'active',
+            ])
+            ->call('create')
+            ->assertHasNoFormErrors();
+
+        $product = Product::query()->where('sku', 'MANUAL-OUT-STOCK-001')->firstOrFail();
+
+        $this->assertSame(Product::SOURCE_MANUAL, $product->source);
+        $this->assertSame(Product::WORKFLOW_DRAFT, $product->workflow_status);
+        $this->assertSame('draft', $product->product_status);
+        $this->assertSame(Product::STOCK_STATUS_OUT_OF_STOCK, $product->stock_status);
+        $this->assertFalse((bool) $product->active);
+        $this->assertNull($product->published_at);
+    }
+
+    public function test_existing_explicit_stock_status_values_are_not_overwritten(): void
+    {
+        $product = Product::factory()->create([
+            'quantity' => 2,
+            'stock_status' => Product::STOCK_STATUS_LIMITED_STOCK,
+            'workflow_status' => Product::WORKFLOW_PUBLISHED,
+            'product_status' => 'active',
+            'active' => true,
+        ]);
+
+        $this->assertSame(Product::STOCK_STATUS_LIMITED_STOCK, $product->refresh()->stock_status);
+        $this->assertSame(Product::WORKFLOW_PUBLISHED, $product->workflow_status);
+    }
+
     public function test_corrective_workflow_backfill_restores_existing_active_catalog_products_to_published(): void
     {
         $product = Product::factory()->create([

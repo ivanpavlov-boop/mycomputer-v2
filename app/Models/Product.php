@@ -53,6 +53,12 @@ class Product extends Model
 
     public const WORKFLOW_PUBLISHED = 'published';
 
+    public const STOCK_STATUS_OUT_OF_STOCK = 'out_of_stock';
+
+    public const STOCK_STATUS_IN_STOCK = 'in_stock';
+
+    public const STOCK_STATUS_LIMITED_STOCK = 'limited_stock';
+
     protected $fillable = [
         'category_id',
         'brand_id',
@@ -166,6 +172,15 @@ class Product extends Model
             'returned_at' => 'datetime',
             'published_at' => 'datetime',
         ];
+    }
+
+    protected static function booted(): void
+    {
+        static::creating(function (Product $product): void {
+            if (blank($product->stock_status)) {
+                $product->stock_status = self::defaultStockStatusForQuantity($product->quantity);
+            }
+        });
     }
 
     public function searchableAs(): string
@@ -484,6 +499,25 @@ class Product extends Model
     public static function workflowStatusLabel(?string $status): string
     {
         return self::workflowStatusOptions()[$status] ?? 'Неизвестен';
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public static function stockStatusOptions(): array
+    {
+        return [
+            self::STOCK_STATUS_OUT_OF_STOCK => 'Out of stock',
+            self::STOCK_STATUS_IN_STOCK => 'In stock',
+            self::STOCK_STATUS_LIMITED_STOCK => 'Limited stock',
+        ];
+    }
+
+    public static function defaultStockStatusForQuantity(mixed $quantity): string
+    {
+        return (int) ($quantity ?? 0) > 0
+            ? self::STOCK_STATUS_IN_STOCK
+            : self::STOCK_STATUS_OUT_OF_STOCK;
     }
 
     public function canTransitionWorkflowTo(string $status, ?User $user = null): bool
