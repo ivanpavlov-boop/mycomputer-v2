@@ -62,7 +62,7 @@ return new class extends Migration
             $table->json('metadata')->nullable();
             $table->timestamps();
 
-            $table->unique(['product_id', 'product_quality_flag_id']);
+            $table->unique(['product_id', 'product_quality_flag_id'], 'pq_flag_assignments_product_flag_unique');
             $table->index(['product_id', 'status']);
         });
     }
