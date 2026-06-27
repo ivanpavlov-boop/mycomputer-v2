@@ -28,6 +28,7 @@ class ProductsTable
     {
         return $table
             ->modifyQueryUsing(fn (Builder $query): Builder => $query->with('thumbnailImage')->withCount('activeQualityFlagAssignments'))
+            ->defaultSort('id', 'desc')
             ->columns([
                 ImageColumn::make('thumbnail')
                     ->label('Image')
@@ -70,6 +71,7 @@ class ProductsTable
                 IconColumn::make('featured')->boolean(),
                 IconColumn::make('new_product')->boolean()->toggleable(),
                 IconColumn::make('bestseller')->boolean()->toggleable(),
+                TextColumn::make('created_at')->dateTime()->sortable()->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('updated_at')->dateTime()->sortable()->toggleable(isToggledHiddenByDefault: true),
             ])
             ->filters([
@@ -113,7 +115,8 @@ class ProductsTable
                                 'manual_override' => (bool) $data['manual_override'],
                             ]);
                         }),
-                    DeleteBulkAction::make(),
+                    DeleteBulkAction::make()
+                        ->label('Delete selected'),
                     RestoreBulkAction::make(),
                     ForceDeleteBulkAction::make(),
                 ]),
