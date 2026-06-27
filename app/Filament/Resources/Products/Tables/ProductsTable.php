@@ -28,6 +28,8 @@ class ProductsTable
     {
         return $table
             ->modifyQueryUsing(fn (Builder $query): Builder => $query->with('thumbnailImage')->withCount('activeQualityFlagAssignments'))
+            ->defaultSort('created_at', 'desc')
+            ->defaultSortOptionLabel('Newest first')
             ->columns([
                 ImageColumn::make('thumbnail')
                     ->label('Image')
@@ -113,7 +115,11 @@ class ProductsTable
                                 'manual_override' => (bool) $data['manual_override'],
                             ]);
                         }),
-                    DeleteBulkAction::make(),
+                    DeleteBulkAction::make()
+                        ->label('Delete selected')
+                        ->modalHeading('Delete selected products')
+                        ->modalDescription('Selected products will be moved to trash. Historical references remain intact.')
+                        ->modalSubmitActionLabel('Delete selected'),
                     RestoreBulkAction::make(),
                     ForceDeleteBulkAction::make(),
                 ]),
