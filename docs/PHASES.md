@@ -29,6 +29,7 @@ Phase 8 manual selected UPDATE price/stock sync has been implemented behind a fe
 | Phase 8.1 | Catalog Sync admin visibility | Complete |
 | Phase 8.5B | Product workflow and configurable quality flags | Complete |
 | Phase 8.6A | Multilingual foundation | Complete |
+| Phase 9A | Product data quality and enrichment queue | Complete |
 
 ## Next Planned Phases
 
@@ -46,6 +47,7 @@ Phase 8 manual selected UPDATE price/stock sync has been implemented behind a fe
 - Add tests/docs before rollback or broader sync phases.
 - Maintain product workflow and quality flags as admin/content controls, not supplier sync expansion.
 - Add multilingual docs/config/schema without changing catalog sync execution behavior.
+- Use the Product Data Quality Queue for read-only enrichment triage; corrections still happen through existing product edit workflows.
 
 ## Forbidden
 

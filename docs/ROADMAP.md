@@ -32,6 +32,7 @@ Manual selected UPDATE price/stock sync is implemented behind `CATALOG_SYNC_UPDA
 - Product workflow for manual product approval and publishing.
 - Configurable non-blocking Product Quality Flags.
 - Multilingual foundation for BG primary and EN secondary content.
+- Product Data Quality Queue for read-only enrichment triage.
 
 ## Current Safety Position
 
@@ -44,6 +45,7 @@ Manual selected UPDATE price/stock sync is implemented behind `CATALOG_SYNC_UPDA
 - Diagnostics are read-only.
 - Manual products start as drafts and must be explicitly reviewed/published.
 - Supplier-created products do not require manual approval by default.
+- Product enrichment gaps are surfaced in a read-only admin queue; fixes still use existing product edit permissions.
 
 ## Next
 
@@ -55,6 +57,7 @@ Manual selected UPDATE price/stock sync is implemented behind `CATALOG_SYNC_UPDA
 6. Sync All later.
 7. Automatic sync later.
 8. Nuxt i18n route integration and localized sitemap expansion.
+9. Data enrichment workflow refinements after queue usage is observed.
 
 ## Phase 8 Initial UPDATE Scope
 
