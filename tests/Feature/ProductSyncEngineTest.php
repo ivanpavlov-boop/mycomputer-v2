@@ -71,9 +71,13 @@ class ProductSyncEngineTest extends TestCase
             'ean' => '9999999999999',
             'mpn' => 'NEW-MPN-001',
             'active' => true,
+            'product_status' => 'active',
             'workflow_status' => Product::WORKFLOW_PUBLISHED,
         ]);
 
+        $product = Product::query()->where('supplier_sku', 'SUP-NEW-001')->firstOrFail();
+
+        $this->assertTrue(Product::published()->whereKey($product)->exists());
         $this->assertSame('synced', $supplierProduct->refresh()->status);
         $this->assertSame('created', ProductSyncLog::query()->where('supplier_product_id', $supplierProduct->id)->firstOrFail()->action);
     }
