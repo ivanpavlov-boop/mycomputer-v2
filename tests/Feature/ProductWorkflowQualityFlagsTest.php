@@ -144,6 +144,59 @@ class ProductWorkflowQualityFlagsTest extends TestCase
         $this->assertTrue(Product::published()->whereKey($product)->exists());
     }
 
+    public function test_corrective_visibility_backfill_reactivates_published_supplier_imported_products(): void
+    {
+        $product = Product::factory()->create([
+            'source' => Product::SOURCE_SUPPLIER_IMPORT,
+            'workflow_status' => Product::WORKFLOW_PUBLISHED,
+            'published_at' => now()->subDay(),
+            'product_status' => 'draft',
+            'active' => false,
+        ]);
+
+        $this->assertFalse(Product::published()->whereKey($product)->exists());
+
+        $this->runSupplierVisibilityBackfill();
+
+        $product->refresh();
+
+        $this->assertSame(Product::WORKFLOW_PUBLISHED, $product->workflow_status);
+        $this->assertSame('active', $product->product_status);
+        $this->assertTrue((bool) $product->active);
+        $this->assertNotNull($product->published_at);
+        $this->assertTrue(Product::published()->whereKey($product)->exists());
+    }
+
+    public function test_corrective_visibility_backfill_does_not_activate_manual_or_deleted_products(): void
+    {
+        $manualDraft = Product::factory()->create([
+            'source' => Product::SOURCE_MANUAL,
+            'workflow_status' => Product::WORKFLOW_PUBLISHED,
+            'published_at' => now()->subDay(),
+            'product_status' => 'draft',
+            'active' => false,
+        ]);
+        $deletedSupplierProduct = Product::factory()->create([
+            'source' => Product::SOURCE_SUPPLIER_IMPORT,
+            'workflow_status' => Product::WORKFLOW_PUBLISHED,
+            'published_at' => now()->subDay(),
+            'product_status' => 'draft',
+            'active' => false,
+        ]);
+        $deletedSupplierProduct->delete();
+
+        $this->runSupplierVisibilityBackfill();
+
+        $manualDraft->refresh();
+        $deletedSupplierProduct = Product::withTrashed()->findOrFail($deletedSupplierProduct->id);
+
+        $this->assertSame('draft', $manualDraft->product_status);
+        $this->assertFalse((bool) $manualDraft->active);
+        $this->assertSame('draft', $deletedSupplierProduct->product_status);
+        $this->assertFalse((bool) $deletedSupplierProduct->active);
+        $this->assertTrue($deletedSupplierProduct->trashed());
+    }
+
     public function test_corrective_workflow_backfill_keeps_manual_drafts_and_hidden_products_draft(): void
     {
         $manualDraft = Product::factory()->manualDraft()->create([
@@ -359,6 +412,13 @@ class ProductWorkflowQualityFlagsTest extends TestCase
     private function runCorrectiveWorkflowBackfill(): void
     {
         $migration = include database_path('migrations/2026_06_27_080000_correct_existing_product_workflow_statuses.php');
+
+        $migration->up();
+    }
+
+    private function runSupplierVisibilityBackfill(): void
+    {
+        $migration = include database_path('migrations/2026_06_27_090000_restore_supplier_published_product_visibility.php');
 
         $migration->up();
     }
