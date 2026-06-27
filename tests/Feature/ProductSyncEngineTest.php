@@ -70,7 +70,8 @@ class ProductSyncEngineTest extends TestCase
             'supplier_sku' => 'SUP-NEW-001',
             'ean' => '9999999999999',
             'mpn' => 'NEW-MPN-001',
-            'active' => false,
+            'active' => true,
+            'workflow_status' => Product::WORKFLOW_PUBLISHED,
         ]);
 
         $this->assertSame('synced', $supplierProduct->refresh()->status);

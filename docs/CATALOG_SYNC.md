@@ -24,6 +24,8 @@ Related docs: [Supplier Import](SUPPLIER_IMPORT.md), [Pricing Rules](PRICING_RUL
 - Manual selected UPDATE sync exists for price, stock, availability, supplier cost, and supplier offer metadata only.
 - Catalog Sync Preview shows the effective feature flag status from configuration.
 - Filament exposes read-only Catalog Sync Batches and Catalog Sync Logs admin views.
+- Supplier/catalog-sync-created products default to the `published` workflow state.
+- Manual selected UPDATE preserves product workflow status and protected content fields.
 
 Only selected CREATE sync and feature-flagged selected UPDATE price/stock sync are implemented. Sync All, automatic sync, scheduled sync, and image import are not enabled.
 
@@ -135,6 +137,7 @@ Sample diagnostic rows show:
 - Image import through sync.
 - Trusting UI-selected state without server-side validation.
 - Direct supplier import writes to catalog products.
+- Supplier sync changing product workflow status except the initial CREATE default.
 
 ## Future Work / Open Questions
 

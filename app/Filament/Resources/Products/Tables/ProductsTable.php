@@ -27,7 +27,7 @@ class ProductsTable
     public static function configure(Table $table): Table
     {
         return $table
-            ->modifyQueryUsing(fn (Builder $query): Builder => $query->with('thumbnailImage'))
+            ->modifyQueryUsing(fn (Builder $query): Builder => $query->with('thumbnailImage')->withCount('activeQualityFlagAssignments'))
             ->columns([
                 ImageColumn::make('thumbnail')
                     ->label('Image')
@@ -40,6 +40,23 @@ class ProductsTable
                     ->toggleable(),
                 TextColumn::make('sku')->searchable()->sortable(),
                 TextColumn::make('name')->searchable()->sortable()->limit(45),
+                TextColumn::make('workflow_status')
+                    ->label('Workflow')
+                    ->badge()
+                    ->formatStateUsing(fn (?string $state): string => Product::workflowStatusLabel($state))
+                    ->color(fn (?string $state): string => match ($state) {
+                        Product::WORKFLOW_PUBLISHED => 'success',
+                        Product::WORKFLOW_APPROVED => 'info',
+                        Product::WORKFLOW_PENDING_REVIEW => 'warning',
+                        Product::WORKFLOW_CHANGES_REQUESTED => 'danger',
+                        default => 'gray',
+                    })
+                    ->sortable(),
+                TextColumn::make('active_quality_flag_assignments_count')
+                    ->label('Quality flags')
+                    ->badge()
+                    ->color(fn (int $state): string => $state > 0 ? 'warning' : 'gray')
+                    ->toggleable(),
                 TextColumn::make('category.name')->sortable()->toggleable(),
                 TextColumn::make('brand.name')->sortable()->toggleable(),
                 TextColumn::make('price')->money(Product::CATALOG_CURRENCY)->sortable(),
@@ -57,6 +74,9 @@ class ProductsTable
             ])
             ->filters([
                 SelectFilter::make('availability_status_id')->relationship('availabilityStatus', 'name')->label('Availability')->searchable()->preload(),
+                SelectFilter::make('workflow_status')
+                    ->label('Workflow')
+                    ->options(Product::workflowStatusOptions()),
                 SelectFilter::make('stock_status'),
                 SelectFilter::make('category')->relationship('category', 'name')->searchable()->preload(),
                 SelectFilter::make('brand')->relationship('brand', 'name')->searchable()->preload(),

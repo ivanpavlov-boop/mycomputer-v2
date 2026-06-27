@@ -3,6 +3,8 @@
 namespace App\Filament\Resources\Products\Schemas;
 
 use App\Models\Product;
+use App\Models\ProductQualityFlag;
+use App\Models\ProductQualityFlagAssignment;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\KeyValue;
@@ -77,6 +79,28 @@ class ProductForm
                                 'style' => 'min-height: 24rem; max-height: 42rem; overflow-y: auto;',
                             ])
                             ->columnSpanFull(),
+                    ]),
+                Section::make('Product workflow')
+                    ->description('Manual products start as drafts. Use the workflow actions on the edit page to submit, approve and publish.')
+                    ->schema([
+                        Grid::make(3)->schema([
+                            Select::make('workflow_status')
+                                ->label('Workflow status')
+                                ->options(Product::workflowStatusOptions())
+                                ->default(Product::WORKFLOW_DRAFT)
+                                ->disabled()
+                                ->dehydrated()
+                                ->required(),
+                            Select::make('assigned_to')
+                                ->label('Assigned to')
+                                ->relationship('assignedTo', 'name')
+                                ->searchable()
+                                ->preload(),
+                            Textarea::make('review_notes')
+                                ->label('Review notes')
+                                ->rows(2)
+                                ->columnSpanFull(),
+                        ]),
                     ]),
                 Section::make('English localization')
                     ->description('Bulgarian remains the primary content in the main fields. English values are optional and are never filled by supplier sync.')
@@ -195,6 +219,32 @@ class ProductForm
                             ->defaultItems(0),
                     ])
                     ->collapsible(),
+                Section::make('Product quality flags')
+                    ->description('Non-blocking internal quality flags for content, SEO, media or data cleanup. They do not affect publishing by themselves.')
+                    ->schema([
+                        Repeater::make('qualityFlagAssignments')
+                            ->relationship()
+                            ->label('Assigned flags')
+                            ->schema([
+                                Select::make('product_quality_flag_id')
+                                    ->label('Flag')
+                                    ->options(fn () => ProductQualityFlag::query()->active()->ordered()->pluck('label_bg', 'id'))
+                                    ->searchable()
+                                    ->required(),
+                                Select::make('status')
+                                    ->options(ProductQualityFlagAssignment::statusOptions())
+                                    ->default(ProductQualityFlagAssignment::STATUS_ACTIVE)
+                                    ->required(),
+                                Textarea::make('note')
+                                    ->rows(2)
+                                    ->columnSpanFull(),
+                            ])
+                            ->columns(2)
+                            ->defaultItems(0),
+                    ])
+                    ->visible(fn (): bool => (bool) auth()->user()?->canManageProductQualityFlags())
+                    ->collapsible()
+                    ->collapsed(),
                 Section::make('Images')
                     ->schema([
                         Repeater::make('images')

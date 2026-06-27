@@ -58,6 +58,10 @@ trait RequiresFilamentPermission
 
     protected static function canAccessResource(): bool
     {
+        if (auth()->user()?->isSuperAdmin()) {
+            return true;
+        }
+
         $permission = static::$permission ?? null;
 
         if (! $permission) {

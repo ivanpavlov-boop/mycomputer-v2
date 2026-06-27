@@ -53,6 +53,7 @@ class ProductFactory extends Factory
             'reserved_quantity' => 0,
             'stock_status' => 'in_stock',
             'product_status' => 'active',
+            'workflow_status' => Product::WORKFLOW_PUBLISHED,
             'warranty_months' => $this->faker->randomElement([12, 24, 36]),
             'active' => true,
             'featured' => $this->faker->boolean(20),
@@ -64,5 +65,28 @@ class ProductFactory extends Factory
             'specifications' => [],
             'published_at' => now(),
         ];
+    }
+
+    public function manualDraft(): static
+    {
+        return $this->state(fn (): array => [
+            'source' => Product::SOURCE_MANUAL,
+            'workflow_status' => Product::WORKFLOW_DRAFT,
+            'product_status' => 'draft',
+            'active' => false,
+            'published_at' => null,
+        ]);
+    }
+
+    public function supplierPublished(): static
+    {
+        return $this->state(fn (): array => [
+            'source' => Product::SOURCE_SUPPLIER_IMPORT,
+            'workflow_status' => Product::WORKFLOW_PUBLISHED,
+            'product_status' => 'active',
+            'active' => true,
+            'published_at' => now(),
+            'price_source' => Product::PRICE_SOURCE_SUPPLIER_IMPORT,
+        ]);
     }
 }
