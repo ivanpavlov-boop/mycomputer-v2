@@ -51,6 +51,49 @@ class ProductWorkflowQualityFlagsTest extends TestCase
         $this->assertNull($product->published_at);
     }
 
+    public function test_corrective_workflow_backfill_restores_existing_active_catalog_products_to_published(): void
+    {
+        $product = Product::factory()->create([
+            'source' => Product::SOURCE_SUPPLIER_IMPORT,
+            'workflow_status' => Product::WORKFLOW_DRAFT,
+            'product_status' => 'active',
+            'active' => true,
+            'published_at' => null,
+        ]);
+
+        $this->runCorrectiveWorkflowBackfill();
+
+        $product->refresh();
+
+        $this->assertSame(Product::WORKFLOW_PUBLISHED, $product->workflow_status);
+        $this->assertSame('active', $product->product_status);
+        $this->assertTrue((bool) $product->active);
+        $this->assertNotNull($product->published_at);
+        $this->assertTrue(Product::published()->whereKey($product)->exists());
+    }
+
+    public function test_corrective_workflow_backfill_keeps_manual_drafts_and_hidden_products_draft(): void
+    {
+        $manualDraft = Product::factory()->manualDraft()->create([
+            'workflow_status' => Product::WORKFLOW_DRAFT,
+            'published_at' => null,
+        ]);
+
+        $hiddenProduct = Product::factory()->create([
+            'workflow_status' => Product::WORKFLOW_DRAFT,
+            'product_status' => 'hidden',
+            'active' => false,
+            'published_at' => null,
+        ]);
+
+        $this->runCorrectiveWorkflowBackfill();
+
+        $this->assertSame(Product::WORKFLOW_DRAFT, $manualDraft->fresh()->workflow_status);
+        $this->assertNull($manualDraft->fresh()->published_at);
+        $this->assertSame(Product::WORKFLOW_DRAFT, $hiddenProduct->fresh()->workflow_status);
+        $this->assertNull($hiddenProduct->fresh()->published_at);
+    }
+
     public function test_product_workflow_transitions_require_catalog_manager_or_super_admin_for_approval_and_publish(): void
     {
         $editor = $this->actingAsRole(User::ROLE_PRODUCT_EDITOR);
@@ -239,6 +282,13 @@ class ProductWorkflowQualityFlagsTest extends TestCase
             'rounding_rule' => PricingRule::ROUND_NONE,
             'is_active' => true,
         ]);
+    }
+
+    private function runCorrectiveWorkflowBackfill(): void
+    {
+        $migration = include database_path('migrations/2026_06_27_080000_correct_existing_product_workflow_statuses.php');
+
+        $migration->up();
     }
 
     /**

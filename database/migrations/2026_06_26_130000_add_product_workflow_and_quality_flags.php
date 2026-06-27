@@ -3,6 +3,7 @@
 use App\Models\Product;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
@@ -23,14 +24,25 @@ return new class extends Migration
             $table->text('review_notes')->nullable()->after('returned_at');
         });
 
-        Product::query()
-            ->where('active', true)
-            ->whereNotNull('published_at')
-            ->update(['workflow_status' => Product::WORKFLOW_PUBLISHED]);
+        $now = now()->toDateTimeString();
 
-        Product::query()
+        DB::table('products')
+            ->where('active', true)
             ->where(function ($query): void {
-                $query->where('active', false)->orWhereNull('published_at');
+                $query
+                    ->whereNull('product_status')
+                    ->orWhereNotIn('product_status', ['draft', 'hidden', 'inactive']);
+            })
+            ->update([
+                'workflow_status' => Product::WORKFLOW_PUBLISHED,
+                'published_at' => DB::raw("COALESCE(published_at, updated_at, created_at, '{$now}')"),
+            ]);
+
+        DB::table('products')
+            ->where(function ($query): void {
+                $query
+                    ->where('active', false)
+                    ->orWhereIn('product_status', ['draft', 'hidden', 'inactive']);
             })
             ->update(['workflow_status' => Product::WORKFLOW_DRAFT]);
 
