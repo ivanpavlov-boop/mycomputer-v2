@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Filament\Resources\ProductDataQualityQueue\Pages\ListProductDataQualityQueue;
 use App\Filament\Resources\ProductDataQualityQueue\ProductDataQualityQueueResource;
+use App\Filament\Resources\Products\ProductResource;
 use App\Models\Product;
 use App\Models\ProductImage;
 use App\Models\ProductQualityFlag;
@@ -127,6 +128,138 @@ class ProductDataQualityQueueTest extends TestCase
             ->assertSee('Needs specs review');
     }
 
+    public function test_queue_table_handles_missing_images_and_multiple_quality_flags(): void
+    {
+        $this->actingAsRole(User::ROLE_CATALOG_MANAGER);
+
+        $product = $this->qualityReadyProduct([
+            'name' => 'Multi flag missing image product',
+            'sku' => 'DQ-MULTI-FLAG',
+            'workflow_status' => Product::WORKFLOW_PENDING_REVIEW,
+            'active' => false,
+            'product_status' => 'draft',
+            'published_at' => null,
+        ], withImage: false);
+
+        foreach (['Needs image review', 'Needs data cleanup'] as $index => $label) {
+            $flag = ProductQualityFlag::query()->create([
+                'code' => 'queue_multi_flag_'.$index,
+                'label_bg' => $label,
+                'label_en' => $label,
+                'severity' => ProductQualityFlag::SEVERITY_MEDIUM,
+                'responsible_role' => User::ROLE_PRODUCT_EDITOR,
+                'type' => ProductQualityFlag::TYPE_DATA,
+                'is_active' => true,
+                'sort_order' => $index + 1,
+            ]);
+
+            ProductQualityFlagAssignment::query()->create([
+                'product_id' => $product->id,
+                'product_quality_flag_id' => $flag->id,
+                'status' => ProductQualityFlagAssignment::STATUS_ACTIVE,
+            ]);
+        }
+
+        Livewire::test(ListProductDataQualityQueue::class)
+            ->assertCanSeeTableRecords([$product])
+            ->assertTableActionExists('reviewFlags', null, $product)
+            ->assertTableActionHasUrl('reviewFlags', ProductResource::getUrl('edit', ['record' => $product]), $product)
+            ->assertSee('Missing image')
+            ->assertSee('Needs image review')
+            ->assertSee('Needs data cleanup')
+            ->assertSee('Flag count')
+            ->assertSee('Hidden')
+            ->assertSee((string) $product->id)
+            ->assertSee($product->sku);
+    }
+
+    public function test_queue_filters_by_workflow_visibility_missing_image_and_no_flags(): void
+    {
+        $this->actingAsRole(User::ROLE_CATALOG_MANAGER);
+
+        $hiddenNoFlag = $this->qualityReadyProduct([
+            'name' => 'Hidden missing image without flags',
+            'sku' => 'DQ-HIDDEN-NO-FLAGS',
+            'workflow_status' => Product::WORKFLOW_DRAFT,
+            'active' => false,
+            'product_status' => 'draft',
+            'published_at' => null,
+        ], withImage: false);
+        $publishedFlagged = $this->qualityReadyProduct([
+            'name' => 'Public flagged product',
+            'sku' => 'DQ-PUBLIC-FLAGGED',
+            'workflow_status' => Product::WORKFLOW_PUBLISHED,
+            'active' => true,
+            'product_status' => 'active',
+            'published_at' => now(),
+        ]);
+        $flag = ProductQualityFlag::query()->create([
+            'code' => 'public_flagged_product',
+            'label_bg' => 'Public flag',
+            'label_en' => 'Public flag',
+            'severity' => ProductQualityFlag::SEVERITY_LOW,
+            'responsible_role' => User::ROLE_PRODUCT_EDITOR,
+            'type' => ProductQualityFlag::TYPE_CONTENT,
+            'is_active' => true,
+            'sort_order' => 1,
+        ]);
+
+        ProductQualityFlagAssignment::query()->create([
+            'product_id' => $publishedFlagged->id,
+            'product_quality_flag_id' => $flag->id,
+            'status' => ProductQualityFlagAssignment::STATUS_ACTIVE,
+        ]);
+
+        Livewire::test(ListProductDataQualityQueue::class)
+            ->filterTable('workflow_status', Product::WORKFLOW_DRAFT)
+            ->assertCanSeeTableRecords([$hiddenNoFlag])
+            ->assertCanNotSeeTableRecords([$publishedFlagged]);
+
+        Livewire::test(ListProductDataQualityQueue::class)
+            ->filterTable('visibility', 'public')
+            ->assertCanSeeTableRecords([$publishedFlagged])
+            ->assertCanNotSeeTableRecords([$hiddenNoFlag]);
+
+        Livewire::test(ListProductDataQualityQueue::class)
+            ->filterTable('missing_image', true)
+            ->assertCanSeeTableRecords([$hiddenNoFlag])
+            ->assertCanNotSeeTableRecords([$publishedFlagged]);
+
+        Livewire::test(ListProductDataQualityQueue::class)
+            ->filterTable('has_quality_flags', false)
+            ->assertCanSeeTableRecords([$hiddenNoFlag])
+            ->assertCanNotSeeTableRecords([$publishedFlagged]);
+    }
+
+    public function test_queue_searches_by_product_name_sku_and_identifier(): void
+    {
+        $this->actingAsRole(User::ROLE_PRODUCT_EDITOR);
+
+        $target = $this->qualityReadyProduct([
+            'name' => 'Searchable Queue Laptop',
+            'sku' => 'DQ-SEARCH-123',
+        ], withImage: false);
+        $other = $this->qualityReadyProduct([
+            'name' => 'Different Queue Product',
+            'sku' => 'DQ-OTHER-456',
+        ], withImage: false);
+
+        Livewire::test(ListProductDataQualityQueue::class)
+            ->searchTable('Searchable Queue Laptop')
+            ->assertCanSeeTableRecords([$target])
+            ->assertCanNotSeeTableRecords([$other]);
+
+        Livewire::test(ListProductDataQualityQueue::class)
+            ->searchTable('DQ-SEARCH-123')
+            ->assertCanSeeTableRecords([$target])
+            ->assertCanNotSeeTableRecords([$other]);
+
+        Livewire::test(ListProductDataQualityQueue::class)
+            ->searchTable((string) $target->id)
+            ->assertCanSeeTableRecords([$target])
+            ->assertCanNotSeeTableRecords([$other]);
+    }
+
     public function test_queue_detects_missing_english_translation_without_using_bg_fallback(): void
     {
         $this->actingAsRole(User::ROLE_SEO_MARKETING);
@@ -159,6 +292,10 @@ class ProductDataQualityQueueTest extends TestCase
 
         Livewire::test(ListProductDataQualityQueue::class)
             ->assertTableActionExists('editProduct', null, $product)
+            ->assertTableActionHasUrl('editProduct', ProductResource::getUrl('edit', ['record' => $product]), $product)
+            ->assertTableActionExists('openProduct', null, $product)
+            ->assertTableActionHasUrl('openProduct', ProductResource::getUrl('edit', ['record' => $product]), $product)
+            ->assertTableActionShouldOpenUrlInNewTab('openProduct', $product)
             ->assertTableActionDoesNotExist('delete', null, $product);
     }
 

@@ -54,27 +54,64 @@ class ProductDataQualityQueueResource extends Resource
             ->defaultSortOptionLabel('Newest first')
             ->columns([
                 ImageColumn::make('thumbnail')
-                    ->label('Image')
+                    ->label('Снимка')
                     ->state(fn (Product $record): ?string => $record->thumbnailUrl())
                     ->defaultImageUrl(self::placeholderImageUrl())
                     ->size(48)
                     ->square(),
-                TextColumn::make('sku')->searchable()->sortable()->copyable(),
-                TextColumn::make('name')->searchable()->sortable()->limit(45),
-                TextColumn::make('source')->badge()->sortable(),
+                TextColumn::make('image_status')
+                    ->label('Image status')
+                    ->state(fn (Product $record): string => $record->thumbnailUrl() ? 'Has image' : 'Missing image')
+                    ->badge()
+                    ->color(fn (string $state): string => $state === 'Missing image' ? 'warning' : 'success'),
+                TextColumn::make('name')
+                    ->label('Product')
+                    ->description(fn (Product $record): string => sprintf(
+                        'SKU: %s | ID: %d',
+                        filled($record->sku) ? $record->sku : 'missing',
+                        $record->getKey(),
+                    ))
+                    ->searchable()
+                    ->sortable()
+                    ->limit(48)
+                    ->tooltip(fn (Product $record): ?string => $record->name),
+                TextColumn::make('sku')
+                    ->label('SKU')
+                    ->searchable()
+                    ->sortable()
+                    ->copyable()
+                    ->toggleable(),
+                TextColumn::make('id')
+                    ->label('ID')
+                    ->searchable()
+                    ->sortable()
+                    ->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('source')->label('Source')->badge()->sortable(),
                 TextColumn::make('workflow_status')
                     ->label('Workflow')
                     ->badge()
                     ->formatStateUsing(fn (?string $state): string => Product::workflowStatusLabel($state))
+                    ->color(fn (?string $state): string => match ($state) {
+                        Product::WORKFLOW_PUBLISHED => 'success',
+                        Product::WORKFLOW_APPROVED => 'info',
+                        Product::WORKFLOW_PENDING_REVIEW => 'warning',
+                        Product::WORKFLOW_CHANGES_REQUESTED => 'danger',
+                        default => 'gray',
+                    })
                     ->sortable(),
-                TextColumn::make('product_status')->label('Status')->badge()->sortable(),
+                TextColumn::make('visibility_status')
+                    ->label('Visibility')
+                    ->state(fn (Product $record): string => self::isPubliclyVisible($record) ? 'Public' : 'Hidden')
+                    ->badge()
+                    ->color(fn (string $state): string => $state === 'Public' ? 'success' : 'gray'),
+                TextColumn::make('product_status')->label('Product status')->badge()->sortable(),
                 TextColumn::make('stock_status')->badge()->sortable()->toggleable(),
                 TextColumn::make('price')->money(Product::CATALOG_CURRENCY)->sortable(),
                 TextColumn::make('quantity')->sortable(),
                 TextColumn::make('category.name')->label('Category')->sortable()->toggleable(),
                 TextColumn::make('brand.name')->label('Brand')->sortable()->toggleable(),
                 TextColumn::make('active_quality_flag_assignments_count')
-                    ->label('Open flags')
+                    ->label('Flag count')
                     ->badge()
                     ->color(fn (int $state): string => $state > 0 ? 'warning' : 'gray')
                     ->sortable(),
@@ -87,7 +124,7 @@ class ProductDataQualityQueueResource extends Resource
                     ->limitList(4)
                     ->expandableLimitedList(),
                 TextColumn::make('active_quality_flags')
-                    ->label('Flag badges')
+                    ->label('Quality flags')
                     ->state(fn (Product $record): array => $scanner->activeFlagLabels($record))
                     ->badge()
                     ->separator(',')
@@ -123,6 +160,7 @@ class ProductDataQualityQueueResource extends Resource
                     ->label('Workflow')
                     ->options(Product::workflowStatusOptions()),
                 SelectFilter::make('product_status')
+                    ->label('Product status')
                     ->options([
                         'draft' => 'Draft',
                         'active' => 'Active',
@@ -130,6 +168,23 @@ class ProductDataQualityQueueResource extends Resource
                         'archived' => 'Archived',
                         'discontinued' => 'Discontinued',
                     ]),
+                SelectFilter::make('visibility')
+                    ->label('Visibility')
+                    ->options([
+                        'public' => 'Public',
+                        'hidden' => 'Hidden',
+                    ])
+                    ->query(fn (Builder $query, array $data): Builder => match ($data['value'] ?? null) {
+                        'public' => $query
+                            ->where('active', true)
+                            ->whereNotNull('published_at')
+                            ->where('workflow_status', Product::WORKFLOW_PUBLISHED),
+                        'hidden' => $query->where(fn (Builder $query): Builder => $query
+                            ->where('active', false)
+                            ->orWhereNull('published_at')
+                            ->orWhere('workflow_status', '!=', Product::WORKFLOW_PUBLISHED)),
+                        default => $query,
+                    }),
                 SelectFilter::make('stock_status')
                     ->options(Product::stockStatusOptions()),
                 SelectFilter::make('category')->relationship('category', 'name')->searchable()->preload(),
@@ -146,6 +201,12 @@ class ProductDataQualityQueueResource extends Resource
                     ->queries(
                         true: fn (Builder $query): Builder => $scanner->applyIssueQuery($query, ProductDataQualityScanner::ISSUE_MISSING_IMAGE),
                         false: fn (Builder $query): Builder => $query->has('images'),
+                    ),
+                TernaryFilter::make('has_quality_flags')
+                    ->label('Assigned quality flags')
+                    ->queries(
+                        true: fn (Builder $query): Builder => $query->whereHas('activeQualityFlagAssignments'),
+                        false: fn (Builder $query): Builder => $query->doesntHave('activeQualityFlagAssignments'),
                     ),
                 TernaryFilter::make('missing_seo')
                     ->label('Missing SEO')
@@ -181,7 +242,20 @@ class ProductDataQualityQueueResource extends Resource
                     ->label('Edit product')
                     ->icon(Heroicon::OutlinedPencilSquare)
                     ->url(fn (Product $record): string => ProductResource::getUrl('edit', ['record' => $record])),
-            ]);
+                Action::make('openProduct')
+                    ->label('Open in new tab')
+                    ->icon(Heroicon::OutlinedArrowTopRightOnSquare)
+                    ->url(fn (Product $record): string => ProductResource::getUrl('edit', ['record' => $record]))
+                    ->openUrlInNewTab(),
+                Action::make('reviewFlags')
+                    ->label('Review flags')
+                    ->icon(Heroicon::OutlinedFlag)
+                    ->url(fn (Product $record): string => ProductResource::getUrl('edit', ['record' => $record]))
+                    ->visible(fn (Product $record): bool => (int) ($record->active_quality_flag_assignments_count ?? 0) > 0),
+            ])
+            ->emptyStateHeading('Няма продукти за преглед')
+            ->emptyStateDescription('Когато продукт има липсваща информация или активен quality flag, ще се появи тук за ръчна проверка.')
+            ->emptyStateIcon(Heroicon::OutlinedClipboardDocumentCheck);
     }
 
     public static function getEloquentQuery(): Builder
@@ -249,7 +323,14 @@ class ProductDataQualityQueueResource extends Resource
     protected static function placeholderImageUrl(): string
     {
         return 'data:image/svg+xml;utf8,'.rawurlencode(
-            '<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48"><rect width="48" height="48" rx="6" fill="#f3f4f6"/><path d="M14 32h20l-6-8-5 6-3-4-6 6Z" fill="#9ca3af"/><circle cx="18" cy="18" r="4" fill="#d1d5db"/></svg>'
+            '<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48"><rect width="48" height="48" rx="6" fill="#f3f4f6"/><path d="M14 32h20l-6-8-5 6-3-4-6 6Z" fill="#9ca3af"/><circle cx="18" cy="18" r="4" fill="#d1d5db"/><text x="24" y="43" text-anchor="middle" font-family="Arial" font-size="6" fill="#6b7280">no image</text></svg>'
         );
+    }
+
+    protected static function isPubliclyVisible(Product $product): bool
+    {
+        return (bool) $product->active
+            && $product->published_at !== null
+            && $product->workflow_status === Product::WORKFLOW_PUBLISHED;
     }
 }
