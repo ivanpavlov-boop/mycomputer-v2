@@ -36,10 +36,27 @@ services:
     depends_on:
       app:
         condition: service_healthy
+      frontend:
+        condition: service_started
     volumes:
       - ./public:/var/www/html/public:ro
       - app-storage:/var/www/html/storage:ro
       - ./deploy/nginx/mycomputer.conf:/etc/nginx/conf.d/default.conf:ro
+
+  frontend:
+    build:
+      context: ./frontend
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+      NITRO_HOST: 0.0.0.0
+      NITRO_PORT: 3000
+      NUXT_PUBLIC_API_BASE_URL: ${NUXT_PUBLIC_API_BASE_URL:-/api/v1}
+      NUXT_API_SERVER_BASE_URL: ${NUXT_API_SERVER_BASE_URL:-http://nginx/api/v1}
+      NUXT_PUBLIC_SITE_URL: ${NUXT_PUBLIC_SITE_URL:-http://localhost:8080}
+    expose:
+      - "3000"
 
   queue:
     build:

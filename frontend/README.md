@@ -32,6 +32,7 @@ NUXT_PUBLIC_META_PIXEL_ID=
 ```
 
 The Laravel API must be running and reachable at `NUXT_PUBLIC_API_BASE_URL`.
+For Docker SSR deployments, set `NUXT_API_SERVER_BASE_URL` to the internal API URL used by the Nuxt server, for example `http://nginx/api/v1`, while keeping `NUXT_PUBLIC_API_BASE_URL` same-origin such as `/api/v1`.
 
 ## Development
 
@@ -138,7 +139,21 @@ npm run build
 npm run preview -- --host 0.0.0.0 --port 3000
 ```
 
-Then browser-check homepage, category, product, cart, checkout, account, wishlist, reviews, blog, B2B, bundles, PC Builder and assistant routes against the staging Laravel API.
+Then browser-check the read-only storefront routes that are intentionally exposed in the Docker nginx config: homepage, catalog, categories, category detail and product detail pages. Cart, checkout, account, wishlist, compare and customer auth pages are not exposed through nginx in Phase 9A.
+
+## Docker Deployment
+
+The root Docker Compose stack builds this package as the `frontend` service. Public nginx routing exposes only the Phase 9A read-only storefront entry points:
+
+- `/`
+- `/catalog`
+- `/categories`
+- `/c/*`
+- `/p/*`
+- `/_nuxt/*`
+- `/_ipx/*`
+
+Admin, API, Livewire, Filament assets and storage remain served by Laravel. Cart, checkout, account, wishlist, compare and customer auth pages are intentionally not exposed through nginx in this phase.
 
 ## Remaining
 
