@@ -81,6 +81,9 @@ class FrontendDeployWiringTest extends TestCase
         $this->assertStringContainsString('FROM node:22-alpine AS build', $dockerfile);
         $this->assertStringContainsString('RUN npm ci', $dockerfile);
         $this->assertStringContainsString('RUN npm run build', $dockerfile);
+        $this->assertStringContainsString('npm prune --omit=dev', $dockerfile);
+        $this->assertStringContainsString('FROM node:22-alpine AS runtime', $dockerfile);
+        $this->assertStringContainsString('COPY --from=build /app/node_modules ./node_modules', $dockerfile);
         $this->assertStringContainsString('CMD ["node", ".output/server/index.mjs"]', $dockerfile);
     }
 
