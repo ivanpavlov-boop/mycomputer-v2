@@ -1,0 +1,52 @@
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
+import { describe, expect, it } from 'vitest'
+
+const root = resolve(__dirname, '..')
+
+function source(path: string) {
+  return readFileSync(resolve(root, path), 'utf8')
+}
+
+describe('read-only public catalog foundation', () => {
+  it('keeps product cards read-only and uses an image fallback', () => {
+    const card = source('app/components/catalog/ProductCard.vue')
+
+    expect(card).toContain('Виж продукта')
+    expect(card).toContain('Няма снимка')
+    expect(card).not.toContain('useCartStore')
+    expect(card).not.toContain('useWishlistStore')
+    expect(card).not.toContain('useCompareStore')
+    expect(card).not.toContain('addToCart')
+    expect(card).not.toContain('wishlist.toggle')
+    expect(card).not.toContain('compare.toggle')
+  })
+
+  it('keeps product detail read-only with no purchase, quote, review, or analytics actions', () => {
+    const detail = source('app/pages/p/[slug].vue')
+
+    expect(detail).toContain('ProductGallery')
+    expect(detail).toContain('ProductPrice')
+    expect(detail).not.toContain('useCartStore')
+    expect(detail).not.toContain('useWishlistStore')
+    expect(detail).not.toContain('useCompareStore')
+    expect(detail).not.toContain('useAnalytics')
+    expect(detail).not.toContain('RequestQuoteButton')
+    expect(detail).not.toContain('ProductReviewList')
+    expect(detail).not.toContain('ProductReviewForm')
+  })
+
+  it('adds catalog and category entry pages that read from catalog APIs only', () => {
+    const catalog = source('app/pages/catalog.vue')
+    const categories = source('app/pages/categories/index.vue')
+
+    expect(catalog).toContain('useProducts')
+    expect(catalog).toContain('ProductGrid')
+    expect(catalog).toContain('SortSelect')
+    expect(categories).toContain('useCategories')
+    expect(categories).toContain('CategoryCard')
+
+    expect(catalog).not.toContain('supplier_products')
+    expect(categories).not.toContain('supplier_products')
+  })
+})

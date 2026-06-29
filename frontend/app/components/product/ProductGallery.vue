@@ -7,12 +7,16 @@
         :alt="activeImage.alt_text || productName"
         class="h-full w-full object-contain"
       />
-      <span v-else class="text-5xl text-slate-300">▣</span>
+      <div v-else class="flex h-full w-full flex-col items-center justify-center gap-2 text-center text-slate-400">
+        <span class="text-5xl" aria-hidden="true">□</span>
+        <span class="text-sm font-medium">Няма снимка</span>
+      </div>
     </div>
     <div v-if="images.length > 1" class="grid grid-cols-5 gap-2">
       <button
         v-for="image in images"
         :key="image.path"
+        type="button"
         class="rounded-md border bg-white p-2"
         :class="activeImage?.path === image.path ? 'border-brand-500' : 'border-slate-200'"
         @click="activeImage = image"
