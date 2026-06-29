@@ -8,13 +8,15 @@ Related docs: [Testing](TESTING.md), [Sync Safety](SYNC_SAFETY.md), [Rollback Pl
 
 ## Current Status
 
-Deployment is Docker-based. Deploy only from `origin/main` after PR merge and passing CI.
+Deployment is Docker-based. Deploy only from `origin/main` after PR merge and passing CI. The stack serves Laravel/Filament through `app` and selected read-only Nuxt storefront routes through `frontend`.
 
 ## Allowed
 
 - Deploy merged `origin/main`.
 - Build app, queue, and scheduler containers.
+- Build the frontend container.
 - Start app before nginx.
+- Start frontend before nginx.
 - Run migrations with `--force`.
 - Rebuild Laravel caches after deploy.
 
@@ -58,6 +60,38 @@ MAIL_FROM_NAME="${APP_NAME}"
 
 Do not hard-code mail credentials in source control. If mail delivery fails, the admin action reports the failure without exposing tokens, passwords or mail credentials.
 
+## Frontend Storefront Routing
+
+The Docker nginx config intentionally exposes only the safe Phase 9A storefront routes through Nuxt:
+
+- `/`
+- `/catalog`
+- `/categories`
+- `/c/*`
+- `/p/*`
+- `/_nuxt/*`
+- `/_ipx/*`
+
+Laravel remains authoritative for:
+
+- `/admin`
+- `/api/*`
+- `/livewire/*`
+- Filament/Laravel assets under `/vendor/*` and `/build/*`
+- `/storage/*`
+
+Customer cart, checkout, account, wishlist, compare and auth storefront routes are not enabled through nginx in this phase. Keep them blocked until those flows are explicitly approved.
+
+Frontend runtime configuration:
+
+```dotenv
+NUXT_PUBLIC_API_BASE_URL=/api/v1
+NUXT_API_SERVER_BASE_URL=http://nginx/api/v1
+NUXT_PUBLIC_SITE_URL=https://computer2u.eu
+```
+
+`NUXT_PUBLIC_API_BASE_URL` is browser-visible and should usually stay same-origin. `NUXT_API_SERVER_BASE_URL` is private server-side Nuxt configuration used by SSR inside Docker.
+
 ## Safe VPS Deploy Command
 
 ```bash
@@ -66,8 +100,8 @@ cd /var/www/mycomputer-v2
 git fetch origin
 git reset --hard origin/main
 
-docker compose build app queue scheduler
-docker compose up -d app queue scheduler
+docker compose build app frontend queue scheduler
+docker compose up -d app frontend queue scheduler
 
 sleep 10
 
@@ -89,25 +123,28 @@ sleep 10
 curl -I http://localhost:8080
 ```
 
-## Common Issue: nginx Upstream App Not Found
+## Common Issue: nginx Upstream App Or Frontend Not Found
 
 Symptom:
 
 ```text
 host not found in upstream "app"
+host not found in upstream "frontend"
 ```
 
 Fix:
 
 1. Start `app` first.
-2. Wait for PHP-FPM to be ready.
-3. Start or restart `nginx`.
+2. Start `frontend`.
+3. Wait for PHP-FPM to be ready.
+4. Start or restart `nginx`.
 
 Useful checks:
 
 ```bash
 docker compose ps
 docker compose logs app --tail=100
+docker compose logs frontend --tail=100
 docker compose logs nginx --tail=100
 curl -I http://localhost:8080
 ```

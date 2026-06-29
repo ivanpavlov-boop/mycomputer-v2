@@ -1,6 +1,8 @@
 export function useApi() {
   const config = useRuntimeConfig()
-  const baseURL = config.public.apiBaseUrl
+  const baseURL = import.meta.server
+    ? String(config.apiServerBaseUrl || config.public.apiBaseUrl)
+    : config.public.apiBaseUrl
   const auth = useAuthStore()
 
   async function get<T>(path: string, query?: Record<string, unknown>) {
