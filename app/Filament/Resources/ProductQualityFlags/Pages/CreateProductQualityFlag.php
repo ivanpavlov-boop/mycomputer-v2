@@ -9,6 +9,11 @@ class CreateProductQualityFlag extends CreateRecord
 {
     protected static string $resource = ProductQualityFlagResource::class;
 
+    public function getTitle(): string
+    {
+        return 'Създаване на флаг за качество';
+    }
+
     protected function getRedirectUrl(): string
     {
         return $this->getResourceUrl();

@@ -301,6 +301,51 @@ class ProductWorkflowQualityFlagsTest extends TestCase
         $this->assertTrue($catalogManager->canManageProductQualityFlags());
     }
 
+    public function test_product_quality_flag_admin_labels_are_bulgarian(): void
+    {
+        $this->actingAsRole(User::ROLE_CATALOG_MANAGER);
+
+        $flag = ProductQualityFlag::query()->create([
+            'code' => 'bg_admin_label_test',
+            'label_bg' => 'Липсва снимка',
+            'label_en' => 'Missing image',
+            'description_bg' => 'Описание за тест.',
+            'description_en' => 'Test description.',
+            'severity' => ProductQualityFlag::SEVERITY_HIGH,
+            'responsible_role' => User::ROLE_PRODUCT_EDITOR,
+            'type' => ProductQualityFlag::TYPE_MEDIA,
+            'is_active' => true,
+            'sort_order' => 5,
+        ]);
+
+        $this->get(ProductQualityFlagResource::getUrl())
+            ->assertOk()
+            ->assertSee('Флагове за качество')
+            ->assertSee('Код')
+            ->assertSee('Етикет')
+            ->assertSee('Важност')
+            ->assertSee('Тип')
+            ->assertSee('Отговорна роля')
+            ->assertSee('Активен')
+            ->assertSee('Ред на сортиране')
+            ->assertSee('Висока')
+            ->assertSee('Медия')
+            ->assertSee('Редактор на продукти');
+
+        $this->get(ProductQualityFlagResource::getUrl('create'))
+            ->assertOk()
+            ->assertSee('Създаване на флаг за качество')
+            ->assertSee('Етикет на български')
+            ->assertSee('Етикет на английски')
+            ->assertSee('Описание на български')
+            ->assertSee('Описание на английски');
+
+        $this->get(ProductQualityFlagResource::getUrl('edit', ['record' => $flag]))
+            ->assertOk()
+            ->assertSee('Редакция на флаг за качество')
+            ->assertSee('Изтриване');
+    }
+
     public function test_catalog_sync_create_defaults_supplier_product_to_published(): void
     {
         $this->actingAsRole(User::ROLE_SUPER_ADMIN);

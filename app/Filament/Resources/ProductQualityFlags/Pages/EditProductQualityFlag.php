@@ -10,10 +10,15 @@ class EditProductQualityFlag extends EditRecord
 {
     protected static string $resource = ProductQualityFlagResource::class;
 
+    public function getTitle(): string
+    {
+        return 'Редакция на флаг за качество';
+    }
+
     protected function getHeaderActions(): array
     {
         return [
-            DeleteAction::make(),
+            DeleteAction::make()->label('Изтриване'),
         ];
     }
 

@@ -13,7 +13,7 @@ class ListProductQualityFlags extends ListRecords
     protected function getHeaderActions(): array
     {
         return [
-            CreateAction::make(),
+            CreateAction::make()->label('Създаване на флаг за качество'),
         ];
     }
 }

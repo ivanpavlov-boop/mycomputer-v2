@@ -38,7 +38,11 @@ class ProductQualityFlagResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedFlag;
 
-    protected static ?string $navigationLabel = 'Product Quality Flags';
+    protected static ?string $navigationLabel = 'Флагове за качество';
+
+    protected static ?string $modelLabel = 'Флаг за качество';
+
+    protected static ?string $pluralModelLabel = 'Флагове за качество';
 
     protected static string|UnitEnum|null $navigationGroup = 'Catalog';
 
@@ -47,38 +51,44 @@ class ProductQualityFlagResource extends Resource
         return $schema->components([
             Grid::make(2)->schema([
                 TextInput::make('code')
+                    ->label('Код')
                     ->required()
                     ->unique(ignoreRecord: true)
                     ->maxLength(100),
                 TextInput::make('label_bg')
-                    ->label('Bulgarian label')
+                    ->label('Етикет на български')
                     ->required()
                     ->maxLength(255),
                 TextInput::make('label_en')
-                    ->label('English label')
+                    ->label('Етикет на английски')
                     ->maxLength(255),
                 Select::make('severity')
-                    ->options(ProductQualityFlag::severityOptions())
+                    ->label('Важност')
+                    ->options(self::severityOptions())
                     ->default(ProductQualityFlag::SEVERITY_MEDIUM)
                     ->required(),
                 Select::make('responsible_role')
-                    ->options(User::roleOptions())
+                    ->label('Отговорна роля')
+                    ->options(self::roleOptions())
                     ->searchable(),
                 Select::make('type')
-                    ->options(ProductQualityFlag::typeOptions())
+                    ->label('Тип')
+                    ->options(self::typeOptions())
                     ->searchable(),
                 Toggle::make('is_active')
+                    ->label('Активен')
                     ->default(true),
                 TextInput::make('sort_order')
+                    ->label('Ред на сортиране')
                     ->numeric()
                     ->default(0)
                     ->required(),
                 Textarea::make('description_bg')
-                    ->label('Bulgarian description')
+                    ->label('Описание на български')
                     ->rows(3)
                     ->columnSpanFull(),
                 Textarea::make('description_en')
-                    ->label('English description')
+                    ->label('Описание на английски')
                     ->rows(3)
                     ->columnSpanFull(),
             ]),
@@ -89,29 +99,40 @@ class ProductQualityFlagResource extends Resource
     {
         return $table
             ->columns([
-                TextColumn::make('code')->searchable()->sortable(),
-                TextColumn::make('label_bg')->label('Label')->searchable()->sortable(),
-                TextColumn::make('severity')->badge()->sortable(),
-                TextColumn::make('type')->badge()->sortable()->toggleable(),
-                TextColumn::make('responsible_role')
-                    ->formatStateUsing(fn (?string $state): string => User::roleLabel($state))
+                TextColumn::make('code')->label('Код')->searchable()->sortable(),
+                TextColumn::make('label_bg')->label('Етикет')->searchable()->sortable(),
+                TextColumn::make('severity')
+                    ->label('Важност')
+                    ->badge()
+                    ->formatStateUsing(fn (?string $state): string => self::severityOptions()[$state] ?? 'Няма')
+                    ->sortable(),
+                TextColumn::make('type')
+                    ->label('Тип')
+                    ->badge()
+                    ->formatStateUsing(fn (?string $state): string => self::typeOptions()[$state] ?? 'Няма')
+                    ->sortable()
                     ->toggleable(),
-                IconColumn::make('is_active')->boolean()->sortable(),
-                TextColumn::make('sort_order')->sortable()->toggleable(),
-                TextColumn::make('updated_at')->dateTime()->sortable()->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('responsible_role')
+                    ->label('Отговорна роля')
+                    ->formatStateUsing(fn (?string $state): string => self::roleOptions()[$state] ?? 'Няма')
+                    ->toggleable(),
+                IconColumn::make('is_active')->label('Активен')->boolean()->sortable(),
+                TextColumn::make('sort_order')->label('Ред на сортиране')->sortable()->toggleable(),
+                TextColumn::make('created_at')->label('Създаден на')->dateTime()->sortable()->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('updated_at')->label('Обновен на')->dateTime()->sortable()->toggleable(isToggledHiddenByDefault: true),
             ])
             ->filters([
-                SelectFilter::make('severity')->options(ProductQualityFlag::severityOptions()),
-                SelectFilter::make('type')->options(ProductQualityFlag::typeOptions()),
-                SelectFilter::make('responsible_role')->options(User::roleOptions()),
-                TernaryFilter::make('is_active'),
+                SelectFilter::make('severity')->label('Важност')->options(self::severityOptions()),
+                SelectFilter::make('type')->label('Тип')->options(self::typeOptions()),
+                SelectFilter::make('responsible_role')->label('Отговорна роля')->options(self::roleOptions()),
+                TernaryFilter::make('is_active')->label('Активен'),
             ])
             ->recordActions([
-                EditAction::make(),
+                EditAction::make()->label('Редакция'),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
-                    DeleteBulkAction::make(),
+                    DeleteBulkAction::make()->label('Изтрий избраните'),
                 ]),
             ]);
     }
@@ -153,5 +174,48 @@ class ProductQualityFlagResource extends Resource
     protected static function canAccessResource(): bool
     {
         return (bool) auth()->user()?->canManageProductQualityFlags();
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    protected static function severityOptions(): array
+    {
+        return [
+            ProductQualityFlag::SEVERITY_LOW => 'Ниска',
+            ProductQualityFlag::SEVERITY_MEDIUM => 'Средна',
+            ProductQualityFlag::SEVERITY_HIGH => 'Висока',
+        ];
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    protected static function typeOptions(): array
+    {
+        return [
+            ProductQualityFlag::TYPE_MEDIA => 'Медия',
+            ProductQualityFlag::TYPE_CONTENT => 'Съдържание',
+            ProductQualityFlag::TYPE_SEO => 'SEO',
+            ProductQualityFlag::TYPE_DATA => 'Каталог',
+        ];
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    protected static function roleOptions(): array
+    {
+        return [
+            User::ROLE_SUPER_ADMIN => 'Супер администратор',
+            User::ROLE_CATALOG_MANAGER => 'Каталог',
+            User::ROLE_PRODUCT_EDITOR => 'Редактор на продукти',
+            User::ROLE_PRODUCT_DATA_ENTRY => 'Въвеждане на продукти',
+            User::ROLE_PRICING_MANAGER => 'Цени',
+            User::ROLE_INVENTORY_MANAGER => 'Наличност',
+            User::ROLE_SEO_MARKETING => 'SEO / Маркетинг',
+            User::ROLE_ORDER_MANAGER => 'Поръчки',
+            User::ROLE_VIEWER_AUDITOR => 'Преглед / одит',
+        ];
     }
 }
