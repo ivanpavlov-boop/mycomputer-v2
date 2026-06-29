@@ -1,6 +1,6 @@
 <template>
   <div>
-    <div v-if="product.promo_price" class="flex items-baseline gap-2">
+    <div v-if="product.promo_price" class="flex flex-wrap items-baseline gap-2">
       <span class="text-2xl font-bold text-red-600">{{ money(product.promo_price) }}</span>
       <span class="text-sm text-slate-500 line-through">{{ money(product.price) }}</span>
     </div>
@@ -14,7 +14,7 @@ import type { ProductCard } from '~/types/api'
 
 const props = defineProps<{ product: ProductCard }>()
 
-const money = (value: string | number) => new Intl.NumberFormat('en-US', {
+const money = (value: string | number) => new Intl.NumberFormat('bg-BG', {
   style: 'currency',
   currency: props.product.currency || 'EUR',
 }).format(Number(value))

@@ -474,7 +474,11 @@ class Product extends Model
         return $query
             ->where('active', true)
             ->whereNotNull('published_at')
-            ->where('workflow_status', self::WORKFLOW_PUBLISHED);
+            ->where('workflow_status', self::WORKFLOW_PUBLISHED)
+            ->where('product_status', 'active')
+            ->whereNotNull('slug')
+            ->where('slug', '!=', '')
+            ->whereHas('category', fn (Builder $category): Builder => $category->where('is_active', true));
     }
 
     public function scopeInStock(Builder $query): Builder
