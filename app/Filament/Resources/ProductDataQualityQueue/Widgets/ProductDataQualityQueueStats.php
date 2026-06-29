@@ -16,14 +16,14 @@ class ProductDataQualityQueueStats extends StatsOverviewWidget
         $scanner = app(ProductDataQualityScanner::class);
 
         return [
-            Stat::make('Products needing attention', $scanner->applyQueueScope(Product::query())->count()),
-            Stat::make('Missing images', Product::query()->doesntHave('images')->count()),
-            Stat::make('Missing SEO', $scanner->applyIssueQuery(Product::query(), ProductDataQualityScanner::ISSUE_MISSING_SEO)->count()),
-            Stat::make('Missing EN translation', $scanner->applyIssueQuery(Product::query(), ProductDataQualityScanner::ISSUE_MISSING_EN_TRANSLATION)->count()),
-            Stat::make('Missing category', Product::query()->whereNull('category_id')->count()),
-            Stat::make('Weak descriptions', $scanner->applyIssueQuery(Product::query(), ProductDataQualityScanner::ISSUE_WEAK_DESCRIPTION)->count()),
-            Stat::make('Open quality flags', ProductQualityFlagAssignment::query()->active()->count()),
-            Stat::make('High severity items', ProductQualityFlagAssignment::query()
+            Stat::make('Продукти за преглед', $scanner->applyQueueScope(Product::query())->count()),
+            Stat::make('Липсващи снимки', Product::query()->doesntHave('images')->count()),
+            Stat::make('Липсва SEO', $scanner->applyIssueQuery(Product::query(), ProductDataQualityScanner::ISSUE_MISSING_SEO)->count()),
+            Stat::make('Липсва EN превод', $scanner->applyIssueQuery(Product::query(), ProductDataQualityScanner::ISSUE_MISSING_EN_TRANSLATION)->count()),
+            Stat::make('Липсва категория', Product::query()->whereNull('category_id')->count()),
+            Stat::make('Слаби описания', $scanner->applyIssueQuery(Product::query(), ProductDataQualityScanner::ISSUE_WEAK_DESCRIPTION)->count()),
+            Stat::make('Активни флагове', ProductQualityFlagAssignment::query()->active()->count()),
+            Stat::make('Висока важност', ProductQualityFlagAssignment::query()
                 ->active()
                 ->whereHas('flag', fn ($query) => $query->where('severity', ProductQualityFlag::SEVERITY_HIGH))
                 ->count()),

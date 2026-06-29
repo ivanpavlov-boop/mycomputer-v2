@@ -28,11 +28,11 @@ class ProductDataQualityQueueResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedClipboardDocumentCheck;
 
-    protected static ?string $navigationLabel = 'Product Data Quality Queue';
+    protected static ?string $navigationLabel = 'Опашка за качество на продуктови данни';
 
-    protected static ?string $modelLabel = 'Product data quality item';
+    protected static ?string $modelLabel = 'Продукт за преглед на качеството';
 
-    protected static ?string $pluralModelLabel = 'Product Data Quality Queue';
+    protected static ?string $pluralModelLabel = 'Опашка за качество на продуктови данни';
 
     protected static string|UnitEnum|null $navigationGroup = 'Catalog';
 
@@ -51,7 +51,7 @@ class ProductDataQualityQueueResource extends Resource
                 ->with(['thumbnailImage', 'category', 'brand', 'assignedTo', 'images', 'attributes', 'activeQualityFlagAssignments.flag'])
                 ->withCount('activeQualityFlagAssignments'))
             ->defaultSort('created_at', 'desc')
-            ->defaultSortOptionLabel('Newest first')
+            ->defaultSortOptionLabel('Най-нови първо')
             ->columns([
                 ImageColumn::make('thumbnail')
                     ->label('Снимка')
@@ -60,12 +60,12 @@ class ProductDataQualityQueueResource extends Resource
                     ->size(48)
                     ->square(),
                 TextColumn::make('image_status')
-                    ->label('Image status')
-                    ->state(fn (Product $record): string => $record->thumbnailUrl() ? 'Has image' : 'Missing image')
+                    ->label('Статус на снимка')
+                    ->state(fn (Product $record): string => $record->thumbnailUrl() ? 'Има снимка' : 'Липсва снимка')
                     ->badge()
-                    ->color(fn (string $state): string => $state === 'Missing image' ? 'warning' : 'success'),
+                    ->color(fn (string $state): string => $state === 'Липсва снимка' ? 'warning' : 'success'),
                 TextColumn::make('name')
-                    ->label('Product')
+                    ->label('Продукт')
                     ->description(fn (Product $record): string => sprintf(
                         'SKU: %s | ID: %d',
                         filled($record->sku) ? $record->sku : 'missing',
@@ -86,9 +86,9 @@ class ProductDataQualityQueueResource extends Resource
                     ->searchable()
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
-                TextColumn::make('source')->label('Source')->badge()->sortable(),
+                TextColumn::make('source')->label('Източник')->badge()->sortable(),
                 TextColumn::make('workflow_status')
-                    ->label('Workflow')
+                    ->label('Работен статус')
                     ->badge()
                     ->formatStateUsing(fn (?string $state): string => Product::workflowStatusLabel($state))
                     ->color(fn (?string $state): string => match ($state) {
@@ -100,79 +100,81 @@ class ProductDataQualityQueueResource extends Resource
                     })
                     ->sortable(),
                 TextColumn::make('visibility_status')
-                    ->label('Visibility')
-                    ->state(fn (Product $record): string => self::isPubliclyVisible($record) ? 'Public' : 'Hidden')
+                    ->label('Видимост')
+                    ->state(fn (Product $record): string => self::isPubliclyVisible($record) ? 'Публичен' : 'Скрит')
                     ->badge()
-                    ->color(fn (string $state): string => $state === 'Public' ? 'success' : 'gray'),
-                TextColumn::make('product_status')->label('Product status')->badge()->sortable(),
-                TextColumn::make('stock_status')->badge()->sortable()->toggleable(),
-                TextColumn::make('price')->money(Product::CATALOG_CURRENCY)->sortable(),
-                TextColumn::make('quantity')->sortable(),
-                TextColumn::make('category.name')->label('Category')->sortable()->toggleable(),
-                TextColumn::make('brand.name')->label('Brand')->sortable()->toggleable(),
+                    ->color(fn (string $state): string => $state === 'Публичен' ? 'success' : 'gray'),
+                TextColumn::make('product_status')->label('Статус на продукта')->badge()->sortable(),
+                TextColumn::make('stock_status')->label('Статус на наличност')->badge()->sortable()->toggleable(),
+                TextColumn::make('price')->label('Цена')->money(Product::CATALOG_CURRENCY)->sortable(),
+                TextColumn::make('quantity')->label('Количество')->sortable(),
+                TextColumn::make('category.name')->label('Категория')->sortable()->toggleable(),
+                TextColumn::make('brand.name')->label('Бранд')->sortable()->toggleable(),
                 TextColumn::make('active_quality_flag_assignments_count')
-                    ->label('Flag count')
+                    ->label('Брой флагове')
                     ->badge()
                     ->color(fn (int $state): string => $state > 0 ? 'warning' : 'gray')
                     ->sortable(),
                 TextColumn::make('detected_issues')
-                    ->label('Detected issues')
-                    ->state(fn (Product $record): array => $scanner->issueLabels($record))
+                    ->label('Открити проблеми')
+                    ->state(fn (Product $record): array => self::detectedIssueLabels($record, $scanner))
                     ->badge()
                     ->separator(',')
                     ->placeholder('-')
                     ->limitList(4)
                     ->expandableLimitedList(),
                 TextColumn::make('active_quality_flags')
-                    ->label('Quality flags')
+                    ->label('Флагове за качество')
                     ->state(fn (Product $record): array => $scanner->activeFlagLabels($record))
                     ->badge()
                     ->separator(',')
                     ->placeholder('-')
                     ->limitList(3)
                     ->expandableLimitedList(),
-                TextColumn::make('assignedTo.name')->label('Assigned')->toggleable(),
-                TextColumn::make('updated_at')->dateTime()->sortable()->toggleable(),
-                TextColumn::make('created_at')->dateTime()->sortable()->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('assignedTo.name')->label('Отговорник')->toggleable(),
+                TextColumn::make('updated_at')->label('Обновен на')->dateTime()->sortable()->toggleable(),
+                TextColumn::make('created_at')->label('Създаден на')->dateTime()->sortable()->toggleable(isToggledHiddenByDefault: true),
             ])
             ->filters([
                 SelectFilter::make('issue_type')
-                    ->label('Issue type')
-                    ->options(ProductDataQualityScanner::issueOptions())
+                    ->label('Тип проблем')
+                    ->options(self::issueOptions())
                     ->query(fn (Builder $query, array $data): Builder => $scanner->applyIssueQuery($query, $data['value'] ?? null)),
                 SelectFilter::make('quality_flag')
-                    ->label('Quality flag')
+                    ->label('Флаг за качество')
                     ->options(fn (): array => ProductQualityFlag::query()->active()->ordered()->pluck('label_bg', 'id')->all())
                     ->query(fn (Builder $query, array $data): Builder => blank($data['value'] ?? null)
                         ? $query
                         : $query->whereHas('activeQualityFlagAssignments', fn (Builder $query): Builder => $query->where('product_quality_flag_id', $data['value']))),
                 SelectFilter::make('severity')
-                    ->options(ProductQualityFlag::severityOptions())
+                    ->label('Важност')
+                    ->options(self::severityOptions())
                     ->query(fn (Builder $query, array $data): Builder => blank($data['value'] ?? null)
                         ? $query
                         : $query->whereHas('activeQualityFlagAssignments.flag', fn (Builder $query): Builder => $query->where('severity', $data['value']))),
                 SelectFilter::make('source')
+                    ->label('Източник')
                     ->options([
-                        Product::SOURCE_MANUAL => 'Manual',
-                        Product::SOURCE_SUPPLIER_IMPORT => 'Supplier import',
+                        Product::SOURCE_MANUAL => 'Ръчно',
+                        Product::SOURCE_SUPPLIER_IMPORT => 'От доставчик',
                     ]),
                 SelectFilter::make('workflow_status')
-                    ->label('Workflow')
+                    ->label('Работен статус')
                     ->options(Product::workflowStatusOptions()),
                 SelectFilter::make('product_status')
-                    ->label('Product status')
+                    ->label('Статус на продукта')
                     ->options([
-                        'draft' => 'Draft',
-                        'active' => 'Active',
-                        'hidden' => 'Hidden',
-                        'archived' => 'Archived',
-                        'discontinued' => 'Discontinued',
+                        'draft' => 'Чернова',
+                        'active' => 'Активен',
+                        'hidden' => 'Скрит',
+                        'archived' => 'Архивиран',
+                        'discontinued' => 'Спрян',
                     ]),
                 SelectFilter::make('visibility')
-                    ->label('Visibility')
+                    ->label('Видимост')
                     ->options([
-                        'public' => 'Public',
-                        'hidden' => 'Hidden',
+                        'public' => 'Публичен',
+                        'hidden' => 'Скрит',
                     ])
                     ->query(fn (Builder $query, array $data): Builder => match ($data['value'] ?? null) {
                         'public' => $query
@@ -186,30 +188,31 @@ class ProductDataQualityQueueResource extends Resource
                         default => $query,
                     }),
                 SelectFilter::make('stock_status')
+                    ->label('Статус на наличност')
                     ->options(Product::stockStatusOptions()),
-                SelectFilter::make('category')->relationship('category', 'name')->searchable()->preload(),
-                SelectFilter::make('brand')->relationship('brand', 'name')->searchable()->preload(),
-                SelectFilter::make('assigned_to')->relationship('assignedTo', 'name')->searchable()->preload(),
+                SelectFilter::make('category')->label('Категория')->relationship('category', 'name')->searchable()->preload(),
+                SelectFilter::make('brand')->label('Бранд')->relationship('brand', 'name')->searchable()->preload(),
+                SelectFilter::make('assigned_to')->label('Отговорник')->relationship('assignedTo', 'name')->searchable()->preload(),
                 SelectFilter::make('responsible_role')
-                    ->label('Responsible role')
-                    ->options(User::roleOptions())
+                    ->label('Отговорна роля')
+                    ->options(self::roleOptions())
                     ->query(fn (Builder $query, array $data): Builder => blank($data['value'] ?? null)
                         ? $query
                         : $query->whereHas('activeQualityFlagAssignments.flag', fn (Builder $query): Builder => $query->where('responsible_role', $data['value']))),
                 TernaryFilter::make('missing_image')
-                    ->label('Missing image')
+                    ->label('Липсва снимка')
                     ->queries(
                         true: fn (Builder $query): Builder => $scanner->applyIssueQuery($query, ProductDataQualityScanner::ISSUE_MISSING_IMAGE),
                         false: fn (Builder $query): Builder => $query->has('images'),
                     ),
                 TernaryFilter::make('has_quality_flags')
-                    ->label('Assigned quality flags')
+                    ->label('Назначени флагове за качество')
                     ->queries(
                         true: fn (Builder $query): Builder => $query->whereHas('activeQualityFlagAssignments'),
                         false: fn (Builder $query): Builder => $query->doesntHave('activeQualityFlagAssignments'),
                     ),
                 TernaryFilter::make('missing_seo')
-                    ->label('Missing SEO')
+                    ->label('Липсва SEO')
                     ->queries(
                         true: fn (Builder $query): Builder => $scanner->applyIssueQuery($query, ProductDataQualityScanner::ISSUE_MISSING_SEO),
                         false: fn (Builder $query): Builder => $query
@@ -219,7 +222,7 @@ class ProductDataQualityQueueResource extends Resource
                             ->where('meta_description', '!=', ''),
                     ),
                 TernaryFilter::make('missing_en_translation')
-                    ->label('Missing EN translation')
+                    ->label('Липсва EN превод')
                     ->queries(
                         true: fn (Builder $query): Builder => $scanner->applyIssueQuery($query, ProductDataQualityScanner::ISSUE_MISSING_EN_TRANSLATION),
                         false: fn (Builder $query): Builder => $query
@@ -231,7 +234,7 @@ class ProductDataQualityQueueResource extends Resource
                             ->where('meta_title_translations->en', '!=', ''),
                     ),
                 TernaryFilter::make('missing_category')
-                    ->label('Missing category')
+                    ->label('Липсва категория')
                     ->queries(
                         true: fn (Builder $query): Builder => $scanner->applyIssueQuery($query, ProductDataQualityScanner::ISSUE_MISSING_CATEGORY),
                         false: fn (Builder $query): Builder => $query->whereNotNull('category_id'),
@@ -239,22 +242,22 @@ class ProductDataQualityQueueResource extends Resource
             ])
             ->recordActions([
                 Action::make('editProduct')
-                    ->label('Edit product')
+                    ->label('Редакция на продукт')
                     ->icon(Heroicon::OutlinedPencilSquare)
                     ->url(fn (Product $record): string => ProductResource::getUrl('edit', ['record' => $record])),
                 Action::make('openProduct')
-                    ->label('Open in new tab')
+                    ->label('Отвори в нов таб')
                     ->icon(Heroicon::OutlinedArrowTopRightOnSquare)
                     ->url(fn (Product $record): string => ProductResource::getUrl('edit', ['record' => $record]))
                     ->openUrlInNewTab(),
                 Action::make('reviewFlags')
-                    ->label('Review flags')
+                    ->label('Преглед на флагове')
                     ->icon(Heroicon::OutlinedFlag)
                     ->url(fn (Product $record): string => ProductResource::getUrl('edit', ['record' => $record]))
                     ->visible(fn (Product $record): bool => (int) ($record->active_quality_flag_assignments_count ?? 0) > 0),
             ])
             ->emptyStateHeading('Няма продукти за преглед')
-            ->emptyStateDescription('Когато продукт има липсваща информация или активен quality flag, ще се появи тук за ръчна проверка.')
+            ->emptyStateDescription('Когато продукт има липсваща информация или активен флаг за качество, ще се появи тук за ръчна проверка.')
             ->emptyStateIcon(Heroicon::OutlinedClipboardDocumentCheck);
     }
 
@@ -332,5 +335,64 @@ class ProductDataQualityQueueResource extends Resource
         return (bool) $product->active
             && $product->published_at !== null
             && $product->workflow_status === Product::WORKFLOW_PUBLISHED;
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    protected static function issueOptions(): array
+    {
+        return [
+            ProductDataQualityScanner::ISSUE_MISSING_IMAGE => 'Липсва снимка',
+            ProductDataQualityScanner::ISSUE_MISSING_CATEGORY => 'Липсва категория',
+            ProductDataQualityScanner::ISSUE_MISSING_BRAND => 'Липсва бранд',
+            ProductDataQualityScanner::ISSUE_MISSING_SEO => 'Липсва SEO',
+            ProductDataQualityScanner::ISSUE_MISSING_EN_TRANSLATION => 'Липсва EN превод',
+            ProductDataQualityScanner::ISSUE_WEAK_DESCRIPTION => 'Слабо описание',
+            ProductDataQualityScanner::ISSUE_MISSING_ATTRIBUTES => 'Липсват атрибути',
+            ProductDataQualityScanner::ISSUE_MISSING_EAN => 'Липсва EAN',
+        ];
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    protected static function severityOptions(): array
+    {
+        return [
+            ProductQualityFlag::SEVERITY_LOW => 'Ниска',
+            ProductQualityFlag::SEVERITY_MEDIUM => 'Средна',
+            ProductQualityFlag::SEVERITY_HIGH => 'Висока',
+        ];
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    protected static function roleOptions(): array
+    {
+        return [
+            User::ROLE_SUPER_ADMIN => 'Супер администратор',
+            User::ROLE_CATALOG_MANAGER => 'Каталог',
+            User::ROLE_PRODUCT_EDITOR => 'Редактор на продукти',
+            User::ROLE_PRODUCT_DATA_ENTRY => 'Въвеждане на продукти',
+            User::ROLE_PRICING_MANAGER => 'Цени',
+            User::ROLE_INVENTORY_MANAGER => 'Наличност',
+            User::ROLE_SEO_MARKETING => 'SEO / Маркетинг',
+            User::ROLE_ORDER_MANAGER => 'Поръчки',
+            User::ROLE_VIEWER_AUDITOR => 'Преглед / одит',
+        ];
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    protected static function detectedIssueLabels(Product $product, ProductDataQualityScanner $scanner): array
+    {
+        $labels = self::issueOptions();
+
+        return collect($scanner->detectedIssues($product))
+            ->map(fn (array $issue): string => $labels[$issue['code']] ?? $issue['label'])
+            ->all();
     }
 }

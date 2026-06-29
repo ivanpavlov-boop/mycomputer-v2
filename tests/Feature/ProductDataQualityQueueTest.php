@@ -39,11 +39,11 @@ class ProductDataQualityQueueTest extends TestCase
         $this->assertTrue(ProductDataQualityQueueResource::canViewAny());
         $this->assertTrue(ProductDataQualityQueueResource::shouldRegisterNavigation());
         $this->get(ProductDataQualityQueueResource::getUrl())->assertOk()
-            ->assertSee('Product Data Quality Queue');
+            ->assertSee('Опашка за качество на продуктови данни');
 
         Livewire::test(ListProductDataQualityQueue::class)
             ->assertCanSeeTableRecords([$product])
-            ->assertSee('Missing SEO');
+            ->assertSee('Липсва SEO');
     }
 
     public function test_queue_access_is_read_only_and_limited_to_catalog_content_roles(): void
@@ -92,7 +92,7 @@ class ProductDataQualityQueueTest extends TestCase
             ->filterTable('issue_type', ProductDataQualityScanner::ISSUE_MISSING_SEO)
             ->assertCanSeeTableRecords([$missingSeo])
             ->assertCanNotSeeTableRecords([$missingImage])
-            ->assertSee('Missing SEO');
+            ->assertSee('Липсва SEO');
     }
 
     public function test_quality_flag_filter_shows_products_with_active_flag_assignments(): void
@@ -164,11 +164,11 @@ class ProductDataQualityQueueTest extends TestCase
             ->assertCanSeeTableRecords([$product])
             ->assertTableActionExists('reviewFlags', null, $product)
             ->assertTableActionHasUrl('reviewFlags', ProductResource::getUrl('edit', ['record' => $product]), $product)
-            ->assertSee('Missing image')
+            ->assertSee('Липсва снимка')
             ->assertSee('Needs image review')
             ->assertSee('Needs data cleanup')
-            ->assertSee('Flag count')
-            ->assertSee('Hidden')
+            ->assertSee('Брой флагове')
+            ->assertSee('Скрит')
             ->assertSee((string) $product->id)
             ->assertSee($product->sku);
     }
@@ -278,7 +278,38 @@ class ProductDataQualityQueueTest extends TestCase
         Livewire::test(ListProductDataQualityQueue::class)
             ->filterTable('issue_type', ProductDataQualityScanner::ISSUE_MISSING_EN_TRANSLATION)
             ->assertCanSeeTableRecords([$product])
-            ->assertSee('Missing EN translation');
+            ->assertSee('Липсва EN превод');
+    }
+
+    public function test_queue_admin_labels_are_bulgarian_without_mutating_products(): void
+    {
+        $this->actingAsRole(User::ROLE_CATALOG_MANAGER);
+
+        $product = $this->qualityReadyProduct([
+            'name' => 'Localized queue labels product',
+            'sku' => 'DQ-BG-LABELS',
+            'meta_title' => null,
+            'meta_description' => '',
+        ], withImage: false);
+
+        Livewire::test(ListProductDataQualityQueue::class)
+            ->assertCanSeeTableRecords([$product])
+            ->assertSee('Снимка')
+            ->assertSee('Статус на снимка')
+            ->assertSee('Продукт')
+            ->assertSee('Източник')
+            ->assertSee('Работен статус')
+            ->assertSee('Видимост')
+            ->assertSee('Статус на продукта')
+            ->assertSee('Открити проблеми')
+            ->assertSee('Флагове за качество')
+            ->assertSee('Редакция на продукт')
+            ->assertSee('Отвори в нов таб');
+
+        $product->refresh();
+
+        $this->assertSame('Localized queue labels product', $product->name);
+        $this->assertSame('DQ-BG-LABELS', $product->sku);
     }
 
     public function test_queue_links_to_existing_product_edit_page_without_additional_mutation_actions(): void
