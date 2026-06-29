@@ -507,9 +507,9 @@ class Product extends Model
     public static function stockStatusOptions(): array
     {
         return [
-            self::STOCK_STATUS_OUT_OF_STOCK => 'Out of stock',
-            self::STOCK_STATUS_IN_STOCK => 'In stock',
-            self::STOCK_STATUS_LIMITED_STOCK => 'Limited stock',
+            self::STOCK_STATUS_OUT_OF_STOCK => 'Няма наличност',
+            self::STOCK_STATUS_IN_STOCK => 'В наличност',
+            self::STOCK_STATUS_LIMITED_STOCK => 'Ограничена наличност',
         ];
     }
 

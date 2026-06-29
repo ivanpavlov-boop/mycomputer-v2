@@ -11,18 +11,23 @@ class ListProducts extends ListRecords
 {
     protected static string $resource = ProductResource::class;
 
+    public function getTitle(): string
+    {
+        return 'Продукти';
+    }
+
     protected function getHeaderActions(): array
     {
         return [
             Action::make('csvImport')
-                ->label('CSV Import')
+                ->label('CSV импорт')
                 ->icon('heroicon-o-arrow-up-tray')
                 ->url('/admin/csv-import-jobs/create'),
             Action::make('csvExport')
-                ->label('CSV Export')
+                ->label('CSV експорт')
                 ->icon('heroicon-o-arrow-down-tray')
                 ->url('/admin/csv-export-jobs/create'),
-            CreateAction::make(),
+            CreateAction::make()->label('Създай продукт'),
         ];
     }
 }

@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Filament\Resources\Products\Pages\ListProducts;
 use App\Filament\Resources\Products\ProductResource;
+use App\Models\AvailabilityStatus;
 use App\Models\Product;
 use App\Models\User;
 use Carbon\Carbon;
@@ -25,10 +26,105 @@ class ProductAdminUxTest extends TestCase
 
         $deleteAction = $component->instance()->getTable()->getBulkAction('delete');
 
-        $this->assertSame('Delete selected', $deleteAction?->getLabel());
-        $this->assertSame('Delete selected products', (string) $deleteAction?->getModalHeading());
-        $this->assertSame('Delete selected', $deleteAction?->getModalSubmitActionLabel());
+        $this->assertSame('Изтрий избраните', $deleteAction?->getLabel());
+        $this->assertSame('Изтриване на избрани продукти', (string) $deleteAction?->getModalHeading());
+        $this->assertSame('Изтрий избраните', $deleteAction?->getModalSubmitActionLabel());
         $this->assertTrue($deleteAction?->isConfirmationRequired());
+    }
+
+    public function test_products_admin_list_create_and_edit_labels_are_bulgarian(): void
+    {
+        $this->actingAsRole(User::ROLE_SUPER_ADMIN);
+
+        $outOfStock = AvailabilityStatus::query()->create([
+            'code' => Product::STOCK_STATUS_OUT_OF_STOCK,
+            'name' => 'Out Of Stock',
+            'color' => 'red',
+            'icon' => 'warning',
+            'badge_style' => 'soft',
+            'allow_purchase' => false,
+            'show_stock_quantity' => false,
+            'is_default' => false,
+            'is_active' => true,
+            'sort_order' => 10,
+        ]);
+        $limitedStock = AvailabilityStatus::query()->create([
+            'code' => Product::STOCK_STATUS_LIMITED_STOCK,
+            'name' => 'Limited Stock',
+            'color' => 'yellow',
+            'icon' => 'package',
+            'badge_style' => 'soft',
+            'allow_purchase' => true,
+            'show_stock_quantity' => true,
+            'is_default' => false,
+            'is_active' => true,
+            'sort_order' => 20,
+        ]);
+
+        $outOfStockProduct = Product::factory()->create([
+            'name' => 'Bulgarian Labels Out Product',
+            'sku' => 'BG-LABEL-OUT',
+            'availability_status_id' => $outOfStock->id,
+            'stock_status' => Product::STOCK_STATUS_OUT_OF_STOCK,
+        ]);
+        $limitedStockProduct = Product::factory()->create([
+            'name' => 'Bulgarian Labels Limited Product',
+            'sku' => 'BG-LABEL-LIMITED',
+            'availability_status_id' => $limitedStock->id,
+            'stock_status' => Product::STOCK_STATUS_LIMITED_STOCK,
+        ]);
+
+        $this->get(ProductResource::getUrl())
+            ->assertOk()
+            ->assertSee('Продукти')
+            ->assertSee('CSV импорт')
+            ->assertSee('CSV експорт')
+            ->assertSee('Създай продукт');
+
+        Livewire::test(ListProducts::class)
+            ->assertCanSeeTableRecords([$outOfStockProduct, $limitedStockProduct])
+            ->assertSee('Снимка')
+            ->assertSee('Име')
+            ->assertSee('Работен статус')
+            ->assertSee('Флагове за качество')
+            ->assertSee('Категория')
+            ->assertSee('Бранд')
+            ->assertSee('Цена')
+            ->assertSee('Промо цена')
+            ->assertSee('Количество')
+            ->assertSee('Наличност')
+            ->assertSee('Няма наличност')
+            ->assertSee('Ограничена наличност');
+
+        $this->get(ProductResource::getUrl('create'))
+            ->assertOk()
+            ->assertSee('Създай продукт')
+            ->assertSee('Основна информация')
+            ->assertSee('Име')
+            ->assertSee('Категория')
+            ->assertSee('Бранд')
+            ->assertSee('Работен статус')
+            ->assertSee('Цени и наличност')
+            ->assertSee('Промо цена')
+            ->assertSee('Количество')
+            ->assertSee('SEO')
+            ->assertSee('Meta заглавие')
+            ->assertSee('Meta описание');
+
+        $this->get(ProductResource::getUrl('edit', ['record' => $outOfStockProduct]))
+            ->assertOk()
+            ->assertSee('Редакция на продукт')
+            ->assertSee('Работен процес на продукта')
+            ->assertSee('Флагове за качество')
+            ->assertSee('Снимки');
+
+        $outOfStockProduct->refresh();
+        $limitedStockProduct->refresh();
+
+        $this->assertSame('Bulgarian Labels Out Product', $outOfStockProduct->name);
+        $this->assertSame('Bulgarian Labels Limited Product', $limitedStockProduct->name);
+        $this->assertSame(Product::STOCK_STATUS_OUT_OF_STOCK, $outOfStockProduct->stock_status);
+        $this->assertSame(Product::STOCK_STATUS_LIMITED_STOCK, $limitedStockProduct->stock_status);
     }
 
     public function test_super_admin_can_bulk_soft_delete_selected_products(): void

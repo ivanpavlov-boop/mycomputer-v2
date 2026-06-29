@@ -133,10 +133,10 @@ class MultilingualFoundationTest extends TestCase
         $this
             ->get(ProductResource::getUrl('create'))
             ->assertOk()
-            ->assertSee('English localization')
-            ->assertSee('English product name')
-            ->assertSee('English slug')
-            ->assertSee('English SEO title');
+            ->assertSee('Английска локализация')
+            ->assertSee('Име на английски')
+            ->assertSee('Slug на английски')
+            ->assertSee('SEO заглавие на английски');
     }
 
     public function test_attribute_labels_support_optional_translations(): void

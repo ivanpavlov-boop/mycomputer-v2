@@ -29,10 +29,10 @@ class ProductsTable
         return $table
             ->modifyQueryUsing(fn (Builder $query): Builder => $query->with('thumbnailImage')->withCount('activeQualityFlagAssignments'))
             ->defaultSort('created_at', 'desc')
-            ->defaultSortOptionLabel('Newest first')
+            ->defaultSortOptionLabel('Най-нови първо')
             ->columns([
                 ImageColumn::make('thumbnail')
-                    ->label('Image')
+                    ->label('Снимка')
                     ->state(fn (Product $record): ?string => $record->thumbnailUrl())
                     ->defaultImageUrl(self::placeholderImageUrl())
                     ->size(56)
@@ -40,12 +40,12 @@ class ProductsTable
                     ->url(fn (Product $record): ?string => $record->thumbnailUrl())
                     ->openUrlInNewTab()
                     ->toggleable(),
-                TextColumn::make('sku')->searchable()->sortable(),
-                TextColumn::make('name')->searchable()->sortable()->limit(45),
+                TextColumn::make('sku')->label('SKU')->searchable()->sortable(),
+                TextColumn::make('name')->label('Име')->searchable()->sortable()->limit(45),
                 TextColumn::make('workflow_status')
-                    ->label('Workflow')
+                    ->label('Работен статус')
                     ->badge()
-                    ->formatStateUsing(fn (?string $state): string => Product::workflowStatusLabel($state))
+                    ->formatStateUsing(fn (?string $state): string => self::workflowStatusOptions()[$state] ?? 'Неизвестен')
                     ->color(fn (?string $state): string => match ($state) {
                         Product::WORKFLOW_PUBLISHED => 'success',
                         Product::WORKFLOW_APPROVED => 'info',
@@ -55,55 +55,67 @@ class ProductsTable
                     })
                     ->sortable(),
                 TextColumn::make('active_quality_flag_assignments_count')
-                    ->label('Quality flags')
+                    ->label('Флагове за качество')
                     ->badge()
                     ->color(fn (int $state): string => $state > 0 ? 'warning' : 'gray')
                     ->toggleable(),
-                TextColumn::make('category.name')->sortable()->toggleable(),
-                TextColumn::make('brand.name')->sortable()->toggleable(),
-                TextColumn::make('price')->money(Product::CATALOG_CURRENCY)->sortable(),
-                TextColumn::make('promo_price')->money(Product::CATALOG_CURRENCY)->sortable()->toggleable(),
-                TextColumn::make('quantity')->sortable(),
-                TextColumn::make('reserved_quantity')->sortable()->toggleable(isToggledHiddenByDefault: true),
-                TextColumn::make('availabilityStatus.name')->label('Availability')->badge()->sortable(),
-                TextColumn::make('stock_status')->badge()->sortable()->toggleable(isToggledHiddenByDefault: true),
-                IconColumn::make('manual_override')->boolean()->toggleable(),
-                IconColumn::make('active')->boolean(),
-                IconColumn::make('featured')->boolean(),
-                IconColumn::make('new_product')->boolean()->toggleable(),
-                IconColumn::make('bestseller')->boolean()->toggleable(),
-                TextColumn::make('updated_at')->dateTime()->sortable()->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('category.name')->label('Категория')->sortable()->toggleable(),
+                TextColumn::make('brand.name')->label('Бранд')->sortable()->toggleable(),
+                TextColumn::make('price')->label('Цена')->money(Product::CATALOG_CURRENCY)->sortable(),
+                TextColumn::make('promo_price')->label('Промо цена')->money(Product::CATALOG_CURRENCY)->sortable()->toggleable(),
+                TextColumn::make('quantity')->label('Количество')->sortable(),
+                TextColumn::make('reserved_quantity')->label('Резервирано количество')->sortable()->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('availabilityStatus.name')
+                    ->label('Наличност')
+                    ->formatStateUsing(fn (?string $state): string => self::availabilityLabel($state))
+                    ->badge()
+                    ->sortable(),
+                TextColumn::make('stock_status')
+                    ->label('Статус на наличност')
+                    ->formatStateUsing(fn (?string $state): string => self::stockStatusOptions()[$state] ?? 'Неизвестен')
+                    ->badge()
+                    ->sortable()
+                    ->toggleable(isToggledHiddenByDefault: true),
+                IconColumn::make('manual_override')->label('Ръчна наличност')->boolean()->toggleable(),
+                IconColumn::make('active')->label('Активен')->boolean(),
+                IconColumn::make('featured')->label('Препоръчан')->boolean(),
+                IconColumn::make('new_product')->label('Нов продукт')->boolean()->toggleable(),
+                IconColumn::make('bestseller')->label('Бестселър')->boolean()->toggleable(),
+                TextColumn::make('updated_at')->label('Обновен на')->dateTime()->sortable()->toggleable(isToggledHiddenByDefault: true),
             ])
             ->filters([
-                SelectFilter::make('availability_status_id')->relationship('availabilityStatus', 'name')->label('Availability')->searchable()->preload(),
+                SelectFilter::make('availability_status_id')->relationship('availabilityStatus', 'name')->label('Наличност')->searchable()->preload(),
                 SelectFilter::make('workflow_status')
-                    ->label('Workflow')
-                    ->options(Product::workflowStatusOptions()),
-                SelectFilter::make('stock_status'),
-                SelectFilter::make('category')->relationship('category', 'name')->searchable()->preload(),
-                SelectFilter::make('brand')->relationship('brand', 'name')->searchable()->preload(),
-                TernaryFilter::make('active'),
-                TernaryFilter::make('featured'),
-                TernaryFilter::make('new_product'),
-                TernaryFilter::make('bestseller'),
+                    ->label('Работен статус')
+                    ->options(self::workflowStatusOptions()),
+                SelectFilter::make('stock_status')
+                    ->label('Статус на наличност')
+                    ->options(self::stockStatusOptions()),
+                SelectFilter::make('category')->label('Категория')->relationship('category', 'name')->searchable()->preload(),
+                SelectFilter::make('brand')->label('Бранд')->relationship('brand', 'name')->searchable()->preload(),
+                TernaryFilter::make('active')->label('Активен'),
+                TernaryFilter::make('featured')->label('Препоръчан'),
+                TernaryFilter::make('new_product')->label('Нов продукт'),
+                TernaryFilter::make('bestseller')->label('Бестселър'),
                 TrashedFilter::make(),
             ])
             ->recordActions([
-                EditAction::make(),
-                RestoreAction::make(),
-                ForceDeleteAction::make(),
+                EditAction::make()->label('Редакция'),
+                RestoreAction::make()->label('Възстановяване'),
+                ForceDeleteAction::make()->label('Изтрий завинаги'),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
                     BulkAction::make('assignAvailability')
-                        ->label('Assign availability')
+                        ->label('Задай наличност')
                         ->form([
                             Select::make('availability_status_id')
-                                ->label('Availability status')
+                                ->label('Статус на наличност')
                                 ->options(fn () => AvailabilityStatus::query()->active()->ordered()->pluck('name', 'id'))
                                 ->required(),
                             Select::make('manual_override')
-                                ->options([1 => 'Manual override on', 0 => 'Manual override off'])
+                                ->label('Ръчна наличност')
+                                ->options([1 => 'Ръчна наличност включена', 0 => 'Ръчна наличност изключена'])
                                 ->default(1)
                                 ->required(),
                         ])
@@ -116,12 +128,12 @@ class ProductsTable
                             ]);
                         }),
                     DeleteBulkAction::make()
-                        ->label('Delete selected')
-                        ->modalHeading('Delete selected products')
-                        ->modalDescription('Selected products will be moved to trash. Historical references remain intact.')
-                        ->modalSubmitActionLabel('Delete selected'),
-                    RestoreBulkAction::make(),
-                    ForceDeleteBulkAction::make(),
+                        ->label('Изтрий избраните')
+                        ->modalHeading('Изтриване на избрани продукти')
+                        ->modalDescription('Избраните продукти ще бъдат преместени в кошчето. Историческите връзки остават запазени.')
+                        ->modalSubmitActionLabel('Изтрий избраните'),
+                    RestoreBulkAction::make()->label('Възстанови избраните'),
+                    ForceDeleteBulkAction::make()->label('Изтрий избраните завинаги'),
                 ]),
             ]);
     }
@@ -131,5 +143,41 @@ class ProductsTable
         return 'data:image/svg+xml;utf8,'.rawurlencode(
             '<svg xmlns="http://www.w3.org/2000/svg" width="56" height="56" viewBox="0 0 56 56"><rect width="56" height="56" rx="6" fill="#f3f4f6"/><path d="M17 37h22l-7-9-5 6-3-4-7 7Z" fill="#9ca3af"/><circle cx="21" cy="21" r="4" fill="#d1d5db"/></svg>'
         );
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    protected static function workflowStatusOptions(): array
+    {
+        return [
+            Product::WORKFLOW_DRAFT => 'Чернова',
+            Product::WORKFLOW_PENDING_REVIEW => 'За преглед',
+            Product::WORKFLOW_CHANGES_REQUESTED => 'Върнат за корекции',
+            Product::WORKFLOW_APPROVED => 'Одобрен',
+            Product::WORKFLOW_PUBLISHED => 'Публикуван',
+        ];
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    protected static function stockStatusOptions(): array
+    {
+        return [
+            Product::STOCK_STATUS_OUT_OF_STOCK => 'Няма наличност',
+            Product::STOCK_STATUS_IN_STOCK => 'В наличност',
+            Product::STOCK_STATUS_LIMITED_STOCK => 'Ограничена наличност',
+        ];
+    }
+
+    protected static function availabilityLabel(?string $state): string
+    {
+        return match (strtolower((string) $state)) {
+            'out of stock', 'out_of_stock' => 'Няма наличност',
+            'in stock', 'in_stock' => 'В наличност',
+            'limited stock', 'limited_stock' => 'Ограничена наличност',
+            default => filled($state) ? (string) $state : 'Неизвестен',
+        };
     }
 }
