@@ -10,6 +10,11 @@ class CreateProduct extends CreateRecord
 {
     protected static string $resource = ProductResource::class;
 
+    public function getTitle(): string
+    {
+        return 'Създай продукт';
+    }
+
     /**
      * @param  array<string, mixed>  $data
      * @return array<string, mixed>

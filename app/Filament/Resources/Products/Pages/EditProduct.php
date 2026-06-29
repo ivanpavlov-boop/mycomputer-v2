@@ -16,38 +16,43 @@ class EditProduct extends EditRecord
 {
     protected static string $resource = ProductResource::class;
 
+    public function getTitle(): string
+    {
+        return 'Редакция на продукт';
+    }
+
     protected function getHeaderActions(): array
     {
         return [
             Action::make('submitForReview')
-                ->label('Submit for review')
+                ->label('Изпрати за преглед')
                 ->color('warning')
                 ->visible(fn (): bool => $this->record->canTransitionWorkflowTo(Product::WORKFLOW_PENDING_REVIEW))
                 ->action(fn (): null => $this->transitionWorkflow(Product::WORKFLOW_PENDING_REVIEW)),
             Action::make('requestChanges')
-                ->label('Request changes')
+                ->label('Върни за корекции')
                 ->color('gray')
                 ->visible(fn (): bool => $this->record->canTransitionWorkflowTo(Product::WORKFLOW_CHANGES_REQUESTED))
                 ->form([
                     Textarea::make('review_notes')
-                        ->label('Correction note')
+                        ->label('Бележка за корекция')
                         ->rows(3)
                         ->required(),
                 ])
                 ->action(fn (array $data): null => $this->transitionWorkflow(Product::WORKFLOW_CHANGES_REQUESTED, $data['review_notes'] ?? null)),
             Action::make('approve')
-                ->label('Approve')
+                ->label('Одобри')
                 ->color('success')
                 ->visible(fn (): bool => $this->record->canTransitionWorkflowTo(Product::WORKFLOW_APPROVED))
                 ->action(fn (): null => $this->transitionWorkflow(Product::WORKFLOW_APPROVED)),
             Action::make('publish')
-                ->label('Publish')
+                ->label('Публикувай')
                 ->color('success')
                 ->visible(fn (): bool => $this->record->canTransitionWorkflowTo(Product::WORKFLOW_PUBLISHED))
                 ->requiresConfirmation()
                 ->action(fn (): null => $this->transitionWorkflow(Product::WORKFLOW_PUBLISHED)),
             Action::make('unpublish')
-                ->label('Unpublish')
+                ->label('Скрий')
                 ->color('danger')
                 ->visible(fn (): bool => $this->record->workflow_status === Product::WORKFLOW_PUBLISHED && auth()->user()?->canPublishProducts())
                 ->requiresConfirmation()
@@ -61,13 +66,13 @@ class EditProduct extends EditRecord
                     $this->refreshFormData(['workflow_status', 'active', 'product_status']);
 
                     Notification::make()
-                        ->title('Product unpublished')
+                        ->title('Продуктът е скрит')
                         ->success()
                         ->send();
                 }),
-            DeleteAction::make(),
-            RestoreAction::make(),
-            ForceDeleteAction::make(),
+            DeleteAction::make()->label('Изтриване'),
+            RestoreAction::make()->label('Възстановяване'),
+            ForceDeleteAction::make()->label('Изтрий завинаги'),
         ];
     }
 
@@ -84,11 +89,22 @@ class EditProduct extends EditRecord
         ]);
 
         Notification::make()
-            ->title('Product workflow updated')
-            ->body(Product::workflowStatusLabel($this->record->workflow_status))
+            ->title('Работният статус е обновен')
+            ->body(self::workflowStatusLabel($this->record->workflow_status))
             ->success()
             ->send();
 
         return null;
+    }
+
+    protected static function workflowStatusLabel(?string $status): string
+    {
+        return [
+            Product::WORKFLOW_DRAFT => 'Чернова',
+            Product::WORKFLOW_PENDING_REVIEW => 'За преглед',
+            Product::WORKFLOW_CHANGES_REQUESTED => 'Върнат за корекции',
+            Product::WORKFLOW_APPROVED => 'Одобрен',
+            Product::WORKFLOW_PUBLISHED => 'Публикуван',
+        ][$status] ?? 'Неизвестен';
     }
 }

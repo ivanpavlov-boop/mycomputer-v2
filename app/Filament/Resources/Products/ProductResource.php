@@ -28,7 +28,11 @@ class ProductResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedCpuChip;
 
-    protected static ?string $navigationLabel = 'Products';
+    protected static ?string $navigationLabel = 'Продукти';
+
+    protected static ?string $modelLabel = 'Продукт';
+
+    protected static ?string $pluralModelLabel = 'Продукти';
 
     protected static string|UnitEnum|null $navigationGroup = 'Catalog';
 
