@@ -44,7 +44,9 @@ describe('read-only public catalog foundation', () => {
     expect(catalog).toContain('ProductGrid')
     expect(catalog).toContain('SortSelect')
     expect(categories).toContain('useCategories')
-    expect(categories).toContain('CategoryCard')
+    expect(categories).toContain('categoryApi.navigation()')
+    expect(categories).toContain('v-for="category in categories"')
+    expect(categories).toContain('v-for="child in childCategories(category)"')
 
     expect(catalog).not.toContain('supplier_products')
     expect(categories).not.toContain('supplier_products')
