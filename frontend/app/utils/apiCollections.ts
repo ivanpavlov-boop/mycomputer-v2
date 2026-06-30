@@ -3,6 +3,10 @@ export interface ApiDataCollection<T> {
   meta?: Record<string, unknown> | null
 }
 
+export interface ApiDataResource<T> {
+  data?: T | null
+}
+
 export function collectionData<T>(response: ApiDataCollection<T> | T[] | null | undefined): T[] {
   if (Array.isArray(response)) {
     return response
@@ -13,4 +17,16 @@ export function collectionData<T>(response: ApiDataCollection<T> | T[] | null | 
   }
 
   return []
+}
+
+export function resourceData<T>(response: ApiDataResource<T> | T | null | undefined): T | null {
+  if (!response || Array.isArray(response)) {
+    return null
+  }
+
+  if (typeof response === 'object' && 'data' in response) {
+    return (response as ApiDataResource<T>).data ?? null
+  }
+
+  return response as T
 }

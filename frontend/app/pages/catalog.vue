@@ -25,7 +25,7 @@
         <span v-if="productsResponse?.meta">
           Намерени продукти: {{ productsResponse.meta.total }}
         </span>
-        <UiBaseButton v-if="route.query.q" variant="secondary" @click="clearSearch">
+        <UiBaseButton v-if="hasSearch" variant="secondary" @click="clearSearch">
           Изчисти търсенето
         </UiBaseButton>
       </div>
@@ -58,40 +58,130 @@ const router = useRouter()
 const productsApi = useProducts()
 const seo = useSeo()
 
-const searchTerm = ref(String(route.query.q || ''))
+const supportedSorts = new Set(['relevance', 'price_asc', 'price_desc', 'newest', 'bestseller', 'featured', 'name_asc', 'name_desc'])
+const forwardedQueryKeys = [
+  'category',
+  'brand',
+  'price_min',
+  'price_max',
+  'stock_status',
+  'availability',
+  'availability_status',
+  'featured',
+  'new_product',
+  'bestseller',
+] as const
+
+const activeSearch = computed(() => queryString(route.query.search) || queryString(route.query.q))
+const hasSearch = computed(() => Boolean(activeSearch.value))
+const searchTerm = ref(activeSearch.value)
 
 const sort = computed({
-  get: () => String(route.query.sort || 'newest'),
+  get: () => {
+    const value = queryString(route.query.sort)
+
+    return supportedSorts.has(value) ? value : 'newest'
+  },
   set: (value) => updateQuery({ sort: value, page: undefined }),
 })
 
+const catalogQuery = computed(() => {
+  const query: Record<string, string | number> = {
+    per_page: positiveInteger(route.query.per_page, 24),
+  }
+
+  const page = positiveInteger(route.query.page, 1)
+  if (page > 1) {
+    query.page = page
+  }
+
+  if (activeSearch.value) {
+    query.search = activeSearch.value
+  }
+
+  query.sort = sort.value
+
+  for (const key of forwardedQueryKeys) {
+    const value = queryString(route.query[key])
+
+    if (value) {
+      query[key] = value
+    }
+  }
+
+  return query
+})
+
 const { data: productsResponse, error, pending } = await useAsyncData(
-  `catalog-products-${JSON.stringify(route.query)}`,
-  () => productsApi.list({ ...route.query, per_page: route.query.per_page || 24 }),
-  { watch: [() => route.query] },
+  'catalog-products',
+  () => productsApi.list(catalogQuery.value),
+  { watch: [catalogQuery] },
 )
 
 const products = computed<ProductCard[]>(() => collectionData<ProductCard>(productsResponse.value))
 
-watch(() => route.query.q, (value) => {
-  searchTerm.value = String(value || '')
+watch(activeSearch, (value) => {
+  searchTerm.value = value
 })
 
 function updateQuery(next: Record<string, unknown>) {
-  router.push({ query: { ...route.query, ...next } })
+  const merged = { ...route.query, ...next }
+  const query: Record<string, string | string[]> = {}
+
+  for (const [key, value] of Object.entries(merged)) {
+    const normalized = routeQueryValue(value)
+
+    if (normalized !== undefined) {
+      query[key] = normalized
+    }
+  }
+
+  router.push({ query })
 }
 
 function applySearch() {
-  updateQuery({ q: searchTerm.value || undefined, page: undefined })
+  const search = searchTerm.value.trim()
+
+  updateQuery({ search: search || undefined, q: undefined, page: undefined })
 }
 
 function clearSearch() {
   searchTerm.value = ''
-  updateQuery({ q: undefined, page: undefined })
+  updateQuery({ search: undefined, q: undefined, page: undefined })
 }
 
 function setPage(page: number) {
-  updateQuery({ page })
+  updateQuery({ page: page > 1 ? page : undefined })
+}
+
+function queryString(value: unknown): string {
+  if (Array.isArray(value)) {
+    return queryString(value[0])
+  }
+
+  if (value === undefined || value === null) {
+    return ''
+  }
+
+  return String(value).trim()
+}
+
+function positiveInteger(value: unknown, fallback: number): number {
+  const parsed = Number.parseInt(queryString(value), 10)
+
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback
+}
+
+function routeQueryValue(value: unknown): string | string[] | undefined {
+  if (Array.isArray(value)) {
+    const values = value.map((item) => queryString(item)).filter(Boolean)
+
+    return values.length ? values : undefined
+  }
+
+  const normalized = queryString(value)
+
+  return normalized || undefined
 }
 
 seo.page('Каталог', 'Активни продукти в публичния каталог на COMPUTER2U.', '/catalog')
