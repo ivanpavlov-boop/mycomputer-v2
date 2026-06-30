@@ -22,8 +22,24 @@ describe('catalog page', () => {
 
     expect(page).toContain('useProducts')
     expect(page).toContain('productsApi.list')
-    expect(page).toContain('per_page: route.query.per_page || 24')
+    expect(page).toContain('productsApi.list(catalogQuery.value)')
+    expect(page).toContain('per_page: positiveInteger(route.query.per_page, 24)')
+    expect(page).not.toContain('productsApi.list({ ...route.query')
     expect(page).toContain('collectionData<ProductCard>(productsResponse.value)')
+  })
+
+  it('maps search sort and pagination to supported API query params only', () => {
+    const page = source('app/pages/catalog.vue')
+    const sort = source('app/components/catalog/SortSelect.vue')
+    const pagination = source('app/components/catalog/Pagination.vue')
+
+    expect(page).toContain('query.search = activeSearch.value')
+    expect(page).toContain("updateQuery({ search: search || undefined, q: undefined, page: undefined })")
+    expect(page).toContain("const supportedSorts = new Set(['relevance', 'price_asc', 'price_desc', 'newest', 'bestseller', 'featured', 'name_asc', 'name_desc'])")
+    expect(page).toContain('query.sort = sort.value')
+    expect(page).toContain('page: page > 1 ? page : undefined')
+    expect(sort).toContain('<UiBaseSelect')
+    expect(pagination).toContain('<UiBaseButton')
   })
 
   it('renders product grid pagination and Bulgarian empty state only after an empty data array', () => {
@@ -91,5 +107,7 @@ describe('catalog page', () => {
     expect(page).not.toContain('useCartStore')
     expect(page).not.toContain('checkout')
     expect(page).not.toContain('/orders')
+    expect(page).not.toContain('wishlist')
+    expect(page).not.toContain('compare')
   })
 })

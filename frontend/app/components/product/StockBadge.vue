@@ -1,5 +1,5 @@
 <template>
-  <AvailabilityBadge :availability="fallbackAvailability" />
+  <ProductAvailabilityBadge :availability="fallbackAvailability" />
 </template>
 
 <script setup lang="ts">

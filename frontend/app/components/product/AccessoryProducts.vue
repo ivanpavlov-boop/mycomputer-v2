@@ -1,5 +1,5 @@
 <template>
-  <RelatedProducts :products="products" title="Подходящи аксесоари" />
+  <ProductRelatedProducts :products="products" title="Подходящи аксесоари" />
 </template>
 
 <script setup lang="ts">
