@@ -25,8 +25,8 @@
         <span v-if="product.brand">{{ product.brand.name }}</span>
       </div>
       <div class="flex items-center gap-2">
-        <AvailabilityBadge v-if="product.availability" :availability="product.availability" />
-        <StockBadge v-else :status="product.stock_status" />
+        <ProductAvailabilityBadge v-if="product.availability" :availability="product.availability" />
+        <ProductStockBadge v-else :status="product.stock_status" />
       </div>
       <div class="mt-auto pt-4">
         <ProductPrice :product="product" />
