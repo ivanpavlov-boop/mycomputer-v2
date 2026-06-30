@@ -22,8 +22,8 @@
       </div>
 
       <div class="mb-4 flex flex-wrap items-center justify-between gap-3 text-sm text-slate-600">
-        <span v-if="productsResponse?.meta">
-          Намерени продукти: {{ productsResponse.meta.total }}
+        <span v-if="catalogMeta?.total !== undefined">
+          Намерени продукти: {{ catalogMeta.total }}
         </span>
         <UiBaseButton v-if="hasSearch" variant="secondary" @click="clearSearch">
           Изчисти търсенето
@@ -43,7 +43,7 @@
           title="Няма активни продукти за показване."
           text="Променете търсенето или опитайте отново по-късно."
         />
-        <CatalogPagination :meta="productsResponse?.meta" @change="setPage" />
+        <CatalogPagination :meta="catalogMeta" @change="setPage" />
       </template>
     </main>
   </div>
@@ -51,7 +51,7 @@
 
 <script setup lang="ts">
 import type { ProductCard } from '~/types/api'
-import { collectionData } from '~/utils/apiCollections'
+import { paginatedResource } from '~/utils/apiCollections'
 
 const route = useRoute()
 const router = useRouter()
@@ -114,11 +114,15 @@ const catalogQuery = computed(() => {
 
 const { data: productsResponse, error, pending } = await useAsyncData(
   'catalog-products',
-  () => productsApi.list(catalogQuery.value),
-  { watch: [catalogQuery] },
+  async () => paginatedResource<ProductCard>(await productsApi.list(catalogQuery.value)),
+  {
+    watch: [catalogQuery],
+    default: () => paginatedResource<ProductCard>(null),
+  },
 )
 
-const products = computed<ProductCard[]>(() => collectionData<ProductCard>(productsResponse.value))
+const products = computed<ProductCard[]>(() => productsResponse.value?.data ?? [])
+const catalogMeta = computed(() => productsResponse.value?.meta)
 
 watch(activeSearch, (value) => {
   searchTerm.value = value

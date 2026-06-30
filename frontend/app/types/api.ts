@@ -45,7 +45,7 @@ export interface ProductAvailability {
   color?: string | null
   icon?: string | null
   badge_style?: 'solid' | 'outline' | 'soft' | string | null
-  allow_purchase: boolean
+  allow_purchase?: boolean
   show_stock_quantity?: boolean
   message?: string | null
   expected_date?: string | null
@@ -63,17 +63,17 @@ export interface ProductCard {
   currency?: string
   price: string | number
   promo_price?: string | number | null
-  quantity: number
+  quantity?: number
   stock_status: string
   availability?: ProductAvailability | null
   warranty_months?: number | null
-  featured: boolean
-  new_product: boolean
-  bestseller: boolean
+  featured?: boolean
+  new_product?: boolean
+  bestseller?: boolean
   average_rating?: number
   reviews_count?: number
-  brand?: Brand
-  category?: Category
+  brand?: Brand | null
+  category?: Category | null
   primary_image?: ProductImage | null
 }
 
