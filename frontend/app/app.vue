@@ -1,6 +1,11 @@
 <template>
   <NuxtLayout>
     <NuxtPage />
-    <AiChatWidget />
+    <AiChatWidget v-if="showAiChatWidget" />
   </NuxtLayout>
 </template>
+
+<script setup lang="ts">
+const route = useRoute()
+const showAiChatWidget = computed(() => route.path !== '/categories')
+</script>
