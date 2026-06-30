@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { collectionData, paginatedResource, resourceCollection } from '../app/utils/apiCollections'
+import { catalogSortOptions, normalizeCatalogSort } from '../app/utils/catalogSorts'
 
 const frontendRoot = resolve(__dirname, '..')
 
@@ -72,11 +73,38 @@ describe('catalog page', () => {
 
     expect(page).toContain('query.search = activeSearch.value')
     expect(page).toContain("updateQuery({ search: search || undefined, q: undefined, page: undefined })")
-    expect(page).toContain("const supportedSorts = new Set(['relevance', 'price_asc', 'price_desc', 'newest', 'bestseller', 'featured', 'name_asc', 'name_desc'])")
+    expect(page).toContain('normalizeCatalogSort(route.query.sort)')
     expect(page).toContain('query.sort = sort.value')
     expect(page).toContain('page: page > 1 ? page : undefined')
     expect(sort).toContain('<UiBaseSelect')
+    expect(sort).toContain('catalogSortOptions')
     expect(pagination).toContain('<UiBaseButton')
+  })
+
+  it('keeps catalog sort values compatible with the public products API', () => {
+    expect(normalizeCatalogSort('newest')).toBe('newest')
+    expect(normalizeCatalogSort('price_asc')).toBe('price_asc')
+    expect(normalizeCatalogSort('price_desc')).toBe('price_desc')
+    expect(normalizeCatalogSort('name_asc')).toBe('name_asc')
+    expect(normalizeCatalogSort('name_desc')).toBe('name_desc')
+    expect(normalizeCatalogSort('featured')).toBe('featured')
+    expect(normalizeCatalogSort('bestseller')).toBe('bestseller')
+    expect(normalizeCatalogSort(['price_asc'])).toBe('price_asc')
+
+    expect(normalizeCatalogSort('latest')).toBe('newest')
+    expect(normalizeCatalogSort('created_desc')).toBe('newest')
+    expect(normalizeCatalogSort('new_product')).toBe('newest')
+    expect(normalizeCatalogSort('')).toBe('newest')
+
+    expect(catalogSortOptions).toEqual([
+      { label: 'Най-нови', value: 'newest' },
+      { label: 'Цена възходящо', value: 'price_asc' },
+      { label: 'Цена низходящо', value: 'price_desc' },
+      { label: 'Име А-Я', value: 'name_asc' },
+      { label: 'Име Я-А', value: 'name_desc' },
+      { label: 'Препоръчани', value: 'featured' },
+      { label: 'Най-продавани', value: 'bestseller' },
+    ])
   })
 
   it('renders product grid pagination and Bulgarian empty state only after an empty data array', () => {
