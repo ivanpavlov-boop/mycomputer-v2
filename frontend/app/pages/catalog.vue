@@ -31,13 +31,28 @@
       </div>
 
       <LoadingState v-if="pending" />
-      <ProductGrid v-else :products="products" />
-      <Pagination :meta="productsResponse?.meta" @change="setPage" />
+      <ErrorState
+        v-else-if="error"
+        title="Не успяхме да заредим каталога"
+        text="Моля, опитайте отново след малко."
+      />
+      <template v-else>
+        <ProductGrid v-if="products.length" :products="products" />
+        <EmptyState
+          v-else
+          title="Няма активни продукти за показване."
+          text="Променете търсенето или опитайте отново по-късно."
+        />
+        <Pagination :meta="productsResponse?.meta" @change="setPage" />
+      </template>
     </main>
   </div>
 </template>
 
 <script setup lang="ts">
+import type { ProductCard } from '~/types/api'
+import { collectionData } from '~/utils/apiCollections'
+
 const route = useRoute()
 const router = useRouter()
 const productsApi = useProducts()
@@ -50,13 +65,13 @@ const sort = computed({
   set: (value) => updateQuery({ sort: value, page: undefined }),
 })
 
-const { data: productsResponse, pending } = await useAsyncData(
+const { data: productsResponse, error, pending } = await useAsyncData(
   `catalog-products-${JSON.stringify(route.query)}`,
   () => productsApi.list({ ...route.query, per_page: route.query.per_page || 24 }),
   { watch: [() => route.query] },
 )
 
-const products = computed(() => productsResponse.value?.data || [])
+const products = computed<ProductCard[]>(() => collectionData<ProductCard>(productsResponse.value))
 
 watch(() => route.query.q, (value) => {
   searchTerm.value = String(value || '')
