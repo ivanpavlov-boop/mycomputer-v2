@@ -7,5 +7,5 @@
 
 <script setup lang="ts">
 const route = useRoute()
-const showAiChatWidget = computed(() => route.path !== '/categories' && !route.path.startsWith('/c/'))
+const showAiChatWidget = computed(() => route.path !== '/catalog' && route.path !== '/categories' && !route.path.startsWith('/c/'))
 </script>
