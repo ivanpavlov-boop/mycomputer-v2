@@ -48,5 +48,6 @@ describe('categories page', () => {
 
     expect(app).toContain('AiChatWidget v-if="showAiChatWidget"')
     expect(app).toContain("route.path !== '/categories'")
+    expect(app).toContain("!route.path.startsWith('/c/')")
   })
 })

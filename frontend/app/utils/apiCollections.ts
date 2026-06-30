@@ -1,5 +1,6 @@
 export interface ApiDataCollection<T> {
   data?: T[] | null
+  meta?: Record<string, unknown> | null
 }
 
 export function collectionData<T>(response: ApiDataCollection<T> | T[] | null | undefined): T[] {
