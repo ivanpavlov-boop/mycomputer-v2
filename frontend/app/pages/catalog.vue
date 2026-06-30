@@ -1,6 +1,6 @@
 <template>
   <div>
-    <Breadcrumbs :items="[{ label: 'Каталог' }]" />
+    <LayoutBreadcrumbs :items="[{ label: 'Каталог' }]" />
 
     <main class="container-page">
       <div class="mb-6 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
@@ -12,12 +12,12 @@
         </div>
 
         <div class="grid gap-3 sm:grid-cols-[minmax(220px,1fr)_220px] lg:w-[520px]">
-          <BaseInput
+          <UiBaseInput
             v-model="searchTerm"
             placeholder="Търсене по име, SKU, EAN или MPN"
             @keyup.enter="applySearch"
           />
-          <SortSelect v-model="sort" />
+          <CatalogSortSelect v-model="sort" />
         </div>
       </div>
 
@@ -25,25 +25,25 @@
         <span v-if="productsResponse?.meta">
           Намерени продукти: {{ productsResponse.meta.total }}
         </span>
-        <BaseButton v-if="route.query.q" variant="secondary" @click="clearSearch">
+        <UiBaseButton v-if="route.query.q" variant="secondary" @click="clearSearch">
           Изчисти търсенето
-        </BaseButton>
+        </UiBaseButton>
       </div>
 
-      <LoadingState v-if="pending" />
-      <ErrorState
+      <UiLoadingState v-if="pending" />
+      <UiErrorState
         v-else-if="error"
         title="Не успяхме да заредим каталога"
         text="Моля, опитайте отново след малко."
       />
       <template v-else>
-        <ProductGrid v-if="products.length" :products="products" />
-        <EmptyState
+        <CatalogProductGrid v-if="products.length" :products="products" />
+        <UiEmptyState
           v-else
           title="Няма активни продукти за показване."
           text="Променете търсенето или опитайте отново по-късно."
         />
-        <Pagination :meta="productsResponse?.meta" @change="setPage" />
+        <CatalogPagination :meta="productsResponse?.meta" @change="setPage" />
       </template>
     </main>
   </div>
