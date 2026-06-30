@@ -52,13 +52,13 @@
 <script setup lang="ts">
 import type { ProductCard } from '~/types/api'
 import { paginatedResource } from '~/utils/apiCollections'
+import { normalizeCatalogSort } from '~/utils/catalogSorts'
 
 const route = useRoute()
 const router = useRouter()
 const productsApi = useProducts()
 const seo = useSeo()
 
-const supportedSorts = new Set(['relevance', 'price_asc', 'price_desc', 'newest', 'bestseller', 'featured', 'name_asc', 'name_desc'])
 const forwardedQueryKeys = [
   'category',
   'brand',
@@ -77,12 +77,8 @@ const hasSearch = computed(() => Boolean(activeSearch.value))
 const searchTerm = ref(activeSearch.value)
 
 const sort = computed({
-  get: () => {
-    const value = queryString(route.query.sort)
-
-    return supportedSorts.has(value) ? value : 'newest'
-  },
-  set: (value) => updateQuery({ sort: value, page: undefined }),
+  get: () => normalizeCatalogSort(route.query.sort),
+  set: (value) => updateQuery({ sort: normalizeCatalogSort(value), page: undefined }),
 })
 
 const catalogQuery = computed(() => {
