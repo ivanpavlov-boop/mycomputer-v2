@@ -76,9 +76,14 @@ describe('catalog page', () => {
     expect(page).toContain('normalizeCatalogSort(route.query.sort)')
     expect(page).toContain('query.sort = sort.value')
     expect(page).toContain('page: page > 1 ? page : undefined')
-    expect(sort).toContain('<UiBaseSelect')
-    expect(sort).toContain('@update:model-value="emitSortValue"')
+    expect(sort).toContain('<select')
+    expect(sort).toContain(':value="currentSort"')
+    expect(sort).toContain('@change="handleSortChange"')
+    expect(sort).toContain('(event.target as HTMLSelectElement | null)?.value')
     expect(sort).toContain('normalizeCatalogSort(value)')
+    expect(sort).not.toContain('UiBaseSelect')
+    expect(sort).not.toContain('@update:model-value')
+    expect(sort).not.toContain('$emit')
     expect(sort).toContain('catalogSortOptions')
     expect(pagination).toContain('<UiBaseButton')
   })
@@ -86,18 +91,21 @@ describe('catalog page', () => {
   it('keeps catalog sort values compatible with the public products API', () => {
     expect(normalizeCatalogSort('newest')).toBe('newest')
     expect(normalizeCatalogSort('price_asc')).toBe('price_asc')
-    expect(normalizeCatalogSort('price_desc')).toBe('price_desc')
-    expect(normalizeCatalogSort('name_asc')).toBe('name_asc')
-    expect(normalizeCatalogSort('name_desc')).toBe('name_desc')
-    expect(normalizeCatalogSort('featured')).toBe('featured')
-    expect(normalizeCatalogSort('bestseller')).toBe('bestseller')
     expect(normalizeCatalogSort(['price_asc'])).toBe('price_asc')
     expect(normalizeCatalogSort({ label: 'Price ascending', value: 'price_asc' })).toBe('price_asc')
     expect(normalizeCatalogSort({ label: 'Newest', value: 'newest' })).toBe('newest')
 
+    expect(normalizeCatalogSort('price_desc')).toBe('newest')
+    expect(normalizeCatalogSort('name_asc')).toBe('newest')
+    expect(normalizeCatalogSort('name_desc')).toBe('newest')
+    expect(normalizeCatalogSort('featured')).toBe('newest')
+    expect(normalizeCatalogSort('bestseller')).toBe('newest')
     expect(normalizeCatalogSort('latest')).toBe('newest')
     expect(normalizeCatalogSort('created_desc')).toBe('newest')
     expect(normalizeCatalogSort('new_product')).toBe('newest')
+    expect(normalizeCatalogSort('[object Object]')).toBe('newest')
+    expect(normalizeCatalogSort(undefined)).toBe('newest')
+    expect(normalizeCatalogSort(null)).toBe('newest')
     expect(normalizeCatalogSort('')).toBe('newest')
     expect(normalizeCatalogSort({ label: 'Newest' })).toBe('newest')
     expect(normalizeCatalogSort({ label: 'Newest', value: 'latest' })).toBe('newest')
@@ -108,11 +116,6 @@ describe('catalog page', () => {
     expect(catalogSortOptions).toEqual([
       { label: 'Най-нови', value: 'newest' },
       { label: 'Цена възходящо', value: 'price_asc' },
-      { label: 'Цена низходящо', value: 'price_desc' },
-      { label: 'Име А-Я', value: 'name_asc' },
-      { label: 'Име Я-А', value: 'name_desc' },
-      { label: 'Препоръчани', value: 'featured' },
-      { label: 'Най-продавани', value: 'bestseller' },
     ])
   })
 
