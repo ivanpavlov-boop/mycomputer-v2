@@ -218,7 +218,8 @@ describe('catalog page', () => {
     const app = source('app/app.vue')
     const page = source('app/pages/catalog.vue')
 
-    expect(app).toContain("route.path !== '/catalog'")
+    expect(app).toContain('const isReadOnlyStorefrontRoute = useReadOnlyStorefrontRoute()')
+    expect(app).toContain('const showAiChatWidget = computed(() => !isReadOnlyStorefrontRoute.value)')
     expect(page).not.toContain('AiChatWidget')
     expect(page).not.toContain('useAiAssistant')
     expect(page).not.toContain('useCartStore')

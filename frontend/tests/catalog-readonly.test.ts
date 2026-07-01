@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { isReadOnlyStorefrontPath } from '../app/composables/useReadOnlyStorefrontRoute'
 
 const root = resolve(__dirname, '..')
 
@@ -42,10 +43,10 @@ describe('read-only public catalog foundation', () => {
     const layout = source('app/layouts/default.vue')
     const readOnlyRoute = source('app/composables/useReadOnlyStorefrontRoute.ts')
 
-    expect(readOnlyRoute).toContain("route.path === '/catalog'")
-    expect(readOnlyRoute).toContain("route.path === '/categories'")
-    expect(readOnlyRoute).toContain("route.path.startsWith('/c/')")
-    expect(readOnlyRoute).toContain("route.path.startsWith('/p/')")
+    expect(readOnlyRoute).toContain("path === '/catalog'")
+    expect(readOnlyRoute).toContain("path === '/categories'")
+    expect(readOnlyRoute).toContain("path.startsWith('/c/')")
+    expect(readOnlyRoute).toContain("path.startsWith('/p/')")
     expect(header).toContain('const isReadOnlyStorefrontRoute = useReadOnlyStorefrontRoute()')
     expect(header).toContain('CartButton v-if="!isReadOnlyStorefrontRoute"')
     expect(header).toContain('v-if="!isReadOnlyStorefrontRoute" to="/compare"')
@@ -53,6 +54,21 @@ describe('read-only public catalog foundation', () => {
     expect(mobileMenu).toContain('v-if="!isReadOnlyStorefrontRoute" to="/compare"')
     expect(mobileMenu).toContain('v-if="!isReadOnlyStorefrontRoute" to="/cart"')
     expect(layout).toContain('CartDrawer v-if="!isReadOnlyStorefrontRoute"')
+  })
+
+  it('hides the global AI assistant on read-only catalog routes', () => {
+    const app = source('app/app.vue')
+
+    expect(isReadOnlyStorefrontPath('/catalog')).toBe(true)
+    expect(isReadOnlyStorefrontPath('/categories')).toBe(true)
+    expect(isReadOnlyStorefrontPath('/c/iphone')).toBe(true)
+    expect(isReadOnlyStorefrontPath('/p/sample-product')).toBe(true)
+    expect(isReadOnlyStorefrontPath('/assistant')).toBe(false)
+    expect(isReadOnlyStorefrontPath('/')).toBe(false)
+    expect(app).toContain('AiChatWidget v-if="showAiChatWidget"')
+    expect(app).toContain('const isReadOnlyStorefrontRoute = useReadOnlyStorefrontRoute()')
+    expect(app).toContain('const showAiChatWidget = computed(() => !isReadOnlyStorefrontRoute.value)')
+    expect(app).not.toContain("route.path !== '/catalog'")
   })
 
   it('adds catalog and category entry pages that read from catalog APIs only', () => {
