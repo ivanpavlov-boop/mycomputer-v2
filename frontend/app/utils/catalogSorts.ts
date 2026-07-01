@@ -29,5 +29,13 @@ function routeQueryString(value: unknown): string {
     return ''
   }
 
+  if (typeof value === 'object') {
+    if ('value' in value) {
+      return routeQueryString(value.value)
+    }
+
+    return ''
+  }
+
   return String(value).trim()
 }

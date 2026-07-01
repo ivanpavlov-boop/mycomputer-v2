@@ -129,7 +129,7 @@ function updateQuery(next: Record<string, unknown>) {
   const query: Record<string, string | string[]> = {}
 
   for (const [key, value] of Object.entries(merged)) {
-    const normalized = routeQueryValue(value)
+    const normalized = key === 'sort' ? normalizeCatalogSort(value) : routeQueryValue(value)
 
     if (normalized !== undefined) {
       query[key] = normalized
