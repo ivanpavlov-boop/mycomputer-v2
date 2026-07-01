@@ -25,11 +25,12 @@
           <NuxtLink :to="`/c/${category.slug}`" class="block p-4">
             <div class="flex aspect-[16/9] items-center justify-center overflow-hidden rounded-md bg-slate-100 text-brand-700">
               <NuxtImg
-                v-if="category.image"
-                :src="categoryImageSrc(category.image)"
+                v-if="categoryImagePath(category)"
+                :src="categoryImageSrc(categoryImagePath(category)!)"
                 :alt="category.name"
                 class="h-full w-full object-cover"
                 loading="lazy"
+                @error="markCategoryImageFailed(categoryImagePath(category)!)"
               />
               <span v-else class="text-4xl font-semibold" aria-hidden="true">{{ category.icon || '□' }}</span>
             </div>
@@ -95,6 +96,7 @@ const { data: categoryResponse, pending, error } = await useAsyncData(
 
 const categories = computed<Category[]>(() => collectionData<Category>(categoryResponse.value))
 const storageBase = computed(() => String(config.public.apiBaseUrl).replace(/\/api\/v1\/?$/, ''))
+const failedCategoryImages = ref<Set<string>>(new Set())
 
 function childCategories(category: Category): Category[] {
   return category.children || []
@@ -102,6 +104,18 @@ function childCategories(category: Category): Category[] {
 
 function categoryImageSrc(path: string): string {
   return path.startsWith('http') ? path : `${storageBase.value}/storage/${path}`
+}
+
+function categoryImagePath(category: Category): string | null {
+  if (!category.image || failedCategoryImages.value.has(category.image)) {
+    return null
+  }
+
+  return category.image
+}
+
+function markCategoryImageFailed(path: string) {
+  failedCategoryImages.value = new Set([...failedCategoryImages.value, path])
 }
 
 seo.page('Категории', 'Публични продуктови категории в COMPUTER2U.', '/categories')

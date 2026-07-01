@@ -7,8 +7,8 @@
     <SearchBar class="mt-4" />
     <nav class="mt-5 grid gap-3 text-sm font-medium">
       <NuxtLink to="/search" @click="ui.mobileMenuOpen = false">Продукти</NuxtLink>
-      <NuxtLink to="/compare" @click="ui.mobileMenuOpen = false">Сравнение</NuxtLink>
-      <NuxtLink to="/cart" @click="ui.mobileMenuOpen = false">Количка</NuxtLink>
+      <NuxtLink v-if="!isReadOnlyStorefrontRoute" to="/compare" @click="ui.mobileMenuOpen = false">Сравнение</NuxtLink>
+      <NuxtLink v-if="!isReadOnlyStorefrontRoute" to="/cart" @click="ui.mobileMenuOpen = false">Количка</NuxtLink>
       <NuxtLink to="/contacts" @click="ui.mobileMenuOpen = false">Контакти</NuxtLink>
     </nav>
   </BaseModal>
@@ -16,4 +16,5 @@
 
 <script setup lang="ts">
 const ui = useUiStore()
+const isReadOnlyStorefrontRoute = useReadOnlyStorefrontRoute()
 </script>

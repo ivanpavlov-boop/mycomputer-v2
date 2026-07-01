@@ -15,20 +15,20 @@
         <NuxtLink to="/leasing">Лизинг</NuxtLink>
       </nav>
       <SearchBar class="ml-auto hidden max-w-md flex-1 md:block" />
-      <NuxtLink to="/compare" class="hidden text-sm font-semibold text-slate-700 hover:text-brand-700 sm:block">
+      <NuxtLink v-if="!isReadOnlyStorefrontRoute" to="/compare" class="hidden text-sm font-semibold text-slate-700 hover:text-brand-700 sm:block">
         Сравни {{ compare.count ? `(${compare.count})` : '' }}
       </NuxtLink>
-      <NuxtLink v-if="auth.isAuthenticated" to="/account/wishlist" class="hidden text-sm font-semibold text-slate-700 hover:text-brand-700 sm:block">
+      <NuxtLink v-if="!isReadOnlyStorefrontRoute && auth.isAuthenticated" to="/account/wishlist" class="hidden text-sm font-semibold text-slate-700 hover:text-brand-700 sm:block">
         Любими {{ wishlist.count ? `(${wishlist.count})` : '' }}
       </NuxtLink>
-      <NuxtLink v-if="auth.isAuthenticated" to="/account" class="hidden text-sm font-semibold text-slate-700 hover:text-brand-700 sm:block">
+      <NuxtLink v-if="!isReadOnlyStorefrontRoute && auth.isAuthenticated" to="/account" class="hidden text-sm font-semibold text-slate-700 hover:text-brand-700 sm:block">
         Профил
       </NuxtLink>
-      <template v-else>
+      <template v-else-if="!isReadOnlyStorefrontRoute">
         <NuxtLink to="/login" class="hidden text-sm font-semibold text-slate-700 hover:text-brand-700 sm:block">Вход</NuxtLink>
         <NuxtLink to="/register" class="hidden text-sm font-semibold text-slate-700 hover:text-brand-700 sm:block">Регистрация</NuxtLink>
       </template>
-      <CartButton />
+      <CartButton v-if="!isReadOnlyStorefrontRoute" />
     </div>
     <MobileMenu />
   </header>
@@ -39,8 +39,11 @@ const ui = useUiStore()
 const compare = useCompareStore()
 const wishlist = useWishlistStore()
 const auth = useAuthStore()
+const isReadOnlyStorefrontRoute = useReadOnlyStorefrontRoute()
 onMounted(async () => {
   await auth.fetchUser()
-  await compare.load()
+  if (!isReadOnlyStorefrontRoute.value) {
+    await compare.load()
+  }
 })
 </script>

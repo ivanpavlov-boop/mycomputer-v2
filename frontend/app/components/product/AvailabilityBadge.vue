@@ -6,11 +6,11 @@
     @click="$emit('status-click', availability.code)"
   >
     <span v-if="icon" aria-hidden="true">{{ icon }}</span>
-    <span>{{ availability.name }}</span>
+    <span>{{ displayName }}</span>
   </button>
   <span v-else :class="badgeClass">
     <span v-if="icon" aria-hidden="true">{{ icon }}</span>
-    <span>{{ availability.name }}</span>
+    <span>{{ displayName }}</span>
   </span>
 </template>
 
@@ -32,6 +32,13 @@ const iconMap: Record<string, string> = {
   clock: '◷',
   truck: '↦',
   package: '□',
+}
+
+const labelMap: Record<string, string> = {
+  in_stock: 'В наличност',
+  limited_stock: 'Ограничена наличност',
+  limited: 'Ограничена наличност',
+  out_of_stock: 'Няма наличност',
 }
 
 const toneMap: Record<string, { soft: string; solid: string; outline: string }> = {
@@ -63,6 +70,13 @@ const toneMap: Record<string, { soft: string; solid: string; outline: string }> 
 }
 
 const icon = computed(() => iconMap[String(props.availability.icon || '')] || props.availability.icon)
+const displayName = computed(() => {
+  const code = String(props.availability.code || '')
+  const name = String(props.availability.name || '')
+  const normalizedName = name.toLowerCase().replace(/\s+/g, '_')
+
+  return labelMap[code] || labelMap[normalizedName] || name
+})
 const style = computed(() => props.availability.badge_style || 'soft')
 const tone = computed(() => {
   const color = String(props.availability.color || 'green')

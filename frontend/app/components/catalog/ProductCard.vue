@@ -3,11 +3,12 @@
     <NuxtLink :to="`/p/${product.slug}`" class="block bg-white p-4">
       <div class="flex aspect-square items-center justify-center rounded-md bg-slate-100">
         <NuxtImg
-          v-if="product.primary_image?.path"
-          :src="imageSrc(product.primary_image.path)"
+          v-if="primaryImagePath && !primaryImageFailed"
+          :src="imageSrc(primaryImagePath)"
           :alt="product.primary_image.alt_text || product.name"
           class="h-full w-full object-contain"
           loading="lazy"
+          @error="primaryImageFailed = true"
         />
         <div v-else class="flex h-full w-full flex-col items-center justify-center gap-2 text-center text-slate-400">
           <span class="text-4xl" aria-hidden="true">□</span>
@@ -44,9 +45,15 @@
 <script setup lang="ts">
 import type { ProductCard } from '~/types/api'
 
-defineProps<{ product: ProductCard }>()
+const props = defineProps<{ product: ProductCard }>()
 
 const config = useRuntimeConfig()
+const primaryImageFailed = ref(false)
+const primaryImagePath = computed(() => props.product.primary_image?.path || '')
 const storageBase = computed(() => String(config.public.apiBaseUrl).replace(/\/api\/v1\/?$/, ''))
 const imageSrc = (path: string) => path.startsWith('http') ? path : `${storageBase.value}/storage/${path}`
+
+watch(primaryImagePath, () => {
+  primaryImageFailed.value = false
+})
 </script>
