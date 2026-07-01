@@ -12,7 +12,7 @@ export default defineNuxtConfig({
   runtimeConfig: {
     apiServerBaseUrl: process.env.NUXT_API_SERVER_BASE_URL || process.env.NUXT_PUBLIC_API_BASE_URL || 'http://localhost:8000/api/v1',
     public: {
-      apiBaseUrl: process.env.NUXT_PUBLIC_API_BASE_URL || 'http://localhost:8000/api/v1',
+      apiBaseUrl: process.env.NUXT_PUBLIC_API_BASE_URL || '/api/v1',
       siteUrl: process.env.NUXT_PUBLIC_SITE_URL || 'http://localhost:3000',
       ga4Id: process.env.NUXT_PUBLIC_GA4_ID || '',
       metaPixelId: process.env.NUXT_PUBLIC_META_PIXEL_ID || '',

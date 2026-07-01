@@ -37,8 +37,8 @@
         </div>
 
         <div class="mb-4 flex flex-wrap items-center justify-between gap-3 text-sm text-slate-600">
-          <span v-if="productsResponse?.meta">
-            Продукти: {{ productsResponse.meta.total }}
+          <span v-if="productsMeta">
+            Продукти: {{ productsMeta.total }}
           </span>
         </div>
 
@@ -54,7 +54,7 @@
           </NuxtLink>
         </div>
 
-        <Pagination :meta="productsResponse?.meta" @change="setPage" />
+        <Pagination :meta="productsMeta" @change="setPage" />
       </template>
 
       <ErrorState
@@ -68,7 +68,9 @@
 
 <script setup lang="ts">
 import type { ProductCard } from '~/types/api'
-import { collectionData } from '~/utils/apiCollections'
+import { paginatedResource } from '~/utils/apiCollections'
+import { normalizeCatalogSort } from '~/utils/catalogSorts'
+import { positiveInteger, routeQueryValue } from '~/utils/routeQuery'
 
 const route = useRoute()
 const router = useRouter()
@@ -76,8 +78,27 @@ const categories = useCategories()
 const seo = useSeo()
 const slug = computed(() => String(route.params.slug))
 const sort = computed({
-  get: () => String(route.query.sort || 'newest'),
-  set: (value) => updateQuery({ sort: value, page: undefined }),
+  get: () => normalizeCatalogSort(route.query.sort),
+  set: (value) => updateQuery({ sort: normalizeCatalogSort(value), page: undefined }),
+})
+
+const categoryProductQuery = computed(() => {
+  const query: Record<string, string | number> = {
+    per_page: positiveInteger(route.query.per_page, 24),
+    sort: sort.value,
+  }
+
+  const page = positiveInteger(route.query.page, 1)
+  if (page > 1) {
+    query.page = page
+  }
+
+  const search = routeQueryValue(route.query.search) || routeQueryValue(route.query.q)
+  if (typeof search === 'string') {
+    query.search = search
+  }
+
+  return query
 })
 
 const { data: categoryData, error: categoryError, pending: categoryPending } = await useAsyncData(
@@ -87,20 +108,33 @@ const { data: categoryData, error: categoryError, pending: categoryPending } = a
 )
 
 const { data: productsResponse, error: productsError, pending: productsPending } = await useAsyncData(
-  `category-products-${slug.value}-${JSON.stringify(route.query)}`,
-  () => categories.products(slug.value, { ...route.query, per_page: route.query.per_page || 24 }),
-  { watch: [() => route.params.slug, () => route.query] },
+  `category-products-${slug.value}`,
+  () => categories.products(slug.value, categoryProductQuery.value),
+  { watch: [() => route.params.slug, categoryProductQuery] },
 )
 
 const category = computed(() => categoryData.value?.data)
-const products = computed<ProductCard[]>(() => collectionData<ProductCard>(productsResponse.value))
+const normalizedProductsResponse = computed(() => paginatedResource<ProductCard>(productsResponse.value))
+const products = computed<ProductCard[]>(() => normalizedProductsResponse.value.data)
+const productsMeta = computed(() => normalizedProductsResponse.value.meta)
 
 function updateQuery(next: Record<string, unknown>) {
-  router.push({ query: { ...route.query, ...next } })
+  const merged = { ...route.query, ...next }
+  const query: Record<string, string | string[]> = {}
+
+  for (const [key, value] of Object.entries(merged)) {
+    const normalized = key === 'sort' ? normalizeCatalogSort(value) : routeQueryValue(value)
+
+    if (normalized !== undefined) {
+      query[key] = normalized
+    }
+  }
+
+  router.push({ query })
 }
 
 function setPage(page: number) {
-  updateQuery({ page })
+  updateQuery({ page: page > 1 ? page : undefined })
 }
 
 watchEffect(() => {

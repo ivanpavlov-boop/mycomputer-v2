@@ -48,8 +48,20 @@ describe('frontend deploy wiring', () => {
 
     expect(nuxtConfig).toContain('NUXT_API_SERVER_BASE_URL')
     expect(nuxtConfig).toContain('NUXT_PUBLIC_API_BASE_URL')
+    expect(nuxtConfig).toContain("apiBaseUrl: process.env.NUXT_PUBLIC_API_BASE_URL || '/api/v1'")
     expect(useApi).toContain('import.meta.server')
     expect(useApi).toContain('config.apiServerBaseUrl')
     expect(useApi).toContain('config.public.apiBaseUrl')
+  })
+
+  it('does not hardcode staging or production domains in frontend runtime source', () => {
+    const nuxtConfig = frontendSource('nuxt.config.ts')
+    const useSeo = frontendSource('app/composables/useSeo.ts')
+
+    expect(nuxtConfig).not.toContain('staging.mycomputer.bg')
+    expect(nuxtConfig).not.toContain('computer2u.eu')
+    expect(useSeo).toContain('config.public.siteUrl')
+    expect(useSeo).not.toContain('staging.mycomputer.bg')
+    expect(useSeo).not.toContain('computer2u.eu')
   })
 })

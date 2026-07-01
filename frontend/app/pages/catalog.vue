@@ -53,6 +53,7 @@
 import type { ProductCard } from '~/types/api'
 import { paginatedResource } from '~/utils/apiCollections'
 import { normalizeCatalogSort } from '~/utils/catalogSorts'
+import { positiveInteger, queryString, routeQueryValue } from '~/utils/routeQuery'
 
 const route = useRoute()
 const router = useRouter()
@@ -152,36 +153,6 @@ function clearSearch() {
 
 function setPage(page: number) {
   updateQuery({ page: page > 1 ? page : undefined })
-}
-
-function queryString(value: unknown): string {
-  if (Array.isArray(value)) {
-    return queryString(value[0])
-  }
-
-  if (value === undefined || value === null) {
-    return ''
-  }
-
-  return String(value).trim()
-}
-
-function positiveInteger(value: unknown, fallback: number): number {
-  const parsed = Number.parseInt(queryString(value), 10)
-
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback
-}
-
-function routeQueryValue(value: unknown): string | string[] | undefined {
-  if (Array.isArray(value)) {
-    const values = value.map((item) => queryString(item)).filter(Boolean)
-
-    return values.length ? values : undefined
-  }
-
-  const normalized = queryString(value)
-
-  return normalized || undefined
 }
 
 seo.page('Каталог', 'Активни продукти в публичния каталог на COMPUTER2U.', '/catalog')

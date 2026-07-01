@@ -36,6 +36,25 @@ describe('read-only public catalog foundation', () => {
     expect(detail).not.toContain('ProductReviewForm')
   })
 
+  it('hides shell commerce and account actions on read-only catalog routes', () => {
+    const header = source('app/components/layout/AppHeader.vue')
+    const mobileMenu = source('app/components/layout/MobileMenu.vue')
+    const layout = source('app/layouts/default.vue')
+    const readOnlyRoute = source('app/composables/useReadOnlyStorefrontRoute.ts')
+
+    expect(readOnlyRoute).toContain("route.path === '/catalog'")
+    expect(readOnlyRoute).toContain("route.path === '/categories'")
+    expect(readOnlyRoute).toContain("route.path.startsWith('/c/')")
+    expect(readOnlyRoute).toContain("route.path.startsWith('/p/')")
+    expect(header).toContain('const isReadOnlyStorefrontRoute = useReadOnlyStorefrontRoute()')
+    expect(header).toContain('CartButton v-if="!isReadOnlyStorefrontRoute"')
+    expect(header).toContain('v-if="!isReadOnlyStorefrontRoute" to="/compare"')
+    expect(header).toContain('v-else-if="!isReadOnlyStorefrontRoute"')
+    expect(mobileMenu).toContain('v-if="!isReadOnlyStorefrontRoute" to="/compare"')
+    expect(mobileMenu).toContain('v-if="!isReadOnlyStorefrontRoute" to="/cart"')
+    expect(layout).toContain('CartDrawer v-if="!isReadOnlyStorefrontRoute"')
+  })
+
   it('adds catalog and category entry pages that read from catalog APIs only', () => {
     const catalog = source('app/pages/catalog.vue')
     const categories = source('app/pages/categories/index.vue')

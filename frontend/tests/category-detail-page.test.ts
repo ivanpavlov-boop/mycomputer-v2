@@ -22,8 +22,11 @@ describe('category detail page', () => {
 
     expect(page).toContain('categories.detail(slug.value)')
     expect(page).toContain('categories.products(slug.value')
-    expect(page).toContain('collectionData<ProductCard>(productsResponse.value)')
-    expect(page).toContain('per_page: route.query.per_page || 24')
+    expect(page).toContain('paginatedResource<ProductCard>(productsResponse.value)')
+    expect(page).toContain('per_page: positiveInteger(route.query.per_page, 24)')
+    expect(page).toContain('normalizeCatalogSort(route.query.sort)')
+    expect(page).toContain('categories.products(slug.value, categoryProductQuery.value)')
+    expect(page).not.toContain('{ ...route.query, per_page: route.query.per_page || 24 }')
   })
 
   it('renders category title product cards pagination and Bulgarian empty state', () => {
@@ -31,10 +34,22 @@ describe('category detail page', () => {
 
     expect(page).toContain('{{ category.name }}')
     expect(page).toContain('ProductGrid v-if="products.length"')
-    expect(page).toContain('Pagination :meta="productsResponse?.meta"')
+    expect(page).toContain('Pagination :meta="productsMeta"')
     expect(page).toContain('Няма активни продукти в тази категория.')
     expect(page).toContain('Всички категории')
     expect(page).toContain('to="/categories"')
+  })
+
+  it('normalizes category sort search and pagination query values safely', () => {
+    const page = source('app/pages/c/[slug].vue')
+
+    expect(page).toContain('const categoryProductQuery = computed(() => {')
+    expect(page).toContain('sort: sort.value')
+    expect(page).toContain('const page = positiveInteger(route.query.page, 1)')
+    expect(page).toContain('query.page = page')
+    expect(page).toContain('const search = routeQueryValue(route.query.search) || routeQueryValue(route.query.q)')
+    expect(page).toContain("updateQuery({ page: page > 1 ? page : undefined })")
+    expect(page).toContain("key === 'sort' ? normalizeCatalogSort(value) : routeQueryValue(value)")
   })
 
   it('keeps product links read-only and pointed at product detail pages', () => {

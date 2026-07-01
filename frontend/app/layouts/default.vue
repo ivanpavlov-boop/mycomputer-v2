@@ -5,6 +5,10 @@
       <slot />
     </main>
     <AppFooter />
-    <CartDrawer />
+    <CartDrawer v-if="!isReadOnlyStorefrontRoute" />
   </div>
 </template>
+
+<script setup lang="ts">
+const isReadOnlyStorefrontRoute = useReadOnlyStorefrontRoute()
+</script>

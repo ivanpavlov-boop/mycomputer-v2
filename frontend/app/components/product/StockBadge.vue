@@ -10,7 +10,7 @@ const labels: Record<string, string> = {
   limited_stock: 'Ограничена наличност',
   limited: 'Ограничена наличност',
   incoming: 'Очаква се',
-  out_of_stock: 'Изчерпан',
+  out_of_stock: 'Няма наличност',
   preorder: 'Предварителна поръчка',
   on_request: 'По заявка',
   discontinued: 'Спрян продукт',

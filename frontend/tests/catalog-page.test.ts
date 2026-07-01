@@ -3,6 +3,7 @@ import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { collectionData, paginatedResource, resourceCollection } from '../app/utils/apiCollections'
 import { catalogSortOptions, normalizeCatalogSort } from '../app/utils/catalogSorts'
+import { positiveInteger, queryString, routeQueryValue } from '../app/utils/routeQuery'
 
 const frontendRoot = resolve(__dirname, '..')
 
@@ -73,9 +74,11 @@ describe('catalog page', () => {
 
     expect(page).toContain('query.search = activeSearch.value')
     expect(page).toContain("updateQuery({ search: search || undefined, q: undefined, page: undefined })")
+    expect(page).toContain('const search = searchTerm.value.trim()')
     expect(page).toContain('normalizeCatalogSort(route.query.sort)')
     expect(page).toContain('query.sort = sort.value')
     expect(page).toContain('page: page > 1 ? page : undefined')
+    expect(page).toContain('routeQueryValue(value)')
     expect(sort).toContain('<select')
     expect(sort).toContain(':value="currentSort"')
     expect(sort).toContain('@change="handleSortChange"')
@@ -86,6 +89,22 @@ describe('catalog page', () => {
     expect(sort).not.toContain('$emit')
     expect(sort).toContain('catalogSortOptions')
     expect(pagination).toContain('<UiBaseButton')
+  })
+
+  it('normalizes search page and route query values without leaking invalid params', () => {
+    expect(queryString('  logitech  ')).toBe('logitech')
+    expect(queryString(['  logitech  '])).toBe('logitech')
+    expect(queryString({ value: 'logitech' })).toBe('')
+    expect(queryString(undefined)).toBe('')
+    expect(queryString(null)).toBe('')
+    expect(routeQueryValue('  ')).toBeUndefined()
+    expect(routeQueryValue(['', '  '])).toBeUndefined()
+    expect(routeQueryValue(['  logitech  ', 'ignored'])).toEqual(['logitech', 'ignored'])
+    expect(routeQueryValue({ label: 'Newest', value: 'price_asc' })).toBeUndefined()
+    expect(positiveInteger('2', 1)).toBe(2)
+    expect(positiveInteger('0', 1)).toBe(1)
+    expect(positiveInteger('-3', 1)).toBe(1)
+    expect(positiveInteger('not-a-page', 1)).toBe(1)
   })
 
   it('keeps catalog sort values compatible with the public products API', () => {
@@ -190,6 +209,8 @@ describe('catalog page', () => {
 
     expect(card).toContain(':to="`/p/${product.slug}`"')
     expect(card).toContain('Няма снимка')
+    expect(card).toContain('@error="primaryImageFailed = true"')
+    expect(card).toContain('watch(primaryImagePath')
     expect(card).toContain('Виж продукта')
   })
 
