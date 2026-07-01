@@ -89,17 +89,29 @@ describe('catalog page', () => {
   })
 
   it('keeps catalog sort values compatible with the public products API', () => {
-    expect(normalizeCatalogSort('newest')).toBe('newest')
-    expect(normalizeCatalogSort('price_asc')).toBe('price_asc')
-    expect(normalizeCatalogSort(['price_asc'])).toBe('price_asc')
-    expect(normalizeCatalogSort({ label: 'Price ascending', value: 'price_asc' })).toBe('price_asc')
-    expect(normalizeCatalogSort({ label: 'Newest', value: 'newest' })).toBe('newest')
+    const supportedOptions = [
+      { label: 'Най-нови', value: 'newest' },
+      { label: 'Цена възходящо', value: 'price_asc' },
+      { label: 'Цена низходящо', value: 'price_desc' },
+      { label: 'Име А-Я', value: 'name_asc' },
+      { label: 'Име Я-А', value: 'name_desc' },
+      { label: 'Препоръчани', value: 'featured' },
+      { label: 'Най-продавани', value: 'bestseller' },
+    ] as const
 
-    expect(normalizeCatalogSort('price_desc')).toBe('newest')
-    expect(normalizeCatalogSort('name_asc')).toBe('newest')
-    expect(normalizeCatalogSort('name_desc')).toBe('newest')
-    expect(normalizeCatalogSort('featured')).toBe('newest')
-    expect(normalizeCatalogSort('bestseller')).toBe('newest')
+    for (const option of supportedOptions) {
+      expect(normalizeCatalogSort(option.value)).toBe(option.value)
+    }
+
+    expect(normalizeCatalogSort(['price_asc'])).toBe('price_asc')
+    expect(normalizeCatalogSort({ label: 'Newest', value: 'newest' })).toBe('newest')
+    expect(normalizeCatalogSort({ label: 'Price ascending', value: 'price_asc' })).toBe('price_asc')
+    expect(normalizeCatalogSort({ label: 'Price descending', value: 'price_desc' })).toBe('price_desc')
+    expect(normalizeCatalogSort({ label: 'Name ascending', value: 'name_asc' })).toBe('name_asc')
+    expect(normalizeCatalogSort({ label: 'Name descending', value: 'name_desc' })).toBe('name_desc')
+    expect(normalizeCatalogSort({ label: 'Featured', value: 'featured' })).toBe('featured')
+    expect(normalizeCatalogSort({ label: 'Bestseller', value: 'bestseller' })).toBe('bestseller')
+
     expect(normalizeCatalogSort('latest')).toBe('newest')
     expect(normalizeCatalogSort('created_desc')).toBe('newest')
     expect(normalizeCatalogSort('new_product')).toBe('newest')
@@ -113,10 +125,7 @@ describe('catalog page', () => {
     expect(normalizeCatalogSort({ label: 'Newest', value: null })).toBe('newest')
     expect(normalizeCatalogSort({ value: '[object Object]' })).toBe('newest')
 
-    expect(catalogSortOptions).toEqual([
-      { label: 'Най-нови', value: 'newest' },
-      { label: 'Цена възходящо', value: 'price_asc' },
-    ])
+    expect(catalogSortOptions).toEqual(supportedOptions)
   })
 
   it('renders product grid pagination and Bulgarian empty state only after an empty data array', () => {

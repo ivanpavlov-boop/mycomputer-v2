@@ -3,6 +3,11 @@ export const defaultCatalogSort = 'newest'
 export const catalogSortOptions = [
   { label: 'Най-нови', value: 'newest' },
   { label: 'Цена възходящо', value: 'price_asc' },
+  { label: 'Цена низходящо', value: 'price_desc' },
+  { label: 'Име А-Я', value: 'name_asc' },
+  { label: 'Име Я-А', value: 'name_desc' },
+  { label: 'Препоръчани', value: 'featured' },
+  { label: 'Най-продавани', value: 'bestseller' },
 ] as const
 
 export type CatalogSort = typeof catalogSortOptions[number]['value']
