@@ -50,8 +50,7 @@ describe('categories page', () => {
     const app = source('app/app.vue')
 
     expect(app).toContain('AiChatWidget v-if="showAiChatWidget"')
-    expect(app).toContain("route.path !== '/catalog'")
-    expect(app).toContain("route.path !== '/categories'")
-    expect(app).toContain("!route.path.startsWith('/c/')")
+    expect(app).toContain('const isReadOnlyStorefrontRoute = useReadOnlyStorefrontRoute()')
+    expect(app).toContain('const showAiChatWidget = computed(() => !isReadOnlyStorefrontRoute.value)')
   })
 })

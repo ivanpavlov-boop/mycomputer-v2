@@ -68,7 +68,8 @@ describe('category detail page', () => {
     const app = source('app/app.vue')
     const page = source('app/pages/c/[slug].vue')
 
-    expect(app).toContain("!route.path.startsWith('/c/')")
+    expect(app).toContain('const isReadOnlyStorefrontRoute = useReadOnlyStorefrontRoute()')
+    expect(app).toContain('const showAiChatWidget = computed(() => !isReadOnlyStorefrontRoute.value)')
     expect(page).not.toContain('AiChatWidget')
     expect(page).not.toContain('useAiAssistant')
   })
