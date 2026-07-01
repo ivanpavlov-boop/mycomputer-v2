@@ -1,5 +1,5 @@
 <template>
-  <UiBaseSelect :model-value="modelValue" @update:model-value="$emit('update:modelValue', $event)">
+  <UiBaseSelect :model-value="modelValue" @update:model-value="emitSortValue">
     <option v-for="option in catalogSortOptions" :key="option.value" :value="option.value">
       {{ option.label }}
     </option>
@@ -7,8 +7,12 @@
 </template>
 
 <script setup lang="ts">
-import { catalogSortOptions } from '~/utils/catalogSorts'
+import { catalogSortOptions, normalizeCatalogSort, type CatalogSort } from '~/utils/catalogSorts'
 
 defineProps<{ modelValue?: string }>()
-defineEmits<{ 'update:modelValue': [value: string] }>()
+const emit = defineEmits<{ 'update:modelValue': [value: CatalogSort] }>()
+
+function emitSortValue(value: unknown) {
+  emit('update:modelValue', normalizeCatalogSort(value))
+}
 </script>

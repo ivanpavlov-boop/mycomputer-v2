@@ -77,6 +77,8 @@ describe('catalog page', () => {
     expect(page).toContain('query.sort = sort.value')
     expect(page).toContain('page: page > 1 ? page : undefined')
     expect(sort).toContain('<UiBaseSelect')
+    expect(sort).toContain('@update:model-value="emitSortValue"')
+    expect(sort).toContain('normalizeCatalogSort(value)')
     expect(sort).toContain('catalogSortOptions')
     expect(pagination).toContain('<UiBaseButton')
   })
@@ -90,11 +92,18 @@ describe('catalog page', () => {
     expect(normalizeCatalogSort('featured')).toBe('featured')
     expect(normalizeCatalogSort('bestseller')).toBe('bestseller')
     expect(normalizeCatalogSort(['price_asc'])).toBe('price_asc')
+    expect(normalizeCatalogSort({ label: 'Price ascending', value: 'price_asc' })).toBe('price_asc')
+    expect(normalizeCatalogSort({ label: 'Newest', value: 'newest' })).toBe('newest')
 
     expect(normalizeCatalogSort('latest')).toBe('newest')
     expect(normalizeCatalogSort('created_desc')).toBe('newest')
     expect(normalizeCatalogSort('new_product')).toBe('newest')
     expect(normalizeCatalogSort('')).toBe('newest')
+    expect(normalizeCatalogSort({ label: 'Newest' })).toBe('newest')
+    expect(normalizeCatalogSort({ label: 'Newest', value: 'latest' })).toBe('newest')
+    expect(normalizeCatalogSort({ label: 'Newest', value: undefined })).toBe('newest')
+    expect(normalizeCatalogSort({ label: 'Newest', value: null })).toBe('newest')
+    expect(normalizeCatalogSort({ value: '[object Object]' })).toBe('newest')
 
     expect(catalogSortOptions).toEqual([
       { label: 'Най-нови', value: 'newest' },
@@ -159,6 +168,7 @@ describe('catalog page', () => {
 
     expect(page).toContain('v-else-if="error"')
     expect(page).toContain('paginatedResource<ProductCard>(await productsApi.list(catalogQuery.value))')
+    expect(page).toContain("key === 'sort' ? normalizeCatalogSort(value) : routeQueryValue(value)")
     expect(page).not.toContain('throw new Error')
     expect(page).not.toContain('throw createError')
   })
