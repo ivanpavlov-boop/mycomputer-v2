@@ -22,16 +22,16 @@ class AttributeValuesTable
     {
         return $table
             ->columns([
-                TextColumn::make('value')->searchable()->sortable(),
-                TextColumn::make('attribute.name')->label('Attribute')->searchable()->sortable(),
-                TextColumn::make('attribute.group.name')->label('Group')->sortable(),
-                TextColumn::make('slug')->searchable()->toggleable(),
-                TextColumn::make('sort_order')->sortable(),
-                IconColumn::make('is_active')->boolean(),
+                TextColumn::make('value')->label('Етикет')->searchable()->sortable(),
+                TextColumn::make('attribute.name')->label('Характеристика')->searchable()->sortable(),
+                TextColumn::make('attribute.group.name')->label('Група')->sortable(),
+                TextColumn::make('slug')->label('Стойност/slug')->searchable()->toggleable(),
+                TextColumn::make('sort_order')->label('Ред')->sortable(),
+                IconColumn::make('is_active')->label('Активна')->boolean(),
             ])
             ->filters([
-                SelectFilter::make('attribute')->relationship('attribute', 'name')->searchable()->preload(),
-                TernaryFilter::make('is_active'),
+                SelectFilter::make('attribute')->label('Характеристика')->relationship('attribute', 'name')->searchable()->preload(),
+                TernaryFilter::make('is_active')->label('Активна'),
                 TrashedFilter::make(),
             ])
             ->recordActions([

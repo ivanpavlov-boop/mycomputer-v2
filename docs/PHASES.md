@@ -30,6 +30,7 @@ Phase 8 manual selected UPDATE price/stock sync has been implemented behind a fe
 | Phase 8.5B | Product workflow and configurable quality flags | Complete |
 | Phase 8.6A | Multilingual foundation | Complete |
 | Phase 9A | Product data quality and enrichment queue | Complete |
+| Phase 9C.1 | Product attributes core foundation | Complete |
 
 ## Next Planned Phases
 
@@ -48,12 +49,14 @@ Phase 8 manual selected UPDATE price/stock sync has been implemented behind a fe
 - Maintain product workflow and quality flags as admin/content controls, not supplier sync expansion.
 - Add multilingual docs/config/schema without changing catalog sync execution behavior.
 - Use the Product Data Quality Queue for read-only enrichment triage; corrections still happen through existing product edit workflows.
+- Maintain Product Attributes as an internal catalog-owned foundation; supplier attribute mapping and frontend filters require later explicit phases.
 
 ## Forbidden
 
 - Do not add Sync All.
 - Do not enable automatic sync.
 - Do not broaden UPDATE beyond price/stock/availability/supplier offer fields.
+- Do not let supplier imports overwrite catalog attributes/specifications without a controlled preview and approval phase.
 
 ## Future Work / Open Questions
 

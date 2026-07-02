@@ -28,9 +28,19 @@ class AttributeValueResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedListBullet;
 
-    protected static ?string $navigationLabel = 'Attribute Values';
+    protected static ?string $navigationLabel = 'Опции на характеристики';
 
-    protected static string|UnitEnum|null $navigationGroup = 'Catalog Attributes';
+    protected static string|UnitEnum|null $navigationGroup = 'Каталог характеристики';
+
+    public static function getModelLabel(): string
+    {
+        return 'опция на характеристика';
+    }
+
+    public static function getPluralModelLabel(): string
+    {
+        return 'Опции на характеристики';
+    }
 
     public static function form(Schema $schema): Schema
     {

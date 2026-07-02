@@ -19,6 +19,7 @@ use App\Models\BlogPost;
 use App\Models\BlogTag;
 use App\Models\Brand;
 use App\Models\Category;
+use App\Models\CategoryProductAttribute;
 use App\Models\ConversionLog;
 use App\Models\CsvExportJob;
 use App\Models\CsvImportJob;
@@ -138,6 +139,7 @@ class AppServiceProvider extends ServiceProvider
         Gate::policy(AttributeGroup::class, ProductPolicy::class);
         Gate::policy(AttributeValue::class, ProductPolicy::class);
         Gate::policy(ProductAttribute::class, ProductPolicy::class);
+        Gate::policy(CategoryProductAttribute::class, ProductPolicy::class);
         Gate::policy(ProductImage::class, ProductPolicy::class);
         Gate::policy(Category::class, CategoryPolicy::class);
         Gate::policy(Brand::class, BrandPolicy::class);
