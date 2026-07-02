@@ -214,6 +214,96 @@ class ProductAttributesAdminUsabilityTest extends TestCase
         $this->assertTrue($ram->values()->where('slug', '16-gb')->exists());
     }
 
+    public function test_starter_command_reuses_existing_slug_with_different_code(): void
+    {
+        $group = AttributeGroup::factory()->create();
+        $now = now();
+
+        $attributeId = DB::table('product_attributes')->insertGetId([
+            'attribute_group_id' => $group->id,
+            'code' => 'refresh-rate',
+            'name' => 'Custom refresh rate',
+            'name_bg' => 'Custom refresh rate',
+            'name_en' => null,
+            'slug' => 'refresh-rate',
+            'type' => ProductAttribute::TYPE_SELECT,
+            'unit' => null,
+            'sort_order' => 5,
+            'is_filterable' => false,
+            'is_required' => false,
+            'is_visible_on_product' => true,
+            'is_comparable' => false,
+            'is_required_by_default' => false,
+            'is_active' => true,
+            'created_at' => $now,
+            'updated_at' => $now,
+        ]);
+
+        AttributeValue::query()->create([
+            'product_attribute_id' => $attributeId,
+            'value' => '60 Hz',
+            'value_translations' => ['en' => 'Custom 60 Hz'],
+            'slug' => 'custom-60hz',
+            'sort_order' => 99,
+            'is_active' => true,
+        ]);
+
+        $attributeBeforeDryRun = ProductAttribute::query()->findOrFail($attributeId)->only([
+            'code',
+            'name',
+            'name_bg',
+            'name_en',
+            'slug',
+            'type',
+            'unit',
+            'sort_order',
+            'is_filterable',
+            'is_comparable',
+        ]);
+        $optionCountBeforeDryRun = AttributeValue::query()->count();
+
+        $this->assertSame(0, Artisan::call('product-attributes:seed-starter'));
+        $dryRunOutput = Artisan::output();
+
+        $this->assertStringContainsString('Dry-run only. No records were changed.', $dryRunOutput);
+        $this->assertStringContainsString('Attribute slug/code mismatches reused: 1', $dryRunOutput);
+        $this->assertStringContainsString('starter code "refresh_rate" maps to existing code "refresh-rate" with slug "refresh-rate"', $dryRunOutput);
+        $this->assertEquals($attributeBeforeDryRun, ProductAttribute::query()->findOrFail($attributeId)->only(array_keys($attributeBeforeDryRun)));
+        $this->assertSame($optionCountBeforeDryRun, AttributeValue::query()->count());
+
+        $this->assertSame(0, Artisan::call('product-attributes:seed-starter', ['--apply' => true]));
+        $applyOutput = Artisan::output();
+
+        $this->assertStringContainsString('Starter product attributes applied.', $applyOutput);
+        $this->assertStringContainsString('Attribute slug/code mismatches reused: 1', $applyOutput);
+
+        $attribute = ProductAttribute::query()->findOrFail($attributeId);
+
+        $this->assertSame('refresh-rate', $attribute->code);
+        $this->assertSame('refresh-rate', $attribute->slug);
+        $this->assertSame('Custom refresh rate', $attribute->name);
+        $this->assertSame('Custom refresh rate', $attribute->name_bg);
+        $this->assertNull($attribute->name_en);
+        $this->assertSame(ProductAttribute::TYPE_SELECT, $attribute->type);
+        $this->assertSame('Hz', $attribute->unit);
+
+        $this->assertSame(18, ProductAttribute::query()->count());
+        $this->assertSame(1, ProductAttribute::query()->where('slug', 'refresh-rate')->count());
+        $this->assertSame(0, ProductAttribute::query()->where('code', 'refresh_rate')->count());
+        $this->assertSame(1, AttributeValue::query()->where('product_attribute_id', $attributeId)->where('value', '60 Hz')->count());
+        $this->assertFalse(AttributeValue::query()->where('product_attribute_id', $attributeId)->where('slug', '60-hz')->exists());
+
+        $attributeCount = ProductAttribute::query()->count();
+        $optionCount = AttributeValue::query()->count();
+
+        $this->assertSame(0, Artisan::call('product-attributes:seed-starter', ['--apply' => true]));
+
+        $this->assertSame($attributeCount, ProductAttribute::query()->count());
+        $this->assertSame($optionCount, AttributeValue::query()->count());
+        $this->assertSame(0, CategoryProductAttribute::query()->count());
+        $this->assertSame(0, ProductAttributeValue::query()->count());
+    }
+
     public function test_starter_command_does_not_mutate_products_supplier_products_or_public_sync_safety(): void
     {
         $product = Product::factory()->supplierPublished()->create([

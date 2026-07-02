@@ -36,6 +36,7 @@ class SeedStarterProductAttributes extends Command
 
         $this->line('Attributes to create: '.$stats['attributes_to_create']);
         $this->line('Attributes already present: '.$stats['attributes_existing']);
+        $this->line('Attribute slug/code mismatches reused: '.$stats['attribute_slug_code_mismatches']);
         $this->line('Options to create: '.$stats['options_to_create']);
         $this->line('Options already present: '.$stats['options_existing']);
         $this->line('Category assignments: deferred');
@@ -43,20 +44,23 @@ class SeedStarterProductAttributes extends Command
         $this->line('supplier_products changed: 0');
         $this->line('product_attribute_values created: 0');
 
+        foreach ($stats['messages'] as $message) {
+            $this->warn($message);
+        }
+
         return self::SUCCESS;
     }
 
     /**
-     * @return array<string, int>
+     * @return array{attributes_to_create: int, attributes_existing: int, attribute_slug_code_mismatches: int, options_to_create: int, options_existing: int, messages: array<int, string>}
      */
     private function previewStarterStructure(): array
     {
         $stats = $this->emptyStats();
 
         foreach ($this->starterAttributes() as $definition) {
-            $attribute = ProductAttribute::withTrashed()
-                ->where('code', $definition['code'])
-                ->first();
+            $resolved = $this->resolveAttribute($definition);
+            $attribute = $resolved['attribute'];
 
             if (! $attribute) {
                 $stats['attributes_to_create']++;
@@ -66,12 +70,10 @@ class SeedStarterProductAttributes extends Command
             }
 
             $stats['attributes_existing']++;
+            $this->recordSlugCodeMismatch($stats, $resolved, $definition);
 
             foreach ($definition['options'] as $option) {
-                $exists = AttributeValue::withTrashed()
-                    ->where('product_attribute_id', $attribute->id)
-                    ->where('slug', $option['slug'])
-                    ->exists();
+                $exists = $this->findExistingOption($attribute, $option) !== null;
 
                 $exists ? $stats['options_existing']++ : $stats['options_to_create']++;
             }
@@ -81,7 +83,7 @@ class SeedStarterProductAttributes extends Command
     }
 
     /**
-     * @return array<string, int>
+     * @return array{attributes_to_create: int, attributes_existing: int, attribute_slug_code_mismatches: int, options_to_create: int, options_existing: int, messages: array<int, string>}
      */
     private function applyStarterStructure(): array
     {
@@ -101,9 +103,8 @@ class SeedStarterProductAttributes extends Command
             );
 
             foreach ($this->starterAttributes() as $definition) {
-                $attribute = ProductAttribute::withTrashed()
-                    ->where('code', $definition['code'])
-                    ->first();
+                $resolved = $this->resolveAttribute($definition);
+                $attribute = $resolved['attribute'];
 
                 if (! $attribute) {
                     $attribute = ProductAttribute::query()->create([
@@ -127,6 +128,8 @@ class SeedStarterProductAttributes extends Command
                     $stats['attributes_to_create']++;
                 } else {
                     $stats['attributes_existing']++;
+                    $this->recordSlugCodeMismatch($stats, $resolved, $definition);
+                    $this->fillMissingTechnicalFields($attribute, $definition);
                 }
 
                 if ($attribute->trashed()) {
@@ -134,10 +137,7 @@ class SeedStarterProductAttributes extends Command
                 }
 
                 foreach ($definition['options'] as $option) {
-                    $exists = AttributeValue::withTrashed()
-                        ->where('product_attribute_id', $attribute->id)
-                        ->where('slug', $option['slug'])
-                        ->exists();
+                    $exists = $this->findExistingOption($attribute, $option) !== null;
 
                     if ($exists) {
                         $stats['options_existing']++;
@@ -163,16 +163,116 @@ class SeedStarterProductAttributes extends Command
     }
 
     /**
-     * @return array<string, int>
+     * @return array{attributes_to_create: int, attributes_existing: int, attribute_slug_code_mismatches: int, options_to_create: int, options_existing: int, messages: array<int, string>}
      */
     private function emptyStats(): array
     {
         return [
             'attributes_to_create' => 0,
             'attributes_existing' => 0,
+            'attribute_slug_code_mismatches' => 0,
             'options_to_create' => 0,
             'options_existing' => 0,
+            'messages' => [],
         ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $definition
+     * @return array{attribute: ?ProductAttribute, matched_by: ?string}
+     */
+    private function resolveAttribute(array $definition): array
+    {
+        $attribute = ProductAttribute::withTrashed()
+            ->where('code', $definition['code'])
+            ->first();
+
+        if ($attribute) {
+            return [
+                'attribute' => $attribute,
+                'matched_by' => 'code',
+            ];
+        }
+
+        $attribute = ProductAttribute::withTrashed()
+            ->where('slug', $this->starterSlug($definition))
+            ->first();
+
+        return [
+            'attribute' => $attribute,
+            'matched_by' => $attribute ? 'slug' : null,
+        ];
+    }
+
+    /**
+     * @param  array{attributes_to_create: int, attributes_existing: int, attribute_slug_code_mismatches: int, options_to_create: int, options_existing: int, messages: array<int, string>}  $stats
+     * @param  array{attribute: ?ProductAttribute, matched_by: ?string}  $resolved
+     * @param  array<string, mixed>  $definition
+     */
+    private function recordSlugCodeMismatch(array &$stats, array $resolved, array $definition): void
+    {
+        $attribute = $resolved['attribute'];
+
+        if (! $attribute || $resolved['matched_by'] !== 'slug' || $attribute->code === $definition['code']) {
+            return;
+        }
+
+        $stats['attribute_slug_code_mismatches']++;
+        $stats['messages'][] = sprintf(
+            'Reused existing attribute by slug/code mismatch: starter code "%s" maps to existing code "%s" with slug "%s". Existing labels were preserved.',
+            $definition['code'],
+            $attribute->code,
+            $attribute->slug,
+        );
+    }
+
+    /**
+     * @param  array<string, mixed>  $definition
+     */
+    private function fillMissingTechnicalFields(ProductAttribute $attribute, array $definition): void
+    {
+        if ($attribute->trashed()) {
+            return;
+        }
+
+        $updates = [];
+
+        foreach (['type', 'unit'] as $field) {
+            if (blank($attribute->{$field}) && filled($definition[$field])) {
+                $updates[$field] = $definition[$field];
+            }
+        }
+
+        if ($updates !== []) {
+            $updates['updated_at'] = now();
+
+            ProductAttribute::query()
+                ->whereKey($attribute->id)
+                ->update($updates);
+        }
+    }
+
+    /**
+     * @param  array{value: string, en: string, slug: string, sort_order: int}  $option
+     */
+    private function findExistingOption(ProductAttribute $attribute, array $option): ?AttributeValue
+    {
+        return AttributeValue::withTrashed()
+            ->where('product_attribute_id', $attribute->id)
+            ->where(function ($query) use ($option): void {
+                $query
+                    ->where('slug', $option['slug'])
+                    ->orWhere('value', $option['value']);
+            })
+            ->first();
+    }
+
+    /**
+     * @param  array<string, mixed>  $definition
+     */
+    private function starterSlug(array $definition): string
+    {
+        return Str::slug($definition['code']);
     }
 
     /**

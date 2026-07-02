@@ -43,6 +43,8 @@ php artisan product-attributes:seed-starter --apply
 
 The command is idempotent and safe to run repeatedly. It creates missing internal attribute definitions and missing controlled options only. It does not delete records and does not overwrite existing admin-edited labels.
 
+If an existing legacy/admin-created attribute has the same starter slug but a different code, the command reuses the existing attribute and reports the code mismatch instead of inserting a duplicate. Existing codes, labels and descriptions are preserved; only clearly missing technical metadata may be filled during `--apply`.
+
 Starter attributes include:
 
 - `ram`
