@@ -31,6 +31,7 @@ Phase 8 manual selected UPDATE price/stock sync has been implemented behind a fe
 | Phase 8.6A | Multilingual foundation | Complete |
 | Phase 9A | Product data quality and enrichment queue | Complete |
 | Phase 9C.1 | Product attributes core foundation | Complete |
+| Phase 9C.2 | Product attributes admin usability and starter structure | Complete |
 
 ## Next Planned Phases
 

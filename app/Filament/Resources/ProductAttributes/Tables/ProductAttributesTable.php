@@ -25,14 +25,16 @@ class ProductAttributesTable
             ->columns([
                 TextColumn::make('code')->label('Код')->searchable()->sortable(),
                 TextColumn::make('name_bg')->label('Име')->searchable()->sortable(),
+                TextColumn::make('name_en')->label('Име EN')->searchable()->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('group.name')->label('Група')->sortable(),
                 TextColumn::make('type')->label('Тип')->badge()->formatStateUsing(fn (?string $state): string => self::typeLabels()[$state] ?? (string) $state)->sortable(),
-                TextColumn::make('unit')->label('Единица')->toggleable(),
+                TextColumn::make('unit')->label('Мерна единица')->toggleable(),
                 IconColumn::make('is_filterable')->label('Филтър')->boolean(),
-                IconColumn::make('is_visible_on_product')->label('В продукт')->boolean(),
-                IconColumn::make('is_comparable')->label('Сравнение')->boolean(),
-                IconColumn::make('is_required_by_default')->label('Задълж. по подразб.')->boolean(),
+                IconColumn::make('is_visible_on_product')->label('Видима')->boolean(),
+                IconColumn::make('is_comparable')->label('Сравнима')->boolean(),
+                IconColumn::make('is_required_by_default')->label('Задължителна')->boolean(),
                 IconColumn::make('is_active')->label('Активна')->boolean(),
+                TextColumn::make('sort_order')->label('Подредба')->sortable(),
                 TextColumn::make('values_count')->counts('values')->label('Опции')->sortable(),
             ])
             ->filters([
@@ -40,6 +42,8 @@ class ProductAttributesTable
                 SelectFilter::make('type')->label('Тип')->options(self::typeLabels()),
                 TernaryFilter::make('is_filterable')->label('Филтър'),
                 TernaryFilter::make('is_visible_on_product')->label('Видима в продукта'),
+                TernaryFilter::make('is_comparable')->label('Сравнима'),
+                TernaryFilter::make('is_required_by_default')->label('Задължителна'),
                 TernaryFilter::make('is_active')->label('Активна'),
                 TrashedFilter::make(),
             ])

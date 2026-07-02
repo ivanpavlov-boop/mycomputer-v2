@@ -54,16 +54,19 @@ class CategoryProductAttributeResource extends Resource
     {
         return $schema->components([
             Section::make('Категорийно правило')
+                ->description('Свързва вътрешни характеристики с категории. Не променя продуктови категории и не попълва продуктови стойности автоматично.')
                 ->schema([
                     Grid::make(2)->schema([
                         Select::make('category_id')
                             ->label('Категория')
+                            ->helperText('Изберете съществуваща категория. Тази настройка не променя самата категория.')
                             ->relationship('category', 'name')
                             ->searchable()
                             ->preload()
                             ->required(),
                         Select::make('product_attribute_id')
                             ->label('Характеристика')
+                            ->helperText('Изберете вътрешна характеристика, която е подходяща за тази категория.')
                             ->relationship('attribute', 'name')
                             ->searchable()
                             ->preload()
@@ -76,15 +79,19 @@ class CategoryProductAttributeResource extends Resource
                     Grid::make(4)->schema([
                         Toggle::make('is_required')
                             ->label('Задължителна')
+                            ->helperText('Подсказка за бъдеща проверка на качеството; не блокира продукти в тази фаза.')
                             ->default(false),
                         Toggle::make('is_filterable')
                             ->label('Филтър')
+                            ->helperText('Може да се използва по-късно във филтри за тази категория.')
                             ->default(false),
                         Toggle::make('is_visible_on_product')
                             ->label('Видима в продукта')
+                            ->helperText('Може да се показва по-късно в спецификациите на продукта.')
                             ->default(true),
                         Toggle::make('is_comparable')
-                            ->label('За сравнение')
+                            ->label('Сравнима')
+                            ->helperText('Може да се използва по-късно в сравнение на продукти.')
                             ->default(false),
                     ]),
                 ]),
@@ -98,17 +105,19 @@ class CategoryProductAttributeResource extends Resource
                 TextColumn::make('category.name')->label('Категория')->searchable()->sortable(),
                 TextColumn::make('attribute.code')->label('Код')->searchable()->sortable(),
                 TextColumn::make('attribute.name')->label('Характеристика')->searchable()->sortable(),
-                IconColumn::make('is_required')->label('Задълж.')->boolean(),
+                IconColumn::make('is_required')->label('Задължителна')->boolean(),
                 IconColumn::make('is_filterable')->label('Филтър')->boolean(),
-                IconColumn::make('is_visible_on_product')->label('В продукт')->boolean(),
-                IconColumn::make('is_comparable')->label('Сравнение')->boolean(),
-                TextColumn::make('sort_order')->label('Ред')->sortable(),
+                IconColumn::make('is_visible_on_product')->label('Видима')->boolean(),
+                IconColumn::make('is_comparable')->label('Сравнима')->boolean(),
+                TextColumn::make('sort_order')->label('Подредба')->sortable(),
             ])
             ->filters([
                 SelectFilter::make('category')->label('Категория')->relationship('category', 'name')->searchable()->preload(),
                 SelectFilter::make('attribute')->label('Характеристика')->relationship('attribute', 'name')->searchable()->preload(),
                 TernaryFilter::make('is_required')->label('Задължителна'),
                 TernaryFilter::make('is_filterable')->label('Филтър'),
+                TernaryFilter::make('is_visible_on_product')->label('Видима'),
+                TernaryFilter::make('is_comparable')->label('Сравнима'),
             ])
             ->recordActions([
                 EditAction::make(),

@@ -34,6 +34,7 @@ Manual selected UPDATE price/stock sync is implemented behind `CATALOG_SYNC_UPDA
 - Multilingual foundation for BG primary and EN secondary content.
 - Product Data Quality Queue for read-only enrichment triage.
 - Product Attributes core foundation for internal catalog specifications.
+- Product Attributes admin usability and controlled starter attribute structure.
 
 ## Current Safety Position
 
@@ -85,7 +86,7 @@ UPDATE sync must not update:
 
 ## Phase 9C Attribute Foundation Scope
 
-Phase 9C.1 adds internal Product Attributes, controlled options, category assignment rules and typed product attribute value storage. It does not parse supplier XML attributes, does not sync supplier attributes, does not expose frontend filters, and does not mutate existing products or `supplier_products`.
+Phase 9C.1 adds internal Product Attributes, controlled options, category assignment rules and typed product attribute value storage. Phase 9C.2 improves the Filament admin experience and adds the manual `product-attributes:seed-starter` dry-run/apply command for a starter internal attribute library. These phases do not parse supplier XML attributes, do not sync supplier attributes, do not expose frontend filters, and do not mutate existing products or `supplier_products`.
 
 ## Future Work / Open Questions
 

@@ -10,6 +10,7 @@ use Filament\Forms\Components\Toggle;
 use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
+use Illuminate\Support\Str;
 
 class ProductAttributeForm
 {
@@ -30,12 +31,15 @@ class ProductAttributeForm
                                 ->label('Тип')
                                 ->options(self::typeOptions())
                                 ->default(ProductAttribute::TYPE_SELECT)
-                                ->required(),
+                                ->required()
+                                ->in(ProductAttribute::TYPES),
                             TextInput::make('code')
                                 ->label('Код')
-                                ->helperText('Стабилен вътрешен ключ, например ram или ssd_capacity.')
+                                ->helperText('Стабилен вътрешен ключ за бъдещи филтри и спецификации. Използвайте малки букви, цифри и долна черта, например ram или ssd_capacity. Не го променяйте след употреба.')
                                 ->required()
                                 ->maxLength(120)
+                                ->regex('/^[a-z0-9_]+$/')
+                                ->dehydrateStateUsing(fn (?string $state): string => Str::slug((string) $state, '_'))
                                 ->unique(ignoreRecord: true),
                             TextInput::make('name_bg')
                                 ->label('Име на български')
@@ -63,15 +67,19 @@ class ProductAttributeForm
                         Grid::make(3)->schema([
                             Toggle::make('is_filterable')
                                 ->label('Филтър')
+                                ->helperText('Може да се използва по-късно във филтри в каталога.')
                                 ->default(false),
                             Toggle::make('is_visible_on_product')
                                 ->label('Видима в продукта')
+                                ->helperText('Може да се показва по-късно в страницата на продукта.')
                                 ->default(true),
                             Toggle::make('is_comparable')
-                                ->label('За сравнение')
+                                ->label('Сравнима')
+                                ->helperText('Може да се използва по-късно в сравнение на продукти.')
                                 ->default(false),
                             Toggle::make('is_required_by_default')
                                 ->label('Задължителна по подразбиране')
+                                ->helperText('Може да бъде задължителна за избрани категории.')
                                 ->default(false),
                             Toggle::make('is_required')
                                 ->label('Задължителна')
