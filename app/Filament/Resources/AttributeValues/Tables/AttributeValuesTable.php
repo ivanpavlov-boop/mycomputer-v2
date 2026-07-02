@@ -22,12 +22,14 @@ class AttributeValuesTable
     {
         return $table
             ->columns([
-                TextColumn::make('value')->label('Етикет')->searchable()->sortable(),
+                TextColumn::make('attribute.code')->label('Код')->searchable()->sortable(),
                 TextColumn::make('attribute.name')->label('Характеристика')->searchable()->sortable(),
                 TextColumn::make('attribute.group.name')->label('Група')->sortable(),
-                TextColumn::make('slug')->label('Стойност/slug')->searchable()->toggleable(),
-                TextColumn::make('sort_order')->label('Ред')->sortable(),
+                TextColumn::make('slug')->label('Стойност')->searchable()->sortable(),
+                TextColumn::make('value')->label('Етикет BG')->searchable()->sortable(),
+                TextColumn::make('value_translations.en')->label('Етикет EN')->searchable()->toggleable(),
                 IconColumn::make('is_active')->label('Активна')->boolean(),
+                TextColumn::make('sort_order')->label('Подредба')->sortable(),
             ])
             ->filters([
                 SelectFilter::make('attribute')->label('Характеристика')->relationship('attribute', 'name')->searchable()->preload(),

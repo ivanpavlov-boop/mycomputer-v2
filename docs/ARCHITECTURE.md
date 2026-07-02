@@ -318,7 +318,7 @@ erDiagram
     ATTRIBUTE_VALUES ||--o{ PRODUCT_ATTRIBUTE_VALUES : selected
 ```
 
-Phase 9C.1 adds the internal Product Attributes foundation for catalog-owned specifications. See [Product Attributes](PRODUCT_ATTRIBUTES.md). Supplier attribute mapping, automatic attribute sync and storefront attribute filters remain future controlled phases.
+Phase 9C.1 adds the internal Product Attributes foundation for catalog-owned specifications. Phase 9C.2 improves the admin usability and adds the manual dry-run/apply starter attribute command. See [Product Attributes](PRODUCT_ATTRIBUTES.md). Supplier attribute mapping, automatic attribute sync and storefront attribute filters remain future controlled phases.
 
 ## Product Bundles Architecture
 

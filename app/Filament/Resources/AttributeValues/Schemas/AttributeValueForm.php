@@ -18,6 +18,7 @@ class AttributeValueForm
         return $schema
             ->components([
                 Section::make('Опция')
+                    ->description('Контролирана опция за характеристики от тип избор или множествен избор. Не създава стойности по продукти автоматично.')
                     ->schema([
                         Grid::make(2)->schema([
                             Select::make('product_attribute_id')
@@ -27,18 +28,20 @@ class AttributeValueForm
                                 ->preload()
                                 ->required(),
                             TextInput::make('value')
-                                ->label('Етикет на български')
+                                ->label('Етикет BG')
                                 ->required()
                                 ->maxLength(255)
                                 ->live(onBlur: true)
                                 ->afterStateUpdated(fn (Set $set, ?string $state) => $set('slug', Str::slug($state ?? ''))),
                             TextInput::make('value_translations.en')
-                                ->label('Етикет на английски')
+                                ->label('Етикет EN')
                                 ->maxLength(255),
                             TextInput::make('slug')
-                                ->label('Стойност/slug')
+                                ->label('Стойност')
+                                ->helperText('Стабилна стойност за тази опция. Трябва да е уникална в рамките на избраната характеристика.')
                                 ->required()
-                                ->maxLength(255),
+                                ->maxLength(255)
+                                ->dehydrateStateUsing(fn (?string $state): string => Str::slug((string) $state)),
                             TextInput::make('sort_order')
                                 ->label('Ред на сортиране')
                                 ->numeric()

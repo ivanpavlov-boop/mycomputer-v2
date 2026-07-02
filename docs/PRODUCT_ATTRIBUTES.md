@@ -6,7 +6,80 @@ Product Attributes define internal, structured catalog characteristics such as R
 
 This foundation is for catalog-owned product specifications. It does not enable supplier XML attribute sync, frontend attribute filters, Sync All, automatic sync, image import, or supplier-driven product mutations.
 
-## Current Phase 9C.1 Foundation
+## Current Phase 9C.2 Admin Usability And Starter Structure
+
+Phase 9C.2 improves the Filament admin experience for the internal attribute library and adds a safe starter structure command.
+
+Admin areas:
+
+- `Характеристики`: internal attribute definitions such as RAM, storage capacity, screen size, warranty and compatibility.
+- `Опции на характеристики`: controlled options for `select` and `multiselect` attributes.
+- `Категорийни характеристики`: category-to-attribute assignment rules.
+
+The admin UI is intentionally manual and controlled. Attribute definitions, options and category assignments do not automatically create product attribute values.
+
+Useful admin conventions:
+
+- `Код` is a stable internal key such as `ram` or `storage_capacity`. It should use lowercase letters, numbers and `_`, and should not be changed after use.
+- `Филтър` means the attribute may be used later in catalog filters.
+- `Видима` means the attribute may be shown later on product pages.
+- `Сравнима` means the attribute may be used later in product comparison.
+- `Задължителна` is a category/quality hint and does not block products in this phase.
+
+### Starter Command
+
+Preview the starter attribute library without writing anything:
+
+```bash
+php artisan product-attributes:seed-starter
+php artisan product-attributes:seed-starter --dry-run
+```
+
+Apply the starter attribute library manually:
+
+```bash
+php artisan product-attributes:seed-starter --apply
+```
+
+The command is idempotent and safe to run repeatedly. It creates missing internal attribute definitions and missing controlled options only. It does not delete records and does not overwrite existing admin-edited labels.
+
+Starter attributes include:
+
+- `ram`
+- `storage_capacity`
+- `storage_type`
+- `processor`
+- `gpu`
+- `screen_size`
+- `resolution`
+- `refresh_rate`
+- `panel_type`
+- `color`
+- `operating_system`
+- `warranty_months`
+- `interface`
+- `connectors`
+- `cable_length`
+- `compatibility`
+- `power_watts`
+- `weight`
+
+Starter options are included where useful, such as RAM sizes, storage type/capacity, screen size, refresh rate, panel type, color and operating system.
+
+Category assignments are deferred by default. Future category-specific starter sets can be added only through an explicit controlled phase that does not create categories, rename categories, overwrite categories, mutate product category assignments, or populate product attribute values automatically.
+
+Safety guarantees:
+
+- existing products are not mutated
+- `supplier_products` are not mutated
+- `product_attribute_values` are not auto-filled
+- supplier XML attributes are not parsed or synced
+- frontend attribute filters are not exposed
+- Sync All is not added
+- automatic sync is not enabled
+- supplier image import is not added
+
+## Phase 9C.1 Foundation
 
 Phase 9C.1 keeps the existing compatibility tables and extends them with a clearer internal product attribute foundation.
 
