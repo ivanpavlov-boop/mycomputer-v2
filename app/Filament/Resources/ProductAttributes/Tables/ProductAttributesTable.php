@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\ProductAttributes\Tables;
 
+use App\Models\ProductAttribute;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
@@ -22,25 +23,24 @@ class ProductAttributesTable
     {
         return $table
             ->columns([
-                TextColumn::make('name')->searchable()->sortable(),
-                TextColumn::make('group.name')->label('Group')->sortable(),
-                TextColumn::make('type')->badge()->sortable(),
-                TextColumn::make('unit')->toggleable(),
-                IconColumn::make('is_filterable')->boolean(),
-                IconColumn::make('is_required')->boolean(),
-                IconColumn::make('is_active')->boolean(),
-                TextColumn::make('values_count')->counts('values')->label('Values')->sortable(),
+                TextColumn::make('code')->label('Код')->searchable()->sortable(),
+                TextColumn::make('name_bg')->label('Име')->searchable()->sortable(),
+                TextColumn::make('group.name')->label('Група')->sortable(),
+                TextColumn::make('type')->label('Тип')->badge()->formatStateUsing(fn (?string $state): string => self::typeLabels()[$state] ?? (string) $state)->sortable(),
+                TextColumn::make('unit')->label('Единица')->toggleable(),
+                IconColumn::make('is_filterable')->label('Филтър')->boolean(),
+                IconColumn::make('is_visible_on_product')->label('В продукт')->boolean(),
+                IconColumn::make('is_comparable')->label('Сравнение')->boolean(),
+                IconColumn::make('is_required_by_default')->label('Задълж. по подразб.')->boolean(),
+                IconColumn::make('is_active')->label('Активна')->boolean(),
+                TextColumn::make('values_count')->counts('values')->label('Опции')->sortable(),
             ])
             ->filters([
-                SelectFilter::make('group')->relationship('group', 'name')->searchable()->preload(),
-                SelectFilter::make('type')->options([
-                    'select' => 'Select',
-                    'text' => 'Text',
-                    'number' => 'Number',
-                    'boolean' => 'Boolean',
-                ]),
-                TernaryFilter::make('is_filterable'),
-                TernaryFilter::make('is_active'),
+                SelectFilter::make('group')->label('Група')->relationship('group', 'name')->searchable()->preload(),
+                SelectFilter::make('type')->label('Тип')->options(self::typeLabels()),
+                TernaryFilter::make('is_filterable')->label('Филтър'),
+                TernaryFilter::make('is_visible_on_product')->label('Видима в продукта'),
+                TernaryFilter::make('is_active')->label('Активна'),
                 TrashedFilter::make(),
             ])
             ->recordActions([
@@ -55,5 +55,21 @@ class ProductAttributesTable
                     ForceDeleteBulkAction::make(),
                 ]),
             ]);
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private static function typeLabels(): array
+    {
+        return [
+            ProductAttribute::TYPE_TEXT => 'Текст',
+            ProductAttribute::TYPE_NUMBER => 'Число',
+            ProductAttribute::TYPE_BOOLEAN => 'Да/Не',
+            ProductAttribute::TYPE_SELECT => 'Избор',
+            ProductAttribute::TYPE_MULTISELECT => 'Множествен избор',
+            ProductAttribute::TYPE_DECIMAL => 'Десетично число',
+            ProductAttribute::TYPE_JSON => 'JSON',
+        ];
     }
 }

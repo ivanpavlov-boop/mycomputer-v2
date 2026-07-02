@@ -2,11 +2,22 @@
 
 namespace App\Models;
 
+use Database\Factories\ProductAttributeValueFactory;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class ProductAttributeValue extends Model
 {
+    /** @use HasFactory<ProductAttributeValueFactory> */
+    use HasFactory;
+
+    public const SOURCE_MANUAL = 'manual';
+
+    public const SOURCE_IMPORT_PREVIEW = 'import_preview';
+
+    public const SOURCE_CONTROLLED_SYNC = 'controlled_sync';
+
     protected $fillable = [
         'product_id',
         'product_attribute_id',
@@ -14,12 +25,24 @@ class ProductAttributeValue extends Model
         'canonical_attribute_value_id',
         'attribute_value_id',
         'custom_value',
+        'value_text',
+        'value_number',
+        'value_boolean',
+        'value_json',
+        'unit',
+        'source',
+        'is_verified',
+        'sort_order',
         'is_filterable',
     ];
 
     protected function casts(): array
     {
         return [
+            'value_number' => 'decimal:4',
+            'value_boolean' => 'boolean',
+            'value_json' => 'array',
+            'is_verified' => 'boolean',
             'is_filterable' => 'boolean',
         ];
     }

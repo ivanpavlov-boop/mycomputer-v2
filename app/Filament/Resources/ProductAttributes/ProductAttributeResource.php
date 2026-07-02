@@ -28,9 +28,19 @@ class ProductAttributeResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedAdjustmentsHorizontal;
 
-    protected static ?string $navigationLabel = 'Attributes';
+    protected static ?string $navigationLabel = 'Характеристики';
 
-    protected static string|UnitEnum|null $navigationGroup = 'Catalog Attributes';
+    protected static string|UnitEnum|null $navigationGroup = 'Каталог характеристики';
+
+    public static function getModelLabel(): string
+    {
+        return 'характеристика';
+    }
+
+    public static function getPluralModelLabel(): string
+    {
+        return 'Характеристики';
+    }
 
     public static function form(Schema $schema): Schema
     {

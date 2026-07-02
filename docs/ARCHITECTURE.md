@@ -318,6 +318,8 @@ erDiagram
     ATTRIBUTE_VALUES ||--o{ PRODUCT_ATTRIBUTE_VALUES : selected
 ```
 
+Phase 9C.1 adds the internal Product Attributes foundation for catalog-owned specifications. See [Product Attributes](PRODUCT_ATTRIBUTES.md). Supplier attribute mapping, automatic attribute sync and storefront attribute filters remain future controlled phases.
+
 ## Product Bundles Architecture
 
 Product bundles are catalog-adjacent sellable packages. They never replace `products`; instead they group active products and convert into normal order component lines for inventory tracking while preserving a separate bundle sales record.

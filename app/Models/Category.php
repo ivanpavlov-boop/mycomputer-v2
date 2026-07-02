@@ -73,4 +73,9 @@ class Category extends Model
     {
         return $this->hasMany(PricingRule::class);
     }
+
+    public function productAttributeAssignments(): HasMany
+    {
+        return $this->hasMany(CategoryProductAttribute::class)->orderBy('sort_order');
+    }
 }

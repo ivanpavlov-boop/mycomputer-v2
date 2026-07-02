@@ -33,6 +33,7 @@ Manual selected UPDATE price/stock sync is implemented behind `CATALOG_SYNC_UPDA
 - Configurable non-blocking Product Quality Flags.
 - Multilingual foundation for BG primary and EN secondary content.
 - Product Data Quality Queue for read-only enrichment triage.
+- Product Attributes core foundation for internal catalog specifications.
 
 ## Current Safety Position
 
@@ -46,6 +47,7 @@ Manual selected UPDATE price/stock sync is implemented behind `CATALOG_SYNC_UPDA
 - Manual products start as drafts and must be explicitly reviewed/published.
 - Supplier-created products do not require manual approval by default.
 - Product enrichment gaps are surfaced in a read-only admin queue; fixes still use existing product edit permissions.
+- Product attributes are catalog-owned internal definitions; supplier attribute mapping and frontend filters are not enabled yet.
 
 ## Next
 
@@ -58,6 +60,8 @@ Manual selected UPDATE price/stock sync is implemented behind `CATALOG_SYNC_UPDA
 7. Automatic sync later.
 8. Nuxt i18n route integration and localized sitemap expansion.
 9. Data enrichment workflow refinements after queue usage is observed.
+10. Controlled supplier attribute mapping preview and approval.
+11. Storefront specification display and later attribute filters.
 
 ## Phase 8 Initial UPDATE Scope
 
@@ -78,6 +82,10 @@ UPDATE sync must not update:
 - images
 - categories
 - attributes/specifications
+
+## Phase 9C Attribute Foundation Scope
+
+Phase 9C.1 adds internal Product Attributes, controlled options, category assignment rules and typed product attribute value storage. It does not parse supplier XML attributes, does not sync supplier attributes, does not expose frontend filters, and does not mutate existing products or `supplier_products`.
 
 ## Future Work / Open Questions
 
