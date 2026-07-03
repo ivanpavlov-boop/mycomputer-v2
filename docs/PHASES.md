@@ -33,6 +33,7 @@ Phase 8 manual selected UPDATE price/stock sync has been implemented behind a fe
 | Phase 9C.1 | Product attributes core foundation | Complete |
 | Phase 9C.2 | Product attributes admin usability and starter structure | Complete |
 | Phase 9C.3 | Category attribute sets | Complete |
+| Phase 9C.4 | Manual product attribute values admin workflow | Complete |
 
 ## Next Planned Phases
 
@@ -53,6 +54,7 @@ Phase 8 manual selected UPDATE price/stock sync has been implemented behind a fe
 - Use the Product Data Quality Queue for read-only enrichment triage; corrections still happen through existing product edit workflows.
 - Maintain Product Attributes as an internal catalog-owned foundation; supplier attribute mapping and frontend filters require later explicit phases.
 - Maintain Category Attribute Sets as controlled category-to-attribute assignment rules; they must not populate product values or expose storefront filters by themselves.
+- Manage individual product attribute values manually from Product edit pages without auto-filling existing products or syncing supplier XML attributes.
 
 ## Forbidden
 

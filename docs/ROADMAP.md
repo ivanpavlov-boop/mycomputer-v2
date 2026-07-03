@@ -36,6 +36,7 @@ Manual selected UPDATE price/stock sync is implemented behind `CATALOG_SYNC_UPDA
 - Product Attributes core foundation for internal catalog specifications.
 - Product Attributes admin usability and controlled starter attribute structure.
 - Category Attribute Sets for controlled existing category-to-attribute assignments.
+- Manual Product edit workflow for product-specific attribute values.
 
 ## Current Safety Position
 
@@ -49,7 +50,7 @@ Manual selected UPDATE price/stock sync is implemented behind `CATALOG_SYNC_UPDA
 - Manual products start as drafts and must be explicitly reviewed/published.
 - Supplier-created products do not require manual approval by default.
 - Product enrichment gaps are surfaced in a read-only admin queue; fixes still use existing product edit permissions.
-- Product attributes are catalog-owned internal definitions. Category Attribute Sets can assign existing attributes to existing categories, but supplier attribute mapping and frontend filters are not enabled yet.
+- Product attributes are catalog-owned internal definitions. Category Attribute Sets can assign existing attributes to existing categories, and admins can manually maintain individual product values from Product edit pages. Supplier attribute mapping and frontend filters are not enabled yet.
 
 ## Next
 
@@ -87,7 +88,7 @@ UPDATE sync must not update:
 
 ## Phase 9C Attribute Foundation Scope
 
-Phase 9C.1 adds internal Product Attributes, controlled options, category assignment rules and typed product attribute value storage. Phase 9C.2 improves the Filament admin experience and adds the manual `product-attributes:seed-starter` dry-run/apply command for a starter internal attribute library. Phase 9C.3 adds `product-attributes:assign-category-sets` for controlled assignment of existing internal attributes to existing categories. These phases do not parse supplier XML attributes, do not sync supplier attributes, do not expose frontend filters, and do not mutate existing products or `supplier_products`.
+Phase 9C.1 adds internal Product Attributes, controlled options, category assignment rules and typed product attribute value storage. Phase 9C.2 improves the Filament admin experience and adds the manual `product-attributes:seed-starter` dry-run/apply command for a starter internal attribute library. Phase 9C.3 adds `product-attributes:assign-category-sets` for controlled assignment of existing internal attributes to existing categories. Phase 9C.4 adds manual product-specific value management from Product edit pages. These phases do not parse supplier XML attributes, do not sync supplier attributes, do not expose frontend filters, and do not automatically mutate existing products or `supplier_products`.
 
 ## Future Work / Open Questions
 
