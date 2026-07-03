@@ -214,30 +214,6 @@ class ProductForm
                             Toggle::make('bestseller')->label('Бестселър')->default(false),
                         ]),
                     ]),
-                Section::make('Атрибути')
-                    ->schema([
-                        Repeater::make('attributes')
-                            ->label('Атрибути')
-                            ->relationship()
-                            ->schema([
-                                Select::make('product_attribute_id')
-                                    ->label('Атрибут')
-                                    ->relationship('attribute', 'name')
-                                    ->searchable()
-                                    ->preload()
-                                    ->required(),
-                                Select::make('attribute_value_id')
-                                    ->label('Стойност')
-                                    ->relationship('value', 'value')
-                                    ->searchable()
-                                    ->preload(),
-                                TextInput::make('custom_value')->label('Ръчна стойност'),
-                                Toggle::make('is_filterable')->label('Използва се за филтри')->default(true),
-                            ])
-                            ->columns(4)
-                            ->defaultItems(0),
-                    ])
-                    ->collapsible(),
                 Section::make('Флагове за качество')
                     ->description('Неблокиращи вътрешни флагове за съдържание, SEO, медия или данни. Те не влияят сами по себе си върху публикуването.')
                     ->schema([

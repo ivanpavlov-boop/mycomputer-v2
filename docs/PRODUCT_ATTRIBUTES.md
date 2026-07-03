@@ -6,7 +6,38 @@ Product Attributes define internal, structured catalog characteristics such as R
 
 This foundation is for catalog-owned product specifications. It does not enable supplier XML attribute sync, frontend attribute filters, Sync All, automatic sync, image import, or supplier-driven product mutations.
 
-## Current Phase 9C.3 Category Attribute Sets
+## Current Phase 9C.4 Manual Product Attribute Values
+
+Phase 9C.4 adds a manual Filament workflow for product-specific attribute values.
+
+Admins with product-management permission can open a product in the Products resource and use the `Характеристики` relation manager to add, edit, view, or remove rows in `product_attribute_values` for that product.
+
+The workflow is intentionally manual:
+
+- it writes only the selected product's `product_attribute_values`
+- it defaults `source` to `manual`
+- it may mark manually entered values as verified
+- it uses existing `product_attributes` and `attribute_values`
+- it does not create attributes, options, categories, or category assignments
+- it does not auto-fill existing products
+- it does not parse or sync supplier XML attributes
+- it does not mutate `supplier_products`
+- it does not expose frontend filters
+
+Attribute selection is guided by `category_product_attributes` where possible. Attributes assigned to the product's category are listed first. If a product has no category assignment rules, admins can still choose from all active Product Attributes. The workflow never changes the product's category assignment.
+
+Value validation is type-aware:
+
+- `text` uses `value_text`
+- `number` and `decimal` require a numeric `value_number`
+- `boolean` uses `value_boolean`
+- `select` requires an existing active `attribute_values` row that belongs to the selected attribute
+- `multiselect` stores selected option IDs in `value_json` on one row for product + attribute
+- `json` requires valid JSON
+
+The admin workflow prevents duplicate product + attribute rows unless a later explicit design allows multiple rows. Deleting a row removes only the product-specific value; it does not delete the product, attribute, option, category, or supplier staging data.
+
+## Phase 9C.3 Category Attribute Sets
 
 Phase 9C.3 adds controlled Category Attribute Sets. These sets assign existing internal product attributes to existing categories through an explicit dry-run/apply command.
 
@@ -218,6 +249,7 @@ Filament exposes Bulgarian admin management for:
 - Product Attributes
 - Attribute Values
 - Category Product Attributes
+- manual Product Attribute Values from the Product edit page `Характеристики` relation manager
 
 These screens are protected by existing product-management authorization. Super Admin retains access through the existing bypass. Viewer/Auditor roles are not given mutation permissions.
 
