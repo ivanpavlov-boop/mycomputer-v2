@@ -70,6 +70,7 @@ class ProductAttributesAdminUsabilityTest extends TestCase
 
         $categoryAttributeColumns = array_keys(Livewire::test(ListCategoryProductAttributes::class)->instance()->getTable()->getColumns());
         $this->assertContains('category.name', $categoryAttributeColumns);
+        $this->assertContains('category.slug', $categoryAttributeColumns);
         $this->assertContains('attribute.code', $categoryAttributeColumns);
         $this->assertContains('attribute.name', $categoryAttributeColumns);
         $this->assertContains('is_required', $categoryAttributeColumns);

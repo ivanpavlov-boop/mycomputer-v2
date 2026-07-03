@@ -6,7 +6,57 @@ Product Attributes define internal, structured catalog characteristics such as R
 
 This foundation is for catalog-owned product specifications. It does not enable supplier XML attribute sync, frontend attribute filters, Sync All, automatic sync, image import, or supplier-driven product mutations.
 
-## Current Phase 9C.2 Admin Usability And Starter Structure
+## Current Phase 9C.3 Category Attribute Sets
+
+Phase 9C.3 adds controlled Category Attribute Sets. These sets assign existing internal product attributes to existing categories through an explicit dry-run/apply command.
+
+Category Attribute Sets are preparation data for future product data quality, manual product specifications, controlled supplier attribute mapping, and later frontend filters. They do not populate product values and they do not make storefront filters visible.
+
+Preview category assignments without writing anything:
+
+```bash
+php artisan product-attributes:assign-category-sets
+php artisan product-attributes:assign-category-sets --set=laptops
+php artisan product-attributes:assign-category-sets --category=iphone
+php artisan product-attributes:assign-category-sets --list
+```
+
+Apply missing assignments manually:
+
+```bash
+php artisan product-attributes:assign-category-sets --apply
+```
+
+The command is idempotent and safe to run repeatedly. It creates only missing `category_product_attributes` rows for existing categories and existing product attributes. It does not delete assignments and does not overwrite existing admin-edited assignment flags.
+
+Category matching uses existing category slugs and a small alias list. Missing categories are skipped and reported. Attribute matching uses code first and then slug, so legacy slug/code mismatches such as `refresh-rate` versus `refresh_rate` are reused safely. Missing attributes are skipped and reported.
+
+Starter category sets include:
+
+- `laptops`
+- `monitors`
+- `phones`
+- `tablets`
+- `keyboards`
+- `mice`
+- `cables`
+- `printers`
+
+The command does not:
+
+- create categories
+- rename categories
+- overwrite category descriptions, SEO, images or slugs
+- change product category assignments
+- mutate products
+- mutate `supplier_products`
+- create `product_attribute_values`
+- create `product_attributes`
+- create `attribute_values`
+- parse or sync supplier XML attributes
+- expose frontend attribute filters
+
+## Phase 9C.2 Admin Usability And Starter Structure
 
 Phase 9C.2 improves the Filament admin experience for the internal attribute library and adds a safe starter structure command.
 
@@ -68,13 +118,15 @@ Starter attributes include:
 
 Starter options are included where useful, such as RAM sizes, storage type/capacity, screen size, refresh rate, panel type, color and operating system.
 
-Category assignments are deferred by default. Future category-specific starter sets can be added only through an explicit controlled phase that does not create categories, rename categories, overwrite categories, mutate product category assignments, or populate product attribute values automatically.
+Category assignments are handled separately by `product-attributes:assign-category-sets`. The starter attribute command still does not create category assignments, create categories, rename categories, overwrite categories, mutate product category assignments, or populate product attribute values automatically.
 
 Safety guarantees:
 
 - existing products are not mutated
 - `supplier_products` are not mutated
 - `product_attribute_values` are not auto-filled
+- categories are not created or renamed
+- category content, SEO and images are not overwritten
 - supplier XML attributes are not parsed or synced
 - frontend attribute filters are not exposed
 - Sync All is not added

@@ -103,6 +103,7 @@ class CategoryProductAttributeResource extends Resource
         return $table
             ->columns([
                 TextColumn::make('category.name')->label('Категория')->searchable()->sortable(),
+                TextColumn::make('category.slug')->label('Slug')->searchable()->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('attribute.code')->label('Код')->searchable()->sortable(),
                 TextColumn::make('attribute.name')->label('Характеристика')->searchable()->sortable(),
                 IconColumn::make('is_required')->label('Задължителна')->boolean(),

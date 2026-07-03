@@ -32,6 +32,7 @@ Phase 8 manual selected UPDATE price/stock sync has been implemented behind a fe
 | Phase 9A | Product data quality and enrichment queue | Complete |
 | Phase 9C.1 | Product attributes core foundation | Complete |
 | Phase 9C.2 | Product attributes admin usability and starter structure | Complete |
+| Phase 9C.3 | Category attribute sets | Complete |
 
 ## Next Planned Phases
 
@@ -51,6 +52,7 @@ Phase 8 manual selected UPDATE price/stock sync has been implemented behind a fe
 - Add multilingual docs/config/schema without changing catalog sync execution behavior.
 - Use the Product Data Quality Queue for read-only enrichment triage; corrections still happen through existing product edit workflows.
 - Maintain Product Attributes as an internal catalog-owned foundation; supplier attribute mapping and frontend filters require later explicit phases.
+- Maintain Category Attribute Sets as controlled category-to-attribute assignment rules; they must not populate product values or expose storefront filters by themselves.
 
 ## Forbidden
 
