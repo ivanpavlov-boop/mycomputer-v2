@@ -6,7 +6,21 @@ Product Attributes define internal, structured catalog characteristics such as R
 
 This foundation is for catalog-owned product specifications. It does not enable supplier XML attribute sync, frontend attribute filters, Sync All, automatic sync, image import, or supplier-driven product mutations.
 
-## Current Phase 9C.4 Manual Product Attribute Values
+## Current Phase 9C.4.1 Category-Driven Product Specifications Editor
+
+Phase 9C.4.1 keeps the manual product attribute workflow, but makes the Product edit `Характеристики` area category-driven first.
+
+When a product has a primary category with rows in `category_product_attributes`, those assigned attributes are shown as ready specification fields in the product characteristics editor. Admins fill the values that are known. Empty category fields are allowed and do not create `product_attribute_values` rows.
+
+Saving category specifications is explicit. A filled field creates or updates exactly one `product_attribute_values` row for the current product and attribute. Clearing a previously filled category field removes only that one product-specific value row. It does not delete the product, category, attribute definition, controlled option, supplier staging row, or any other product value.
+
+Existing product values remain visible even if their attribute is no longer assigned to the product category. Admins may still add extra/manual characteristics outside the category assignment set.
+
+The category assignment `is_required` flag is a visual data-quality hint only. It does not block saving, publishing, sync preview, or storefront visibility in this phase.
+
+Phase 9C.4.1 still does not parse supplier XML attributes, does not sync supplier attributes, does not auto-fill product values, does not mutate `supplier_products`, and does not expose frontend attribute filters.
+
+## Phase 9C.4 Manual Product Attribute Values
 
 Phase 9C.4 adds a manual Filament workflow for product-specific attribute values.
 
@@ -24,7 +38,7 @@ The workflow is intentionally manual:
 - it does not mutate `supplier_products`
 - it does not expose frontend filters
 
-Attribute selection is guided by `category_product_attributes` where possible. Attributes assigned to the product's category are listed first. If a product has no category assignment rules, admins can still choose from all active Product Attributes. The workflow never changes the product's category assignment.
+Attribute selection is guided by `category_product_attributes` where possible. Attributes assigned to the product's primary category are listed first and, in Phase 9C.4.1, are also available as ready category specification fields. If a product has no category assignment rules, admins can still choose from all active Product Attributes. The workflow never changes the product's category assignment.
 
 Value validation is type-aware:
 

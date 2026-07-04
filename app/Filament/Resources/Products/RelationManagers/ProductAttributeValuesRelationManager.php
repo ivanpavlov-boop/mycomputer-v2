@@ -7,6 +7,7 @@ use App\Models\CategoryProductAttribute;
 use App\Models\Product;
 use App\Models\ProductAttribute;
 use App\Models\ProductAttributeValue;
+use Filament\Actions\Action;
 use Filament\Actions\CreateAction;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\EditAction;
@@ -137,6 +138,343 @@ class ProductAttributeValuesRelationManager extends RelationManager
             ]);
     }
 
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    public function categorySpecificationRowsForProduct(Product $product): array
+    {
+        $categoryIds = $this->categoryIdsForProduct($product);
+
+        if ($categoryIds === []) {
+            return [];
+        }
+
+        $assignments = CategoryProductAttribute::query()
+            ->with('attribute')
+            ->whereIn('category_id', $categoryIds)
+            ->whereHas('attribute', fn ($query) => $query->where('is_active', true))
+            ->orderBy('sort_order')
+            ->orderBy('id')
+            ->get();
+
+        if ($assignments->isEmpty()) {
+            return [];
+        }
+
+        $values = $product
+            ->attributeValues()
+            ->with(['attribute', 'value'])
+            ->whereIn('product_attribute_id', $assignments->pluck('product_attribute_id')->unique()->all())
+            ->get()
+            ->keyBy('product_attribute_id');
+
+        $seen = [];
+        $rows = [];
+
+        foreach ($assignments as $assignment) {
+            $attribute = $assignment->attribute;
+
+            if (! $attribute || isset($seen[$attribute->id])) {
+                continue;
+            }
+
+            $seen[$attribute->id] = true;
+
+            $rows[] = [
+                'assignment' => $assignment,
+                'attribute' => $attribute,
+                'product_attribute_id' => (int) $attribute->id,
+                'label' => $this->attributeDisplayLabel($attribute),
+                'type' => (string) $attribute->type,
+                'unit' => $attribute->unit,
+                'is_required' => (bool) $assignment->is_required,
+                'sort_order' => (int) $assignment->sort_order,
+                'value' => $values->get($attribute->id),
+            ];
+        }
+
+        return $rows;
+    }
+
+    /**
+     * @return array<int, ProductAttributeValue>
+     */
+    public function outOfCategoryAttributeValuesForProduct(Product $product): array
+    {
+        $categoryAttributeIds = collect($this->categorySpecificationRowsForProduct($product))
+            ->pluck('product_attribute_id')
+            ->all();
+
+        return $product
+            ->attributeValues()
+            ->with(['attribute', 'value'])
+            ->when($categoryAttributeIds !== [], fn ($query) => $query->whereNotIn('product_attribute_id', $categoryAttributeIds))
+            ->orderBy('sort_order')
+            ->orderBy('id')
+            ->get()
+            ->all();
+    }
+
+    /**
+     * @return array<int, Section>
+     */
+    public function categorySpecificationFormSchema(): array
+    {
+        return collect($this->categorySpecificationRowsForProduct($this->getOwnerProduct()))
+            ->map(fn (array $row): Section => Section::make($row['label'])
+                ->description($this->categorySpecificationDescription($row))
+                ->schema([
+                    ...$this->categorySpecificationValueFields($row),
+                    Grid::make(4)->schema([
+                        TextInput::make("specifications.{$row['product_attribute_id']}.unit")
+                            ->label('Мерна единица')
+                            ->maxLength(50),
+                        Toggle::make("specifications.{$row['product_attribute_id']}.is_verified")
+                            ->label('Проверена')
+                            ->default(false),
+                        Toggle::make("specifications.{$row['product_attribute_id']}.is_filterable")
+                            ->label('Бъдещ филтър')
+                            ->default((bool) ($row['attribute']->is_filterable ?? false)),
+                        TextInput::make("specifications.{$row['product_attribute_id']}.sort_order")
+                            ->label('Подредба')
+                            ->numeric()
+                            ->default($row['sort_order']),
+                    ]),
+                ]))
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @return array<int, mixed>
+     */
+    private function categorySpecificationValueFields(array $row): array
+    {
+        $fieldPrefix = "specifications.{$row['product_attribute_id']}";
+        $attribute = $row['attribute'];
+
+        return match ($row['type']) {
+            ProductAttribute::TYPE_TEXT => [
+                TextInput::make("{$fieldPrefix}.value_text")
+                    ->label('Стойност')
+                    ->maxLength(1000)
+                    ->helperText('Оставете празно, ако стойността още не е известна.'),
+            ],
+            ProductAttribute::TYPE_NUMBER, ProductAttribute::TYPE_DECIMAL => [
+                TextInput::make("{$fieldPrefix}.value_number")
+                    ->label('Числова стойност')
+                    ->numeric()
+                    ->helperText('Оставете празно, ако стойността още не е известна.'),
+            ],
+            ProductAttribute::TYPE_BOOLEAN => [
+                Select::make("{$fieldPrefix}.value_boolean")
+                    ->label('Да / Не')
+                    ->options([
+                        '1' => 'Да',
+                        '0' => 'Не',
+                    ])
+                    ->placeholder('Без стойност')
+                    ->native(false)
+                    ->helperText('Без стойност не създава ред.'),
+            ],
+            ProductAttribute::TYPE_SELECT => [
+                Select::make("{$fieldPrefix}.attribute_value_id")
+                    ->label('Контролирана стойност')
+                    ->options(fn (): array => $this->optionValuesForAttribute($attribute->id))
+                    ->searchable()
+                    ->placeholder('Без стойност')
+                    ->helperText('Изберете само съществуваща опция за тази характеристика.'),
+            ],
+            ProductAttribute::TYPE_MULTISELECT => [
+                Select::make("{$fieldPrefix}.selected_attribute_value_ids")
+                    ->label('Контролирани стойности')
+                    ->options(fn (): array => $this->optionValuesForAttribute($attribute->id))
+                    ->multiple()
+                    ->searchable()
+                    ->helperText('Празен избор не създава ред.'),
+            ],
+            ProductAttribute::TYPE_JSON => [
+                Textarea::make("{$fieldPrefix}.value_json_text")
+                    ->label('JSON стойност')
+                    ->rows(3)
+                    ->helperText('Оставете празно, ако стойността още не е известна.'),
+            ],
+            default => [
+                TextInput::make("{$fieldPrefix}.value_text")
+                    ->label('Стойност')
+                    ->maxLength(1000),
+            ],
+        };
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    public function categorySpecificationFormData(): array
+    {
+        $data = [];
+
+        foreach ($this->categorySpecificationRowsForProduct($this->getOwnerProduct()) as $row) {
+            /** @var ProductAttribute $attribute */
+            $attribute = $row['attribute'];
+            /** @var ProductAttributeValue|null $value */
+            $value = $row['value'];
+            $attributeId = (int) $row['product_attribute_id'];
+
+            $data[$attributeId] = [
+                'unit' => $value?->unit ?? $attribute->unit,
+                'is_verified' => (bool) ($value?->is_verified ?? false),
+                'is_filterable' => (bool) ($value?->is_filterable ?? $attribute->is_filterable),
+                'sort_order' => $value?->sort_order ?? $row['sort_order'],
+                'attribute_value_id' => $value?->attribute_value_id,
+                'selected_attribute_value_ids' => $value ? $this->selectedOptionIdsFromJson($value->value_json) : [],
+                'value_text' => $value?->value_text,
+                'value_number' => $value?->value_number,
+                'value_boolean' => $value?->value_boolean === null ? null : ($value->value_boolean ? '1' : '0'),
+                'value_json_text' => $value?->value_json === null
+                    ? null
+                    : json_encode($value->value_json, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+            ];
+        }
+
+        return $data;
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     */
+    public function saveCategorySpecifications(array $data): void
+    {
+        $product = $this->getOwnerProduct();
+        $specifications = Arr::wrap($data['specifications'] ?? []);
+
+        foreach ($this->categorySpecificationRowsForProduct($product) as $row) {
+            /** @var ProductAttribute $attribute */
+            $attribute = $row['attribute'];
+            $attributeId = (int) $row['product_attribute_id'];
+            $submitted = Arr::wrap($specifications[$attributeId] ?? $specifications[(string) $attributeId] ?? []);
+            $record = $this->existingAttributeValueForAttribute($product, $attributeId);
+
+            if (! $this->categorySpecificationHasValue($attribute, $submitted)) {
+                $record?->delete();
+
+                continue;
+            }
+
+            $normalized = $this->normalizeFormData([
+                ...$submitted,
+                'product_attribute_id' => $attributeId,
+                'source' => ProductAttributeValue::SOURCE_MANUAL,
+                'sort_order' => $submitted['sort_order'] ?? $row['sort_order'],
+                'is_filterable' => $submitted['is_filterable'] ?? $attribute->is_filterable,
+            ], $record);
+
+            if ($record) {
+                $record->update($normalized);
+
+                continue;
+            }
+
+            $product->attributeValues()->create($normalized);
+        }
+    }
+
+    /**
+     * @return array<int, int>
+     */
+    private function categoryIdsForProduct(Product $product): array
+    {
+        return collect([$product->category_id])
+            ->filter()
+            ->map(fn (mixed $id): int => (int) $id)
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @param  array<string, mixed>  $row
+     */
+    private function categorySpecificationDescription(array $row): string
+    {
+        $parts = [
+            'Тип: '.$this->attributeTypeLabel((string) $row['type']),
+        ];
+
+        if (filled($row['unit'] ?? null)) {
+            $parts[] = 'Мерна единица: '.$row['unit'];
+        }
+
+        if ((bool) ($row['is_required'] ?? false)) {
+            $parts[] = 'Важна за категорията, но не блокира запис.';
+        }
+
+        return implode(' · ', $parts);
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     */
+    private function categorySpecificationHasValue(ProductAttribute $attribute, array $data): bool
+    {
+        return match ($attribute->type) {
+            ProductAttribute::TYPE_TEXT => is_string($data['value_text'] ?? null) && trim($data['value_text']) !== '',
+            ProductAttribute::TYPE_NUMBER, ProductAttribute::TYPE_DECIMAL => array_key_exists('value_number', $data)
+                && $data['value_number'] !== null
+                && $data['value_number'] !== '',
+            ProductAttribute::TYPE_BOOLEAN => array_key_exists('value_boolean', $data)
+                && $data['value_boolean'] !== null
+                && $data['value_boolean'] !== '',
+            ProductAttribute::TYPE_SELECT => filled($data['attribute_value_id'] ?? null),
+            ProductAttribute::TYPE_MULTISELECT => array_values(array_filter(Arr::wrap($data['selected_attribute_value_ids'] ?? []))) !== [],
+            ProductAttribute::TYPE_JSON => is_string($data['value_json_text'] ?? null) && trim($data['value_json_text']) !== '',
+            default => is_string($data['value_text'] ?? null) && trim($data['value_text']) !== '',
+        };
+    }
+
+    private function existingAttributeValueForAttribute(Product $product, int $attributeId): ?ProductAttributeValue
+    {
+        return $product
+            ->attributeValues()
+            ->where('product_attribute_id', $attributeId)
+            ->first();
+    }
+
+    private function categoryScopeLabel(ProductAttributeValue $record): string
+    {
+        return $this->categoryAssignmentForAttribute($record) ? 'Категорийна' : 'Допълнителна';
+    }
+
+    private function categoryScopeColor(ProductAttributeValue $record): string
+    {
+        return $this->categoryAssignmentForAttribute($record) ? 'primary' : 'gray';
+    }
+
+    private function categoryRequiredState(ProductAttributeValue $record): bool
+    {
+        return (bool) $this->categoryAssignmentForAttribute($record)?->is_required;
+    }
+
+    private function categoryAssignmentForAttribute(ProductAttributeValue $record): ?CategoryProductAttribute
+    {
+        $categoryIds = $this->categoryIdsForProduct($this->getOwnerProduct());
+
+        if ($categoryIds === []) {
+            return null;
+        }
+
+        return CategoryProductAttribute::query()
+            ->whereIn('category_id', $categoryIds)
+            ->where('product_attribute_id', $record->product_attribute_id)
+            ->orderBy('sort_order')
+            ->first();
+    }
+
+    private function attributeDisplayLabel(ProductAttribute $attribute): string
+    {
+        return $attribute->name_bg ?: $attribute->name ?: $attribute->code;
+    }
+
     public function table(Table $table): Table
     {
         return $table
@@ -147,6 +485,16 @@ class ProductAttributeValuesRelationManager extends RelationManager
                     ->label('Характеристика')
                     ->searchable()
                     ->sortable(),
+                TextColumn::make('category_scope')
+                    ->label('Обхват')
+                    ->state(fn (ProductAttributeValue $record): string => $this->categoryScopeLabel($record))
+                    ->badge()
+                    ->color(fn (ProductAttributeValue $record): string => $this->categoryScopeColor($record)),
+                IconColumn::make('category_required')
+                    ->label('Важна')
+                    ->state(fn (ProductAttributeValue $record): bool => $this->categoryRequiredState($record))
+                    ->boolean()
+                    ->tooltip('Категорийният required флаг е само визуален ориентир и не блокира запис.'),
                 TextColumn::make('display_value')
                     ->label('Стойност')
                     ->state(fn (ProductAttributeValue $record): string => $this->displayValue($record))
@@ -172,6 +520,21 @@ class ProductAttributeValuesRelationManager extends RelationManager
                     ->sortable(),
             ])
             ->headerActions([
+                Action::make('saveCategorySpecifications')
+                    ->label('Попълни категорийни характеристики')
+                    ->modalHeading('Категорийни характеристики')
+                    ->modalDescription('Показани са характеристиките, прикачени към категорията на продукта. Празните полета не създават редове. Изчистването премахва само стойността за този продукт.')
+                    ->modalSubmitActionLabel('Запази характеристиките')
+                    ->icon(Heroicon::OutlinedSquaresPlus)
+                    ->color('primary')
+                    ->visible(fn (): bool => $this->categorySpecificationRowsForProduct($this->getOwnerProduct()) !== [])
+                    ->form(fn (): array => $this->categorySpecificationFormSchema())
+                    ->fillForm(fn (): array => [
+                        'specifications' => $this->categorySpecificationFormData(),
+                    ])
+                    ->action(function (array $data): void {
+                        $this->saveCategorySpecifications($data);
+                    }),
                 CreateAction::make()
                     ->label('Добави характеристика')
                     ->modalHeading('Добавяне на продуктова характеристика')
@@ -200,7 +563,9 @@ class ProductAttributeValuesRelationManager extends RelationManager
                     ->modalHeading('Премахване на характеристика')
                     ->modalDescription('Това премахва само стойността за този продукт. Характеристиката, опциите, продуктът и категориите няма да бъдат изтрити.')
                     ->modalSubmitActionLabel('Премахни стойността'),
-            ]);
+            ])
+            ->emptyStateHeading('Няма записани характеристики')
+            ->emptyStateDescription('Ако продуктът има категория с прикачени характеристики, използвайте бутона за категорийни характеристики. Празните полета не създават редове.');
     }
 
     /**
@@ -526,12 +891,14 @@ class ProductAttributeValuesRelationManager extends RelationManager
      */
     private function categorySuggestedAttributeIds(Product $product): array
     {
-        if (! $product->category_id) {
+        $categoryIds = $this->categoryIdsForProduct($product);
+
+        if ($categoryIds === []) {
             return [];
         }
 
         return CategoryProductAttribute::query()
-            ->where('category_id', $product->category_id)
+            ->whereIn('category_id', $categoryIds)
             ->whereHas('attribute', fn ($query) => $query->where('is_active', true))
             ->orderBy('sort_order')
             ->pluck('product_attribute_id')

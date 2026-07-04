@@ -286,6 +286,256 @@ class ProductAttributeValuesAdminWorkflowTest extends TestCase
         $this->assertSame($category->id, $product->fresh()->category_id);
     }
 
+    public function test_category_driven_editor_saves_only_filled_assigned_values(): void
+    {
+        $this->actingAsSuperAdmin();
+
+        $category = Category::factory()->create();
+        $product = Product::factory()->create(['category_id' => $category->id]);
+        $ram = ProductAttribute::factory()->create([
+            'code' => 'ram',
+            'name_bg' => 'RAM',
+            'type' => ProductAttribute::TYPE_TEXT,
+            'unit' => 'GB',
+            'is_filterable' => true,
+        ]);
+        $warranty = ProductAttribute::factory()->create([
+            'code' => 'warranty_months',
+            'name_bg' => 'Warranty',
+            'type' => ProductAttribute::TYPE_NUMBER,
+            'unit' => 'months',
+        ]);
+        $color = ProductAttribute::factory()->create([
+            'code' => 'color',
+            'name_bg' => 'Color',
+            'type' => ProductAttribute::TYPE_SELECT,
+        ]);
+
+        CategoryProductAttribute::factory()->create([
+            'category_id' => $category->id,
+            'product_attribute_id' => $ram->id,
+            'is_required' => true,
+            'sort_order' => 1,
+        ]);
+        CategoryProductAttribute::factory()->create([
+            'category_id' => $category->id,
+            'product_attribute_id' => $warranty->id,
+            'sort_order' => 2,
+        ]);
+        CategoryProductAttribute::factory()->create([
+            'category_id' => $category->id,
+            'product_attribute_id' => $color->id,
+            'sort_order' => 3,
+        ]);
+
+        $component = $this->relationManager($product);
+        $rows = $component->instance()->categorySpecificationRowsForProduct($product);
+
+        $this->assertCount(3, $rows);
+        $this->assertSame([$ram->id, $warranty->id, $color->id], array_column($rows, 'product_attribute_id'));
+        $this->assertTrue($rows[0]['is_required']);
+
+        $component
+            ->assertTableHeaderActionsExistInOrder(['saveCategorySpecifications', 'create'])
+            ->callTableAction('saveCategorySpecifications', null, [
+                'specifications' => [
+                    $ram->id => [
+                        'value_text' => '16',
+                        'unit' => 'GB',
+                        'is_verified' => true,
+                        'is_filterable' => true,
+                        'sort_order' => 1,
+                    ],
+                    $warranty->id => [
+                        'value_number' => 24,
+                        'unit' => 'months',
+                        'sort_order' => 2,
+                    ],
+                    $color->id => [
+                        'attribute_value_id' => null,
+                        'sort_order' => 3,
+                    ],
+                ],
+            ])
+            ->assertHasNoTableActionErrors();
+
+        $this->assertDatabaseHas('product_attribute_values', [
+            'product_id' => $product->id,
+            'product_attribute_id' => $ram->id,
+            'value_text' => '16',
+            'custom_value' => '16',
+            'unit' => 'GB',
+            'source' => ProductAttributeValue::SOURCE_MANUAL,
+            'is_verified' => true,
+        ]);
+        $this->assertDatabaseHas('product_attribute_values', [
+            'product_id' => $product->id,
+            'product_attribute_id' => $warranty->id,
+            'value_number' => '24.0000',
+            'custom_value' => '24',
+            'unit' => 'months',
+            'source' => ProductAttributeValue::SOURCE_MANUAL,
+        ]);
+        $this->assertDatabaseMissing('product_attribute_values', [
+            'product_id' => $product->id,
+            'product_attribute_id' => $color->id,
+        ]);
+        $this->assertSame(3, CategoryProductAttribute::query()->count());
+        $this->assertSame($category->id, $product->fresh()->category_id);
+    }
+
+    public function test_required_category_attribute_is_visual_only_and_empty_save_does_not_create_value(): void
+    {
+        $this->actingAsSuperAdmin();
+
+        $category = Category::factory()->create();
+        $product = Product::factory()->create(['category_id' => $category->id]);
+        $importantAttribute = ProductAttribute::factory()->create([
+            'code' => 'processor',
+            'type' => ProductAttribute::TYPE_TEXT,
+        ]);
+
+        CategoryProductAttribute::factory()->create([
+            'category_id' => $category->id,
+            'product_attribute_id' => $importantAttribute->id,
+            'is_required' => true,
+        ]);
+
+        $component = $this->relationManager($product);
+
+        $this->assertTrue($component->instance()->categorySpecificationRowsForProduct($product)[0]['is_required']);
+
+        $component
+            ->callTableAction('saveCategorySpecifications', null, [
+                'specifications' => [
+                    $importantAttribute->id => [
+                        'value_text' => '',
+                    ],
+                ],
+            ])
+            ->assertHasNoTableActionErrors();
+
+        $this->assertSame(0, ProductAttributeValue::query()->count());
+    }
+
+    public function test_category_editor_clears_existing_value_without_removing_extra_values(): void
+    {
+        $this->actingAsSuperAdmin();
+
+        $category = Category::factory()->create();
+        $product = Product::factory()->create(['category_id' => $category->id]);
+        $categoryAttribute = ProductAttribute::factory()->create([
+            'code' => 'screen_size',
+            'type' => ProductAttribute::TYPE_TEXT,
+        ]);
+        $extraAttribute = ProductAttribute::factory()->create([
+            'code' => 'internal_note',
+            'type' => ProductAttribute::TYPE_TEXT,
+        ]);
+        CategoryProductAttribute::factory()->create([
+            'category_id' => $category->id,
+            'product_attribute_id' => $categoryAttribute->id,
+        ]);
+        $categoryValue = ProductAttributeValue::factory()->create([
+            'product_id' => $product->id,
+            'product_attribute_id' => $categoryAttribute->id,
+            'value_text' => '15.6',
+            'custom_value' => '15.6',
+        ]);
+        $extraValue = ProductAttributeValue::factory()->create([
+            'product_id' => $product->id,
+            'product_attribute_id' => $extraAttribute->id,
+            'value_text' => 'Admin-only note',
+            'custom_value' => 'Admin-only note',
+        ]);
+
+        $this->relationManager($product)
+            ->callTableAction('saveCategorySpecifications', null, [
+                'specifications' => [
+                    $categoryAttribute->id => [
+                        'value_text' => '',
+                    ],
+                ],
+            ])
+            ->assertHasNoTableActionErrors();
+
+        $this->assertDatabaseMissing('product_attribute_values', [
+            'id' => $categoryValue->id,
+        ]);
+        $this->assertDatabaseHas('product_attribute_values', [
+            'id' => $extraValue->id,
+            'product_id' => $product->id,
+            'product_attribute_id' => $extraAttribute->id,
+        ]);
+
+        $outOfCategory = $this->relationManager($product)
+            ->instance()
+            ->outOfCategoryAttributeValuesForProduct($product);
+
+        $this->assertCount(1, $outOfCategory);
+        $this->assertSame($extraValue->id, $outOfCategory[0]->id);
+    }
+
+    public function test_category_editor_uses_existing_options_and_rejects_wrong_options(): void
+    {
+        $this->actingAsSuperAdmin();
+
+        $category = Category::factory()->create();
+        $product = Product::factory()->create(['category_id' => $category->id]);
+        $color = ProductAttribute::factory()->create([
+            'code' => 'color',
+            'type' => ProductAttribute::TYPE_SELECT,
+        ]);
+        $panelType = ProductAttribute::factory()->create([
+            'code' => 'panel_type',
+            'type' => ProductAttribute::TYPE_SELECT,
+        ]);
+        $black = AttributeValue::factory()->create([
+            'product_attribute_id' => $color->id,
+            'value' => 'Black',
+        ]);
+        $wrongOption = AttributeValue::factory()->create([
+            'product_attribute_id' => $panelType->id,
+            'value' => 'IPS',
+        ]);
+        CategoryProductAttribute::factory()->create([
+            'category_id' => $category->id,
+            'product_attribute_id' => $color->id,
+        ]);
+
+        $attributeCount = ProductAttribute::query()->count();
+        $optionCount = AttributeValue::query()->count();
+
+        $this->relationManager($product)
+            ->callTableAction('saveCategorySpecifications', null, [
+                'specifications' => [
+                    $color->id => [
+                        'attribute_value_id' => $wrongOption->id,
+                    ],
+                ],
+            ])
+            ->assertHasTableActionErrors();
+
+        $this->relationManager($product)
+            ->callTableAction('saveCategorySpecifications', null, [
+                'specifications' => [
+                    $color->id => [
+                        'attribute_value_id' => $black->id,
+                    ],
+                ],
+            ])
+            ->assertHasNoTableActionErrors();
+
+        $this->assertSame($attributeCount, ProductAttribute::query()->count());
+        $this->assertSame($optionCount, AttributeValue::query()->count());
+        $this->assertDatabaseHas('product_attribute_values', [
+            'product_id' => $product->id,
+            'product_attribute_id' => $color->id,
+            'attribute_value_id' => $black->id,
+            'custom_value' => 'Black',
+        ]);
+    }
+
     public function test_viewer_auditor_cannot_mutate_product_attribute_values(): void
     {
         $this->seed(RolesAndPermissionsSeeder::class);
