@@ -2,8 +2,14 @@
 
 namespace Tests\Feature;
 
+use App\Jobs\ProcessXmlSupplierFeed;
 use App\Jobs\RunSupplierImportJob;
 use App\Jobs\SendEmailJob;
+use App\Jobs\SyncProductJob;
+use App\Models\CategoryProductAttribute;
+use App\Models\Product;
+use App\Models\ProductAttributeValue;
+use App\Models\ProductSyncLog;
 use App\Models\Supplier;
 use App\Models\SupplierFeed;
 use App\Models\SupplierImportRun;
@@ -143,6 +149,12 @@ class SupplierImportSchedulingTest extends TestCase
 
     public function test_csv_supplier_feed_import_stages_supplier_products_before_sync(): void
     {
+        config([
+            'catalog_sync.auto_enabled' => false,
+            'catalog_sync.update_enabled' => false,
+            'catalog_sync.sync_all_enabled' => false,
+        ]);
+
         Http::fake([
             'https://feeds.example.com/products.csv' => Http::response(
                 "sku,name,brand,category,price,quantity\nCSV-1,CSV Product,Lenovo,Laptops,1200,5\n",
@@ -152,6 +164,9 @@ class SupplierImportSchedulingTest extends TestCase
 
         $supplier = $this->supplier();
         $this->feed($supplier, 'https://feeds.example.com/products.csv', 'csv');
+        $productCount = Product::query()->count();
+        $productAttributeValueCount = ProductAttributeValue::query()->count();
+        $categoryProductAttributeCount = CategoryProductAttribute::query()->count();
 
         $run = SupplierImportRun::query()->create([
             'supplier_id' => $supplier->id,
@@ -167,12 +182,121 @@ class SupplierImportSchedulingTest extends TestCase
             'supplier_id' => $supplier->id,
             'supplier_sku' => 'CSV-1',
             'name' => 'CSV Product',
-            'status' => 'synced',
+            'status' => 'new',
+            'product_id' => null,
         ]);
-        $this->assertDatabaseHas('products', [
+        $this->assertDatabaseMissing('products', [
             'sku' => 'CSV-1',
             'name' => 'CSV Product',
         ]);
+        $this->assertSame($productCount, Product::query()->count());
+        $this->assertSame($productAttributeValueCount, ProductAttributeValue::query()->count());
+        $this->assertSame($categoryProductAttributeCount, CategoryProductAttribute::query()->count());
+        $this->assertSame(0, ProductSyncLog::query()->count());
+        $this->assertSame(0, (int) $result->products_created);
+        $this->assertSame(0, (int) $result->products_updated);
+        $this->assertSame(1, (int) $result->products_skipped);
+        $this->assertContains(
+            'Catalog product sync skipped: CATALOG_SYNC_AUTO_ENABLED is disabled; supplier import wrote supplier_products staging rows only.',
+            $result->warnings ?? [],
+        );
+    }
+
+    public function test_scheduled_supplier_import_stages_xml_only_without_catalog_product_mutation(): void
+    {
+        config([
+            'catalog_sync.auto_enabled' => false,
+            'catalog_sync.update_enabled' => false,
+            'catalog_sync.sync_all_enabled' => false,
+        ]);
+
+        Http::fake([
+            'https://feeds.example.com/products.xml' => Http::response(
+                '<products><product><code>XML-1</code><ean>1234567890123</ean><name>XML Product</name><price>1500</price><stock>12</stock></product></products>',
+                200,
+            ),
+        ]);
+
+        $supplier = $this->supplier();
+        $this->feed($supplier);
+        $this->mapping($supplier);
+        $existingProduct = Product::factory()->create([
+            'ean' => '1234567890123',
+            'price' => 999,
+            'quantity' => 2,
+            'workflow_status' => Product::WORKFLOW_PUBLISHED,
+        ]);
+        $productCount = Product::query()->count();
+        $productAttributeValueCount = ProductAttributeValue::query()->count();
+        $categoryProductAttributeCount = CategoryProductAttribute::query()->count();
+
+        $run = SupplierImportRun::query()->create([
+            'supplier_id' => $supplier->id,
+            'trigger_type' => 'scheduled',
+            'import_type' => 'xml',
+            'status' => 'pending',
+        ]);
+
+        $result = app(SupplierImportOrchestrator::class)->execute($run, true);
+
+        $this->assertSame('completed_with_warnings', $result->status);
+        $this->assertDatabaseHas('supplier_products', [
+            'supplier_id' => $supplier->id,
+            'supplier_sku' => 'XML-1',
+            'ean' => '1234567890123',
+            'name' => 'XML Product',
+            'status' => 'new',
+            'product_id' => null,
+        ]);
+        $this->assertSame($productCount, Product::query()->count());
+        $this->assertSame(999.0, (float) $existingProduct->fresh()->price);
+        $this->assertSame(2, (int) $existingProduct->fresh()->quantity);
+        $this->assertSame(Product::WORKFLOW_PUBLISHED, $existingProduct->fresh()->workflow_status);
+        $this->assertSame($productAttributeValueCount, ProductAttributeValue::query()->count());
+        $this->assertSame($categoryProductAttributeCount, CategoryProductAttribute::query()->count());
+        $this->assertSame(0, ProductSyncLog::query()->count());
+        $this->assertSame(0, (int) $result->products_created);
+        $this->assertSame(0, (int) $result->products_updated);
+        $this->assertSame(1, (int) $result->products_skipped);
+    }
+
+    public function test_sync_due_supplier_feeds_queues_staging_import_only_when_auto_sync_disabled(): void
+    {
+        config([
+            'catalog_sync.auto_enabled' => false,
+            'catalog_sync.update_enabled' => false,
+            'catalog_sync.sync_all_enabled' => false,
+        ]);
+        Queue::fake([ProcessXmlSupplierFeed::class, SyncProductJob::class]);
+
+        $supplier = $this->supplier();
+        $this->feed($supplier, 'https://feeds.example.com/products.xml');
+        SupplierFeed::query()->where('supplier_id', $supplier->id)->update([
+            'update_interval' => 'hourly',
+            'last_sync_at' => null,
+        ]);
+        $this->mapping($supplier);
+        Product::factory()->create([
+            'ean' => '9876543210123',
+            'price' => 2999,
+            'quantity' => 3,
+        ]);
+        $productCount = Product::query()->count();
+
+        $this->artisan('suppliers:sync-due-feeds')
+            ->expectsOutput('Queued 1 supplier XML import job(s).')
+            ->assertSuccessful();
+
+        Queue::assertPushed(ProcessXmlSupplierFeed::class);
+        Queue::assertNotPushed(SyncProductJob::class);
+        $this->assertDatabaseHas('import_jobs', [
+            'supplier_id' => $supplier->id,
+            'type' => 'xml',
+            'mode' => 'scheduled',
+            'status' => 'pending',
+        ]);
+        $this->assertSame($productCount, Product::query()->count());
+        $this->assertSame(0, ProductSyncLog::query()->count());
     }
 
     public function test_mass_product_drop_blocks_sync_without_destructive_sync(): void
@@ -279,6 +403,7 @@ class SupplierImportSchedulingTest extends TestCase
             'root_path' => 'products.product',
             'field_map' => [
                 'supplier_sku' => 'code',
+                'ean' => 'ean',
                 'name' => 'name',
                 'price' => 'price',
                 'quantity' => 'stock',
