@@ -4,8 +4,6 @@ namespace App\Services\Suppliers;
 
 use App\Jobs\RunSupplierImportJob;
 use App\Models\ImportJob;
-use App\Models\Product;
-use App\Models\ProductSyncLog;
 use App\Models\Supplier;
 use App\Models\SupplierFeed;
 use App\Models\SupplierImportRun;
@@ -13,7 +11,6 @@ use App\Models\SupplierProduct;
 use App\Models\SupplierProductAttribute;
 use App\Models\XmlMappingTemplate;
 use App\Services\Imports\XmlImportEngine;
-use App\Services\Products\ProductSyncService;
 use Illuminate\Support\Facades\Cache;
 use Throwable;
 
@@ -142,10 +139,10 @@ class SupplierImportOrchestrator
                 return $this->finish($run->fresh(), 'failed', $decision['warnings'], $decision['errors']);
             }
 
-            $syncStats = ['created' => 0, 'updated' => 0, 'skipped' => 0];
+            $syncStats = $this->catalogProductSyncSkippedStats($supplier, $startedAt);
 
-            if (! $decision['block_sync']) {
-                $syncStats = $this->syncImportedProducts($supplier, $startedAt);
+            if (! $decision['block_sync'] && $syncStats['skipped'] > 0) {
+                $decision['warnings'][] = $this->catalogProductSyncSkipReason();
             }
 
             $status = $decision['warnings'] === [] ? 'completed' : 'completed_with_warnings';
@@ -223,43 +220,35 @@ class SupplierImportOrchestrator
         ]);
     }
 
-    private function syncImportedProducts(Supplier $supplier, $startedAt): array
+    /**
+     * Supplier imports are staging-only. Catalog writes must go through the
+     * manual Catalog Sync Preview actions until a future explicit automatic
+     * sync phase exists with its own audit and rollback controls.
+     *
+     * @return array{created: int, updated: int, skipped: int}
+     */
+    private function catalogProductSyncSkippedStats(Supplier $supplier, $startedAt): array
     {
-        $stats = ['created' => 0, 'updated' => 0, 'skipped' => 0];
-        $productIds = [];
-
-        SupplierProduct::query()
+        $stagedRows = SupplierProduct::query()
             ->where('supplier_id', $supplier->id)
             ->where('received_at', '>=', $startedAt)
             ->where('status', 'new')
-            ->chunkById(100, function ($products) use (&$stats, &$productIds): void {
-                foreach ($products as $supplierProduct) {
-                    $log = app(ProductSyncService::class)->sync($supplierProduct);
-
-                    if ($log->action === 'created') {
-                        $stats['created']++;
-                    } elseif ($log->action === 'updated') {
-                        $stats['updated']++;
-                    } else {
-                        $stats['skipped']++;
-                    }
-
-                    if ($log->product_id) {
-                        $productIds[] = $log->product_id;
-                    }
-                }
-            });
-
-        ProductSyncLog::query()
-            ->whereIn('product_id', array_unique($productIds))
-            ->where('created_at', '>=', $startedAt)
             ->count();
 
-        if ($productIds !== []) {
-            Product::query()->whereIn('id', array_unique($productIds))->get()->searchable();
+        return ['created' => 0, 'updated' => 0, 'skipped' => $stagedRows];
+    }
+
+    private function catalogProductSyncSkipReason(): string
+    {
+        if (! (bool) config('catalog_sync.auto_enabled', false)) {
+            return 'Catalog product sync skipped: CATALOG_SYNC_AUTO_ENABLED is disabled; supplier import wrote supplier_products staging rows only.';
         }
 
-        return $stats;
+        if (! (bool) config('catalog_sync.sync_all_enabled', false)) {
+            return 'Catalog product sync skipped: CATALOG_SYNC_SYNC_ALL_ENABLED is disabled; supplier import wrote supplier_products staging rows only.';
+        }
+
+        return 'Catalog product sync skipped: no explicit safe automatic catalog sync mode is implemented; use Catalog Sync Preview manual CREATE/UPDATE actions.';
     }
 
     private function hasRunningImport(Supplier $supplier): bool
