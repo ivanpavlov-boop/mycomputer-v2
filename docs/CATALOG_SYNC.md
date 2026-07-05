@@ -104,6 +104,43 @@ Sample diagnostic rows show:
 - excluded
 - exclusion reason
 
+## Corrective Review Command
+
+Phase 9C.4.2 removed an old supplier import path that could create catalog
+products automatically after staging supplier rows. Before that hotfix was
+deployed, three Arlo catalog products were created from supplier data while
+automatic catalog sync was disabled.
+
+Phase 9C.4.3 adds a dry-run-first corrective command so those known products
+can be moved out of `published` and into manual review without deleting them or
+changing supplier staging data:
+
+```bash
+php artisan catalog:review-auto-created-products
+php artisan catalog:review-auto-created-products --apply
+php artisan catalog:review-auto-created-products --apply --status=pending_review
+```
+
+Known SKU allowlist:
+
+- `VMA3600-10000S`
+- `VMC4460P-100EUS`
+- `VMC4260P-100EUS`
+
+The command defaults to dry-run and reports the products found, missing SKUs,
+current status, proposed status, and safety counters. Apply mode requires
+explicit `--apply`, is idempotent, and may only update review/status fields for
+the allowlisted products. It does not delete products, mutate
+`supplier_products`, mutate `product_attribute_values`, mutate
+`category_product_attributes`, or change product content, SEO, images,
+categories, attributes, price, stock, or supplier offer metadata.
+
+Do not manually delete these products from the database. Review them in the
+admin after running the dry-run and only apply the status move when the output
+matches the expected three products. Supplier imports remain staging-only and
+future catalog CREATE sync remains manual and controlled through Catalog Sync
+Preview.
+
 ## Important Interpretation Rules
 
 - Unmatched does not automatically mean CREATE.
