@@ -4,7 +4,7 @@
 
 Document the current supplier-to-catalog control layer before Phase 8 UPDATE sync.
 
-Related docs: [Supplier Import](SUPPLIER_IMPORT.md), [Pricing Rules](PRICING_RULES.md), [Supplier Exclusions](SUPPLIER_EXCLUSIONS.md), [Matching Rules](MATCHING_RULES.md), [Sync Safety](SYNC_SAFETY.md), [Rollback Plan](ROLLBACK_PLAN.md).
+Related docs: [Supplier Import](SUPPLIER_IMPORT.md), [Pricing Rules](PRICING_RULES.md), [Supplier Exclusions](SUPPLIER_EXCLUSIONS.md), [Matching Rules](MATCHING_RULES.md), [Sync Safety](SYNC_SAFETY.md), [Catalog Sync Safety Playbook](CATALOG_SYNC_SAFETY.md), [Rollback Plan](ROLLBACK_PLAN.md).
 
 ## Current Status
 
@@ -140,6 +140,10 @@ admin after running the dry-run and only apply the status move when the output
 matches the expected three products. Supplier imports remain staging-only and
 future catalog CREATE sync remains manual and controlled through Catalog Sync
 Preview.
+
+See [Catalog Sync Safety Playbook](CATALOG_SYNC_SAFETY.md) for the incident
+summary, staging-only supplier import rule, required PR checks, and AI/Codex
+review guardrails.
 
 ## Important Interpretation Rules
 

@@ -6,6 +6,11 @@ Product Attributes define internal, structured catalog characteristics such as R
 
 This foundation is for catalog-owned product specifications. It does not enable supplier XML attribute sync, frontend attribute filters, Sync All, automatic sync, image import, or supplier-driven product mutations.
 
+See [Project AI Agents](AI_AGENTS.md) for the Product Attributes Architecture
+Agent role. That role protects the model where `product_attributes` are global
+internal definitions, `category_product_attributes` are category specification
+templates, and `product_attribute_values` are product-specific values.
+
 ## Current Phase 9C.4.1 Category-Driven Product Specifications Editor
 
 Phase 9C.4.1 keeps the manual product attribute workflow, but makes the Product edit `Характеристики` area category-driven first.
@@ -309,3 +314,7 @@ Planned follow-up work:
 6. Frontend attribute filters and facets.
 
 Each future write phase must include server-side validation, preview, auditability and tests proving products and `supplier_products` are not mutated unexpectedly.
+
+Future supplier XML mapping remains preview-only until a dedicated phase
+explicitly approves writes from raw supplier attributes into internal product
+attribute values.
