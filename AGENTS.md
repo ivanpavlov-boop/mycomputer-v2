@@ -13,6 +13,9 @@ Start with these docs:
 - [Sync Safety](docs/SYNC_SAFETY.md)
 - [Data Ownership](docs/DATA_OWNERSHIP.md)
 - [Supplier Import](docs/SUPPLIER_IMPORT.md)
+- [AI Agents](docs/AI_AGENTS.md)
+- [Catalog Sync Safety Playbook](docs/CATALOG_SYNC_SAFETY.md)
+- [Release Checklist](docs/RELEASE_CHECKLIST.md)
 - [Testing](docs/TESTING.md)
 - [Deployment](docs/DEPLOYMENT.md)
 - [Roadmap](docs/ROADMAP.md)
@@ -39,6 +42,9 @@ Selected CREATE sync is enabled. Selected UPDATE price/stock sync is feature-fla
 - Every PR must run tests and Pint.
 - No merge with failing CI.
 - No VPS deploy before merge into `main`.
+- Do not deploy to VPS unless explicitly requested.
+- Follow the release checklist for PR, CI, merge, deploy, and post-deploy smoke tests.
+- Return validation results and safety confirmations when handing work back.
 
 ## Project Architect
 
@@ -133,11 +139,19 @@ See [Testing](docs/TESTING.md).
 Rules:
 
 - Deploy only from `origin/main`.
+- Deploy only after the PR is merged into `main`.
+- Deploy only when the user explicitly requests deployment.
 - Start app containers before nginx.
 - Verify with `curl -I http://localhost:8080`.
 - If nginx cannot resolve upstream `app`, start `app` first, wait, then start nginx.
 
-See [Deployment](docs/DEPLOYMENT.md).
+See [Deployment](docs/DEPLOYMENT.md) and [Release Checklist](docs/RELEASE_CHECKLIST.md).
+
+## AI Agent Playbook
+
+Use [AI Agents](docs/AI_AGENTS.md) for project AI/Codex roles and review checklists.
+These roles are documentation and process guidance only; they are not autonomous
+production agents, scheduled jobs, background workers, or data-mutating AI code.
 
 ## Filament UI
 

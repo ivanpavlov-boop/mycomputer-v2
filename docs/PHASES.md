@@ -37,11 +37,16 @@ Phase 8 manual selected UPDATE price/stock sync has been implemented behind a fe
 | Phase 9C.4.1 | Category-driven product specifications editor | Complete |
 | Phase 9C.4.2 | Supplier import automatic product creation safety hotfix | Complete |
 | Phase 9C.4.3 | Review automatically-created catalog products | Complete |
+| Phase 9C.4.4 | Project AI agents and safety playbook | Complete |
 
 ## Next Planned Phases
 
 | Phase | Name | Notes |
 | --- | --- | --- |
+| Phase 9C.5 | Admin UX verification of category-driven specifications | Verify field ergonomics and non-mutating behavior. |
+| Phase 9C.6 | Product specification data quality | Read-only quality reporting before any blocking rules. |
+| Phase 9C.7 | Supplier XML attribute mapping preview | Preview and manual approval only. |
+| Phase 9C.8 | Frontend attribute filters | Only after controlled data quality and approved product values. |
 | Phase 9 | Rollback support | Required before broad writes. |
 | Phase 10 | Manual Sync All eligible CREATE | Later, after stronger audit controls. |
 | Phase 11 | Scheduled preview generation | Preview only before scheduled writes. |
@@ -60,6 +65,7 @@ Phase 8 manual selected UPDATE price/stock sync has been implemented behind a fe
 - Manage individual product attribute values manually from Product edit pages without auto-filling existing products or syncing supplier XML attributes.
 - Use category-assigned attributes as ready Product edit specification fields while keeping empty fields non-mutating and required flags visual only.
 - Use `catalog:review-auto-created-products` as a dry-run-first corrective command for the three known products created before the Phase 9C.4.2 supplier import safety hotfix. The command must remain allowlisted, idempotent, and limited to review/status fields.
+- Use the Project AI Agents and Catalog Sync Safety playbooks as process guardrails only; they do not add autonomous agents, jobs, or runtime behavior.
 
 ## Forbidden
 
