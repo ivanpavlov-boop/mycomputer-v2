@@ -25,6 +25,37 @@ The category assignment `is_required` flag is a visual data-quality hint only. I
 
 Phase 9C.4.1 still does not parse supplier XML attributes, does not sync supplier attributes, does not auto-fill product values, does not mutate `supplier_products`, and does not expose frontend attribute filters.
 
+## Phase 9C.4.5 Admin UX Verification
+
+Phase 9C.4.5 verifies and lightly polishes the Product edit `Characteristics`
+admin workflow for category-driven specifications.
+
+Manual verification checklist:
+
+- Open an existing product with a category that has `category_product_attributes`.
+- Confirm category-defined specifications appear as ready-to-fill rows/fields.
+- Confirm parent category assignments are included when a product category has a
+  parent, and duplicate attributes are shown once with the more specific child
+  category assignment taking precedence.
+- Leave several category specification fields empty and save. Empty fields must
+  not create `product_attribute_values` rows.
+- Fill one category specification field and save. Exactly one row should be
+  created or updated for that product and product attribute.
+- Clear an existing category specification field and save. Only that one
+  product-specific value row should be removed.
+- Confirm existing out-of-category values remain visible as extra/manual values
+  and are not deleted by category specification saves.
+- Confirm products without category templates still allow manual extra
+  characteristics from the active internal attribute picker.
+- Confirm required/important category assignments are visual data-quality hints
+  only and do not block saving.
+
+This phase remains admin-only and read-only until an admin explicitly saves
+product-specific specification values. It does not parse supplier XML
+attributes, does not sync supplier attributes, does not mutate
+`supplier_products`, does not expose frontend filters, does not add Sync All,
+and does not enable automatic sync.
+
 ## Phase 9C.4 Manual Product Attribute Values
 
 Phase 9C.4 adds a manual Filament workflow for product-specific attribute values.

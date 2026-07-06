@@ -286,6 +286,108 @@ class ProductAttributeValuesAdminWorkflowTest extends TestCase
         $this->assertSame($category->id, $product->fresh()->category_id);
     }
 
+    public function test_category_specifications_include_parent_category_assignments_and_dedupe_child_overrides(): void
+    {
+        $this->actingAsSuperAdmin();
+
+        $parentCategory = Category::factory()->create(['slug' => 'computers']);
+        $childCategory = Category::factory()->create([
+            'parent_id' => $parentCategory->id,
+            'slug' => 'laptops',
+        ]);
+        $product = Product::factory()->create(['category_id' => $childCategory->id]);
+
+        $parentOnly = ProductAttribute::factory()->create([
+            'code' => 'warranty_months',
+            'name_bg' => 'Warranty',
+            'type' => ProductAttribute::TYPE_NUMBER,
+        ]);
+        $shared = ProductAttribute::factory()->create([
+            'code' => 'ram',
+            'name_bg' => 'RAM',
+            'type' => ProductAttribute::TYPE_TEXT,
+        ]);
+        $childOnly = ProductAttribute::factory()->create([
+            'code' => 'gpu',
+            'name_bg' => 'GPU',
+            'type' => ProductAttribute::TYPE_TEXT,
+        ]);
+
+        CategoryProductAttribute::factory()->create([
+            'category_id' => $parentCategory->id,
+            'product_attribute_id' => $shared->id,
+            'is_required' => false,
+            'sort_order' => 1,
+        ]);
+        CategoryProductAttribute::factory()->create([
+            'category_id' => $parentCategory->id,
+            'product_attribute_id' => $parentOnly->id,
+            'sort_order' => 2,
+        ]);
+        CategoryProductAttribute::factory()->create([
+            'category_id' => $childCategory->id,
+            'product_attribute_id' => $childOnly->id,
+            'sort_order' => 1,
+        ]);
+        CategoryProductAttribute::factory()->create([
+            'category_id' => $childCategory->id,
+            'product_attribute_id' => $shared->id,
+            'is_required' => true,
+            'sort_order' => 2,
+        ]);
+
+        $component = $this->relationManager($product);
+        $rows = $component->instance()->categorySpecificationRowsForProduct($product);
+
+        $this->assertSame(
+            [$childOnly->id, $shared->id, $parentOnly->id],
+            array_column($rows, 'product_attribute_id')
+        );
+
+        $sharedRow = collect($rows)->firstWhere('product_attribute_id', $shared->id);
+
+        $this->assertSame($childCategory->id, $sharedRow['assignment']->category_id);
+        $this->assertTrue($sharedRow['is_required']);
+        $this->assertSame(0, ProductAttributeValue::query()->count());
+    }
+
+    public function test_product_without_category_falls_back_to_manual_attribute_picker_without_autofill(): void
+    {
+        $this->actingAsSuperAdmin();
+
+        $product = Product::factory()->create(['category_id' => null]);
+        $category = Category::factory()->create();
+        $assignedElsewhere = ProductAttribute::factory()->create([
+            'code' => 'ram',
+            'name_bg' => 'RAM',
+            'type' => ProductAttribute::TYPE_TEXT,
+            'sort_order' => 2,
+        ]);
+        $fallback = ProductAttribute::factory()->create([
+            'code' => 'color',
+            'name_bg' => 'Color',
+            'type' => ProductAttribute::TYPE_TEXT,
+            'sort_order' => 1,
+        ]);
+
+        CategoryProductAttribute::factory()->create([
+            'category_id' => $category->id,
+            'product_attribute_id' => $assignedElsewhere->id,
+        ]);
+
+        $component = $this->relationManager($product);
+
+        $this->assertSame([], $component->instance()->categorySpecificationRowsForProduct($product));
+        $this->assertSame([], $component->instance()->categorySpecificationFormSchema());
+
+        $options = $component->instance()->attributeOptionsForProduct($product);
+
+        $this->assertSame([$fallback->id, $assignedElsewhere->id], array_keys($options));
+        $this->assertStringContainsString('Color', $options[$fallback->id]);
+        $this->assertStringContainsString('RAM', $options[$assignedElsewhere->id]);
+        $this->assertSame(0, ProductAttributeValue::query()->count());
+    }
+
     public function test_category_driven_editor_saves_only_filled_assigned_values(): void
     {
         $this->actingAsSuperAdmin();
