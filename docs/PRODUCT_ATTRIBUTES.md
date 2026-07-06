@@ -307,6 +307,50 @@ This phase does not parse supplier XML attributes, does not sync supplier
 attributes, does not mutate products or `supplier_products`, does not expose
 frontend filters, does not add Sync All, and does not enable automatic sync.
 
+## Phase 9C.5.4 Category Specification Template Coverage Plan
+
+Phase 9C.5.4 adds a read-only planning audit for category specification
+template coverage. It helps identify which categories already have direct
+`category_product_attributes`, which categories inherit a parent template, and
+which product categories still have no effective specification template.
+
+Run the audit:
+
+```bash
+php artisan product-attributes:audit-category-template-coverage
+php artisan product-attributes:audit-category-template-coverage --only-missing
+php artisan product-attributes:audit-category-template-coverage --limit=100
+php artisan product-attributes:audit-category-template-coverage --format=json
+```
+
+The command reports:
+
+- category id, name, slug and parent category
+- product count for each category
+- direct category assignment count
+- inherited parent assignment count
+- total effective expected attributes count
+- coverage status: `direct_template`, `inherited_template`, or `no_template`
+- conservative suggested product family
+- suggested next action for planning future templates
+
+`direct_template` means the category has its own active category-to-attribute
+assignments. `inherited_template` means the category has no direct template but
+inherits active assignments from a parent category. `no_template` means the
+category has products but no direct or inherited active category specification
+template.
+
+This audit is planning-only. It has no `--apply` mode and does not create or
+change `product_attributes`, `attribute_values`, `category_product_attributes`,
+`product_attribute_values`, categories, products, supplier staging rows, or
+product category assignments. It does not parse supplier XML attributes, sync
+supplier attributes, expose frontend filters, or add Catalog Sync write paths.
+
+The suggested families are conservative keyword/slug hints only. Unknown
+categories remain `unknown` and require manual classification before a template
+is created. The output is intended to guide future product-family template
+phases such as RAM/memory, storage/SSD/HDD, and GPU/video cards.
+
 ## Phase 9C.4 Manual Product Attribute Values
 
 Phase 9C.4 adds a manual Filament workflow for product-specific attribute values.
@@ -588,11 +632,11 @@ Price, stock and availability updates remain separate from content and attribute
 
 Planned follow-up work:
 
-1. Product Specification Data Quality polish.
-2. Supplier raw attribute capture review.
-3. Supplier-to-internal attribute mapping preview UI.
-4. Preview-only attribute mapping diagnostics.
-5. Manual controlled attribute sync with audit logs.
+1. RAM / Memory Category Attribute Template.
+2. SSD / Storage Category Attribute Template.
+3. GPU Category Attribute Template.
+4. Supplier Attribute Mapping Foundation.
+5. Product Specification Data Quality polish.
 6. Storefront product specification display.
 7. Frontend attribute filters and facets.
 
