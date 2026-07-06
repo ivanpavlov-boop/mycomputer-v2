@@ -230,6 +230,83 @@ assignments, categories, products, or supplier staging rows, does not parse
 supplier XML attributes, does not sync supplier attributes, does not expose
 frontend filters, does not add Sync All, and does not enable automatic sync.
 
+## Phase 9C.5.3 CPU Category Attribute Template
+
+Phase 9C.5.3 adds a controlled CPU / Processor category specification template
+for existing CPU categories. The template is supplier-independent catalog
+structure. It prepares the internal attribute model for later product-by-product
+legacy reconciliation, but it does not reconcile values itself.
+
+The command is:
+
+```bash
+php artisan product-attributes:seed-cpu-template
+```
+
+Default behavior is a dry run. It reports CPU attributes, safe options, and
+category assignments that would be created, plus explicit safety counters for
+products, `supplier_products`, `product_attribute_values`, categories, and
+product category assignments.
+
+Apply mode is explicit:
+
+```bash
+php artisan product-attributes:seed-cpu-template --apply
+```
+
+Apply mode creates only missing internal CPU `product_attributes`, a small safe
+set of controlled options, and missing `category_product_attributes` for
+existing CPU categories. It does not create categories and it does not alter
+category names, slugs, descriptions, SEO, images, or product category
+assignments. Existing admin-edited attribute labels, descriptions, flags, and
+assignments are preserved.
+
+CPU category aliases are matched by existing category slug only:
+
+- `procesori`
+- `processors`
+- `processor`
+- `cpu`
+- `cpus`
+- `protsesori`
+- `central-processors`
+- `desktop-processors`
+
+If no matching CPU category exists, category assignments are skipped and the
+command reports that clearly. Attributes/options may still be prepared by
+explicit apply, but no categories are created.
+
+The CPU template includes:
+
+- `processor`
+- `cpu_socket`
+- `cpu_cores`
+- `cpu_threads`
+- `cpu_base_clock`
+- `cpu_boost_clock`
+- `cpu_tdp`
+- `cpu_cache`
+- `cpu_architecture`
+- `cpu_integrated_graphics`
+- `cpu_memory_support`
+- `warranty_months`
+
+The only controlled options created in this phase are intentionally small:
+
+- `cpu_socket`: `AM4`, `AM5`, `LGA1700`, `LGA1851`
+- `cpu_memory_support`: `DDR4`, `DDR5`
+
+The legacy reconciliation proposal logic can now recognize CPU source labels
+such as `Socket`, `Cores`, `Base clock`, `Boost clock`, `TDP`, and related CPU
+fields once the target attributes are present and assigned. That remains a
+dry-run-first, explicit product-by-product reconciliation workflow. This phase
+does not run `product-attributes:reconcile-legacy-values --apply`, does not
+create `product_attribute_values`, and does not auto-fill CPU product specs.
+
+This phase does not parse supplier XML attributes, does not sync supplier
+attributes, does not mutate products or `supplier_products`, does not expose
+frontend filters, does not add Sync All, and does not enable automatic sync.
+
 ## Phase 9C.4 Manual Product Attribute Values
 
 Phase 9C.4 adds a manual Filament workflow for product-specific attribute values.
