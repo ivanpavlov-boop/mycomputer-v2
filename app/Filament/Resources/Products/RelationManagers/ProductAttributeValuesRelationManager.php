@@ -27,6 +27,7 @@ use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
 use Throwable;
@@ -143,19 +144,7 @@ class ProductAttributeValuesRelationManager extends RelationManager
      */
     public function categorySpecificationRowsForProduct(Product $product): array
     {
-        $categoryIds = $this->categoryIdsForProduct($product);
-
-        if ($categoryIds === []) {
-            return [];
-        }
-
-        $assignments = CategoryProductAttribute::query()
-            ->with('attribute')
-            ->whereIn('category_id', $categoryIds)
-            ->whereHas('attribute', fn ($query) => $query->where('is_active', true))
-            ->orderBy('sort_order')
-            ->orderBy('id')
-            ->get();
+        $assignments = $this->categoryAssignmentsForProduct($product);
 
         if ($assignments->isEmpty()) {
             return [];
@@ -384,7 +373,25 @@ class ProductAttributeValuesRelationManager extends RelationManager
      */
     private function categoryIdsForProduct(Product $product): array
     {
-        return collect([$product->category_id])
+        $categoryIds = collect([$product->category_id]);
+        $category = $product->category;
+        $visited = [];
+        $guard = 0;
+
+        while ($category !== null && $category->parent_id !== null && $guard < 20) {
+            $parentId = (int) $category->parent_id;
+
+            if (isset($visited[$parentId])) {
+                break;
+            }
+
+            $visited[$parentId] = true;
+            $categoryIds->push($parentId);
+            $category = $category->parent;
+            $guard++;
+        }
+
+        return $categoryIds
             ->filter()
             ->map(fn (mixed $id): int => (int) $id)
             ->unique()
@@ -463,11 +470,8 @@ class ProductAttributeValuesRelationManager extends RelationManager
             return null;
         }
 
-        return CategoryProductAttribute::query()
-            ->whereIn('category_id', $categoryIds)
-            ->where('product_attribute_id', $record->product_attribute_id)
-            ->orderBy('sort_order')
-            ->first();
+        return $this->categoryAssignmentsForProduct($this->getOwnerProduct())
+            ->firstWhere('product_attribute_id', $record->product_attribute_id);
     }
 
     private function attributeDisplayLabel(ProductAttribute $attribute): string
@@ -891,21 +895,42 @@ class ProductAttributeValuesRelationManager extends RelationManager
      */
     private function categorySuggestedAttributeIds(Product $product): array
     {
-        $categoryIds = $this->categoryIdsForProduct($product);
-
-        if ($categoryIds === []) {
-            return [];
-        }
-
-        return CategoryProductAttribute::query()
-            ->whereIn('category_id', $categoryIds)
-            ->whereHas('attribute', fn ($query) => $query->where('is_active', true))
-            ->orderBy('sort_order')
+        return $this->categoryAssignmentsForProduct($product)
             ->pluck('product_attribute_id')
             ->map(fn (mixed $id): int => (int) $id)
             ->unique()
             ->values()
             ->all();
+    }
+
+    /**
+     * @return Collection<int, CategoryProductAttribute>
+     */
+    private function categoryAssignmentsForProduct(Product $product): Collection
+    {
+        $categoryIds = $this->categoryIdsForProduct($product);
+
+        if ($categoryIds === []) {
+            return collect();
+        }
+
+        $categoryRank = array_flip($categoryIds);
+
+        return CategoryProductAttribute::query()
+            ->with('attribute')
+            ->whereIn('category_id', $categoryIds)
+            ->whereHas('attribute', fn ($query) => $query->where('is_active', true))
+            ->get()
+            ->sort(fn (CategoryProductAttribute $left, CategoryProductAttribute $right): int => [
+                $categoryRank[(int) $left->category_id] ?? PHP_INT_MAX,
+                (int) $left->sort_order,
+                (int) $left->id,
+            ] <=> [
+                $categoryRank[(int) $right->category_id] ?? PHP_INT_MAX,
+                (int) $right->sort_order,
+                (int) $right->id,
+            ])
+            ->values();
     }
 
     private function attributeType(mixed $attributeId): ?string
