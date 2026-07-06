@@ -56,6 +56,69 @@ attributes, does not sync supplier attributes, does not mutate
 `supplier_products`, does not expose frontend filters, does not add Sync All,
 and does not enable automatic sync.
 
+## Phase 9C.5 Product Specification Data Quality
+
+Phase 9C.5 adds a read-only Product Specification Data Quality layer for
+category-driven product specifications.
+
+The quality checker uses existing `category_product_attributes` rows as the
+source of expected product characteristics. Category assignments marked
+`is_required` are treated as important first. If a category has no required
+assignments, visible, filterable, or comparable category assignments are treated
+as recommended important fields. Child category assignments are evaluated before
+parent category assignments, and duplicate product attributes are shown once
+using the more specific assignment.
+
+Quality statuses are computed dynamically and are not stored on products:
+
+- `good` / `Добро`
+- `needs_data` / `Нуждае се от попълване`
+- `missing_required` / `Липсват важни характеристики`
+- `no_category_template` / `Няма зададен шаблон за категория`
+
+The score is computed dynamically as filled important fields over total expected
+important fields, for example `2/4 (50%)`.
+
+Filled values are type-aware:
+
+- text values need non-empty text
+- number and decimal values need a numeric value
+- boolean values count as filled when true or false is explicitly present
+- select values must reference an existing option for the same attribute
+- multiselect values must contain at least one valid option for the same
+  attribute
+- JSON values must contain non-empty JSON data
+
+Empty strings, nulls, empty arrays, and invalid option references count as
+missing. Existing manually entered product values are preserved; the checker
+does not rewrite or normalize historical rows.
+
+Admin visibility is warning-only:
+
+- the Products table shows a `Характеристики` quality badge
+- the Product edit `Характеристики` area shows a compact
+  `Качество на характеристиките` summary with expected, filled, and missing
+  counts
+- missing important attributes are shown as warnings and do not block saving
+- admins still fill values manually through Product edit -> `Характеристики`
+
+The optional read-only audit command:
+
+```bash
+php artisan products:audit-specification-quality
+```
+
+prints total products checked, products with missing important specs, products
+without category templates, top missing attributes, and explicit `changed: 0`
+lines for products, `supplier_products`, `product_attribute_values`, and
+`category_product_attributes`.
+
+This phase does not auto-fill `product_attribute_values`, does not create
+attributes or options, does not create category assignments, does not mutate
+products or `supplier_products`, does not parse supplier XML attributes, does
+not sync supplier attributes, does not expose frontend filters, does not add
+Sync All, and does not enable automatic sync.
+
 ## Phase 9C.4 Manual Product Attribute Values
 
 Phase 9C.4 adds a manual Filament workflow for product-specific attribute values.
@@ -337,12 +400,13 @@ Price, stock and availability updates remain separate from content and attribute
 
 Planned follow-up work:
 
-1. Supplier raw attribute capture review.
-2. Supplier-to-internal attribute mapping UI.
-3. Preview-only attribute mapping diagnostics.
-4. Manual controlled attribute sync with audit logs.
-5. Storefront product specification display.
-6. Frontend attribute filters and facets.
+1. Product Specification Data Quality polish.
+2. Supplier raw attribute capture review.
+3. Supplier-to-internal attribute mapping preview UI.
+4. Preview-only attribute mapping diagnostics.
+5. Manual controlled attribute sync with audit logs.
+6. Storefront product specification display.
+7. Frontend attribute filters and facets.
 
 Each future write phase must include server-side validation, preview, auditability and tests proving products and `supplier_products` are not mutated unexpectedly.
 

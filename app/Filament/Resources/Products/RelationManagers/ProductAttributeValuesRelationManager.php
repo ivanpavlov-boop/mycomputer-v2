@@ -7,6 +7,8 @@ use App\Models\CategoryProductAttribute;
 use App\Models\Product;
 use App\Models\ProductAttribute;
 use App\Models\ProductAttributeValue;
+use App\Services\Products\ProductSpecificationQualityResult;
+use App\Services\Products\ProductSpecificationQualityService;
 use Filament\Actions\Action;
 use Filament\Actions\CreateAction;
 use Filament\Actions\DeleteAction;
@@ -479,9 +481,33 @@ class ProductAttributeValuesRelationManager extends RelationManager
         return $attribute->name_bg ?: $attribute->name ?: $attribute->code;
     }
 
+    private function specificationQualityDescription(): string
+    {
+        $result = $this->specificationQuality();
+        $description = 'Качество на характеристиките: '.$result->statusLabel().' · '.$result->scoreLabel().'.';
+
+        if ($result->status === ProductSpecificationQualityResult::STATUS_NO_CATEGORY_TEMPLATE) {
+            return $description.' Няма зададен категориен шаблон. Това е предупреждение и не блокира записа.';
+        }
+
+        $missing = $result->missingAttributeSummary(8);
+
+        if ($missing !== '') {
+            return $description.' Липсват: '.$missing.'. Това е предупреждение и не блокира записа.';
+        }
+
+        return $description.' Категорийно важните характеристики са попълнени.';
+    }
+
+    private function specificationQuality(): ProductSpecificationQualityResult
+    {
+        return app(ProductSpecificationQualityService::class)->evaluate($this->getOwnerProduct());
+    }
+
     public function table(Table $table): Table
     {
         return $table
+            ->description(fn (): string => $this->specificationQualityDescription())
             ->recordTitleAttribute('custom_value')
             ->defaultSort('sort_order')
             ->columns([
