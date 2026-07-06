@@ -119,6 +119,80 @@ products or `supplier_products`, does not parse supplier XML attributes, does
 not sync supplier attributes, does not expose frontend filters, does not add
 Sync All, and does not enable automatic sync.
 
+## Phase 9C.5.1 Legacy Product Attribute Value Reconciliation
+
+Phase 9C.5.1 adds a dry-run-first maintenance command for legacy
+`product_attribute_values` that sit outside the current category-driven
+specification template.
+
+The command is:
+
+```bash
+php artisan product-attributes:reconcile-legacy-values
+```
+
+Default behavior is read-only. A dry run scans products, finds legacy
+out-of-category values, and reports copy proposals into existing category
+assigned target attributes. It prints scanned products, legacy values found,
+proposal counts, target-already-filled counts, manual-review counts, and
+explicit `changed: 0` safety lines for products, `supplier_products`,
+`category_product_attributes`, `product_attributes`, and `attribute_values`.
+
+Apply mode is intentionally restricted:
+
+```bash
+php artisan product-attributes:reconcile-legacy-values --apply --sku=SKU
+php artisan product-attributes:reconcile-legacy-values --apply --product-id=ID
+```
+
+Unrestricted `--apply` is refused. Apply mode must name exactly one product by
+SKU or product ID. There is no bulk apply across all products in this phase.
+
+Optional discovery filters are available for dry runs:
+
+- `--sku=SKU`
+- `--product-id=ID`
+- `--limit=COUNT` capped by the command
+- `--only-missing-quality`
+- `--category=category-slug`
+- `--attribute=legacy-attribute-code-or-name`
+
+The reconciliation is copy-safe:
+
+- it creates a new target `product_attribute_values` row only when the target
+  attribute already exists and is assigned to the product category
+- it preserves the legacy source row
+- it does not delete, overwrite, deactivate, or mutate legacy source values
+- it skips when the target already has a value and reports
+  `target_already_filled`
+- it skips ambiguous or unparseable values and reports manual review actions
+- it skips missing target attributes and missing select/multiselect options
+- it never creates `product_attributes`, `attribute_values`, or
+  `category_product_attributes`
+
+The first reconciliation rules cover common legacy labels:
+
+- storage / pamet values such as `512 GB SSD`, `1 TB SSD`, `256GB NVMe`, and
+  `2 TB HDD` can propose `storage_capacity` and `storage_type`
+- display / screen values can propose `screen_size`
+- RAM / memory can propose `ram`
+- processor / CPU can propose `processor`
+- GPU / graphics / video can propose `gpu`
+- resolution can propose `resolution`
+- refresh rate / `refresh-rate` / Hz values can propose `refresh_rate`, with
+  code-first then slug fallback for existing slug/code mismatches
+- operating system / OS can propose `operating_system`
+- color, warranty, weight, power, interface, and connectors can propose their
+  corresponding existing target attributes
+
+For text targets the command copies text. For number/decimal targets it writes
+only confidently parsed numbers. For select and multiselect targets it reuses
+existing `attribute_values` only; missing options are reported and skipped.
+
+This phase does not parse supplier XML attributes, does not sync supplier
+attributes, does not expose frontend filters, does not mutate products or
+`supplier_products`, does not add Sync All, and does not enable automatic sync.
+
 ## Phase 9C.4 Manual Product Attribute Values
 
 Phase 9C.4 adds a manual Filament workflow for product-specific attribute values.

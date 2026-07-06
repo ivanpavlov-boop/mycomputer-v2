@@ -40,6 +40,7 @@ Phase 8 manual selected UPDATE price/stock sync has been implemented behind a fe
 | Phase 9C.4.4 | Project AI agents and safety playbook | Complete |
 | Phase 9C.4.5 | Admin UX verification of category-driven specifications | Complete |
 | Phase 9C.5 | Product specification data quality | Complete |
+| Phase 9C.5.1 | Legacy product attribute value reconciliation | Complete |
 
 ## Next Planned Phases
 
@@ -66,6 +67,7 @@ Phase 8 manual selected UPDATE price/stock sync has been implemented behind a fe
 - Manage individual product attribute values manually from Product edit pages without auto-filling existing products or syncing supplier XML attributes.
 - Use category-assigned attributes as ready Product edit specification fields while keeping empty fields non-mutating and required flags visual only.
 - Use Product Specification Data Quality as warning-only reporting based on existing category templates and product values; it must not auto-fill, block saves, or mutate products, `supplier_products`, `product_attribute_values`, `product_attributes`, `attribute_values`, or `category_product_attributes`.
+- Use `product-attributes:reconcile-legacy-values` as a dry-run-first, copy-safe maintenance command for legacy out-of-category product attribute values. Apply mode must name one product by SKU or product ID, must preserve legacy values, and must not create attributes, options, category assignments, products, or supplier staging data.
 - Use `catalog:review-auto-created-products` as a dry-run-first corrective command for the three known products created before the Phase 9C.4.2 supplier import safety hotfix. The command must remain allowlisted, idempotent, and limited to review/status fields.
 - Use the Project AI Agents and Catalog Sync Safety playbooks as process guardrails only; they do not add autonomous agents, jobs, or runtime behavior.
 
