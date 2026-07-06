@@ -7,6 +7,7 @@ use App\Models\CategoryProductAttribute;
 use App\Models\Product;
 use App\Models\ProductAttribute;
 use App\Models\ProductAttributeValue;
+use App\Services\Products\LegacyProductAttributeValueReconciliationService;
 use App\Services\Products\ProductSpecificationQualityResult;
 use App\Services\Products\ProductSpecificationQualityService;
 use Filament\Actions\Action;
@@ -28,6 +29,7 @@ use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Validator;
@@ -459,6 +461,34 @@ class ProductAttributeValuesRelationManager extends RelationManager
         return $this->categoryAssignmentForAttribute($record) ? 'primary' : 'gray';
     }
 
+    private function legacyVisibilityStatusLabel(ProductAttributeValue $record): string
+    {
+        return match ($this->legacyVisibilityClassification($record)) {
+            LegacyProductAttributeValueReconciliationService::VISIBILITY_CATEGORY => 'Категорийна',
+            LegacyProductAttributeValueReconciliationService::VISIBILITY_RECONCILED_LEGACY => 'Вече прехвърлена',
+            LegacyProductAttributeValueReconciliationService::VISIBILITY_PARTIALLY_RECONCILED_LEGACY => 'Частично прехвърлена',
+            LegacyProductAttributeValueReconciliationService::VISIBILITY_NEEDS_REVIEW => 'Нуждае се от преглед',
+            default => 'Стара стойност',
+        };
+    }
+
+    private function legacyVisibilityStatusColor(ProductAttributeValue $record): string
+    {
+        return match ($this->legacyVisibilityClassification($record)) {
+            LegacyProductAttributeValueReconciliationService::VISIBILITY_CATEGORY => 'primary',
+            LegacyProductAttributeValueReconciliationService::VISIBILITY_RECONCILED_LEGACY => 'success',
+            LegacyProductAttributeValueReconciliationService::VISIBILITY_PARTIALLY_RECONCILED_LEGACY => 'warning',
+            LegacyProductAttributeValueReconciliationService::VISIBILITY_NEEDS_REVIEW => 'warning',
+            default => 'gray',
+        };
+    }
+
+    private function legacyVisibilityClassification(ProductAttributeValue $record): string
+    {
+        return app(LegacyProductAttributeValueReconciliationService::class)
+            ->visibilityClassification($this->getOwnerProduct(), $record)['classification'];
+    }
+
     private function categoryRequiredState(ProductAttributeValue $record): bool
     {
         return (bool) $this->categoryAssignmentForAttribute($record)?->is_required;
@@ -485,18 +515,19 @@ class ProductAttributeValuesRelationManager extends RelationManager
     {
         $result = $this->specificationQuality();
         $description = 'Качество на характеристиките: '.$result->statusLabel().' · '.$result->scoreLabel().'.';
+        $legacyNote = ' Старите допълнителни стойности са запазени за справка; ако вече са прехвърлени към категорийна характеристика, се маркират като „Вече прехвърлена“.';
 
         if ($result->status === ProductSpecificationQualityResult::STATUS_NO_CATEGORY_TEMPLATE) {
-            return $description.' Няма зададен категориен шаблон. Това е предупреждение и не блокира записа.';
+            return $description.' Няма зададен категориен шаблон. Това е предупреждение и не блокира записа.'.$legacyNote;
         }
 
         $missing = $result->missingAttributeSummary(8);
 
         if ($missing !== '') {
-            return $description.' Липсват: '.$missing.'. Това е предупреждение и не блокира записа.';
+            return $description.' Липсват: '.$missing.'. Това е предупреждение и не блокира записа.'.$legacyNote;
         }
 
-        return $description.' Категорийно важните характеристики са попълнени.';
+        return $description.' Категорийно важните характеристики са попълнени.'.$legacyNote;
     }
 
     private function specificationQuality(): ProductSpecificationQualityResult
@@ -509,7 +540,7 @@ class ProductAttributeValuesRelationManager extends RelationManager
         return $table
             ->description(fn (): string => $this->specificationQualityDescription())
             ->recordTitleAttribute('custom_value')
-            ->defaultSort('sort_order')
+            ->modifyQueryUsing(fn (Builder $query): Builder => $this->applyVisibilitySort($query))
             ->columns([
                 TextColumn::make('attribute.name')
                     ->label('Характеристика')
@@ -520,6 +551,11 @@ class ProductAttributeValuesRelationManager extends RelationManager
                     ->state(fn (ProductAttributeValue $record): string => $this->categoryScopeLabel($record))
                     ->badge()
                     ->color(fn (ProductAttributeValue $record): string => $this->categoryScopeColor($record)),
+                TextColumn::make('legacy_visibility_status')
+                    ->label('Състояние')
+                    ->state(fn (ProductAttributeValue $record): string => $this->legacyVisibilityStatusLabel($record))
+                    ->badge()
+                    ->color(fn (ProductAttributeValue $record): string => $this->legacyVisibilityStatusColor($record)),
                 IconColumn::make('category_required')
                     ->label('Важна')
                     ->state(fn (ProductAttributeValue $record): bool => $this->categoryRequiredState($record))
@@ -596,6 +632,20 @@ class ProductAttributeValuesRelationManager extends RelationManager
             ])
             ->emptyStateHeading('Няма записани характеристики')
             ->emptyStateDescription('Ако продуктът има категория с прикачени характеристики, използвайте бутона за категорийни характеристики. Празните полета не създават редове.');
+    }
+
+    private function applyVisibilitySort(Builder $query): Builder
+    {
+        $categoryAttributeIds = $this->categorySuggestedAttributeIds($this->getOwnerProduct());
+
+        if ($categoryAttributeIds !== []) {
+            $ids = implode(',', array_map('intval', $categoryAttributeIds));
+            $query->orderByRaw("case when product_attribute_id in ({$ids}) then 0 else 1 end");
+        }
+
+        return $query
+            ->orderBy('sort_order')
+            ->orderBy('id');
     }
 
     /**

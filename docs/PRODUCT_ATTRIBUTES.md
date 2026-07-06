@@ -193,6 +193,43 @@ This phase does not parse supplier XML attributes, does not sync supplier
 attributes, does not expose frontend filters, does not mutate products or
 `supplier_products`, does not add Sync All, and does not enable automatic sync.
 
+## Phase 9C.5.2 Reconciled Legacy Values Visibility Cleanup
+
+Phase 9C.5.2 improves Product edit -> `Характеристики` visibility after legacy
+values have been copied safely into category-driven specifications.
+
+Legacy values are still preserved. They are not deleted, soft-deleted, hidden
+completely, overwritten, or automatically cleaned up. The admin table now keeps
+category-driven values visually primary and marks old/out-of-category values
+with clearer Bulgarian badges:
+
+- `Категорийна` for active category-template values
+- `Допълнителна` for values outside the current category template
+- `Вече прехвърлена` when every safe reconciliation target already has a filled
+  product value
+- `Частично прехвърлена` when only some safe targets are filled
+- `Нуждае се от преглед` when the legacy value is ambiguous, unknown, missing a
+  target, or otherwise not fully reconciled
+
+Detection is read-only. A legacy/out-of-category value is marked as already
+reconciled only when the Phase 9C.5.1 reconciliation service can generate
+non-ambiguous target proposals and all target attributes already have filled
+values for the same product according to the existing specification quality
+filled-value rules. Partial and ambiguous values remain visible for manual
+review.
+
+Admins should treat old values as original/audit reference data. Do not delete
+legacy rows just because they are marked `Вече прехвърлена`; a future controlled
+cleanup phase would need its own design, audit trail, tests, and explicit
+approval.
+
+This phase is UI/read-only classification only. It does not run
+`product-attributes:reconcile-legacy-values`, does not create
+`product_attribute_values`, does not create attributes, options, category
+assignments, categories, products, or supplier staging rows, does not parse
+supplier XML attributes, does not sync supplier attributes, does not expose
+frontend filters, does not add Sync All, and does not enable automatic sync.
+
 ## Phase 9C.4 Manual Product Attribute Values
 
 Phase 9C.4 adds a manual Filament workflow for product-specific attribute values.
