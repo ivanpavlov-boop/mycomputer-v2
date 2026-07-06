@@ -43,6 +43,8 @@ Manual selected UPDATE price/stock sync is implemented behind `CATALOG_SYNC_UPDA
 - Reconciled Legacy Values Visibility Cleanup so Product edit clearly marks old
   out-of-category values that have already been copied into category-driven
   specifications while preserving them for audit/reference.
+- CPU Category Attribute Template for controlled CPU internal attributes and
+  assignments to existing CPU categories without creating product values.
 - Category-driven Product edit specifications editor for manually maintaining category-assigned values.
 - Project AI agents and safety playbook for Codex/process guardrails.
 - Product Specification Data Quality for read-only warning-only reporting of missing important category specifications.
@@ -59,13 +61,13 @@ Manual selected UPDATE price/stock sync is implemented behind `CATALOG_SYNC_UPDA
 - Manual products start as drafts and must be explicitly reviewed/published.
 - Supplier-created products do not require manual approval by default.
 - Product enrichment gaps are surfaced in a read-only admin queue; fixes still use existing product edit permissions.
-- Product attributes are catalog-owned internal definitions. Category Attribute Sets can assign existing attributes to existing categories, admins can manually maintain individual product values from Product edit pages, Product Specification Data Quality reports missing important category specs without mutating data, the legacy reconciliation command can copy safe values into existing category-assigned targets one explicit product at a time, and reconciled legacy values are marked read-only in admin while staying visible. Supplier attribute mapping and frontend filters are not enabled yet.
+- Product attributes are catalog-owned internal definitions. Category Attribute Sets can assign existing attributes to existing categories, admins can manually maintain individual product values from Product edit pages, Product Specification Data Quality reports missing important category specs without mutating data, the legacy reconciliation command can copy safe values into existing category-assigned targets one explicit product at a time, reconciled legacy values are marked read-only in admin while staying visible, and the CPU template command can explicitly prepare CPU attributes/options/category assignments without product values. Supplier attribute mapping and frontend filters are not enabled yet.
 
 ## Next
 
 1. Keep Phase 7.5 documentation lock current.
 2. Keep feature flag/audit visibility read-only.
-3. CPU category attribute template.
+3. CPU legacy value reconciliation.
 4. Product specification data quality polish.
 5. Controlled supplier XML attribute mapping preview and approval.
 6. Storefront specification display and later attribute filters.
@@ -100,7 +102,7 @@ UPDATE sync must not update:
 
 ## Phase 9C Attribute Foundation Scope
 
-Phase 9C.1 adds internal Product Attributes, controlled options, category assignment rules and typed product attribute value storage. Phase 9C.2 improves the Filament admin experience and adds the manual `product-attributes:seed-starter` dry-run/apply command for a starter internal attribute library. Phase 9C.3 adds `product-attributes:assign-category-sets` for controlled assignment of existing internal attributes to existing categories. Phase 9C.4 adds manual product-specific value management from Product edit pages. Phase 9C.4.1 makes category-assigned attributes easier to maintain as ready Product edit specification fields while keeping empty fields non-mutating. Phase 9C.5 adds read-only Product Specification Data Quality reporting based on existing category templates and product values. Phase 9C.5.1 adds `product-attributes:reconcile-legacy-values`, a dry-run-first copy-safe command that can apply safe target value rows only for one explicit SKU or product ID. Phase 9C.5.2 adds read-only admin visibility labels for legacy values that have already been fully or partially reconciled. These phases do not parse supplier XML attributes, do not sync supplier attributes, do not expose frontend filters, and do not automatically mutate existing products or `supplier_products`.
+Phase 9C.1 adds internal Product Attributes, controlled options, category assignment rules and typed product attribute value storage. Phase 9C.2 improves the Filament admin experience and adds the manual `product-attributes:seed-starter` dry-run/apply command for a starter internal attribute library. Phase 9C.3 adds `product-attributes:assign-category-sets` for controlled assignment of existing internal attributes to existing categories. Phase 9C.4 adds manual product-specific value management from Product edit pages. Phase 9C.4.1 makes category-assigned attributes easier to maintain as ready Product edit specification fields while keeping empty fields non-mutating. Phase 9C.5 adds read-only Product Specification Data Quality reporting based on existing category templates and product values. Phase 9C.5.1 adds `product-attributes:reconcile-legacy-values`, a dry-run-first copy-safe command that can apply safe target value rows only for one explicit SKU or product ID. Phase 9C.5.2 adds read-only admin visibility labels for legacy values that have already been fully or partially reconciled. Phase 9C.5.3 adds `product-attributes:seed-cpu-template`, a dry-run-first explicit-apply command for CPU attributes, safe CPU options, and assignments to existing CPU categories. These phases do not parse supplier XML attributes, do not sync supplier attributes, do not expose frontend filters, and do not automatically mutate existing products or `supplier_products`.
 
 Phase 9C.4.4 adds documentation-only AI agent and safety playbooks. It does not
 add autonomous agents, scheduled AI jobs, background workers, runtime code,

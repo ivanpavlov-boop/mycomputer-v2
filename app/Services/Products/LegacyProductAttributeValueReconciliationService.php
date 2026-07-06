@@ -530,6 +530,42 @@ class LegacyProductAttributeValueReconciliationService
             return $this->textTarget('processor', $sourceValue, 'processor_text_copied');
         }
 
+        if (Str::contains($identity, ['socket'])) {
+            return $this->textTarget('cpu_socket', $sourceValue, 'cpu_socket_text_copied');
+        }
+
+        if (Str::contains($identity, ['core', 'cores'])) {
+            return $this->numericFromTextTarget('cpu_cores', $sourceValue, null, 'cpu_cores_parsed');
+        }
+
+        if (Str::contains($identity, ['thread', 'threads'])) {
+            return $this->numericFromTextTarget('cpu_threads', $sourceValue, null, 'cpu_threads_parsed');
+        }
+
+        if (Str::contains($identity, ['boost_clock', 'boost clock', 'boost_frequency', 'boost frequency', 'max_clock', 'max clock'])) {
+            return $this->numericFromTextTarget('cpu_boost_clock', $sourceValue, 'GHz', 'cpu_boost_clock_parsed');
+        }
+
+        if (Str::contains($identity, ['base_clock', 'base clock', 'base_frequency', 'base frequency'])) {
+            return $this->numericFromTextTarget('cpu_base_clock', $sourceValue, 'GHz', 'cpu_base_clock_parsed');
+        }
+
+        if (Str::contains($identity, ['tdp'])) {
+            return $this->numericFromTextTarget('cpu_tdp', $sourceValue, 'W', 'cpu_tdp_parsed');
+        }
+
+        if (Str::contains($identity, ['cache'])) {
+            return $this->textTarget('cpu_cache', $sourceValue, 'cpu_cache_text_copied');
+        }
+
+        if (Str::contains($identity, ['architecture'])) {
+            return $this->textTarget('cpu_architecture', $sourceValue, 'cpu_architecture_text_copied');
+        }
+
+        if (Str::contains($identity, ['integrated_graphics', 'integrated graphics', 'igpu'])) {
+            return $this->textTarget('cpu_integrated_graphics', $sourceValue, 'cpu_integrated_graphics_text_copied');
+        }
+
         if (Str::contains($identity, ['gpu', 'graphics', 'video'])) {
             return $this->textTarget('gpu', $sourceValue, 'gpu_text_copied');
         }
