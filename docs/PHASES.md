@@ -43,15 +43,19 @@ Phase 8 manual selected UPDATE price/stock sync has been implemented behind a fe
 | Phase 9C.5.1 | Legacy product attribute value reconciliation | Complete |
 | Phase 9C.5.2 | Reconciled legacy values visibility cleanup | Complete |
 | Phase 9C.5.3 | CPU category attribute template | Complete |
+| Phase 9C.5.4 | Category specification template coverage plan | Complete |
 
 ## Next Planned Phases
 
 | Phase | Name | Notes |
 | --- | --- | --- |
-| Phase 9C.5.4 | CPU legacy value reconciliation | Use the dry-run-first reconciliation workflow product-by-product after CPU templates are verified. |
-| Phase 9C.6 | Product specification data quality polish | Improve admin ergonomics after real queue usage. |
-| Phase 9C.7 | Supplier XML attribute mapping preview | Preview and manual approval only. |
-| Phase 9C.8 | Frontend attribute filters | Only after controlled data quality and approved product values. |
+| Phase 9C.5.5 | RAM / Memory Category Attribute Template | Controlled template command for existing memory/RAM categories only; no product values. |
+| Phase 9C.5.6 | SSD / Storage Category Attribute Template | Controlled template command for existing storage categories only; no product values. |
+| Phase 9C.5.7 | GPU Category Attribute Template | Controlled template command for existing GPU/video card categories only; no product values. |
+| Phase 9C.6 | Supplier Attribute Mapping Foundation | Preview/planning foundation only until a later explicit approval/write phase. |
+| Phase 9C.7 | Product specification data quality polish | Improve admin ergonomics after real queue usage. |
+| Phase 9C.8 | Storefront specification display | Display catalog-owned specs only after controlled data quality. |
+| Phase 9C.9 | Frontend attribute filters | Only after controlled data quality and approved product values. |
 | Phase 9 | Rollback support | Required before broad writes. |
 | Phase 10 | Manual Sync All eligible CREATE | Later, after stronger audit controls. |
 | Phase 11 | Scheduled preview generation | Preview only before scheduled writes. |
@@ -73,6 +77,7 @@ Phase 8 manual selected UPDATE price/stock sync has been implemented behind a fe
 - Use `product-attributes:reconcile-legacy-values` as a dry-run-first, copy-safe maintenance command for legacy out-of-category product attribute values. Apply mode must name one product by SKU or product ID, must preserve legacy values, and must not create attributes, options, category assignments, products, or supplier staging data.
 - Mark already-reconciled legacy product attribute values in Product edit as read-only admin visibility only. Legacy values remain visible and preserved; classification must not create, update, hide, or delete product attribute values.
 - Use `product-attributes:seed-cpu-template` as a dry-run-first, explicit-apply command for CPU internal attributes, safe CPU options, and assignments to existing CPU categories only. It must not create categories or product values.
+- Use `product-attributes:audit-category-template-coverage` as a read-only planning audit for direct, inherited, and missing category specification templates. It must not have an apply mode and must not create or update product values, attributes, options, category assignments, categories, products, or `supplier_products`.
 - Use `catalog:review-auto-created-products` as a dry-run-first corrective command for the three known products created before the Phase 9C.4.2 supplier import safety hotfix. The command must remain allowlisted, idempotent, and limited to review/status fields.
 - Use the Project AI Agents and Catalog Sync Safety playbooks as process guardrails only; they do not add autonomous agents, jobs, or runtime behavior.
 
