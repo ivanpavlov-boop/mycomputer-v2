@@ -24,6 +24,16 @@ class LegacyProductAttributeValueReconciliationService
 
     public const ACTION_SKIPPED_AMBIGUOUS = 'skipped_ambiguous';
 
+    public const VISIBILITY_CATEGORY = 'category';
+
+    public const VISIBILITY_EXTRA = 'extra';
+
+    public const VISIBILITY_RECONCILED_LEGACY = 'reconciled_legacy';
+
+    public const VISIBILITY_PARTIALLY_RECONCILED_LEGACY = 'partially_reconciled_legacy';
+
+    public const VISIBILITY_NEEDS_REVIEW = 'needs_review';
+
     /**
      * @param  array{attribute?: string|null, only_missing_quality?: bool}  $filters
      * @return array{legacy_values_found: int, proposals: Collection<int, array<string, mixed>>}
@@ -102,6 +112,95 @@ class LegacyProductAttributeValueReconciliationService
             'created' => $created,
             'skipped' => $skipped,
         ];
+    }
+
+    /**
+     * @return array{
+     *     classification: string,
+     *     proposals: Collection<int, array<string, mixed>>,
+     *     expected_target_count: int,
+     *     filled_target_count: int,
+     *     target_codes: array<int, string>,
+     *     filled_target_codes: array<int, string>
+     * }
+     */
+    public function visibilityClassification(Product $product, ProductAttributeValue $legacyValue): array
+    {
+        $product->loadMissing([
+            'category.parent',
+            'attributeValues.attribute',
+            'attributeValues.value',
+        ]);
+        $legacyValue->loadMissing(['attribute', 'value']);
+
+        $categoryAttributeIds = $this->categoryAttributeIdsForProduct($product);
+
+        if (in_array((int) $legacyValue->product_attribute_id, $categoryAttributeIds, true)) {
+            return $this->visibilityResult(self::VISIBILITY_CATEGORY);
+        }
+
+        $proposals = collect($this->proposalsForLegacyValue($product, $legacyValue, $categoryAttributeIds));
+
+        if ($proposals->isEmpty()) {
+            return $this->visibilityResult(self::VISIBILITY_EXTRA, $proposals);
+        }
+
+        if ($proposals->contains(fn (array $proposal): bool => ($proposal['action'] ?? null) === self::ACTION_SKIPPED_AMBIGUOUS)) {
+            return $this->visibilityResult(self::VISIBILITY_NEEDS_REVIEW, $proposals);
+        }
+
+        $expectedTargets = $proposals
+            ->mapWithKeys(function (array $proposal): array {
+                $code = $proposal['target_code'] ?? $proposal['target_attribute']?->code ?? null;
+
+                return filled($code) ? [(string) $code => $proposal] : [];
+            });
+
+        if ($expectedTargets->isEmpty()) {
+            return $this->visibilityResult(self::VISIBILITY_NEEDS_REVIEW, $proposals);
+        }
+
+        $filledTargets = $expectedTargets
+            ->filter(function (array $proposal) use ($product): bool {
+                $targetAttribute = $proposal['target_attribute'] ?? null;
+
+                if (! $targetAttribute instanceof ProductAttribute) {
+                    return false;
+                }
+
+                $targetValue = ProductAttributeValue::query()
+                    ->with('value')
+                    ->where('product_id', $product->id)
+                    ->where('product_attribute_id', $targetAttribute->id)
+                    ->first();
+
+                return app(ProductSpecificationQualityService::class)->hasFilledValue($targetAttribute, $targetValue);
+            });
+
+        if ($filledTargets->count() === $expectedTargets->count()) {
+            return $this->visibilityResult(
+                self::VISIBILITY_RECONCILED_LEGACY,
+                $proposals,
+                $expectedTargets->keys()->values()->all(),
+                $filledTargets->keys()->values()->all(),
+            );
+        }
+
+        if ($filledTargets->isNotEmpty()) {
+            return $this->visibilityResult(
+                self::VISIBILITY_PARTIALLY_RECONCILED_LEGACY,
+                $proposals,
+                $expectedTargets->keys()->values()->all(),
+                $filledTargets->keys()->values()->all(),
+            );
+        }
+
+        return $this->visibilityResult(
+            self::VISIBILITY_NEEDS_REVIEW,
+            $proposals,
+            $expectedTargets->keys()->values()->all(),
+            [],
+        );
     }
 
     /**
@@ -197,6 +296,35 @@ class LegacyProductAttributeValueReconciliationService
             $target,
             $payload,
         );
+    }
+
+    /**
+     * @param  Collection<int, array<string, mixed>>|null  $proposals
+     * @param  array<int, string>  $targetCodes
+     * @param  array<int, string>  $filledTargetCodes
+     * @return array{
+     *     classification: string,
+     *     proposals: Collection<int, array<string, mixed>>,
+     *     expected_target_count: int,
+     *     filled_target_count: int,
+     *     target_codes: array<int, string>,
+     *     filled_target_codes: array<int, string>
+     * }
+     */
+    private function visibilityResult(
+        string $classification,
+        ?Collection $proposals = null,
+        array $targetCodes = [],
+        array $filledTargetCodes = [],
+    ): array {
+        return [
+            'classification' => $classification,
+            'proposals' => $proposals ?? collect(),
+            'expected_target_count' => count($targetCodes),
+            'filled_target_count' => count($filledTargetCodes),
+            'target_codes' => array_values($targetCodes),
+            'filled_target_codes' => array_values($filledTargetCodes),
+        ];
     }
 
     /**

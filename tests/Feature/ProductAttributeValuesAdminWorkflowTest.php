@@ -578,6 +578,196 @@ class ProductAttributeValuesAdminWorkflowTest extends TestCase
         $this->assertSame($extraValue->id, $outOfCategory[0]->id);
     }
 
+    public function test_reconciled_legacy_values_are_marked_and_sorted_after_category_values_without_mutation(): void
+    {
+        $this->actingAsSuperAdmin();
+
+        $category = Category::factory()->create();
+        $product = Product::factory()->create([
+            'category_id' => $category->id,
+            'sku' => 'MC-LAP-001',
+        ]);
+        $storageCapacity = ProductAttribute::factory()->create([
+            'code' => 'storage_capacity',
+            'slug' => 'storage-capacity',
+            'name_bg' => 'Капацитет на паметта',
+            'type' => ProductAttribute::TYPE_SELECT,
+        ]);
+        $storageType = ProductAttribute::factory()->create([
+            'code' => 'storage_type',
+            'slug' => 'storage-type',
+            'name_bg' => 'Тип памет',
+            'type' => ProductAttribute::TYPE_SELECT,
+        ]);
+        $screenSize = ProductAttribute::factory()->create([
+            'code' => 'screen_size',
+            'slug' => 'screen-size',
+            'name_bg' => 'Размер на екрана',
+            'type' => ProductAttribute::TYPE_SELECT,
+        ]);
+
+        CategoryProductAttribute::factory()->create([
+            'category_id' => $category->id,
+            'product_attribute_id' => $storageCapacity->id,
+            'sort_order' => 1,
+        ]);
+        CategoryProductAttribute::factory()->create([
+            'category_id' => $category->id,
+            'product_attribute_id' => $storageType->id,
+            'sort_order' => 2,
+        ]);
+        CategoryProductAttribute::factory()->create([
+            'category_id' => $category->id,
+            'product_attribute_id' => $screenSize->id,
+            'sort_order' => 3,
+        ]);
+
+        $capacityOption = AttributeValue::factory()->create([
+            'product_attribute_id' => $storageCapacity->id,
+            'value' => '512 GB',
+            'slug' => '512-gb',
+        ]);
+        $typeOption = AttributeValue::factory()->create([
+            'product_attribute_id' => $storageType->id,
+            'value' => 'SSD',
+            'slug' => 'ssd',
+        ]);
+        $screenOption = AttributeValue::factory()->create([
+            'product_attribute_id' => $screenSize->id,
+            'value' => '16"',
+            'slug' => '16',
+        ]);
+
+        $capacityValue = ProductAttributeValue::factory()->create([
+            'product_id' => $product->id,
+            'product_attribute_id' => $storageCapacity->id,
+            'attribute_value_id' => $capacityOption->id,
+            'custom_value' => '512 GB',
+            'value_text' => '512 GB',
+            'sort_order' => 1,
+        ]);
+        $typeValue = ProductAttributeValue::factory()->create([
+            'product_id' => $product->id,
+            'product_attribute_id' => $storageType->id,
+            'attribute_value_id' => $typeOption->id,
+            'custom_value' => 'SSD',
+            'value_text' => 'SSD',
+            'sort_order' => 2,
+        ]);
+        $screenValue = ProductAttributeValue::factory()->create([
+            'product_id' => $product->id,
+            'product_attribute_id' => $screenSize->id,
+            'attribute_value_id' => $screenOption->id,
+            'custom_value' => '16"',
+            'value_text' => '16"',
+            'sort_order' => 3,
+        ]);
+
+        $legacyStorage = $this->legacyProductAttributeValue($product, 'Storage', '512 GB SSD', 10);
+        $legacyDisplay = $this->legacyProductAttributeValue($product, 'Display', '16 inch', 11);
+        $extraLegacy = $this->legacyProductAttributeValue($product, 'Internal note', 'Keep for audit', 12);
+        $counts = $this->attributeSystemCounts();
+        $productSnapshot = $product->fresh()->only(['name', 'sku', 'category_id', 'workflow_status', 'product_status', 'active', 'updated_at']);
+
+        $this->relationManager($product)
+            ->assertCanSeeTableRecords([
+                $capacityValue,
+                $typeValue,
+                $screenValue,
+                $legacyStorage,
+                $legacyDisplay,
+                $extraLegacy,
+            ], inOrder: true)
+            ->assertTableColumnStateSet('category_scope', 'Категорийна', $capacityValue)
+            ->assertTableColumnStateSet('legacy_visibility_status', 'Категорийна', $capacityValue)
+            ->assertTableColumnStateSet('category_scope', 'Допълнителна', $legacyStorage)
+            ->assertTableColumnStateSet('legacy_visibility_status', 'Вече прехвърлена', $legacyStorage)
+            ->assertTableColumnStateSet('legacy_visibility_status', 'Вече прехвърлена', $legacyDisplay)
+            ->assertTableColumnStateSet('legacy_visibility_status', 'Нуждае се от преглед', $extraLegacy)
+            ->assertSee('Старите допълнителни стойности са запазени за справка')
+            ->assertSee('Състояние');
+
+        $this->assertSame($counts, $this->attributeSystemCounts());
+        $this->assertEquals($productSnapshot, $product->fresh()->only(array_keys($productSnapshot)));
+    }
+
+    public function test_partial_and_ambiguous_legacy_values_stay_visible_without_auto_cleanup(): void
+    {
+        $this->actingAsSuperAdmin();
+
+        $category = Category::factory()->create();
+        $product = Product::factory()->create(['category_id' => $category->id]);
+        $storageCapacity = ProductAttribute::factory()->create([
+            'code' => 'storage_capacity',
+            'slug' => 'storage-capacity',
+            'type' => ProductAttribute::TYPE_SELECT,
+        ]);
+        $storageType = ProductAttribute::factory()->create([
+            'code' => 'storage_type',
+            'slug' => 'storage-type',
+            'type' => ProductAttribute::TYPE_SELECT,
+        ]);
+
+        CategoryProductAttribute::factory()->create([
+            'category_id' => $category->id,
+            'product_attribute_id' => $storageCapacity->id,
+            'sort_order' => 1,
+        ]);
+        CategoryProductAttribute::factory()->create([
+            'category_id' => $category->id,
+            'product_attribute_id' => $storageType->id,
+            'sort_order' => 2,
+        ]);
+
+        $capacityOption = AttributeValue::factory()->create([
+            'product_attribute_id' => $storageCapacity->id,
+            'value' => '512 GB',
+            'slug' => '512-gb',
+        ]);
+        AttributeValue::factory()->create([
+            'product_attribute_id' => $storageCapacity->id,
+            'value' => '1 TB',
+            'slug' => '1-tb',
+        ]);
+        AttributeValue::factory()->create([
+            'product_attribute_id' => $storageType->id,
+            'value' => 'SSD',
+            'slug' => 'ssd',
+        ]);
+        AttributeValue::factory()->create([
+            'product_attribute_id' => $storageType->id,
+            'value' => 'HDD',
+            'slug' => 'hdd',
+        ]);
+
+        $capacityValue = ProductAttributeValue::factory()->create([
+            'product_id' => $product->id,
+            'product_attribute_id' => $storageCapacity->id,
+            'attribute_value_id' => $capacityOption->id,
+            'custom_value' => '512 GB',
+            'value_text' => '512 GB',
+            'sort_order' => 1,
+        ]);
+        $partialLegacy = $this->legacyProductAttributeValue($product, 'Storage partial', '512 GB SSD', 10);
+        $ambiguousLegacy = $this->legacyProductAttributeValue($product, 'Storage ambiguous', '512 GB SSD + 1 TB HDD', 11);
+        $counts = $this->attributeSystemCounts();
+
+        $this->relationManager($product)
+            ->assertCanSeeTableRecords([$capacityValue, $partialLegacy, $ambiguousLegacy], inOrder: true)
+            ->assertTableColumnStateSet('legacy_visibility_status', 'Частично прехвърлена', $partialLegacy)
+            ->assertTableColumnStateSet('legacy_visibility_status', 'Нуждае се от преглед', $ambiguousLegacy)
+            ->assertTableColumnStateSet('category_scope', 'Допълнителна', $partialLegacy)
+            ->assertTableColumnStateSet('category_scope', 'Допълнителна', $ambiguousLegacy);
+
+        $this->assertSame($counts, $this->attributeSystemCounts());
+        $this->assertDatabaseHas('product_attribute_values', ['id' => $partialLegacy->id]);
+        $this->assertDatabaseHas('product_attribute_values', ['id' => $ambiguousLegacy->id]);
+        $this->assertDatabaseMissing('product_attribute_values', [
+            'product_id' => $product->id,
+            'product_attribute_id' => $storageType->id,
+        ]);
+    }
+
     public function test_category_editor_uses_existing_options_and_rejects_wrong_options(): void
     {
         $this->actingAsSuperAdmin();
@@ -706,5 +896,41 @@ class ProductAttributeValuesAdminWorkflowTest extends TestCase
         $this->actingAs($user);
 
         return $user;
+    }
+
+    private function legacyProductAttributeValue(Product $product, string $attributeName, string $value, int $sortOrder): ProductAttributeValue
+    {
+        $attribute = ProductAttribute::factory()->create([
+            'code' => $attributeName,
+            'slug' => str($attributeName)->slug()->toString(),
+            'name' => $attributeName,
+            'name_bg' => $attributeName,
+            'type' => ProductAttribute::TYPE_TEXT,
+            'is_active' => true,
+        ]);
+
+        return ProductAttributeValue::factory()->create([
+            'product_id' => $product->id,
+            'product_attribute_id' => $attribute->id,
+            'custom_value' => $value,
+            'value_text' => $value,
+            'source' => ProductAttributeValue::SOURCE_MANUAL,
+            'sort_order' => $sortOrder,
+        ]);
+    }
+
+    /**
+     * @return array<string, int>
+     */
+    private function attributeSystemCounts(): array
+    {
+        return [
+            'products' => Product::query()->count(),
+            'supplier_products' => SupplierProduct::query()->count(),
+            'product_attribute_values' => ProductAttributeValue::query()->count(),
+            'category_product_attributes' => CategoryProductAttribute::query()->count(),
+            'product_attributes' => ProductAttribute::query()->count(),
+            'attribute_values' => AttributeValue::query()->count(),
+        ];
     }
 }
