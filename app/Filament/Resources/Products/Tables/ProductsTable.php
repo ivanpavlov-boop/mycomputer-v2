@@ -4,6 +4,8 @@ namespace App\Filament\Resources\Products\Tables;
 
 use App\Models\AvailabilityStatus;
 use App\Models\Product;
+use App\Services\Products\ProductSpecificationQualityResult;
+use App\Services\Products\ProductSpecificationQualityService;
 use Filament\Actions\BulkAction;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
@@ -58,6 +60,14 @@ class ProductsTable
                     ->label('Флагове за качество')
                     ->badge()
                     ->color(fn (int $state): string => $state > 0 ? 'warning' : 'gray')
+                    ->toggleable(),
+                TextColumn::make('specification_quality')
+                    ->label('Характеристики')
+                    ->state(fn (Product $record): string => self::specificationQuality($record)->statusLabel())
+                    ->description(fn (Product $record): string => self::specificationQuality($record)->scoreLabel())
+                    ->badge()
+                    ->color(fn (Product $record): string => self::specificationQuality($record)->statusColor())
+                    ->tooltip(fn (Product $record): string => self::specificationQualityTooltip($record))
                     ->toggleable(),
                 TextColumn::make('category.name')->label('Категория')->sortable()->toggleable(),
                 TextColumn::make('brand.name')->label('Бранд')->sortable()->toggleable(),
@@ -143,6 +153,23 @@ class ProductsTable
         return 'data:image/svg+xml;utf8,'.rawurlencode(
             '<svg xmlns="http://www.w3.org/2000/svg" width="56" height="56" viewBox="0 0 56 56"><rect width="56" height="56" rx="6" fill="#f3f4f6"/><path d="M17 37h22l-7-9-5 6-3-4-7 7Z" fill="#9ca3af"/><circle cx="21" cy="21" r="4" fill="#d1d5db"/></svg>'
         );
+    }
+
+    protected static function specificationQuality(Product $record): ProductSpecificationQualityResult
+    {
+        return app(ProductSpecificationQualityService::class)->evaluate($record);
+    }
+
+    protected static function specificationQualityTooltip(Product $record): string
+    {
+        $result = self::specificationQuality($record);
+        $missing = $result->missingAttributeSummary();
+
+        if ($missing === '') {
+            return 'Спецификациите са попълнени според категорийния шаблон.';
+        }
+
+        return 'Липсват: '.$missing;
     }
 
     /**

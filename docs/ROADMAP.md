@@ -39,6 +39,7 @@ Manual selected UPDATE price/stock sync is implemented behind `CATALOG_SYNC_UPDA
 - Manual Product edit workflow for product-specific attribute values.
 - Category-driven Product edit specifications editor for manually maintaining category-assigned values.
 - Project AI agents and safety playbook for Codex/process guardrails.
+- Product Specification Data Quality for read-only warning-only reporting of missing important category specifications.
 
 ## Current Safety Position
 
@@ -52,16 +53,16 @@ Manual selected UPDATE price/stock sync is implemented behind `CATALOG_SYNC_UPDA
 - Manual products start as drafts and must be explicitly reviewed/published.
 - Supplier-created products do not require manual approval by default.
 - Product enrichment gaps are surfaced in a read-only admin queue; fixes still use existing product edit permissions.
-- Product attributes are catalog-owned internal definitions. Category Attribute Sets can assign existing attributes to existing categories, and admins can manually maintain individual product values from Product edit pages, including category-assigned specification fields. Supplier attribute mapping and frontend filters are not enabled yet.
+- Product attributes are catalog-owned internal definitions. Category Attribute Sets can assign existing attributes to existing categories, admins can manually maintain individual product values from Product edit pages, and Product Specification Data Quality reports missing important category specs without mutating data. Supplier attribute mapping and frontend filters are not enabled yet.
 
 ## Next
 
 1. Keep Phase 7.5 documentation lock current.
 2. Keep feature flag/audit visibility read-only.
-3. Admin UX verification of category-driven specifications.
-4. Product specification data quality.
-5. Controlled supplier XML attribute mapping preview and approval.
-6. Storefront specification display and later attribute filters.
+3. Product specification data quality polish.
+4. Controlled supplier XML attribute mapping preview and approval.
+5. Storefront specification display and later attribute filters.
+6. Product attribute filter design after controlled data quality.
 7. Rollback tooling based on `catalog_sync_batches` and `catalog_sync_logs`.
 8. Keep feature flags locked down before broader sync work.
 9. Conflict/manual mapping workflow.
@@ -92,7 +93,7 @@ UPDATE sync must not update:
 
 ## Phase 9C Attribute Foundation Scope
 
-Phase 9C.1 adds internal Product Attributes, controlled options, category assignment rules and typed product attribute value storage. Phase 9C.2 improves the Filament admin experience and adds the manual `product-attributes:seed-starter` dry-run/apply command for a starter internal attribute library. Phase 9C.3 adds `product-attributes:assign-category-sets` for controlled assignment of existing internal attributes to existing categories. Phase 9C.4 adds manual product-specific value management from Product edit pages. Phase 9C.4.1 makes category-assigned attributes easier to maintain as ready Product edit specification fields while keeping empty fields non-mutating. These phases do not parse supplier XML attributes, do not sync supplier attributes, do not expose frontend filters, and do not automatically mutate existing products or `supplier_products`.
+Phase 9C.1 adds internal Product Attributes, controlled options, category assignment rules and typed product attribute value storage. Phase 9C.2 improves the Filament admin experience and adds the manual `product-attributes:seed-starter` dry-run/apply command for a starter internal attribute library. Phase 9C.3 adds `product-attributes:assign-category-sets` for controlled assignment of existing internal attributes to existing categories. Phase 9C.4 adds manual product-specific value management from Product edit pages. Phase 9C.4.1 makes category-assigned attributes easier to maintain as ready Product edit specification fields while keeping empty fields non-mutating. Phase 9C.5 adds read-only Product Specification Data Quality reporting based on existing category templates and product values. These phases do not parse supplier XML attributes, do not sync supplier attributes, do not expose frontend filters, and do not automatically mutate existing products or `supplier_products`.
 
 Phase 9C.4.4 adds documentation-only AI agent and safety playbooks. It does not
 add autonomous agents, scheduled AI jobs, background workers, runtime code,
@@ -108,7 +109,6 @@ commands, jobs, observers, or frontend features.
 - Controlled Sync All for eligible CREATE rows only.
 - Scheduled preview generation before any scheduled writes.
 - English content completion workflow and translation completeness reports.
-- Admin UX verification of category-driven specifications.
-- Product specification data quality.
+- Product specification data quality polish.
 - Supplier XML attribute mapping preview.
 - Frontend attribute filters only after controlled data quality.
