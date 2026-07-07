@@ -275,6 +275,123 @@ class SupplierCategoryMappingReviewWorkflowTest extends TestCase
         $this->assertEquals($snapshots['productValue'], $productValue->fresh()->only(array_keys($snapshots['productValue'])));
     }
 
+    public function test_status_column_sorts_by_workflow_order_without_filtering_or_mutation(): void
+    {
+        $this->actingAsRole(User::ROLE_SUPER_ADMIN);
+
+        $supplier = $this->supplier();
+        $family = $this->family('peripherals');
+
+        $pendingOne = $this->mapping([
+            'supplier_id' => $supplier->id,
+            'supplier_category_name' => 'Pending Cable One',
+            'canonical_product_family_id' => $family->id,
+        ]);
+        $pendingTwo = $this->mapping([
+            'supplier_id' => $supplier->id,
+            'supplier_category_name' => 'Pending Dock Two',
+            'canonical_product_family_id' => $family->id,
+        ]);
+        $pendingThree = $this->mapping([
+            'supplier_id' => $supplier->id,
+            'supplier_category_name' => 'Pending Hub Three',
+            'canonical_product_family_id' => $family->id,
+        ]);
+        $approvedOne = $this->mapping([
+            'supplier_id' => $supplier->id,
+            'supplier_category_name' => 'Approved Cable One',
+            'status' => SupplierCategoryMapping::STATUS_APPROVED,
+            'canonical_product_family_id' => $family->id,
+            'confidence' => SupplierCategoryMapping::CONFIDENCE_LOW,
+        ]);
+        $approvedTwo = $this->mapping([
+            'supplier_id' => $supplier->id,
+            'supplier_category_name' => 'Approved Cable Two',
+            'status' => SupplierCategoryMapping::STATUS_APPROVED,
+            'canonical_product_family_id' => $family->id,
+            'confidence' => SupplierCategoryMapping::CONFIDENCE_HIGH,
+        ]);
+        $rejected = $this->mapping([
+            'supplier_id' => $supplier->id,
+            'supplier_category_name' => 'Rejected Cable',
+            'status' => SupplierCategoryMapping::STATUS_REJECTED,
+            'canonical_product_family_id' => $family->id,
+        ]);
+        $ignored = $this->mapping([
+            'supplier_id' => $supplier->id,
+            'supplier_category_name' => 'Ignored Cable',
+            'status' => SupplierCategoryMapping::STATUS_IGNORED,
+            'canonical_product_family_id' => $family->id,
+        ]);
+        $unknown = $this->mapping([
+            'supplier_id' => $supplier->id,
+            'supplier_category_name' => 'Unknown Cable',
+            'status' => 'needs_triage',
+            'canonical_product_family_id' => $family->id,
+        ]);
+
+        $this->supplierProducts($supplier, 'Pending Cable One', 3);
+        $this->supplierProducts($supplier, 'Pending Dock Two', 1);
+        $this->supplierProducts($supplier, 'Pending Hub Three', 2);
+        $this->supplierProducts($supplier, 'Approved Cable One', 2);
+        $this->supplierProducts($supplier, 'Approved Cable Two', 1);
+        $this->supplierProducts($supplier, 'Rejected Cable', 5);
+        $this->supplierProducts($supplier, 'Ignored Cable', 4);
+        $this->supplierProducts($supplier, 'Unknown Cable', 6);
+
+        $allMappings = [$pendingOne, $pendingTwo, $pendingThree, $approvedOne, $approvedTwo, $rejected, $ignored, $unknown];
+        $counts = $this->protectedCounts();
+        $mappingStatuses = $this->mappingStatuses($allMappings);
+
+        Livewire::test(ListSupplierCategoryMappings::class)
+            ->sortTable('status')
+            ->assertCanSeeTableRecords([
+                $approvedOne,
+                $approvedTwo,
+                $pendingOne,
+                $pendingTwo,
+                $pendingThree,
+                $rejected,
+                $ignored,
+                $unknown,
+            ], inOrder: true);
+
+        Livewire::test(ListSupplierCategoryMappings::class)
+            ->sortTable('status', 'desc')
+            ->assertCanSeeTableRecords([
+                $ignored,
+                $rejected,
+                $pendingOne,
+                $pendingTwo,
+                $pendingThree,
+                $approvedOne,
+                $approvedTwo,
+                $unknown,
+            ], inOrder: true);
+
+        Livewire::test(ListSupplierCategoryMappings::class)
+            ->searchTable('Cable')
+            ->sortTable('status')
+            ->assertCanSeeTableRecords([
+                $approvedOne,
+                $approvedTwo,
+                $pendingOne,
+                $rejected,
+                $ignored,
+                $unknown,
+            ], inOrder: true)
+            ->assertCanNotSeeTableRecords([$pendingTwo, $pendingThree]);
+
+        Livewire::test(ListSupplierCategoryMappings::class)
+            ->filterTable('status', SupplierCategoryMapping::STATUS_PENDING_REVIEW)
+            ->sortTable('status')
+            ->assertCanSeeTableRecords([$pendingOne, $pendingTwo, $pendingThree], inOrder: true)
+            ->assertCanNotSeeTableRecords([$approvedOne, $approvedTwo, $rejected, $ignored, $unknown]);
+
+        $this->assertSame($mappingStatuses, $this->mappingStatuses($allMappings));
+        $this->assertSame($counts, $this->protectedCounts());
+    }
+
     public function test_super_admin_can_review_mappings_without_mutating_catalog_data(): void
     {
         $reviewer = $this->actingAsRole(User::ROLE_SUPER_ADMIN);
