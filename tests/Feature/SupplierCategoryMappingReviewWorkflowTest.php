@@ -133,19 +133,73 @@ class SupplierCategoryMappingReviewWorkflowTest extends TestCase
     {
         $this->actingAsRole(User::ROLE_SUPER_ADMIN);
 
-        $pending = $this->mapping(['supplier_category_name' => 'Pending Mapping']);
+        $supplier = $this->supplier();
+        $family = $this->family('peripherals');
+        $category = Category::factory()->create();
+        $product = Product::factory()->supplierPublished()->create(['category_id' => $category->id]);
+        $attribute = ProductAttribute::factory()->create(['code' => 'filter_guard']);
+        $attributeValue = AttributeValue::factory()->create(['product_attribute_id' => $attribute->id]);
+        $assignment = CategoryProductAttribute::factory()->create([
+            'category_id' => $category->id,
+            'product_attribute_id' => $attribute->id,
+        ]);
+        $productValue = ProductAttributeValue::factory()->create([
+            'product_id' => $product->id,
+            'product_attribute_id' => $attribute->id,
+            'attribute_value_id' => $attributeValue->id,
+        ]);
+
+        $pending = $this->mapping([
+            'supplier_id' => $supplier->id,
+            'supplier_category_name' => 'Pending Cable Mapping',
+            'canonical_product_family_id' => $family->id,
+            'confidence' => SupplierCategoryMapping::CONFIDENCE_MEDIUM,
+        ]);
         $approved = $this->mapping([
-            'supplier_category_name' => 'Approved Mapping',
+            'supplier_id' => $supplier->id,
+            'supplier_category_name' => 'Approved Cable High Volume',
             'status' => SupplierCategoryMapping::STATUS_APPROVED,
+            'canonical_product_family_id' => $family->id,
+            'confidence' => SupplierCategoryMapping::CONFIDENCE_LOW,
+        ]);
+        $approvedHighConfidence = $this->mapping([
+            'supplier_id' => $supplier->id,
+            'supplier_category_name' => 'Approved Cable High Confidence',
+            'status' => SupplierCategoryMapping::STATUS_APPROVED,
+            'canonical_product_family_id' => $family->id,
+            'confidence' => SupplierCategoryMapping::CONFIDENCE_HIGH,
         ]);
         $rejected = $this->mapping([
-            'supplier_category_name' => 'Rejected Mapping',
+            'supplier_id' => $supplier->id,
+            'supplier_category_name' => 'Rejected Mouse Mapping',
             'status' => SupplierCategoryMapping::STATUS_REJECTED,
+            'canonical_product_family_id' => $family->id,
+            'confidence' => SupplierCategoryMapping::CONFIDENCE_MEDIUM,
         ]);
         $ignored = $this->mapping([
-            'supplier_category_name' => 'Ignored Mapping',
+            'supplier_id' => $supplier->id,
+            'supplier_category_name' => 'Ignored Mouse Mapping',
             'status' => SupplierCategoryMapping::STATUS_IGNORED,
+            'canonical_product_family_id' => $family->id,
+            'confidence' => SupplierCategoryMapping::CONFIDENCE_LOW,
         ]);
+
+        $this->supplierProducts($supplier, 'Approved Cable High Volume', 5);
+        $this->supplierProducts($supplier, 'Approved Cable High Confidence', 1);
+        $this->supplierProducts($supplier, 'Pending Cable Mapping', 2);
+        $this->supplierProducts($supplier, 'Rejected Mouse Mapping', 3);
+        $this->supplierProducts($supplier, 'Ignored Mouse Mapping', 4);
+
+        $counts = $this->protectedCounts();
+        $mappingStatuses = $this->mappingStatuses([$pending, $approved, $approvedHighConfidence, $rejected, $ignored]);
+        $snapshots = [
+            'product' => $product->fresh()->only(['category_id', 'workflow_status', 'product_status', 'active', 'updated_at']),
+            'category' => $category->fresh()->only(['name', 'slug', 'description', 'image_path', 'updated_at']),
+            'assignment' => $assignment->fresh()->only(['category_id', 'product_attribute_id', 'is_required', 'is_filterable', 'is_visible_on_product', 'is_comparable', 'sort_order', 'updated_at']),
+            'attribute' => $attribute->fresh()->only(['code', 'name_bg', 'slug', 'type', 'updated_at']),
+            'attributeValue' => $attributeValue->fresh()->only(['product_attribute_id', 'value', 'slug', 'updated_at']),
+            'productValue' => $productValue->fresh()->only(['product_id', 'product_attribute_id', 'attribute_value_id', 'value_text', 'custom_value', 'updated_at']),
+        ];
 
         $this->assertSame([
             SupplierCategoryMapping::STATUS_PENDING_REVIEW => 'За преглед',
@@ -153,22 +207,72 @@ class SupplierCategoryMappingReviewWorkflowTest extends TestCase
             SupplierCategoryMapping::STATUS_REJECTED => 'Отхвърлено',
             SupplierCategoryMapping::STATUS_IGNORED => 'Игнорирано',
         ], SupplierCategoryMappingResource::statusOptions());
+        $this->assertArrayNotHasKey('Одобрено', SupplierCategoryMappingResource::statusOptions());
+
+        foreach (SupplierCategoryMappingResource::statusOptions() as $status => $label) {
+            $this->assertContains($status, [
+                SupplierCategoryMapping::STATUS_PENDING_REVIEW,
+                SupplierCategoryMapping::STATUS_APPROVED,
+                SupplierCategoryMapping::STATUS_REJECTED,
+                SupplierCategoryMapping::STATUS_IGNORED,
+            ]);
+            $this->assertStringNotContainsString('Р—', $label);
+            $this->assertStringNotContainsString('Рћ', $label);
+            $this->assertStringNotContainsString('Р', $label);
+        }
+
+        Livewire::test(ListSupplierCategoryMappings::class)
+            ->assertTableFilterExists('status', fn ($filter): bool => $filter->getAttribute() === 'status');
 
         Livewire::test(ListSupplierCategoryMappings::class)
             ->filterTable('status', SupplierCategoryMapping::STATUS_PENDING_REVIEW)
             ->assertCanSeeTableRecords([$pending])
-            ->assertCanNotSeeTableRecords([$approved, $rejected, $ignored])
+            ->assertCanNotSeeTableRecords([$approved, $approvedHighConfidence, $rejected, $ignored])
             ->filterTable('status', SupplierCategoryMapping::STATUS_APPROVED)
-            ->assertCanSeeTableRecords([$approved])
+            ->assertCanSeeTableRecords([$approved, $approvedHighConfidence])
             ->assertCanNotSeeTableRecords([$pending, $rejected, $ignored])
             ->filterTable('status', SupplierCategoryMapping::STATUS_REJECTED)
             ->assertCanSeeTableRecords([$rejected])
-            ->assertCanNotSeeTableRecords([$pending, $approved, $ignored])
+            ->assertCanNotSeeTableRecords([$pending, $approved, $approvedHighConfidence, $ignored])
             ->filterTable('status', SupplierCategoryMapping::STATUS_IGNORED)
             ->assertCanSeeTableRecords([$ignored])
-            ->assertCanNotSeeTableRecords([$pending, $approved, $rejected])
+            ->assertCanNotSeeTableRecords([$pending, $approved, $approvedHighConfidence, $rejected])
             ->removeTableFilter('status')
-            ->assertCanSeeTableRecords([$pending, $approved, $rejected, $ignored]);
+            ->assertCanSeeTableRecords([$pending, $approved, $approvedHighConfidence, $rejected, $ignored]);
+
+        Livewire::test(ListSupplierCategoryMappings::class)
+            ->set('tableFilters.status', ['values' => [SupplierCategoryMapping::STATUS_REJECTED]])
+            ->assertCanSeeTableRecords([$rejected])
+            ->assertCanNotSeeTableRecords([$pending, $approved, $approvedHighConfidence, $ignored]);
+
+        Livewire::test(ListSupplierCategoryMappings::class)
+            ->filterTable('status', [SupplierCategoryMapping::STATUS_IGNORED])
+            ->assertCanSeeTableRecords([$ignored])
+            ->assertCanNotSeeTableRecords([$pending, $approved, $approvedHighConfidence, $rejected]);
+
+        Livewire::test(ListSupplierCategoryMappings::class)
+            ->filterTable('status', SupplierCategoryMapping::STATUS_APPROVED)
+            ->searchTable('High Confidence')
+            ->assertCanSeeTableRecords([$approvedHighConfidence])
+            ->assertCanNotSeeTableRecords([$pending, $approved, $rejected, $ignored]);
+
+        Livewire::test(ListSupplierCategoryMappings::class)
+            ->filterTable('status', SupplierCategoryMapping::STATUS_APPROVED)
+            ->sortTable('staged_product_count', 'desc')
+            ->assertCanSeeTableRecords([$approved, $approvedHighConfidence], inOrder: true)
+            ->assertCanNotSeeTableRecords([$pending, $rejected, $ignored])
+            ->sortTable('confidence', 'desc')
+            ->assertCanSeeTableRecords([$approvedHighConfidence, $approved], inOrder: true)
+            ->assertCanNotSeeTableRecords([$pending, $rejected, $ignored]);
+
+        $this->assertSame($mappingStatuses, $this->mappingStatuses([$pending, $approved, $approvedHighConfidence, $rejected, $ignored]));
+        $this->assertSame($counts, $this->protectedCounts());
+        $this->assertEquals($snapshots['product'], $product->fresh()->only(array_keys($snapshots['product'])));
+        $this->assertEquals($snapshots['category'], $category->fresh()->only(array_keys($snapshots['category'])));
+        $this->assertEquals($snapshots['assignment'], $assignment->fresh()->only(array_keys($snapshots['assignment'])));
+        $this->assertEquals($snapshots['attribute'], $attribute->fresh()->only(array_keys($snapshots['attribute'])));
+        $this->assertEquals($snapshots['attributeValue'], $attributeValue->fresh()->only(array_keys($snapshots['attributeValue'])));
+        $this->assertEquals($snapshots['productValue'], $productValue->fresh()->only(array_keys($snapshots['productValue'])));
     }
 
     public function test_super_admin_can_review_mappings_without_mutating_catalog_data(): void
