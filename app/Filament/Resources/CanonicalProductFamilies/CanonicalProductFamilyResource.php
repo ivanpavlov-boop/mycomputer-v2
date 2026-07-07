@@ -33,7 +33,7 @@ class CanonicalProductFamilyResource extends Resource
 
     protected static ?string $navigationLabel = 'Вътрешни продуктови семейства';
 
-    protected static string|UnitEnum|null $navigationGroup = 'Каталог характеристики';
+    protected static string|UnitEnum|null $navigationGroup = 'Таксономия';
 
     public static function getModelLabel(): string
     {

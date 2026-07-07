@@ -45,15 +45,16 @@ Phase 8 manual selected UPDATE price/stock sync has been implemented behind a fe
 | Phase 9C.5.3 | CPU category attribute template | Complete |
 | Phase 9C.5.4 | Category specification template coverage plan | Complete |
 | Phase 9C.5.5 | Internal taxonomy and supplier category mapping foundation | Complete |
+| Phase 9C.5.6 | Supplier category mapping review workflow | Complete |
 
 ## Next Planned Phases
 
 | Phase | Name | Notes |
 | --- | --- | --- |
-| Phase 9C.5.6 | Internal Category Template Assignment Plan | Plan category template work from internal taxonomy, not supplier category names. |
-| Phase 9C.5.7 | Power/Cables Template Based on Internal Taxonomy | Controlled template work based on canonical family mapping only; no product values. |
-| Phase 9C.5.8 | Cases/Protection Template Based on Internal Taxonomy | Controlled template work based on canonical family mapping only; no product values. |
-| Phase 9C.5.9 | Peripherals Template Based on Internal Taxonomy | Controlled template work based on canonical family mapping only; no product values. |
+| Phase 9C.5.7 | Internal Category Template Assignment Plan | Plan category template work from internal taxonomy, not supplier category names. |
+| Phase 9C.5.8 | Power/Cables Template Based on Internal Taxonomy | Controlled template work based on canonical family mapping only; no product values. |
+| Phase 9C.5.9 | Cases/Protection Template Based on Internal Taxonomy | Controlled template work based on canonical family mapping only; no product values. |
+| Phase 9C.5.10 | Peripherals Template Based on Internal Taxonomy | Controlled template work based on canonical family mapping only; no product values. |
 | Phase 9C.6 | Supplier Attribute Mapping Foundation | Preview/planning foundation only until a later explicit approval/write phase. |
 | Phase 9C.7 | Product specification data quality polish | Improve admin ergonomics after real queue usage. |
 | Phase 9C.8 | Storefront specification display | Display catalog-owned specs only after controlled data quality. |
@@ -81,6 +82,7 @@ Phase 8 manual selected UPDATE price/stock sync has been implemented behind a fe
 - Use `product-attributes:seed-cpu-template` as a dry-run-first, explicit-apply command for CPU internal attributes, safe CPU options, and assignments to existing CPU categories only. It must not create categories or product values.
 - Use `product-attributes:audit-category-template-coverage` as a read-only planning audit for direct, inherited, and missing category specification templates. It must not have an apply mode and must not create or update product values, attributes, options, category assignments, categories, products, or `supplier_products`.
 - Use `taxonomy:seed-canonical-families` and `supplier-categories:*` commands as the internal taxonomy and supplier category mapping foundation. Only `canonical_product_families` and `supplier_category_mappings` may be written by their explicit apply modes; mappings must remain `pending_review` and must not apply to products.
+- Use the supplier category mapping review workflow to mark only mapping records as approved, rejected, ignored, or pending again. Approval is not an apply action and must not create categories, move products, update `products.category_id`, or trigger Catalog Sync.
 - Use `catalog:review-auto-created-products` as a dry-run-first corrective command for the three known products created before the Phase 9C.4.2 supplier import safety hotfix. The command must remain allowlisted, idempotent, and limited to review/status fields.
 - Use the Project AI Agents and Catalog Sync Safety playbooks as process guardrails only; they do not add autonomous agents, jobs, or runtime behavior.
 
