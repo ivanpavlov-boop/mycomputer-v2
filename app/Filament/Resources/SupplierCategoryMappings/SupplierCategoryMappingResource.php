@@ -116,7 +116,10 @@ class SupplierCategoryMappingResource extends Resource
                             ->label('Статус')
                             ->options(self::statusOptions())
                             ->default(SupplierCategoryMapping::STATUS_PENDING_REVIEW)
-                            ->required(),
+                            ->required()
+                            ->disabled()
+                            ->dehydrated(fn (?SupplierCategoryMapping $record): bool => $record === null)
+                            ->helperText('Статусът се променя само чрез действията за преглед. Това не променя продукти или категории.'),
                         Select::make('confidence')
                             ->label('Увереност')
                             ->options(self::confidenceOptions()),
@@ -183,7 +186,12 @@ class SupplierCategoryMappingResource extends Resource
                 TextColumn::make('reviewer.name')->label('Прегледано от')->toggleable(isToggledHiddenByDefault: true),
             ])
             ->filters([
-                SelectFilter::make('status')->label('Статус')->options(self::statusOptions()),
+                SelectFilter::make('status')
+                    ->label('Статус')
+                    ->options(self::statusOptions())
+                    ->query(fn (Builder $query, array $data): Builder => filled($data['value'] ?? null)
+                        ? $query->where('supplier_category_mappings.status', $data['value'])
+                        : $query),
                 SelectFilter::make('supplier')->label('Доставчик')->relationship('supplier', 'company_name')->searchable()->preload(),
                 SelectFilter::make('canonicalProductFamily')->label('Семейство')->relationship('canonicalProductFamily', 'name_bg')->searchable()->preload(),
                 SelectFilter::make('confidence')->label('Увереност')->options(self::confidenceOptions()),
@@ -216,6 +224,7 @@ class SupplierCategoryMappingResource extends Resource
                     ->modalHeading('Одобряване на supplier mapping')
                     ->modalDescription('Одобрява само този review запис. Не създава категории, не мести продукти и не прилага Catalog Sync.')
                     ->modalSubmitActionLabel('Одобри')
+                    ->successNotificationTitle('Mapping-ът е одобрен.')
                     ->action(fn (SupplierCategoryMapping $record): bool => self::approveMapping($record)),
                 Action::make('reject')
                     ->label('Отхвърли')
@@ -229,7 +238,9 @@ class SupplierCategoryMappingResource extends Resource
                             ->rows(3),
                     ])
                     ->modalHeading('Отхвърляне на supplier mapping')
+                    ->modalDescription('Отхвърля само този review запис. Не променя продукти, категории или Catalog Sync.')
                     ->modalSubmitActionLabel('Отхвърли')
+                    ->successNotificationTitle('Mapping-ът е отхвърлен.')
                     ->action(fn (SupplierCategoryMapping $record, array $data): bool => self::markMapping($record, SupplierCategoryMapping::STATUS_REJECTED, $data['notes'] ?? null)),
                 Action::make('ignore')
                     ->label('Игнорирай')
@@ -243,7 +254,9 @@ class SupplierCategoryMappingResource extends Resource
                             ->rows(3),
                     ])
                     ->modalHeading('Игнориране на supplier mapping')
+                    ->modalDescription('Игнорира само този review запис. Не променя продукти, категории или Catalog Sync.')
                     ->modalSubmitActionLabel('Игнорирай')
+                    ->successNotificationTitle('Mapping-ът е игнориран.')
                     ->action(fn (SupplierCategoryMapping $record, array $data): bool => self::markMapping($record, SupplierCategoryMapping::STATUS_IGNORED, $data['notes'] ?? null)),
                 Action::make('reset_pending')
                     ->label('Върни за преглед')
@@ -254,6 +267,7 @@ class SupplierCategoryMappingResource extends Resource
                     ->modalHeading('Връщане за преглед')
                     ->modalDescription('Връща само review статуса. Не променя продукти, категории или sync данни.')
                     ->modalSubmitActionLabel('Върни за преглед')
+                    ->successNotificationTitle('Mapping-ът е върнат за преглед.')
                     ->action(fn (SupplierCategoryMapping $record): bool => self::resetMapping($record)),
                 EditAction::make()->label('Редакция')->visible(fn (): bool => self::canManageTaxonomy()),
                 DeleteAction::make()->label('Изтрий')->visible(fn (): bool => self::canManageTaxonomy()),

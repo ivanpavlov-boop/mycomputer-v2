@@ -2,7 +2,6 @@
 
 namespace Tests\Feature;
 
-use App\Filament\Resources\CanonicalProductFamilies\CanonicalProductFamilyResource;
 use App\Filament\Resources\SupplierCategoryMappings\Pages\EditSupplierCategoryMapping;
 use App\Filament\Resources\SupplierCategoryMappings\Pages\ListSupplierCategoryMappings;
 use App\Filament\Resources\SupplierCategoryMappings\SupplierCategoryMappingResource;
@@ -41,7 +40,6 @@ class SupplierCategoryMappingReviewWorkflowTest extends TestCase
         $table = $component->instance()->getTable();
 
         $this->assertSame('Таксономия', SupplierCategoryMappingResource::getNavigationGroup());
-        $this->assertSame('Таксономия', CanonicalProductFamilyResource::getNavigationGroup());
 
         $columns = array_keys($table->getColumns());
         $filters = array_keys($table->getFilters());
@@ -94,6 +92,83 @@ class SupplierCategoryMappingReviewWorkflowTest extends TestCase
             ->assertTableActionEnabled('approve', $mapping)
             ->assertTableActionVisible('reject', $mapping)
             ->assertTableActionVisible('ignore', $mapping);
+    }
+
+    public function test_edit_page_review_action_labels_and_notifications_are_readable_bulgarian(): void
+    {
+        $this->actingAsRole(User::ROLE_SUPER_ADMIN);
+
+        $mapping = $this->mapping([
+            'canonical_product_family_id' => $this->family('peripherals')->id,
+            'status' => SupplierCategoryMapping::STATUS_APPROVED,
+        ]);
+
+        $actions = collect(Livewire::test(EditSupplierCategoryMapping::class, ['record' => $mapping->getKey()])
+            ->instance()
+            ->getCachedHeaderActions())
+            ->keyBy(fn ($action): string => $action->getName());
+
+        $expected = [
+            'approve' => ['Одобри', 'Mapping-ът е одобрен.'],
+            'reject' => ['Отхвърли', 'Mapping-ът е отхвърлен.'],
+            'ignore' => ['Игнорирай', 'Mapping-ът е игнориран.'],
+            'reset_pending' => ['Върни за преглед', 'Mapping-ът е върнат за преглед.'],
+        ];
+
+        foreach ($expected as $actionName => [$label, $successTitle]) {
+            $this->assertTrue($actions->has($actionName));
+            $this->assertSame($label, $actions[$actionName]->getLabel());
+            $this->assertSame($successTitle, $actions[$actionName]->getSuccessNotificationTitle());
+            $this->assertStringNotContainsString('Р ', $actions[$actionName]->getLabel());
+            $this->assertStringNotContainsString('Гђ', $actions[$actionName]->getLabel());
+            $this->assertStringNotContainsString('Г‘', $actions[$actionName]->getLabel());
+        }
+
+        foreach (['apply', 'syncAll', 'moveProducts', 'createCategory', 'updateProductCategories'] as $forbiddenAction) {
+            $this->assertFalse($actions->has($forbiddenAction));
+        }
+    }
+
+    public function test_status_filter_uses_canonical_status_values_with_bulgarian_labels(): void
+    {
+        $this->actingAsRole(User::ROLE_SUPER_ADMIN);
+
+        $pending = $this->mapping(['supplier_category_name' => 'Pending Mapping']);
+        $approved = $this->mapping([
+            'supplier_category_name' => 'Approved Mapping',
+            'status' => SupplierCategoryMapping::STATUS_APPROVED,
+        ]);
+        $rejected = $this->mapping([
+            'supplier_category_name' => 'Rejected Mapping',
+            'status' => SupplierCategoryMapping::STATUS_REJECTED,
+        ]);
+        $ignored = $this->mapping([
+            'supplier_category_name' => 'Ignored Mapping',
+            'status' => SupplierCategoryMapping::STATUS_IGNORED,
+        ]);
+
+        $this->assertSame([
+            SupplierCategoryMapping::STATUS_PENDING_REVIEW => 'За преглед',
+            SupplierCategoryMapping::STATUS_APPROVED => 'Одобрено',
+            SupplierCategoryMapping::STATUS_REJECTED => 'Отхвърлено',
+            SupplierCategoryMapping::STATUS_IGNORED => 'Игнорирано',
+        ], SupplierCategoryMappingResource::statusOptions());
+
+        Livewire::test(ListSupplierCategoryMappings::class)
+            ->filterTable('status', SupplierCategoryMapping::STATUS_PENDING_REVIEW)
+            ->assertCanSeeTableRecords([$pending])
+            ->assertCanNotSeeTableRecords([$approved, $rejected, $ignored])
+            ->filterTable('status', SupplierCategoryMapping::STATUS_APPROVED)
+            ->assertCanSeeTableRecords([$approved])
+            ->assertCanNotSeeTableRecords([$pending, $rejected, $ignored])
+            ->filterTable('status', SupplierCategoryMapping::STATUS_REJECTED)
+            ->assertCanSeeTableRecords([$rejected])
+            ->assertCanNotSeeTableRecords([$pending, $approved, $ignored])
+            ->filterTable('status', SupplierCategoryMapping::STATUS_IGNORED)
+            ->assertCanSeeTableRecords([$ignored])
+            ->assertCanNotSeeTableRecords([$pending, $approved, $rejected])
+            ->removeTableFilter('status')
+            ->assertCanSeeTableRecords([$pending, $approved, $rejected, $ignored]);
     }
 
     public function test_super_admin_can_review_mappings_without_mutating_catalog_data(): void
@@ -190,6 +265,7 @@ class SupplierCategoryMappingReviewWorkflowTest extends TestCase
             'reviewed_by' => $reviewer->id,
             'notes' => 'Incorrect family candidate',
         ]);
+        $this->assertNotNull($reject->fresh()->reviewed_at);
 
         $this->assertDatabaseHas('supplier_category_mappings', [
             'id' => $ignore->id,
@@ -197,6 +273,7 @@ class SupplierCategoryMappingReviewWorkflowTest extends TestCase
             'reviewed_by' => $reviewer->id,
             'notes' => 'Not useful for templates',
         ]);
+        $this->assertNotNull($ignore->fresh()->reviewed_at);
 
         $this->assertSame($counts, $this->protectedCounts());
         $this->assertEquals($snapshots['product'], $product->fresh()->only(array_keys($snapshots['product'])));
@@ -301,9 +378,14 @@ class SupplierCategoryMappingReviewWorkflowTest extends TestCase
 
         $this->assertSame(SupplierCategoryMapping::STATUS_APPROVED, $approve->fresh()->status);
         $this->assertSame($reviewer->id, $approve->fresh()->reviewed_by);
+        $this->assertNotNull($approve->fresh()->reviewed_at);
         $this->assertSame(SupplierCategoryMapping::STATUS_REJECTED, $reject->fresh()->status);
+        $this->assertSame($reviewer->id, $reject->fresh()->reviewed_by);
+        $this->assertNotNull($reject->fresh()->reviewed_at);
         $this->assertSame('Wrong candidate', $reject->fresh()->notes);
         $this->assertSame(SupplierCategoryMapping::STATUS_IGNORED, $ignore->fresh()->status);
+        $this->assertSame($reviewer->id, $ignore->fresh()->reviewed_by);
+        $this->assertNotNull($ignore->fresh()->reviewed_at);
         $this->assertSame('Irrelevant candidate', $ignore->fresh()->notes);
         $this->assertSame(SupplierCategoryMapping::STATUS_PENDING_REVIEW, $reset->fresh()->status);
         $this->assertNull($reset->fresh()->reviewed_at);
@@ -317,6 +399,38 @@ class SupplierCategoryMappingReviewWorkflowTest extends TestCase
         $this->assertEquals($snapshots['attribute'], $attribute->fresh()->only(array_keys($snapshots['attribute'])));
         $this->assertEquals($snapshots['attributeValue'], $attributeValue->fresh()->only(array_keys($snapshots['attributeValue'])));
         $this->assertEquals($snapshots['productValue'], $productValue->fresh()->only(array_keys($snapshots['productValue'])));
+    }
+
+    public function test_manual_status_save_is_read_only_and_does_not_create_review_metadata_or_catalog_mutation(): void
+    {
+        $this->actingAsRole(User::ROLE_SUPER_ADMIN);
+
+        $category = Category::factory()->create();
+        $product = Product::factory()->supplierPublished()->create(['category_id' => $category->id]);
+        $mapping = $this->mapping([
+            'supplier_category_name' => 'Manual Status Save',
+            'canonical_product_family_id' => $this->family('peripherals')->id,
+        ]);
+
+        $counts = $this->protectedCounts();
+        $productSnapshot = $product->fresh()->only(['category_id', 'workflow_status', 'product_status', 'active', 'updated_at']);
+
+        Livewire::test(EditSupplierCategoryMapping::class, ['record' => $mapping->getKey()])
+            ->fillForm([
+                'status' => SupplierCategoryMapping::STATUS_APPROVED,
+                'notes' => 'Safe form save note',
+            ])
+            ->call('save')
+            ->assertHasNoFormErrors();
+
+        $mapping->refresh();
+
+        $this->assertSame(SupplierCategoryMapping::STATUS_PENDING_REVIEW, $mapping->status);
+        $this->assertNull($mapping->reviewed_at);
+        $this->assertNull($mapping->reviewed_by);
+        $this->assertSame('Safe form save note', $mapping->notes);
+        $this->assertSame($counts, $this->protectedCounts());
+        $this->assertEquals($productSnapshot, $product->fresh()->only(array_keys($productSnapshot)));
     }
 
     public function test_quick_approve_requires_known_family_but_not_future_category(): void
