@@ -189,9 +189,9 @@ class SupplierCategoryMappingResource extends Resource
                 SelectFilter::make('status')
                     ->label('Статус')
                     ->options(self::statusOptions())
-                    ->query(fn (Builder $query, array $data): Builder => filled($data['value'] ?? null)
-                        ? $query->where('supplier_category_mappings.status', $data['value'])
-                        : $query),
+                    ->attribute('status')
+                    ->indicateUsing(fn (array $state): array => self::statusFilterIndicators($state))
+                    ->query(fn (Builder $query, array $data): Builder => self::applyStatusFilter($query, $data)),
                 SelectFilter::make('supplier')->label('Доставчик')->relationship('supplier', 'company_name')->searchable()->preload(),
                 SelectFilter::make('canonicalProductFamily')->label('Семейство')->relationship('canonicalProductFamily', 'name_bg')->searchable()->preload(),
                 SelectFilter::make('confidence')->label('Увереност')->options(self::confidenceOptions()),
@@ -391,6 +391,63 @@ class SupplierCategoryMappingResource extends Resource
             'reviewed_at' => null,
             'reviewed_by' => null,
         ])->save();
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     */
+    protected static function applyStatusFilter(Builder $query, array $data): Builder
+    {
+        $statuses = self::resolveStatusFilterValues($data);
+
+        if ($statuses === []) {
+            return $query;
+        }
+
+        return count($statuses) === 1
+            ? $query->where('supplier_category_mappings.status', $statuses[0])
+            : $query->whereIn('supplier_category_mappings.status', $statuses);
+    }
+
+    /**
+     * @param  array<string, mixed>  $state
+     * @return array<string, string>
+     */
+    protected static function statusFilterIndicators(array $state): array
+    {
+        $labels = collect(self::resolveStatusFilterValues($state))
+            ->map(fn (string $status): string => self::statusOptions()[$status])
+            ->all();
+
+        if ($labels === []) {
+            return [];
+        }
+
+        return ['value' => 'Статус: '.implode(', ', $labels)];
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     * @return array<int, string>
+     */
+    protected static function resolveStatusFilterValues(array $data): array
+    {
+        $selected = $data['value'] ?? $data['values'] ?? null;
+
+        if ($selected === null && array_is_list($data)) {
+            $selected = $data;
+        }
+
+        $validStatuses = array_keys(self::statusOptions());
+
+        return collect(is_array($selected) ? $selected : [$selected])
+            ->flatten()
+            ->filter(fn (mixed $value): bool => is_scalar($value))
+            ->map(fn (mixed $value): string => (string) $value)
+            ->filter(fn (string $value): bool => in_array($value, $validStatuses, true))
+            ->unique()
+            ->values()
+            ->all();
     }
 
     protected static function reviewQueueQuery(Builder $query): Builder
