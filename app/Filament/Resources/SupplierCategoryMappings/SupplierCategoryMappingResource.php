@@ -168,7 +168,7 @@ class SupplierCategoryMappingResource extends Resource
                     ->badge()
                     ->color(fn (?string $state): string => self::statusColor($state))
                     ->formatStateUsing(fn (?string $state): string => self::statusOptions()[$state] ?? (string) $state)
-                    ->sortable(),
+                    ->sortable(query: fn (Builder $query, string $direction): Builder => self::sortByStatus($query, $direction)),
                 TextColumn::make('confidence')
                     ->label('Увереност')
                     ->badge()
@@ -487,6 +487,37 @@ class SupplierCategoryMappingResource extends Resource
         return $query
             ->reorder()
             ->orderBy('staged_product_count', $direction)
+            ->orderBy('supplier_category_mappings.id');
+    }
+
+    protected static function sortByStatus(Builder $query, string $direction): Builder
+    {
+        $knownStatuses = [
+            SupplierCategoryMapping::STATUS_APPROVED,
+            SupplierCategoryMapping::STATUS_PENDING_REVIEW,
+            SupplierCategoryMapping::STATUS_REJECTED,
+            SupplierCategoryMapping::STATUS_IGNORED,
+        ];
+
+        $statusOrder = $direction === 'desc'
+            ? [
+                SupplierCategoryMapping::STATUS_IGNORED,
+                SupplierCategoryMapping::STATUS_REJECTED,
+                SupplierCategoryMapping::STATUS_PENDING_REVIEW,
+                SupplierCategoryMapping::STATUS_APPROVED,
+            ]
+            : $knownStatuses;
+
+        return $query
+            ->reorder()
+            ->orderByRaw(
+                'CASE WHEN supplier_category_mappings.status IN (?, ?, ?, ?) THEN 0 ELSE 1 END ASC',
+                $knownStatuses,
+            )
+            ->orderByRaw(
+                'CASE supplier_category_mappings.status WHEN ? THEN 0 WHEN ? THEN 1 WHEN ? THEN 2 WHEN ? THEN 3 ELSE 4 END ASC',
+                $statusOrder,
+            )
             ->orderBy('supplier_category_mappings.id');
     }
 
