@@ -423,6 +423,38 @@ mappings are visibility and maintenance tools for the new taxonomy tables only.
 Super Admin can create/edit/delete the new records; Viewer/Auditor is
 read-only. There is no bulk apply-to-products action.
 
+## Phase 9C.5.6 Supplier Category Mapping Review Workflow
+
+Phase 9C.5.6 makes the supplier category mapping queue easier to review in
+Filament while keeping the workflow as planning metadata only.
+
+Review actions:
+
+- `approve`: marks a mapping as reviewed and approved only when a known
+  canonical product family is selected. A future target category is optional and
+  is not required for approval.
+- `reject`: marks an incorrect mapping as rejected and may store a review note.
+- `ignore`: marks a supplier category as intentionally ignored and may store a
+  review note.
+- `reset_pending`: returns a reviewed mapping to `pending_review`.
+
+The review table now includes supplier/category identity, staging product count,
+canonical family, optional future target category, status/confidence badges,
+match reason, notes indicator, reviewer and reviewed timestamp. Filters cover
+status, supplier, canonical family, confidence, no family, `unknown` family,
+missing future category, and approved mappings without a future category.
+
+Safety rules:
+
+- Review actions update only `supplier_category_mappings`.
+- Approval does not create catalog categories.
+- Approval does not move products or update `products.category_id`.
+- Approval does not update category hierarchy, SEO, descriptions, images,
+  category attribute assignments, product attributes, attribute values, product
+  attribute values, `supplier_products`, or Catalog Sync state.
+- The optional `target_category_id` is a future-use reference only.
+- Super Admin can mutate review records; Viewer/Auditor remains read-only.
+
 ## Phase 9C.4 Manual Product Attribute Values
 
 Phase 9C.4 adds a manual Filament workflow for product-specific attribute values.

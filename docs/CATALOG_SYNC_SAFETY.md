@@ -186,6 +186,11 @@ Safety rules:
   `product_attributes`, or `attribute_values`.
 - Supplier category mappings must not trigger Catalog Sync, Sync All,
   automatic sync, or supplier XML attribute mapping.
+- The supplier category mapping review workflow may mark mapping records as
+  approved, rejected, ignored, or pending review again. These status changes are
+  review metadata only and must not apply mappings to products or categories.
+- `target_category_id` is optional future-use metadata. An approved mapping with
+  no target category is allowed and still must not mutate catalog categories.
 
 Any future phase that applies mappings to products or internal category
 templates must be preview-first, manually approved, audited, tested, and
