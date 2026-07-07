@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Filament\Resources\CanonicalProductFamilies\CanonicalProductFamilyResource;
+use App\Filament\Resources\SupplierCategoryMappings\Pages\EditSupplierCategoryMapping;
 use App\Filament\Resources\SupplierCategoryMappings\Pages\ListSupplierCategoryMappings;
 use App\Filament\Resources\SupplierCategoryMappings\SupplierCategoryMappingResource;
 use App\Models\AttributeValue;
@@ -196,6 +197,117 @@ class SupplierCategoryMappingReviewWorkflowTest extends TestCase
             'reviewed_by' => $reviewer->id,
             'notes' => 'Not useful for templates',
         ]);
+
+        $this->assertSame($counts, $this->protectedCounts());
+        $this->assertEquals($snapshots['product'], $product->fresh()->only(array_keys($snapshots['product'])));
+        $this->assertEquals($snapshots['supplierProduct'], $supplierProduct->fresh()->only(array_keys($snapshots['supplierProduct'])));
+        $this->assertEquals($snapshots['category'], $category->fresh()->only(array_keys($snapshots['category'])));
+        $this->assertEquals($snapshots['assignment'], $assignment->fresh()->only(array_keys($snapshots['assignment'])));
+        $this->assertEquals($snapshots['attribute'], $attribute->fresh()->only(array_keys($snapshots['attribute'])));
+        $this->assertEquals($snapshots['attributeValue'], $attributeValue->fresh()->only(array_keys($snapshots['attributeValue'])));
+        $this->assertEquals($snapshots['productValue'], $productValue->fresh()->only(array_keys($snapshots['productValue'])));
+    }
+
+    public function test_edit_page_review_actions_redirect_to_index_without_mutating_catalog_data(): void
+    {
+        $reviewer = $this->actingAsRole(User::ROLE_SUPER_ADMIN);
+
+        $family = $this->family('peripherals');
+        $category = Category::factory()->create([
+            'name' => 'Existing Review Category',
+            'slug' => 'existing-review-category',
+            'description' => 'Protected description',
+            'image_path' => 'categories/protected.jpg',
+        ]);
+        $product = Product::factory()->supplierPublished()->create([
+            'category_id' => $category->id,
+            'sku' => 'SUP-CAT-REDIRECT-001',
+        ]);
+        $attribute = ProductAttribute::factory()->create([
+            'code' => 'protected_attribute',
+            'slug' => 'protected-attribute',
+            'name_bg' => 'Protected attribute',
+        ]);
+        $attributeValue = AttributeValue::factory()->create([
+            'product_attribute_id' => $attribute->id,
+            'value' => 'Protected value',
+            'slug' => 'protected-value',
+        ]);
+        $assignment = CategoryProductAttribute::factory()->create([
+            'category_id' => $category->id,
+            'product_attribute_id' => $attribute->id,
+            'is_required' => true,
+        ]);
+        $productValue = ProductAttributeValue::factory()->create([
+            'product_id' => $product->id,
+            'product_attribute_id' => $attribute->id,
+            'attribute_value_id' => $attributeValue->id,
+            'value_text' => 'Protected value',
+            'custom_value' => 'Protected value',
+        ]);
+        $supplierProduct = $this->supplierProduct($this->supplier(), 'Protected Supplier Category');
+
+        $approve = $this->mapping([
+            'supplier_category_name' => 'Approve Redirect',
+            'canonical_product_family_id' => $family->id,
+            'confidence' => SupplierCategoryMapping::CONFIDENCE_HIGH,
+        ]);
+        $reject = $this->mapping([
+            'supplier_category_name' => 'Reject Redirect',
+            'canonical_product_family_id' => $family->id,
+        ]);
+        $ignore = $this->mapping([
+            'supplier_category_name' => 'Ignore Redirect',
+            'canonical_product_family_id' => $family->id,
+        ]);
+        $reset = $this->mapping([
+            'supplier_category_name' => 'Reset Redirect',
+            'canonical_product_family_id' => $family->id,
+            'status' => SupplierCategoryMapping::STATUS_APPROVED,
+            'reviewed_at' => now(),
+            'reviewed_by' => $reviewer->id,
+        ]);
+
+        $counts = $this->protectedCounts();
+        $snapshots = [
+            'product' => $product->fresh()->only(['category_id', 'name', 'sku', 'workflow_status', 'product_status', 'active', 'updated_at']),
+            'supplierProduct' => $supplierProduct->fresh()->only(['category_name', 'name', 'supplier_sku', 'raw_data', 'status', 'updated_at']),
+            'category' => $category->fresh()->only(['name', 'slug', 'description', 'image_path', 'updated_at']),
+            'assignment' => $assignment->fresh()->only(['category_id', 'product_attribute_id', 'is_required', 'is_filterable', 'is_visible_on_product', 'is_comparable', 'sort_order', 'updated_at']),
+            'attribute' => $attribute->fresh()->only(['code', 'name_bg', 'slug', 'type', 'updated_at']),
+            'attributeValue' => $attributeValue->fresh()->only(['product_attribute_id', 'value', 'slug', 'updated_at']),
+            'productValue' => $productValue->fresh()->only(['product_id', 'product_attribute_id', 'attribute_value_id', 'value_text', 'custom_value', 'updated_at']),
+        ];
+
+        Livewire::test(EditSupplierCategoryMapping::class, ['record' => $approve->getKey()])
+            ->callAction('approve')
+            ->assertHasNoActionErrors()
+            ->assertRedirect(SupplierCategoryMappingResource::getUrl('index'));
+
+        Livewire::test(EditSupplierCategoryMapping::class, ['record' => $reject->getKey()])
+            ->callAction('reject', ['notes' => 'Wrong candidate'])
+            ->assertHasNoActionErrors()
+            ->assertRedirect(SupplierCategoryMappingResource::getUrl('index'));
+
+        Livewire::test(EditSupplierCategoryMapping::class, ['record' => $ignore->getKey()])
+            ->callAction('ignore', ['notes' => 'Irrelevant candidate'])
+            ->assertHasNoActionErrors()
+            ->assertRedirect(SupplierCategoryMappingResource::getUrl('index'));
+
+        Livewire::test(EditSupplierCategoryMapping::class, ['record' => $reset->getKey()])
+            ->callAction('reset_pending')
+            ->assertHasNoActionErrors()
+            ->assertRedirect(SupplierCategoryMappingResource::getUrl('index'));
+
+        $this->assertSame(SupplierCategoryMapping::STATUS_APPROVED, $approve->fresh()->status);
+        $this->assertSame($reviewer->id, $approve->fresh()->reviewed_by);
+        $this->assertSame(SupplierCategoryMapping::STATUS_REJECTED, $reject->fresh()->status);
+        $this->assertSame('Wrong candidate', $reject->fresh()->notes);
+        $this->assertSame(SupplierCategoryMapping::STATUS_IGNORED, $ignore->fresh()->status);
+        $this->assertSame('Irrelevant candidate', $ignore->fresh()->notes);
+        $this->assertSame(SupplierCategoryMapping::STATUS_PENDING_REVIEW, $reset->fresh()->status);
+        $this->assertNull($reset->fresh()->reviewed_at);
+        $this->assertNull($reset->fresh()->reviewed_by);
 
         $this->assertSame($counts, $this->protectedCounts());
         $this->assertEquals($snapshots['product'], $product->fresh()->only(array_keys($snapshots['product'])));
