@@ -285,6 +285,89 @@ class SupplierCategoryMappingReviewWorkflowTest extends TestCase
             ], inOrder: true);
     }
 
+    public function test_review_table_sorts_by_staged_product_count_ascending_and_descending_without_mutation(): void
+    {
+        $this->actingAsRole(User::ROLE_SUPER_ADMIN);
+
+        $supplier = $this->supplier();
+        $family = $this->family('peripherals');
+
+        $oneProduct = $this->mapping([
+            'supplier_id' => $supplier->id,
+            'supplier_category_name' => 'One Product',
+            'canonical_product_family_id' => $family->id,
+            'confidence' => SupplierCategoryMapping::CONFIDENCE_MEDIUM,
+        ]);
+        $threeProducts = $this->mapping([
+            'supplier_id' => $supplier->id,
+            'supplier_category_name' => 'Three Products',
+            'canonical_product_family_id' => $family->id,
+            'confidence' => SupplierCategoryMapping::CONFIDENCE_MEDIUM,
+        ]);
+        $fiveProducts = $this->mapping([
+            'supplier_id' => $supplier->id,
+            'supplier_category_name' => 'Five Products',
+            'canonical_product_family_id' => $family->id,
+            'confidence' => SupplierCategoryMapping::CONFIDENCE_MEDIUM,
+        ]);
+
+        $this->supplierProducts($supplier, 'One Product', 1);
+        $this->supplierProducts($supplier, 'Three Products', 3);
+        $this->supplierProducts($supplier, 'Five Products', 5);
+
+        $counts = $this->protectedCounts();
+        $statuses = $this->mappingStatuses([$oneProduct, $threeProducts, $fiveProducts]);
+
+        Livewire::test(ListSupplierCategoryMappings::class)
+            ->sortTable('staged_product_count', 'asc')
+            ->assertCanSeeTableRecords([$oneProduct, $threeProducts, $fiveProducts], inOrder: true)
+            ->sortTable('staged_product_count', 'desc')
+            ->assertCanSeeTableRecords([$fiveProducts, $threeProducts, $oneProduct], inOrder: true);
+
+        $this->assertSame($statuses, $this->mappingStatuses([$oneProduct, $threeProducts, $fiveProducts]));
+        $this->assertSame($counts, $this->protectedCounts());
+    }
+
+    public function test_review_table_sorts_by_confidence_custom_order_without_mutation(): void
+    {
+        $this->actingAsRole(User::ROLE_SUPER_ADMIN);
+
+        $family = $this->family('peripherals');
+
+        $high = $this->mapping([
+            'supplier_category_name' => 'High Confidence',
+            'canonical_product_family_id' => $family->id,
+            'confidence' => SupplierCategoryMapping::CONFIDENCE_HIGH,
+        ]);
+        $medium = $this->mapping([
+            'supplier_category_name' => 'Medium Confidence',
+            'canonical_product_family_id' => $family->id,
+            'confidence' => SupplierCategoryMapping::CONFIDENCE_MEDIUM,
+        ]);
+        $low = $this->mapping([
+            'supplier_category_name' => 'Low Confidence',
+            'canonical_product_family_id' => $family->id,
+            'confidence' => SupplierCategoryMapping::CONFIDENCE_LOW,
+        ]);
+        $unknown = $this->mapping([
+            'supplier_category_name' => 'Unknown Confidence',
+            'canonical_product_family_id' => $family->id,
+            'confidence' => null,
+        ]);
+
+        $counts = $this->protectedCounts();
+        $statuses = $this->mappingStatuses([$high, $medium, $low, $unknown]);
+
+        Livewire::test(ListSupplierCategoryMappings::class)
+            ->sortTable('confidence', 'asc')
+            ->assertCanSeeTableRecords([$low, $medium, $high, $unknown], inOrder: true)
+            ->sortTable('confidence', 'desc')
+            ->assertCanSeeTableRecords([$high, $medium, $low, $unknown], inOrder: true);
+
+        $this->assertSame($statuses, $this->mappingStatuses([$high, $medium, $low, $unknown]));
+        $this->assertSame($counts, $this->protectedCounts());
+    }
+
     public function test_viewer_auditor_can_view_but_cannot_mutate_review_records(): void
     {
         $family = $this->family('cables_adapters');
@@ -376,6 +459,13 @@ class SupplierCategoryMappingReviewWorkflowTest extends TestCase
         ]);
     }
 
+    private function supplierProducts(Supplier $supplier, string $categoryName, int $count): void
+    {
+        foreach (range(1, $count) as $_) {
+            $this->supplierProduct($supplier, $categoryName);
+        }
+    }
+
     /**
      * @return array<string, int>
      */
@@ -390,6 +480,17 @@ class SupplierCategoryMappingReviewWorkflowTest extends TestCase
             'attribute_values' => AttributeValue::query()->count(),
             'product_attribute_values' => ProductAttributeValue::query()->count(),
         ];
+    }
+
+    /**
+     * @param  array<int, SupplierCategoryMapping>  $mappings
+     * @return array<int, string|null>
+     */
+    private function mappingStatuses(array $mappings): array
+    {
+        return collect($mappings)
+            ->mapWithKeys(fn (SupplierCategoryMapping $mapping): array => [$mapping->id => $mapping->fresh()->status])
+            ->all();
     }
 
     private function actingAsRole(string $role): User

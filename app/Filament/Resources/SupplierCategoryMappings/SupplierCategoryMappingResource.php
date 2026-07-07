@@ -157,7 +157,7 @@ class SupplierCategoryMappingResource extends Resource
                 TextColumn::make('staged_product_count')
                     ->label('Продукти в staging')
                     ->numeric()
-                    ->sortable(query: fn (Builder $query, string $direction): Builder => $query->orderBy('staged_product_count', $direction)),
+                    ->sortable(query: fn (Builder $query, string $direction): Builder => self::sortByStagedProductCount($query, $direction)),
                 TextColumn::make('canonicalProductFamily.code')->label('Семейство')->badge()->placeholder('Няма')->sortable(),
                 TextColumn::make('targetCategory.name')->label('Бъдеща категория')->placeholder('Не е избрана')->toggleable(),
                 TextColumn::make('status')
@@ -171,7 +171,7 @@ class SupplierCategoryMappingResource extends Resource
                     ->badge()
                     ->color(fn (?string $state): string => self::confidenceColor($state))
                     ->formatStateUsing(fn (?string $state): string => self::confidenceOptions()[$state] ?? 'Няма')
-                    ->sortable(),
+                    ->sortable(query: fn (Builder $query, string $direction): Builder => self::sortByConfidence($query, $direction)),
                 TextColumn::make('match_reason')->label('Причина')->limit(60)->tooltip(fn (SupplierCategoryMapping $record): ?string => $record->match_reason)->toggleable(),
                 TextColumn::make('notes_indicator')
                     ->label('Бележки')
@@ -409,6 +409,45 @@ class SupplierCategoryMappingResource extends Resource
                 ],
             )
             ->latest('supplier_category_mappings.created_at');
+    }
+
+    protected static function sortByStagedProductCount(Builder $query, string $direction): Builder
+    {
+        return $query
+            ->reorder()
+            ->orderBy('staged_product_count', $direction)
+            ->orderBy('supplier_category_mappings.id');
+    }
+
+    protected static function sortByConfidence(Builder $query, string $direction): Builder
+    {
+        $confidenceOrder = $direction === 'desc'
+            ? [
+                SupplierCategoryMapping::CONFIDENCE_HIGH,
+                SupplierCategoryMapping::CONFIDENCE_MEDIUM,
+                SupplierCategoryMapping::CONFIDENCE_LOW,
+            ]
+            : [
+                SupplierCategoryMapping::CONFIDENCE_LOW,
+                SupplierCategoryMapping::CONFIDENCE_MEDIUM,
+                SupplierCategoryMapping::CONFIDENCE_HIGH,
+            ];
+
+        return $query
+            ->reorder()
+            ->orderByRaw(
+                'CASE WHEN supplier_category_mappings.confidence IN (?, ?, ?) THEN 0 ELSE 1 END ASC',
+                [
+                    SupplierCategoryMapping::CONFIDENCE_LOW,
+                    SupplierCategoryMapping::CONFIDENCE_MEDIUM,
+                    SupplierCategoryMapping::CONFIDENCE_HIGH,
+                ],
+            )
+            ->orderByRaw(
+                'CASE supplier_category_mappings.confidence WHEN ? THEN 0 WHEN ? THEN 1 WHEN ? THEN 2 ELSE 3 END ASC',
+                $confidenceOrder,
+            )
+            ->orderBy('supplier_category_mappings.id');
     }
 
     protected static function statusColor(?string $status): string
