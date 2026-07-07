@@ -351,6 +351,78 @@ categories remain `unknown` and require manual classification before a template
 is created. The output is intended to guide future product-family template
 phases such as RAM/memory, storage/SSD/HDD, and GPU/video cards.
 
+## Phase 9C.5.5 Internal Taxonomy And Supplier Category Mapping Foundation
+
+Phase 9C.5.5 adds an internal taxonomy foundation so future specification
+templates are based on COMPUTER2U canonical product families instead of one
+supplier's category names.
+
+The intended long-term flow is:
+
+```text
+supplier category
+-> supplier category mapping
+-> internal/canonical product family or category
+-> internal product specification template
+```
+
+This prevents category templates from being tied to APCOM or any other single
+supplier feed. Different suppliers may use different category names and
+structures for the same product family, so supplier categories must first be
+reviewed and mapped into internal taxonomy records.
+
+New tables:
+
+- `canonical_product_families`: internal product-family buckets such as
+  `computers_laptops`, `components`, `peripherals`, `cables_adapters`,
+  `cases_protection`, `apple_devices`, `storage`, and `unknown`.
+- `supplier_category_mappings`: supplier category candidates and reviewed
+  mappings into a canonical product family and, optionally, a future target
+  catalog category.
+
+Mapping statuses:
+
+- `pending_review`: default for discovered candidates; requires manual review.
+- `approved`: reviewed and approved for future controlled phases.
+- `rejected`: reviewed and rejected as an incorrect candidate.
+- `ignored`: intentionally ignored.
+
+Commands:
+
+```bash
+php artisan taxonomy:seed-canonical-families
+php artisan taxonomy:seed-canonical-families --apply
+php artisan supplier-categories:audit --limit=50
+php artisan supplier-categories:audit --only-unmapped --limit=50
+php artisan supplier-categories:audit --format=json --limit=10
+php artisan supplier-categories:discover-mappings --limit=50
+php artisan supplier-categories:discover-mappings --only-unmapped --limit=50
+php artisan supplier-categories:discover-mappings --format=json --limit=10
+php artisan supplier-categories:discover-mappings --apply --limit=50
+```
+
+Safety rules:
+
+- `taxonomy:seed-canonical-families` is dry-run by default and may create or
+  update only `canonical_product_families` when `--apply` is explicitly used.
+- `supplier-categories:audit` is read-only and has no `--apply` option.
+- `supplier-categories:discover-mappings` is dry-run by default and may create
+  only `supplier_category_mappings` records with `pending_review` status when
+  `--apply` is explicitly used.
+- Mapping candidates are never auto-approved.
+- Supplier category mappings do not apply to products.
+- Supplier category mappings do not create catalog categories.
+- Supplier category mappings do not move products or update
+  `products.category_id`.
+- Supplier category mappings do not change category names, slugs, hierarchy,
+  SEO, descriptions, images, product attributes, category assignments, or
+  product attribute values.
+
+The Filament admin resources for canonical families and supplier category
+mappings are visibility and maintenance tools for the new taxonomy tables only.
+Super Admin can create/edit/delete the new records; Viewer/Auditor is
+read-only. There is no bulk apply-to-products action.
+
 ## Phase 9C.4 Manual Product Attribute Values
 
 Phase 9C.4 adds a manual Filament workflow for product-specific attribute values.
@@ -632,13 +704,14 @@ Price, stock and availability updates remain separate from content and attribute
 
 Planned follow-up work:
 
-1. RAM / Memory Category Attribute Template.
-2. SSD / Storage Category Attribute Template.
-3. GPU Category Attribute Template.
-4. Supplier Attribute Mapping Foundation.
-5. Product Specification Data Quality polish.
-6. Storefront product specification display.
-7. Frontend attribute filters and facets.
+1. Internal Category Template Assignment Plan.
+2. Power/Cables Template Based on Internal Taxonomy.
+3. Cases/Protection Template Based on Internal Taxonomy.
+4. Peripherals Template Based on Internal Taxonomy.
+5. Supplier Attribute Mapping Foundation.
+6. Product Specification Data Quality polish.
+7. Storefront product specification display.
+8. Frontend attribute filters and facets.
 
 Each future write phase must include server-side validation, preview, auditability and tests proving products and `supplier_products` are not mutated unexpectedly.
 

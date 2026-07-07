@@ -156,6 +156,41 @@ Current rules:
 - Future supplier XML mapping must be preview-first and manually approved.
 - Frontend filters require a future phase after data quality is controlled.
 
+## Supplier Category Mapping Safety
+
+Supplier categories are staging/import inputs. They are not allowed to overwrite
+catalog categories directly.
+
+Phase 9C.5.5 adds `canonical_product_families` and
+`supplier_category_mappings` as a safe taxonomy planning layer:
+
+```text
+supplier category
+-> pending supplier category mapping
+-> canonical product family
+-> future internal category/template plan
+```
+
+Safety rules:
+
+- Supplier category mapping candidates default to `pending_review`.
+- Mapping candidates are not auto-approved.
+- Supplier category mappings must not create catalog categories.
+- Supplier category mappings must not move products.
+- Supplier category mappings must not update `products.category_id`.
+- Supplier category mappings must not rename or restructure existing categories.
+- Supplier category mappings must not overwrite category SEO, descriptions, or
+  images.
+- Supplier category mappings must not create or update
+  `category_product_attributes`, `product_attribute_values`,
+  `product_attributes`, or `attribute_values`.
+- Supplier category mappings must not trigger Catalog Sync, Sync All,
+  automatic sync, or supplier XML attribute mapping.
+
+Any future phase that applies mappings to products or internal category
+templates must be preview-first, manually approved, audited, tested, and
+explicitly requested.
+
 ## Phase 9C.4.2 Incident Summary
 
 Before Phase 9C.4.2, an old scheduled supplier import path created three catalog
