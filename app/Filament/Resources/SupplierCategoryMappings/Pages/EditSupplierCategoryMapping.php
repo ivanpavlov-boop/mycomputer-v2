@@ -17,59 +17,78 @@ class EditSupplierCategoryMapping extends EditRecord
     {
         return [
             Action::make('approve')
-                ->label('РћРґРѕР±СЂРё')
+                ->label('Одобри')
                 ->icon('heroicon-o-check-circle')
                 ->color('success')
                 ->visible(fn (): bool => SupplierCategoryMappingResource::canEdit($this->record))
                 ->disabled(fn (): bool => ! SupplierCategoryMappingResource::canQuickApprove($this->record))
                 ->requiresConfirmation()
-                ->modalHeading('РћРґРѕР±СЂСЏРІР°РЅРµ РЅР° supplier mapping')
-                ->modalDescription('РћРґРѕР±СЂСЏРІР° СЃР°РјРѕ С‚РѕР·Рё review Р·Р°РїРёСЃ. РќРµ СЃСЉР·РґР°РІР° РєР°С‚РµРіРѕСЂРёРё, РЅРµ РјРµСЃС‚Рё РїСЂРѕРґСѓРєС‚Рё Рё РЅРµ РїСЂРёР»Р°РіР° Catalog Sync.')
-                ->modalSubmitActionLabel('РћРґРѕР±СЂРё')
-                ->successRedirectUrl(SupplierCategoryMappingResource::getUrl('index'))
-                ->action(fn (): bool => SupplierCategoryMappingResource::approveMapping($this->record)),
+                ->modalHeading('Одобряване на supplier mapping')
+                ->modalDescription('Одобрява само този review запис. Не създава категории, не мести продукти и не прилага Catalog Sync.')
+                ->modalSubmitActionLabel('Одобри')
+                ->successNotificationTitle('Mapping-ът е одобрен.')
+                ->action(fn (): bool => $this->redirectToIndexIfSuccessful(
+                    SupplierCategoryMappingResource::approveMapping($this->record),
+                )),
             Action::make('reject')
-                ->label('РћС‚С…РІСЉСЂР»Рё')
+                ->label('Отхвърли')
                 ->icon('heroicon-o-x-circle')
                 ->color('danger')
                 ->visible(fn (): bool => SupplierCategoryMappingResource::canEdit($this->record))
                 ->schema([
                     Textarea::make('notes')
-                        ->label('Р‘РµР»РµР¶РєР°')
+                        ->label('Бележка')
                         ->maxLength(1000)
                         ->rows(3),
                 ])
-                ->modalHeading('РћС‚С…РІСЉСЂР»СЏРЅРµ РЅР° supplier mapping')
-                ->modalSubmitActionLabel('РћС‚С…РІСЉСЂР»Рё')
-                ->successRedirectUrl(SupplierCategoryMappingResource::getUrl('index'))
-                ->action(fn (array $data): bool => SupplierCategoryMappingResource::markMapping($this->record, SupplierCategoryMapping::STATUS_REJECTED, $data['notes'] ?? null)),
+                ->modalHeading('Отхвърляне на supplier mapping')
+                ->modalDescription('Отхвърля само този review запис. Не променя продукти, категории или Catalog Sync.')
+                ->modalSubmitActionLabel('Отхвърли')
+                ->successNotificationTitle('Mapping-ът е отхвърлен.')
+                ->action(fn (array $data): bool => $this->redirectToIndexIfSuccessful(
+                    SupplierCategoryMappingResource::markMapping($this->record, SupplierCategoryMapping::STATUS_REJECTED, $data['notes'] ?? null),
+                )),
             Action::make('ignore')
-                ->label('РРіРЅРѕСЂРёСЂР°Р№')
+                ->label('Игнорирай')
                 ->icon('heroicon-o-no-symbol')
                 ->color('gray')
                 ->visible(fn (): bool => SupplierCategoryMappingResource::canEdit($this->record))
                 ->schema([
                     Textarea::make('notes')
-                        ->label('Р‘РµР»РµР¶РєР°')
+                        ->label('Бележка')
                         ->maxLength(1000)
                         ->rows(3),
                 ])
-                ->modalHeading('РРіРЅРѕСЂРёСЂР°РЅРµ РЅР° supplier mapping')
-                ->modalSubmitActionLabel('РРіРЅРѕСЂРёСЂР°Р№')
-                ->successRedirectUrl(SupplierCategoryMappingResource::getUrl('index'))
-                ->action(fn (array $data): bool => SupplierCategoryMappingResource::markMapping($this->record, SupplierCategoryMapping::STATUS_IGNORED, $data['notes'] ?? null)),
+                ->modalHeading('Игнориране на supplier mapping')
+                ->modalDescription('Игнорира само този review запис. Не променя продукти, категории или Catalog Sync.')
+                ->modalSubmitActionLabel('Игнорирай')
+                ->successNotificationTitle('Mapping-ът е игнориран.')
+                ->action(fn (array $data): bool => $this->redirectToIndexIfSuccessful(
+                    SupplierCategoryMappingResource::markMapping($this->record, SupplierCategoryMapping::STATUS_IGNORED, $data['notes'] ?? null),
+                )),
             Action::make('reset_pending')
-                ->label('Р’СЉСЂРЅРё Р·Р° РїСЂРµРіР»РµРґ')
+                ->label('Върни за преглед')
                 ->icon('heroicon-o-arrow-path')
                 ->color('warning')
                 ->visible(fn (): bool => SupplierCategoryMappingResource::canEdit($this->record) && $this->record->status !== SupplierCategoryMapping::STATUS_PENDING_REVIEW)
                 ->requiresConfirmation()
-                ->modalHeading('Р’СЂСЉС‰Р°РЅРµ Р·Р° РїСЂРµРіР»РµРґ')
-                ->modalDescription('Р’СЂСЉС‰Р° СЃР°РјРѕ review СЃС‚Р°С‚СѓСЃР°. РќРµ РїСЂРѕРјРµРЅСЏ РїСЂРѕРґСѓРєС‚Рё, РєР°С‚РµРіРѕСЂРёРё РёР»Рё sync РґР°РЅРЅРё.')
-                ->modalSubmitActionLabel('Р’СЉСЂРЅРё Р·Р° РїСЂРµРіР»РµРґ')
-                ->successRedirectUrl(SupplierCategoryMappingResource::getUrl('index'))
-                ->action(fn (): bool => SupplierCategoryMappingResource::resetMapping($this->record)),
+                ->modalHeading('Връщане за преглед')
+                ->modalDescription('Връща само review статуса. Не променя продукти, категории или sync данни.')
+                ->modalSubmitActionLabel('Върни за преглед')
+                ->successNotificationTitle('Mapping-ът е върнат за преглед.')
+                ->action(fn (): bool => $this->redirectToIndexIfSuccessful(
+                    SupplierCategoryMappingResource::resetMapping($this->record),
+                )),
             DeleteAction::make()->label('Изтрий'),
         ];
+    }
+
+    private function redirectToIndexIfSuccessful(bool $success): bool
+    {
+        if ($success) {
+            $this->redirect(SupplierCategoryMappingResource::getUrl('index'));
+        }
+
+        return $success;
     }
 }
