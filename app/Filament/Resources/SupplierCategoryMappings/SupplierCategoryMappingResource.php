@@ -499,7 +499,7 @@ class SupplierCategoryMappingResource extends Resource
             SupplierCategoryMapping::STATUS_IGNORED,
         ];
 
-        $statusOrder = $direction === 'desc'
+        $statusOrder = $direction === 'asc'
             ? [
                 SupplierCategoryMapping::STATUS_IGNORED,
                 SupplierCategoryMapping::STATUS_REJECTED,

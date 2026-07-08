@@ -10,6 +10,19 @@ class ListSupplierCategoryMappings extends ListRecords
 {
     protected static string $resource = SupplierCategoryMappingResource::class;
 
+    public function sortTable(?string $column = null, ?string $direction = null): void
+    {
+        if ($column === 'status' && $direction === null) {
+            $direction = match ($this->getTableSortColumn() === 'status' ? $this->getTableSortDirection() : null) {
+                'desc' => 'asc',
+                'asc' => null,
+                default => 'desc',
+            };
+        }
+
+        parent::sortTable($column, $direction);
+    }
+
     protected function getHeaderActions(): array
     {
         return [

@@ -343,8 +343,11 @@ class SupplierCategoryMappingReviewWorkflowTest extends TestCase
         $counts = $this->protectedCounts();
         $mappingStatuses = $this->mappingStatuses($allMappings);
 
-        Livewire::test(ListSupplierCategoryMappings::class)
+        $statusSort = Livewire::test(ListSupplierCategoryMappings::class);
+
+        $statusSort
             ->sortTable('status')
+            ->assertSet('tableSort', 'status:desc')
             ->assertCanSeeTableRecords([
                 $approvedOne,
                 $approvedTwo,
@@ -356,8 +359,9 @@ class SupplierCategoryMappingReviewWorkflowTest extends TestCase
                 $unknown,
             ], inOrder: true);
 
-        Livewire::test(ListSupplierCategoryMappings::class)
-            ->sortTable('status', 'desc')
+        $statusSort
+            ->sortTable('status')
+            ->assertSet('tableSort', 'status:asc')
             ->assertCanSeeTableRecords([
                 $ignored,
                 $rejected,
