@@ -47,6 +47,7 @@ Phase 8 manual selected UPDATE price/stock sync has been implemented behind a fe
 | Phase 9C.5.5 | Internal taxonomy and supplier category mapping foundation | Complete |
 | Phase 9C.5.6 | Supplier category mapping review workflow | Complete |
 | Phase 9C.6 | Multi-supplier import discovery foundation | Complete |
+| Phase 9C.6.1 | Supplier Import Capability Audit | Complete |
 
 ## Paused / Partial Phases
 
@@ -58,7 +59,6 @@ Phase 8 manual selected UPDATE price/stock sync has been implemented behind a fe
 
 | Phase | Name | Notes |
 | --- | --- | --- |
-| Phase 9C.6.1 | Supplier Import Capability Audit | Review available supplier feeds/import adapters before adding more staging imports. |
 | Phase 9C.6.2 | Add Next Supplier Staging Import, Preview Only | Stage the next supplier into `supplier_products` only; no catalog writes. |
 | Phase 9C.6.3 | Multi-Supplier Category Mapping Review | Review mappings in batches using the full multi-supplier picture. |
 | Phase 9C.6.4 | Multi-Supplier Identifier Overlap Review | Review exact and possible overlaps before future offer grouping. |
@@ -91,6 +91,7 @@ Phase 8 manual selected UPDATE price/stock sync has been implemented behind a fe
 - Use `taxonomy:seed-canonical-families` and `supplier-categories:*` commands as the internal taxonomy and supplier category mapping foundation. Only `canonical_product_families` and `supplier_category_mappings` may be written by their explicit apply modes; mappings must remain `pending_review` and must not apply to products.
 - Use the supplier category mapping review workflow to mark only mapping records as approved, rejected, ignored, or pending again. Approval is not an apply action and must not create categories, move products, update `products.category_id`, or trigger Catalog Sync.
 - Use `suppliers:audit-discovery` as a read-only multi-supplier staging audit. It reports suppliers, staged products, category mapping status, identifier completeness, and possible overlaps, but has no apply mode and must not mutate products, `supplier_products`, mappings, categories, canonical families, attributes, or category assignments.
+- Use `suppliers:audit-import-capabilities` as a read-only supplier import capability audit. It reports feed readiness, supported static drivers, redacted feed config, schedules, and checklist status, but has no apply mode and must not fetch feeds, dispatch jobs, call Catalog Sync, expose secrets, or mutate protected tables.
 - Use `catalog:review-auto-created-products` as a dry-run-first corrective command for the three known products created before the Phase 9C.4.2 supplier import safety hotfix. The command must remain allowlisted, idempotent, and limited to review/status fields.
 - Use the Project AI Agents and Catalog Sync Safety playbooks as process guardrails only; they do not add autonomous agents, jobs, or runtime behavior.
 

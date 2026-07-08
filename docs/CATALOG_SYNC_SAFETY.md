@@ -231,6 +231,40 @@ The only valid output of this phase is reporting: table or JSON summaries,
 issue lists, overlap candidates, and explicit zero-change counters for
 protected tables.
 
+## Supplier Import Capability Audit Safety
+
+Phase 9C.6.1 adds `suppliers:audit-import-capabilities` as a read-only supplier
+import capability audit before any additional supplier staging import is added.
+
+The command may inspect:
+
+- suppliers and safe supplier scheduling metadata
+- supplier feed metadata
+- active XML mapping template presence
+- latest supplier import run status
+- staged `supplier_products` counts and identifier completeness
+- static importer/driver class availability
+
+The command must not:
+
+- run supplier imports
+- fetch remote feeds
+- call supplier APIs
+- dispatch queue jobs
+- call Catalog Sync
+- mutate products, suppliers, `supplier_products`, categories, supplier category
+  mappings, canonical families, product attributes, attribute values,
+  `product_attribute_values`, or `category_product_attributes`
+- expose supplier feed secrets
+
+Feed URLs are reported with hosts visible but sensitive path segments and query
+values redacted. Authentication output is limited to boolean presence markers
+such as username/password/token/header configured, never raw credential values.
+
+The only valid output of this phase is reporting: table or JSON supplier
+capability rows, optional static driver/schedule/config/checklist sections, and
+explicit zero-change counters for protected tables.
+
 ## Phase 9C.4.2 Incident Summary
 
 Before Phase 9C.4.2, an old scheduled supplier import path created three catalog
