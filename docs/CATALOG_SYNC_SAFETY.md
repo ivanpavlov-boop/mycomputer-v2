@@ -196,6 +196,41 @@ Any future phase that applies mappings to products or internal category
 templates must be preview-first, manually approved, audited, tested, and
 explicitly requested.
 
+## Multi-Supplier Discovery Safety
+
+Phase 9C.6 adds `suppliers:audit-discovery` as a read-only multi-supplier
+staging audit before more supplier category mappings are reviewed.
+
+Discovery commands may inspect:
+
+- suppliers
+- `supplier_products`
+- supplier category mapping status
+- identifier completeness
+- duplicate identifiers inside one supplier
+- possible cross-supplier EAN/GTIN, MPN, brand + MPN, or low-confidence name
+  overlaps
+
+Discovery commands must not:
+
+- run supplier imports
+- call Catalog Sync
+- create, update, delete, or soft-delete catalog products
+- mutate `supplier_products`
+- create, approve, reject, ignore, or apply supplier category mappings
+- create categories or change category hierarchy
+- create canonical product families
+- create or update `category_product_attributes`
+- create or update `product_attributes`, `attribute_values`, or
+  `product_attribute_values`
+- link supplier staging rows to catalog products
+- create offer groups or supplier offer metadata
+- expose supplier staging data publicly
+
+The only valid output of this phase is reporting: table or JSON summaries,
+issue lists, overlap candidates, and explicit zero-change counters for
+protected tables.
+
 ## Phase 9C.4.2 Incident Summary
 
 Before Phase 9C.4.2, an old scheduled supplier import path created three catalog

@@ -455,6 +455,56 @@ Safety rules:
 - The optional `target_category_id` is a future-use reference only.
 - Super Admin can mutate review records; Viewer/Auditor remains read-only.
 
+## Phase 9C.6 Multi-Supplier Import Discovery Foundation
+
+Phase 9C.5.8 manual supplier category review is intentionally paused after the
+first APCOM review batch. Current production context has 6 approved supplier
+category mappings and 67 `pending_review` mappings. The pause is deliberate:
+internal category templates should be designed from the full supplier landscape,
+not from one supplier category taxonomy alone.
+
+Phase 9C.6 adds a read-only discovery command:
+
+```bash
+php artisan suppliers:audit-discovery
+php artisan suppliers:audit-discovery --format=json --limit=50
+php artisan suppliers:audit-discovery --show-categories --limit=50
+php artisan suppliers:audit-discovery --show-identifiers --limit=50
+php artisan suppliers:audit-discovery --show-overlaps --limit=50
+```
+
+The command reports existing suppliers, staged `supplier_products` counts,
+identifier completeness, supplier category coverage, mapping status counts, and
+possible cross-supplier overlaps. It is meant to prepare future batches for
+manual supplier category mapping review after all planned suppliers are staged.
+
+Safety rules:
+
+- It has no `--apply` option.
+- It does not run supplier imports.
+- It does not call Catalog Sync.
+- It does not create or update catalog products.
+- It does not create or update `supplier_products`.
+- It does not create, approve, reject, ignore, or apply
+  `supplier_category_mappings`.
+- It does not create categories, canonical product families, product
+  attributes, attribute values, category assignments, or product attribute
+  values.
+
+Correct planning flow:
+
+```text
+supplier import
+-> supplier_products staging only
+-> read-only discovery/audit
+-> mapping candidates
+-> manual review
+-> approved mapping records
+-> future controlled preview phase
+```
+
+The future controlled preview/application phase is not implemented here.
+
 ## Phase 9C.4 Manual Product Attribute Values
 
 Phase 9C.4 adds a manual Filament workflow for product-specific attribute values.
