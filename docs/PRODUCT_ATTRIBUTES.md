@@ -505,6 +505,44 @@ supplier import
 
 The future controlled preview/application phase is not implemented here.
 
+## Phase 9C.6.1 Supplier Import Capability Audit
+
+Phase 9C.6.1 adds a read-only supplier import capability audit command:
+
+```bash
+php artisan suppliers:audit-import-capabilities
+php artisan suppliers:audit-import-capabilities --format=json
+php artisan suppliers:audit-import-capabilities --supplier=apcom
+php artisan suppliers:audit-import-capabilities --include-disabled --only-with-issues
+php artisan suppliers:audit-import-capabilities --show-drivers --show-schedules --show-config --show-checklist
+```
+
+The command reports supplier feed readiness before the next supplier staging
+phase. It shows supplier status, import/schedule state, feed type, supported
+driver/parser, redacted feed host/URL, authentication presence markers, XML
+mapping template presence, staged row counts, identifier completeness, latest
+import run status, schedule readiness, and capability issues.
+
+Secret handling is display-only and conservative: hosts may be shown, but
+sensitive path segments and all query values are redacted. Authentication output
+uses boolean presence markers only and must not print usernames, passwords,
+tokens, API keys, bearer headers, or feed secrets.
+
+Safety rules:
+
+- It has no `--apply` option.
+- It does not run supplier imports.
+- It does not fetch remote feeds or call supplier APIs.
+- It does not dispatch queue jobs.
+- It does not call Catalog Sync.
+- It does not mutate products, suppliers, `supplier_products`, categories,
+  supplier category mappings, canonical families, product attributes, attribute
+  values, category assignments, or product attribute values.
+- It does not expose supplier feed secrets.
+
+Phase 9C.6.1 does not stage another supplier. That remains a future
+preview-only phase after capability gaps are reviewed.
+
 ## Phase 9C.4 Manual Product Attribute Values
 
 Phase 9C.4 adds a manual Filament workflow for product-specific attribute values.
