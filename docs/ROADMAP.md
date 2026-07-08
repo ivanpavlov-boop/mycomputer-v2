@@ -51,6 +51,9 @@ Manual selected UPDATE price/stock sync is implemented behind `CATALOG_SYNC_UPDA
 - Internal Taxonomy and Supplier Category Mapping Foundation for canonical
   product families and pending-review supplier category mappings that do not
   apply to products.
+- Multi-Supplier Import Discovery Foundation for read-only supplier staging,
+  category, identifier, and overlap visibility before more supplier mapping
+  approvals.
 - Category-driven Product edit specifications editor for manually maintaining category-assigned values.
 - Project AI agents and safety playbook for Codex/process guardrails.
 - Product Specification Data Quality for read-only warning-only reporting of missing important category specifications.
@@ -67,17 +70,17 @@ Manual selected UPDATE price/stock sync is implemented behind `CATALOG_SYNC_UPDA
 - Manual products start as drafts and must be explicitly reviewed/published.
 - Supplier-created products do not require manual approval by default.
 - Product enrichment gaps are surfaced in a read-only admin queue; fixes still use existing product edit permissions.
-- Product attributes are catalog-owned internal definitions. Category Attribute Sets can assign existing attributes to existing categories, admins can manually maintain individual product values from Product edit pages, Product Specification Data Quality reports missing important category specs without mutating data, the legacy reconciliation command can copy safe values into existing category-assigned targets one explicit product at a time, reconciled legacy values are marked read-only in admin while staying visible, the CPU template command can explicitly prepare CPU attributes/options/category assignments without product values, the category template coverage audit can report direct/inherited/missing template coverage without an apply mode, and supplier category mappings can prepare pending-review taxonomy records without applying them to products. Supplier attribute mapping and frontend filters are not enabled yet.
+- Product attributes are catalog-owned internal definitions. Category Attribute Sets can assign existing attributes to existing categories, admins can manually maintain individual product values from Product edit pages, Product Specification Data Quality reports missing important category specs without mutating data, the legacy reconciliation command can copy safe values into existing category-assigned targets one explicit product at a time, reconciled legacy values are marked read-only in admin while staying visible, the CPU template command can explicitly prepare CPU attributes/options/category assignments without product values, the category template coverage audit can report direct/inherited/missing template coverage without an apply mode, supplier category mappings can prepare pending-review taxonomy records without applying them to products, and multi-supplier discovery can report staging/category/identifier overlap data without any apply mode. Supplier attribute mapping and frontend filters are not enabled yet.
 
 ## Next
 
 1. Keep Phase 7.5 documentation lock current.
 2. Keep feature flag/audit visibility read-only.
-3. Internal Category Template Assignment Plan.
-4. Power/Cables Template Based on Internal Taxonomy.
-5. Cases/Protection Template Based on Internal Taxonomy.
-6. Peripherals Template Based on Internal Taxonomy.
-7. Supplier Attribute Mapping Foundation.
+3. Phase 9C.6.1 Supplier Import Capability Audit.
+4. Phase 9C.6.2 Add Next Supplier Staging Import, Preview Only.
+5. Phase 9C.6.3 Multi-Supplier Category Mapping Review.
+6. Phase 9C.6.4 Multi-Supplier Identifier Overlap Review.
+7. Phase 9C.7 Supplier Attribute Mapping Foundation.
 8. Product specification data quality polish.
 9. Storefront specification display and later attribute filters.
 10. Product attribute filter design after controlled data quality.
@@ -111,7 +114,7 @@ UPDATE sync must not update:
 
 ## Phase 9C Attribute Foundation Scope
 
-Phase 9C.1 adds internal Product Attributes, controlled options, category assignment rules and typed product attribute value storage. Phase 9C.2 improves the Filament admin experience and adds the manual `product-attributes:seed-starter` dry-run/apply command for a starter internal attribute library. Phase 9C.3 adds `product-attributes:assign-category-sets` for controlled assignment of existing internal attributes to existing categories. Phase 9C.4 adds manual product-specific value management from Product edit pages. Phase 9C.4.1 makes category-assigned attributes easier to maintain as ready Product edit specification fields while keeping empty fields non-mutating. Phase 9C.5 adds read-only Product Specification Data Quality reporting based on existing category templates and product values. Phase 9C.5.1 adds `product-attributes:reconcile-legacy-values`, a dry-run-first copy-safe command that can apply safe target value rows only for one explicit SKU or product ID. Phase 9C.5.2 adds read-only admin visibility labels for legacy values that have already been fully or partially reconciled. Phase 9C.5.3 adds `product-attributes:seed-cpu-template`, a dry-run-first explicit-apply command for CPU attributes, safe CPU options, and assignments to existing CPU categories. Phase 9C.5.4 adds `product-attributes:audit-category-template-coverage`, a read-only planning command for direct, inherited, and missing category template coverage with no apply mode. Phase 9C.5.5 adds internal taxonomy and supplier category mapping records for pending review; supplier mappings do not apply to products or catalog categories. Phase 9C.5.6 adds a Filament review workflow for supplier category mapping records only; approval/rejection/ignore/reset mutate only `supplier_category_mappings` review metadata and do not apply mappings to products or categories. These phases do not parse supplier XML attributes, do not sync supplier attributes, do not expose frontend filters, and do not automatically mutate existing products or `supplier_products`.
+Phase 9C.1 adds internal Product Attributes, controlled options, category assignment rules and typed product attribute value storage. Phase 9C.2 improves the Filament admin experience and adds the manual `product-attributes:seed-starter` dry-run/apply command for a starter internal attribute library. Phase 9C.3 adds `product-attributes:assign-category-sets` for controlled assignment of existing internal attributes to existing categories. Phase 9C.4 adds manual product-specific value management from Product edit pages. Phase 9C.4.1 makes category-assigned attributes easier to maintain as ready Product edit specification fields while keeping empty fields non-mutating. Phase 9C.5 adds read-only Product Specification Data Quality reporting based on existing category templates and product values. Phase 9C.5.1 adds `product-attributes:reconcile-legacy-values`, a dry-run-first copy-safe command that can apply safe target value rows only for one explicit SKU or product ID. Phase 9C.5.2 adds read-only admin visibility labels for legacy values that have already been fully or partially reconciled. Phase 9C.5.3 adds `product-attributes:seed-cpu-template`, a dry-run-first explicit-apply command for CPU attributes, safe CPU options, and assignments to existing CPU categories. Phase 9C.5.4 adds `product-attributes:audit-category-template-coverage`, a read-only planning command for direct, inherited, and missing category template coverage with no apply mode. Phase 9C.5.5 adds internal taxonomy and supplier category mapping records for pending review; supplier mappings do not apply to products or catalog categories. Phase 9C.5.6 adds a Filament review workflow for supplier category mapping records only; approval/rejection/ignore/reset mutate only `supplier_category_mappings` review metadata and do not apply mappings to products or categories. Phase 9C.5.8 is partial/paused intentionally after 6 approved mappings and 67 pending review mappings so template decisions can wait for a full multi-supplier view. Phase 9C.6 adds `suppliers:audit-discovery`, a read-only multi-supplier staging audit with no apply mode. These phases do not parse supplier XML attributes, do not sync supplier attributes, do not expose frontend filters, and do not automatically mutate existing products or `supplier_products`.
 
 Phase 9C.4.4 adds documentation-only AI agent and safety playbooks. It does not
 add autonomous agents, scheduled AI jobs, background workers, runtime code,
@@ -128,9 +131,10 @@ commands, jobs, observers, or frontend features.
 - Scheduled preview generation before any scheduled writes.
 - English content completion workflow and translation completeness reports.
 - Internal Category Template Assignment Plan.
-- Power/Cables Template Based on Internal Taxonomy.
-- Cases/Protection Template Based on Internal Taxonomy.
-- Peripherals Template Based on Internal Taxonomy.
+- Supplier Import Capability Audit.
+- Add Next Supplier Staging Import, Preview Only.
+- Multi-Supplier Category Mapping Review.
+- Multi-Supplier Identifier Overlap Review.
 - Supplier Attribute Mapping Foundation.
 - Product specification data quality polish.
 - Supplier XML attribute mapping preview.
