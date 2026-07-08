@@ -28,7 +28,7 @@ class SupplierImportCapabilityAuditTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_command_is_registered_without_apply_option(): void
+    public function test_audit_import_capabilities_command_is_registered_without_apply_option(): void
     {
         $commands = Artisan::all();
 
