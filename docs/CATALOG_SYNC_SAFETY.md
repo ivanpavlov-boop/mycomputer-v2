@@ -265,6 +265,47 @@ The only valid output of this phase is reporting: table or JSON supplier
 capability rows, optional static driver/schedule/config/checklist sections, and
 explicit zero-change counters for protected tables.
 
+## Supplier Schedule Safety Cleanup
+
+Phase 9C.6.2 adds `suppliers:cleanup-unsafe-schedules` as a dry-run-first
+supplier configuration safety cleanup before the next supplier staging import.
+
+Suppliers that are active and import-enabled should not keep scheduled imports
+enabled when they have no usable feed/import configuration. Missing feed URL,
+missing import driver, and no staging data together create operational noise and
+risk without producing safe staged data.
+
+The command may inspect the same safe supplier capability data as
+`suppliers:audit-import-capabilities`. By default it is read-only and reports
+which supplier schedules would be disabled.
+
+Apply mode is explicit:
+
+```bash
+php artisan suppliers:cleanup-unsafe-schedules --apply
+```
+
+Apply mode may only set the supplier schedule flag off for suppliers that are:
+
+- active
+- `import_enabled=true`
+- `schedule_enabled=true`
+- missing an active feed URL or missing a configured import driver
+- holding zero staged `supplier_products`
+- classified as `missing_feed_url`, `missing_import_driver`, or
+  `no_staging_data`
+
+The cleanup must not disable the supplier itself, delete feeds, change
+`import_enabled`, run imports, fetch remote feeds, call supplier APIs, dispatch
+queue jobs, call Catalog Sync, expose secrets, or mutate products,
+`supplier_products`, categories, supplier category mappings, canonical families,
+product attributes, attribute values, `product_attribute_values`, or
+`category_product_attributes`.
+
+The only write allowed by explicit apply is the supplier schedule flag and the
+normal model timestamp update for the affected supplier rows. Dry runs and JSON
+output must include protected-table zero-change counters.
+
 ## Phase 9C.4.2 Incident Summary
 
 Before Phase 9C.4.2, an old scheduled supplier import path created three catalog

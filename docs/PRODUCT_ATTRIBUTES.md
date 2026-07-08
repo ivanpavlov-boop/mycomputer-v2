@@ -543,6 +543,35 @@ Safety rules:
 Phase 9C.6.1 does not stage another supplier. That remains a future
 preview-only phase after capability gaps are reviewed.
 
+## Phase 9C.6.2 Supplier Configuration Safety Cleanup
+
+Phase 9C.6.2 adds a dry-run-first supplier schedule cleanup command:
+
+```bash
+php artisan suppliers:cleanup-unsafe-schedules
+php artisan suppliers:cleanup-unsafe-schedules --format=json --only-unsafe
+php artisan suppliers:cleanup-unsafe-schedules --apply --only-unsafe
+```
+
+The command exists because supplier category and attribute planning should wait
+until all suppliers are safely staged and visible. Suppliers that are active,
+import-enabled, scheduled, missing feed/driver configuration, and have no staged
+rows should not continue to produce scheduled import noise while the next
+supplier staging phase is still being prepared.
+
+Dry-run mode reports affected suppliers and protected-table zero-change
+counters. Explicit apply mode may only disable the unsafe supplier schedule flag.
+It does not disable suppliers, delete feeds, change `import_enabled`, run
+imports, fetch feeds, call supplier APIs, dispatch queue jobs, call Catalog
+Sync, mutate products, mutate `supplier_products`, approve or apply supplier
+category mappings, create category templates, or create product attribute
+values.
+
+The Phase 9C.5.8 mapping/template work remains intentionally paused after 6
+approved mappings and 67 `pending_review` mappings until multi-supplier staging
+coverage is safe enough to review broader supplier category and attribute
+patterns.
+
 ## Phase 9C.4 Manual Product Attribute Values
 
 Phase 9C.4 adds a manual Filament workflow for product-specific attribute values.
