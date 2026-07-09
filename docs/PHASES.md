@@ -50,6 +50,7 @@ Phase 8 manual selected UPDATE price/stock sync has been implemented behind a fe
 | Phase 9C.6.1 | Supplier Import Capability Audit | Complete |
 | Phase 9C.6.2 | Supplier Configuration Safety Cleanup | Complete |
 | Phase 9C.6.3 | Add Next Supplier Staging Import, Preview Only | Complete |
+| Phase 9C.6.4 | Controlled Supplier Staging Import Apply for One Supplier | Complete |
 
 ## Paused / Partial Phases
 
@@ -61,9 +62,9 @@ Phase 8 manual selected UPDATE price/stock sync has been implemented behind a fe
 
 | Phase | Name | Notes |
 | --- | --- | --- |
-| Phase 9C.6.4 | Controlled Supplier Staging Import Apply for One Supplier | Future explicit apply phase for one supplier into `supplier_products` staging only. |
-| Phase 9C.6.5 | Multi-Supplier Category Mapping Review | Review mappings in batches using the full multi-supplier picture. |
-| Phase 9C.6.6 | Multi-Supplier Identifier Overlap Review | Review exact and possible overlaps before future offer grouping. |
+| Phase 9C.6.5 | ASBIS Staging Data Discovery Audit | Audit newly staged ASBIS data before broader mapping review. |
+| Phase 9C.6.6 | Multi-Supplier Category Mapping Review | Review mappings in batches using the full multi-supplier picture. |
+| Phase 9C.6.7 | Multi-Supplier Identifier Overlap Review | Review exact and possible overlaps before future offer grouping. |
 | Phase 9C.7 | Supplier Attribute Mapping Foundation | Preview/planning foundation only until a later explicit approval/write phase. |
 | Phase 9C.8 | Product specification data quality polish | Improve admin ergonomics after real queue usage. |
 | Phase 9C.9 | Storefront specification display | Display catalog-owned specs only after controlled data quality. |
@@ -96,6 +97,7 @@ Phase 8 manual selected UPDATE price/stock sync has been implemented behind a fe
 - Use `suppliers:audit-import-capabilities` as a read-only supplier import capability audit. It reports feed readiness, supported static drivers, redacted feed config, schedules, and checklist status, but has no apply mode and must not fetch feeds, dispatch jobs, call Catalog Sync, expose secrets, or mutate protected tables.
 - Use `suppliers:cleanup-unsafe-schedules` as a dry-run-first supplier configuration safety cleanup. Explicit apply may only disable unsafe supplier schedules for active import-enabled suppliers with missing feed/driver configuration and zero staged rows. It must not run imports, fetch feeds, dispatch jobs, call Catalog Sync, mutate catalog data, mutate staging data, or apply supplier mappings.
 - Use `suppliers:preview-staging-import` as a local-file, preview-only parser for the next supplier. It reports detected fields, normalized coverage, identifiers, categories, price/stock coverage, overlaps, row issues, and future staging action labels, but has no apply mode and must not fetch remote feeds, dispatch jobs, call Catalog Sync, mutate staging data, mutate catalog data, or expose supplier feed secrets.
+- Use `suppliers:controlled-staging-import` as the ASBIS-only controlled staging apply command. Dry-run is default; apply requires `--apply --confirm-supplier=asbis` and may write only ASBIS `supplier_products` rows matched by supplier and supplier SKU. It must not fetch remote feeds, dispatch jobs, call Catalog Sync, mutate products/categories/mappings/attributes, enable schedules, or store real feed URLs or credentials.
 - Use `catalog:review-auto-created-products` as a dry-run-first corrective command for the three known products created before the Phase 9C.4.2 supplier import safety hotfix. The command must remain allowlisted, idempotent, and limited to review/status fields.
 - Use the Project AI Agents and Catalog Sync Safety playbooks as process guardrails only; they do not add autonomous agents, jobs, or runtime behavior.
 

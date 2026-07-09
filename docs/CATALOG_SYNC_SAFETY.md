@@ -339,6 +339,55 @@ The only valid output of this phase is reporting: table or JSON summaries,
 preview rows, overlap candidates, issue lists, and explicit zero-change
 counters for protected tables. Real staging writes remain a future phase.
 
+## Controlled Supplier Staging Import Apply Safety
+
+Phase 9C.6.4 adds `suppliers:controlled-staging-import` as the first
+dry-run-first, explicit-apply path for one new supplier after APCOM: ASBIS.
+
+Default behavior is dry-run. Dry-run parses a local XML, CSV, or JSON file,
+reports what would be created or updated in `supplier_products`, reports
+invalid/skipped rows, duplicate supplier SKUs, cross-supplier identifier
+overlaps, and prints protected-table zero-change counters.
+
+Apply mode is intentionally narrow:
+
+```bash
+php artisan suppliers:controlled-staging-import --supplier=asbis --fixture=tests/Fixtures/Suppliers/asbis_staging_import.xml
+php artisan suppliers:controlled-staging-import --supplier=asbis --fixture=tests/Fixtures/Suppliers/asbis_staging_import.xml --apply --confirm-supplier=asbis
+```
+
+Safety rules:
+
+- `--supplier` and a local `--source` or `--fixture` are required.
+- HTTP and HTTPS sources are refused. Remote feed fetching remains disabled.
+- `--apply` requires the exact confirmation `--confirm-supplier=asbis`.
+- Apply is ASBIS-only in this phase.
+- Apply may create or update only ASBIS `supplier_products` rows matched by
+  `supplier_id` plus `supplier_sku`.
+- Apply must not delete supplier products, mark absent rows discontinued, or
+  mark absent rows out of stock.
+- Apply must not change supplier feed URLs, supplier credentials,
+  `schedule_enabled`, `import_enabled`, supplier active state, or supplier
+  schedule configuration.
+- Apply must run in a database transaction and roll back staging writes if the
+  apply fails.
+- Cross-supplier EAN, MPN, or brand+MPN overlaps are report-only and must not
+  link rows or mutate other suppliers.
+- Supplier category names remain staging metadata only.
+- Supplier image URLs may be preserved only as raw staging metadata; images are
+  not downloaded or imported.
+- The command must not dispatch jobs, call Catalog Sync, create catalog
+  products, update catalog products, create categories, apply supplier category
+  mappings, create canonical families, create attributes, create attribute
+  values, or create product attribute values.
+
+Protected-table counters must always show zero changes for products,
+categories, suppliers, supplier category mappings, canonical families, category
+product attributes, product attributes, attribute values, product attribute
+values, and Catalog Sync. In dry-run, `supplier_products` changes must also be
+zero. In explicit apply, `supplier_products` is the only counter allowed to be
+greater than zero.
+
 ## Phase 9C.4.2 Incident Summary
 
 Before Phase 9C.4.2, an old scheduled supplier import path created three catalog
