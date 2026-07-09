@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ProductList>
+    <Product>
+        <ProductID>ASBIS-AMBIG-001</ProductID>
+        <SKU>AMBIG-SKU-001</SKU>
+        <EAN>5902000000001</EAN>
+        <MPN>AMBIG-MPN-001</MPN>
+        <Brand>AmbiguousBrand</Brand>
+        <Name>Ambiguous Product</Name>
+        <Category>Diagnostics</Category>
+    </Product>
+</ProductList>

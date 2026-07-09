@@ -339,6 +339,46 @@ The only valid output of this phase is reporting: table or JSON summaries,
 preview rows, overlap candidates, issue lists, and explicit zero-change
 counters for protected tables. Real staging writes remain a future phase.
 
+## ASBIS Dual-Feed Local Preview Safety
+
+Phase 9C.6.4.1 adds `suppliers:preview-asbis-dual-feed` as a local-only,
+preview-only join diagnostic for ASBIS ProductList and PriceAvail files.
+
+Example:
+
+```bash
+php artisan suppliers:preview-asbis-dual-feed --supplier=asbis --product-list=/path/ProductList.xml --price-avail=/path/PriceAvail.xml
+```
+
+Safety rules:
+
+- `--supplier` is required and must resolve to ASBIS.
+- Both ProductList and PriceAvail inputs must be local files or test fixtures.
+- HTTP and HTTPS sources are refused with a redacted source label. Remote feed
+  fetching, supplier APIs, queues, jobs and scheduled imports are not used.
+- There is no `--apply` option.
+- Join keys are detected in memory from safe candidate identifiers, or can be
+  supplied explicitly with `--product-key` and `--price-key`.
+- Ambiguous or missing join keys are diagnostic issues only and do not crash the
+  command.
+- Output may show field maps, normalized fields, identifiers, categories,
+  unmatched rows, row issues, cross-supplier overlap candidates and future
+  staging action labels.
+- Full supplier feed URLs, secrets, raw long descriptions and full image URLs
+  must not be printed. Image diagnostics are limited to presence and host.
+- Cross-supplier EAN, MPN and brand+MPN overlaps are report-only.
+- ProductList-only and PriceAvail-only rows remain manual-review diagnostics.
+
+The command must not mutate products, suppliers, `supplier_products`,
+categories, supplier category mappings, canonical families, product attributes,
+attribute values, product attribute values, category attribute assignments,
+Catalog Sync batches/logs or schedules. It does not create categories, apply
+supplier mappings, import images, dispatch jobs, call Catalog Sync, add Sync All
+or enable automatic sync.
+
+Protected-table counters must always be zero, including `supplier_products`.
+Controlled ASBIS staging writes remain a later explicit phase.
+
 ## Controlled Supplier Staging Import Apply Safety
 
 Phase 9C.6.4 adds `suppliers:controlled-staging-import` as the first

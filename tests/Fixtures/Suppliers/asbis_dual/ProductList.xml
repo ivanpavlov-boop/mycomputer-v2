@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ProductList>
+    <Product>
+        <ProductID>ASBIS-LAP-001</ProductID>
+        <EAN>5901000000001</EAN>
+        <MPN>ASBIS-MPN-001</MPN>
+        <Brand>TestBrand</Brand>
+        <Name>ASBIS Test Laptop Existing</Name>
+        <Category>Computers / Laptops</Category>
+        <ImageURL>https://cdn.example.invalid/asbis/lap-001.jpg</ImageURL>
+        <Description>Fixture description should never be printed in full.</Description>
+    </Product>
+    <Product>
+        <ProductID>ASBIS-LAP-002</ProductID>
+        <EAN>5901000000002</EAN>
+        <MPN>ASBIS-MPN-002</MPN>
+        <Brand>TestBrand</Brand>
+        <Name>ASBIS Test Laptop New</Name>
+        <Category>Computers / Laptops</Category>
+        <ImageURL>https://cdn.example.invalid/asbis/lap-002.jpg</ImageURL>
+        <Description>Second fixture description should never be printed in full.</Description>
+    </Product>
+    <Product>
+        <ProductID>ASBIS-MPN-ONLY-001</ProductID>
+        <MPN>ASBIS-MPN-ONLY-001</MPN>
+        <Brand>TestBrand</Brand>
+        <Name>ASBIS MPN Only Product</Name>
+        <Category>Components / Motherboards</Category>
+    </Product>
+    <Product>
+        <ProductID>ASBIS-NO-IDS-001</ProductID>
+        <Brand>NoIdBrand</Brand>
+        <Name>ASBIS Missing Identifier Product</Name>
+        <Category>Accessories</Category>
+    </Product>
+    <Product>
+        <ProductID>ASBIS-PRODUCT-ONLY</ProductID>
+        <EAN>5901000000005</EAN>
+        <MPN>ASBIS-PRODUCT-ONLY-MPN</MPN>
+        <Brand>ProductOnlyBrand</Brand>
+        <Name>ASBIS ProductList Only Product</Name>
+        <Category>Accessories</Category>
+    </Product>
+    <Product>
+        <ProductID>ASBIS-DUP-001</ProductID>
+        <EAN>5901000000006</EAN>
+        <MPN>ASBIS-DUP-MPN-001</MPN>
+        <Brand>DuplicateBrand</Brand>
+        <Name>ASBIS Duplicate Product A</Name>
+        <Category>Duplicate Category</Category>
+    </Product>
+    <Product>
+        <ProductID>ASBIS-DUP-001</ProductID>
+        <EAN>5901000000007</EAN>
+        <MPN>ASBIS-DUP-MPN-002</MPN>
+        <Brand>DuplicateBrand</Brand>
+        <Name>ASBIS Duplicate Product B</Name>
+        <Category>Duplicate Category</Category>
+    </Product>
+    <Product>
+        <ProductID>ASBIS-OVERLAP-001</ProductID>
+        <EAN>5909999999999</EAN>
+        <MPN>SHARED-MPN-001</MPN>
+        <Brand>SharedBrand</Brand>
+        <Name>ASBIS Cross Supplier Identifier Product</Name>
+        <Category>Computers / Laptops</Category>
+    </Product>
+    <Product>
+        <ProductID>ASBIS-MISSING-PRICE-001</ProductID>
+        <EAN>5901000000009</EAN>
+        <MPN>ASBIS-MISSING-PRICE-MPN</MPN>
+        <Brand>TestBrand</Brand>
+        <Name>ASBIS Missing Price Product</Name>
+        <Category>Accessories</Category>
+    </Product>
+    <Product>
+        <ProductID>ASBIS-NO-STOCK-001</ProductID>
+        <EAN>5901000000010</EAN>
+        <MPN>ASBIS-NO-STOCK-MPN</MPN>
+        <Brand>TestBrand</Brand>
+        <Name>ASBIS Missing Stock Product</Name>
+        <Category>Accessories</Category>
+    </Product>
+</ProductList>
