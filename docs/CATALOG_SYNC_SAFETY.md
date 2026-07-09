@@ -306,6 +306,39 @@ The only write allowed by explicit apply is the supplier schedule flag and the
 normal model timestamp update for the affected supplier rows. Dry runs and JSON
 output must include protected-table zero-change counters.
 
+## Next Supplier Staging Import Preview Safety
+
+Phase 9C.6.3 adds `suppliers:preview-staging-import` as a preview-only parser
+for local XML, CSV, and JSON supplier feed samples before any next-supplier
+staging import is allowed.
+
+The command may inspect only local source files or explicit test fixtures. It
+reports detected raw fields, normalized field coverage, identifier coverage,
+category coverage, price/stock coverage, possible overlaps with existing
+`supplier_products`, row issues, and future staging action labels such as
+`would_create_supplier_product`, `would_update_supplier_product`, or
+`would_skip_row`.
+
+Safety rules:
+
+- It has no `--apply` option.
+- It refuses HTTP and HTTPS sources.
+- It does not fetch remote feeds or call supplier APIs.
+- It does not run supplier imports.
+- It does not dispatch queue jobs.
+- It does not call Catalog Sync.
+- It does not mutate products, suppliers, `supplier_products`, categories,
+  supplier category mappings, canonical families, product attributes, attribute
+  values, `product_attribute_values`, or `category_product_attributes`.
+- It does not expose feed secrets, raw long descriptions, or full image URLs.
+  Image output is limited to presence and host diagnostics.
+- It does not add admin UI, frontend filters, Sync All, automatic sync,
+  supplier image import, or supplier attribute mapping.
+
+The only valid output of this phase is reporting: table or JSON summaries,
+preview rows, overlap candidates, issue lists, and explicit zero-change
+counters for protected tables. Real staging writes remain a future phase.
+
 ## Phase 9C.4.2 Incident Summary
 
 Before Phase 9C.4.2, an old scheduled supplier import path created three catalog
