@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<PriceAvail>
+    <Price>
+        <ProductID>ASBIS-AMBIG-001</ProductID>
+        <SKU>AMBIG-SKU-001</SKU>
+        <Price>25.00</Price>
+        <Currency>EUR</Currency>
+        <Stock>1</Stock>
+        <Availability>in_stock</Availability>
+    </Price>
+</PriceAvail>

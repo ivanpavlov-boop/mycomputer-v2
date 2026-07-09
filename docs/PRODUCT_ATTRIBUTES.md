@@ -638,6 +638,32 @@ approved mappings and 67 `pending_review` mappings. Mapping review remains
 paused until all suppliers are staged and the multi-supplier category and
 identifier picture can be reviewed safely.
 
+## Phase 9C.6.4.1 ASBIS Dual-Feed Local Preview
+
+Phase 9C.6.4.1 adds a read-only ASBIS ProductList plus PriceAvail join preview:
+
+```bash
+php artisan suppliers:preview-asbis-dual-feed --supplier=asbis --product-list=/path/ProductList.xml --price-avail=/path/PriceAvail.xml
+```
+
+The command reads local XML files only, refuses HTTP/HTTPS sources, detects or
+accepts explicit join keys, joins rows in memory, normalizes identifiers,
+categories, price, stock and availability, and reports future staging action
+labels such as `would_create_supplier_product`,
+`would_update_supplier_product`, `would_skip_row`, and
+`would_need_manual_review`.
+
+ASBIS category names remain supplier staging metadata only. This preview can
+inform later category and attribute decisions, but it does not create catalog
+categories, approve supplier category mappings, create product attributes,
+create attribute values, mutate product attribute values, mutate
+`supplier_products`, call Catalog Sync, import images, enable Sync All or enable
+automatic sync.
+
+Phase 9C.5.8 remains paused until ASBIS and the other planned suppliers are
+staged and reviewed together. Multi-supplier category mapping and supplier
+attribute mapping should not resume from a single-supplier preview alone.
+
 ## Phase 9C.4 Manual Product Attribute Values
 
 Phase 9C.4 adds a manual Filament workflow for product-specific attribute values.
