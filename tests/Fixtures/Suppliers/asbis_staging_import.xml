@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<catalog>
+    <product>
+        <sku>ASBIS-LAP-001</sku>
+        <ean>5901000000001</ean>
+        <mpn>ASBIS-MPN-001</mpn>
+        <brand>TestBook</brand>
+        <name>ASBIS TestBook 14 Laptop</name>
+        <category>Computers / Laptops</category>
+        <price>999.99</price>
+        <stock>12</stock>
+        <availability>in_stock</availability>
+        <currency>EUR</currency>
+    </product>
+    <product>
+        <sku></sku>
+        <ean>5901000000002</ean>
+        <mpn>ASBIS-MPN-MISSING-SKU</mpn>
+        <brand>TestBook</brand>
+        <name>ASBIS Missing SKU Product</name>
+        <category>Computers / Laptops</category>
+        <price>499.00</price>
+        <stock>3</stock>
+        <availability>in_stock</availability>
+        <currency>EUR</currency>
+    </product>
+    <product>
+        <sku>ASBIS-DUP-001</sku>
+        <ean>5901000000003</ean>
+        <mpn>ASBIS-MPN-DUP-A</mpn>
+        <brand>TestBrand</brand>
+        <name>ASBIS Duplicate SKU A</name>
+        <category>Components / Memory</category>
+        <price>49.90</price>
+        <stock>8</stock>
+        <availability>in_stock</availability>
+        <currency>EUR</currency>
+    </product>
+    <product>
+        <sku>ASBIS-DUP-001</sku>
+        <ean>5901000000004</ean>
+        <mpn>ASBIS-MPN-DUP-B</mpn>
+        <brand>TestBrand</brand>
+        <name>ASBIS Duplicate SKU B</name>
+        <category>Components / Memory</category>
+        <price>51.00</price>
+        <stock>9</stock>
+        <availability>in_stock</availability>
+        <currency>EUR</currency>
+    </product>
+    <product>
+        <sku>ASBIS-MPN-ONLY-001</sku>
+        <ean></ean>
+        <mpn>ASBIS-MPN-ONLY-001</mpn>
+        <brand>TestDisplay</brand>
+        <name>ASBIS MPN Only Monitor</name>
+        <category>Displays / Monitors</category>
+        <price>229.00</price>
+        <stock>4</stock>
+        <availability>limited_stock</availability>
+        <currency>EUR</currency>
+    </product>
+    <product>
+        <sku>ASBIS-MISSING-COMMERCIAL-001</sku>
+        <ean>5901000000005</ean>
+        <mpn>ASBIS-MPN-MISSING-COMMERCIAL</mpn>
+        <brand>TestStorage</brand>
+        <name>ASBIS Missing Price Stock</name>
+        <category>Storage / SSD</category>
+        <price></price>
+        <stock></stock>
+        <availability></availability>
+        <currency>EUR</currency>
+    </product>
+    <product>
+        <sku>ASBIS-OVERLAP-001</sku>
+        <ean>5909999999999</ean>
+        <mpn>SHARED-MPN-001</mpn>
+        <brand>SharedBrand</brand>
+        <name>ASBIS Cross Supplier Overlap</name>
+        <category>Accessories / Docking</category>
+        <price>149.00</price>
+        <stock>7</stock>
+        <availability>in_stock</availability>
+        <currency>EUR</currency>
+    </product>
+</catalog>

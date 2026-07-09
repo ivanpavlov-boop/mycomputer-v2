@@ -1,0 +1,16 @@
+{
+  "products": [
+    {
+      "sku": "ASBIS-JSON-001",
+      "ean": "5903000000001",
+      "mpn": "ASBIS-JSON-MPN-001",
+      "brand": "TestJson",
+      "name": "ASBIS JSON Product",
+      "category": "Computers / Mini PCs",
+      "price": "299.00",
+      "stock": "11",
+      "availability": "in_stock",
+      "currency": "EUR"
+    }
+  ]
+}

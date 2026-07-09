@@ -1,0 +1,8 @@
+sku,ean,mpn,brand,name,category,price,stock,availability,currency
+ASBIS-LAP-CSV-001,5902000000001,ASBIS-CSV-MPN-001,TestBook,ASBIS CSV Laptop,Computers / Laptops,899.00,5,in_stock,EUR
+,5902000000002,ASBIS-CSV-MISSING-SKU,TestBook,ASBIS CSV Missing SKU,Computers / Laptops,399.00,2,in_stock,EUR
+ASBIS-CSV-DUP-001,5902000000003,ASBIS-CSV-DUP-A,TestBrand,ASBIS CSV Duplicate A,Components / Memory,39.90,6,in_stock,EUR
+ASBIS-CSV-DUP-001,5902000000004,ASBIS-CSV-DUP-B,TestBrand,ASBIS CSV Duplicate B,Components / Memory,41.00,7,in_stock,EUR
+ASBIS-CSV-MPN-ONLY-001,,ASBIS-CSV-MPN-ONLY-001,TestDisplay,ASBIS CSV MPN Only Monitor,Displays / Monitors,199.00,3,limited_stock,EUR
+ASBIS-CSV-MISSING-COMMERCIAL-001,5902000000005,ASBIS-CSV-MISSING-COMMERCIAL,TestStorage,ASBIS CSV Missing Price Stock,Storage / SSD,,,EUR
+ASBIS-CSV-OVERLAP-001,5909999999999,SHARED-MPN-001,SharedBrand,ASBIS CSV Cross Supplier Overlap,Accessories / Docking,129.00,4,in_stock,EUR

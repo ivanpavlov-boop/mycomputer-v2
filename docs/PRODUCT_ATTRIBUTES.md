@@ -613,6 +613,31 @@ The next planned supplier phase is a controlled one-supplier staging apply into
 `supplier_products` only. It must be separately requested, preview-first, safe,
 tested, and must not write catalog products directly.
 
+## Phase 9C.6.4 Controlled ASBIS Staging Import Apply
+
+Phase 9C.6.4 adds a controlled ASBIS-only staging apply command:
+
+```bash
+php artisan suppliers:controlled-staging-import --supplier=asbis --fixture=tests/Fixtures/Suppliers/asbis_staging_import.xml
+php artisan suppliers:controlled-staging-import --supplier=asbis --fixture=tests/Fixtures/Suppliers/asbis_staging_import.xml --apply --confirm-supplier=asbis
+```
+
+The command is dry-run by default. It accepts only local source files or local
+fixtures and refuses remote HTTP/HTTPS feeds. Apply mode requires explicit
+supplier confirmation and may write only ASBIS rows in `supplier_products`.
+
+ASBIS supplier categories, identifiers, prices, stock, availability, and raw
+payload data remain staging metadata. The command does not create catalog
+products, categories, category templates, product attributes, attribute values,
+product attribute values, supplier category mappings, or canonical families. It
+does not call Catalog Sync, dispatch jobs, enable schedules, store feed URLs, or
+download supplier images.
+
+The Phase 9C.5.8 mapping/template work remains intentionally paused after 6
+approved mappings and 67 `pending_review` mappings. Mapping review remains
+paused until all suppliers are staged and the multi-supplier category and
+identifier picture can be reviewed safely.
+
 ## Phase 9C.4 Manual Product Attribute Values
 
 Phase 9C.4 adds a manual Filament workflow for product-specific attribute values.
