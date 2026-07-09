@@ -1,0 +1,5 @@
+sku,ean,mpn,brand,name,category,price,stock,availability,currency,image
+CSV-LAP-001,5900000000101,CSV-MPN-001,CSVBrand,CSV Preview Laptop,Laptops > Consumer,899.00,5,in_stock,EUR,https://images.example.test/csv-laptop.jpg
+CSV-MON-001,5900000000102,CSV-MPN-002,CSVDisplay,CSV Preview Monitor,Monitors,219.99,0,out_of_stock,EUR,
+CSV-MON-002,,CSV-MPN-002,CSVDisplay,CSV Preview Monitor Variant,Monitors,229.99,3,limited_stock,EUR,
+CSV-MISSING-SKU,,,,CSV Missing Data,,,,,,

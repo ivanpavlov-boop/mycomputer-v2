@@ -572,6 +572,47 @@ approved mappings and 67 `pending_review` mappings until multi-supplier staging
 coverage is safe enough to review broader supplier category and attribute
 patterns.
 
+## Phase 9C.6.3 Next Supplier Staging Import Preview
+
+Phase 9C.6.3 adds a read-only next-supplier feed preview command:
+
+```bash
+php artisan suppliers:preview-staging-import
+php artisan suppliers:preview-staging-import --fixture=tests/Fixtures/Suppliers/next_supplier_preview.xml --source-type=xml --format=json
+php artisan suppliers:preview-staging-import --fixture=tests/Fixtures/Suppliers/next_supplier_preview.csv --source-type=csv --show-identifiers --show-categories --show-issues
+php artisan suppliers:preview-staging-import --fixture=tests/Fixtures/Suppliers/next_supplier_preview.json --source-type=json --format=json
+```
+
+The command parses local XML, CSV, and JSON source samples only. It reports raw
+field names, normalized field coverage, identifier coverage, category coverage,
+price/stock coverage, duplicate/missing-data issues, safe overlap diagnostics
+against existing `supplier_products`, and future staging action labels. Those
+labels are planning output only; no staging row is created or updated.
+
+Safety rules:
+
+- It has no `--apply` option.
+- It refuses HTTP and HTTPS sources.
+- It does not fetch remote feeds or call supplier APIs.
+- It does not run supplier imports or dispatch jobs.
+- It does not call Catalog Sync.
+- It does not mutate products, `supplier_products`, suppliers, categories,
+  supplier category mappings, canonical families, product attributes, attribute
+  values, product attribute values, or category attribute assignments.
+- It does not expose supplier feed secrets, full image URLs, or long raw
+  descriptions.
+- It does not add admin UI, frontend filters, supplier image import, supplier
+  XML attribute mapping, Sync All, automatic sync, or UPDATE enablement.
+
+The Phase 9C.5.8 mapping/template work remains intentionally paused after 6
+approved mappings and 67 `pending_review` mappings. Future category templates
+and supplier attribute mapping should continue to wait for broader supplier
+coverage and review.
+
+The next planned supplier phase is a controlled one-supplier staging apply into
+`supplier_products` only. It must be separately requested, preview-first, safe,
+tested, and must not write catalog products directly.
+
 ## Phase 9C.4 Manual Product Attribute Values
 
 Phase 9C.4 adds a manual Filament workflow for product-specific attribute values.

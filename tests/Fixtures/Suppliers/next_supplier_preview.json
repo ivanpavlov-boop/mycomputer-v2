@@ -1,0 +1,16 @@
+{
+  "products": [
+    {
+      "sku": "JSON-LAP-001",
+      "ean": "5900000000201",
+      "mpn": "JSON-MPN-001",
+      "brand": "JsonBrand",
+      "name": "JSON Preview Laptop",
+      "category": "Laptops",
+      "price": "999.00",
+      "stock": "4",
+      "availability": "in_stock",
+      "currency": "EUR"
+    }
+  ]
+}

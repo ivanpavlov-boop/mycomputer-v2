@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<products>
+    <product>
+        <sku>NSP-LAP-001</sku>
+        <ean>5900000000001</ean>
+        <mpn>NSP-MPN-001</mpn>
+        <brand>FuturaTech</brand>
+        <name>FuturaTech Preview Laptop 14</name>
+        <category>Laptops &gt; Business</category>
+        <price>1299.90</price>
+        <stock>12</stock>
+        <availability>in_stock</availability>
+        <currency>EUR</currency>
+        <vat>20</vat>
+        <image>https://images.example.test/futura-laptop-14.jpg</image>
+        <description>Fake preview product used for staging import safety tests.</description>
+    </product>
+    <product>
+        <sku>NSP-MON-001</sku>
+        <ean>5900000000002</ean>
+        <mpn>NSP-MPN-002</mpn>
+        <brand>PixelForge</brand>
+        <name>PixelForge Preview Monitor 27</name>
+        <category>Monitors</category>
+        <price>349.50</price>
+        <stock>7</stock>
+        <availability>limited_stock</availability>
+        <currency>EUR</currency>
+    </product>
+    <product>
+        <sku>NSP-MON-001</sku>
+        <ean>5900000000002</ean>
+        <mpn>NSP-MPN-002</mpn>
+        <brand>PixelForge</brand>
+        <name>PixelForge Preview Monitor Duplicate</name>
+        <category>Monitors</category>
+        <price>349.50</price>
+        <stock>7</stock>
+        <availability>limited_stock</availability>
+        <currency>EUR</currency>
+    </product>
+    <product>
+        <sku>NSP-NO-PRICE</sku>
+        <ean></ean>
+        <mpn></mpn>
+        <brand></brand>
+        <name>Preview Product Missing Data</name>
+        <category></category>
+        <price></price>
+        <stock></stock>
+        <availability></availability>
+        <currency>EUR</currency>
+    </product>
+</products>
