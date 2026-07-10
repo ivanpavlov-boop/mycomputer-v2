@@ -17,6 +17,12 @@ class AsbisDualFeedPreviewService
 
     private const SUPPLIER_KEY = 'asbis';
 
+    private const ASBIS_AVAILABILITY_MAP = [
+        'да' => 'in_stock',
+        'ограничено' => 'limited_stock',
+        'по заявка' => 'on_request',
+    ];
+
     private const JOIN_KEY_ALIASES = [
         'product_id',
         'productid',
@@ -689,6 +695,14 @@ class AsbisDualFeedPreviewService
         $priceRaw = $this->cleanValue($this->mappedValue($priceRow ?? [], $priceFieldMap['price'] ?? null))
             ?: $this->cleanValue($this->mappedValue($priceRow ?? [], $priceFieldMap['retail_price'] ?? null));
         $stockRaw = $this->cleanValue($this->mappedValue($priceRow ?? [], $priceFieldMap['stock'] ?? null));
+        $availabilityRaw = $this->cleanValue($this->mappedValue($priceRow ?? [], $priceFieldMap['availability'] ?? null));
+        $stockUsesAvailabilitySource = $this->sameMappedSource($priceFieldMap['stock'] ?? null, $priceFieldMap['availability'] ?? null);
+        $stock = $this->integerValue($stockRaw);
+        $normalizedAvailability = $this->normalizeAsbisAvailability($availabilityRaw);
+        $availability = $normalizedAvailability
+            ?? ($stockUsesAvailabilitySource && $this->hasValue($availabilityRaw) && ! $this->hasValue($stock)
+                ? null
+                : $availabilityRaw);
         $productImageUrl = $this->cleanValue($this->mappedValue($productRow ?? [], $productFieldMap['image_url'] ?? null))
             ?: $this->cleanValue($this->mappedAliasValue($productRow ?? [], ['Images.Image', 'Image', 'ImageURL']));
         $priceImageUrl = $this->cleanValue($this->mappedValue($priceRow ?? [], $priceFieldMap['image_url'] ?? null))
@@ -716,8 +730,10 @@ class AsbisDualFeedPreviewService
                 ?: $this->cleanValue($this->mappedValue($priceRow ?? [], $priceFieldMap['category'] ?? null)),
             'price' => $this->decimalValue($priceRaw),
             'currency' => $this->cleanValue($this->mappedValue($priceRow ?? [], $priceFieldMap['currency'] ?? null)),
-            'stock' => $this->integerValue($stockRaw),
-            'availability' => $this->cleanValue($this->mappedValue($priceRow ?? [], $priceFieldMap['availability'] ?? null)),
+            'stock' => $stock,
+            'availability' => $availability,
+            'raw_availability' => $availabilityRaw,
+            'supplier_availability_label' => $availabilityRaw,
             'vat' => $this->cleanValue($this->mappedValue($priceRow ?? [], $priceFieldMap['vat'] ?? null)),
             'image_url_present' => $this->hasValue($imageUrl),
             'image_url_host' => $this->imageHost($imageUrl),
@@ -731,7 +747,7 @@ class AsbisDualFeedPreviewService
             'issues' => [],
         ];
 
-        $row['issues'] = $this->rowIssues($row, $preIssues, $priceRaw, $stockRaw);
+        $row['issues'] = $this->rowIssues($row, $preIssues, $priceRaw, $stockRaw, $availabilityRaw, $stockUsesAvailabilitySource);
         $row['same_supplier_sku_match'] = $this->sameSupplierSkuMatch($supplier, $row['supplier_sku']);
         $row['future_staging_action'] = $this->futureAction($row);
         $row['needs_manual_review'] = $row['future_staging_action'] === 'would_need_manual_review';
@@ -744,7 +760,7 @@ class AsbisDualFeedPreviewService
      * @param  array<int, string>  $preIssues
      * @return array<int, string>
      */
-    private function rowIssues(array $row, array $preIssues, ?string $priceRaw, ?string $stockRaw): array
+    private function rowIssues(array $row, array $preIssues, ?string $priceRaw, ?string $stockRaw, ?string $availabilityRaw, bool $stockUsesAvailabilitySource): array
     {
         $issues = $preIssues;
 
@@ -784,7 +800,11 @@ class AsbisDualFeedPreviewService
             $issues[] = 'missing_stock_availability';
         }
 
-        if ($this->hasValue($stockRaw) && ! $this->hasValue($row['stock'] ?? null)) {
+        if ($stockUsesAvailabilitySource && $this->hasValue($availabilityRaw) && ! $this->hasValue($row['stock'] ?? null) && ! $this->hasValue($row['availability'] ?? null)) {
+            $issues[] = 'unknown_availability';
+        }
+
+        if (! $stockUsesAvailabilitySource && $this->hasValue($stockRaw) && ! $this->hasValue($row['stock'] ?? null)) {
             $issues[] = 'invalid_stock';
         }
 
@@ -942,6 +962,8 @@ class AsbisDualFeedPreviewService
                     'currency' => $row['currency'],
                     'stock' => $row['stock'],
                     'availability' => $row['availability'],
+                    'raw_availability' => $row['raw_availability'],
+                    'supplier_availability_label' => $row['supplier_availability_label'],
                     'vat' => $row['vat'],
                     'image_url_present' => $row['image_url_present'],
                     'image_url_host' => $row['image_url_host'],
@@ -975,6 +997,8 @@ class AsbisDualFeedPreviewService
                             'currency',
                             'stock',
                             'availability',
+                            'raw_availability',
+                            'supplier_availability_label',
                             'vat',
                         ])
                         ->all();
@@ -1229,6 +1253,17 @@ class AsbisDualFeedPreviewService
         return $value === '' ? null : $value;
     }
 
+    private function normalizeAsbisAvailability(?string $value): ?string
+    {
+        if ($value === null) {
+            return null;
+        }
+
+        $normalized = mb_strtolower(trim(preg_replace('/\s+/u', ' ', $value) ?? $value));
+
+        return self::ASBIS_AVAILABILITY_MAP[$normalized] ?? null;
+    }
+
     private function decimalValue(?string $value): ?float
     {
         if ($value === null) {
@@ -1249,6 +1284,11 @@ class AsbisDualFeedPreviewService
         $normalized = preg_replace('/[^0-9\-]/', '', $value) ?? '';
 
         return is_numeric($normalized) ? (int) $normalized : null;
+    }
+
+    private function sameMappedSource(?string $left, ?string $right): bool
+    {
+        return $left !== null && $right !== null && $left === $right;
     }
 
     private function imageHost(?string $url): ?string

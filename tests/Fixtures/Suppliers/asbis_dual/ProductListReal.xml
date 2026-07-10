@@ -28,11 +28,35 @@
         <ProductType>Dock</ProductType>
     </Product>
     <Product>
+        <ProductCode>ASBIS-REAL-003</ProductCode>
+        <Vendor>RequestBrand</Vendor>
+        <ProductCategory>Accessories / Special Order</ProductCategory>
+        <ProductDescription>Special order ASBIS product</ProductDescription>
+        <ProductCard>https://example.invalid/products/real-003</ProductCard>
+        <ProductType>Accessory</ProductType>
+    </Product>
+    <Product>
         <ProductCode>ASBIS-REAL-PRODUCT-ONLY</ProductCode>
         <Vendor>ProductOnlyBrand</Vendor>
         <ProductCategory>Accessories</ProductCategory>
         <ProductDescription>Product-only ASBIS row</ProductDescription>
         <ProductCard>https://example.invalid/products/product-only</ProductCard>
         <ProductType>Adapter</ProductType>
+    </Product>
+    <Product>
+        <ProductCode>ASBIS-REAL-UNKNOWN-AVAIL</ProductCode>
+        <Vendor>UnknownAvailabilityBrand</Vendor>
+        <ProductCategory>Accessories</ProductCategory>
+        <ProductDescription>Unknown availability ASBIS row</ProductDescription>
+        <ProductCard>https://example.invalid/products/unknown-availability</ProductCard>
+        <ProductType>Accessory</ProductType>
+    </Product>
+    <Product>
+        <ProductCode>ASBIS-REAL-MISSING-AVAIL</ProductCode>
+        <Vendor>MissingAvailabilityBrand</Vendor>
+        <ProductCategory>Accessories</ProductCategory>
+        <ProductDescription>Missing availability ASBIS row</ProductDescription>
+        <ProductCard>https://example.invalid/products/missing-availability</ProductCard>
+        <ProductType>Accessory</ProductType>
     </Product>
 </ProductCatalog>
