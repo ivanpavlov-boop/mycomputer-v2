@@ -411,6 +411,40 @@ Phase 9C.6.4.2 remains blocked until the full-file audit completes, source
 fingerprints and exact readiness counts are reviewed, duplicate join-key
 blockers are resolved, and explicit manual approval is given.
 
+## ASBIS Audit Consistency and Missing-Key Safety
+
+Phase 9C.6.4.1d keeps the full-file ASBIS audit read-only while making its
+reports internally consistent. ProductCode, WIC, EAN, MPN and brand+MPN values
+are normalized canonically: whitespace and empty values become null, while
+EAN leading zeroes are preserved. Null or empty identifiers are never indexed,
+compared, or reported as overlap groups.
+
+Cross-supplier overlap sections report both distinct overlap groups and the
+number of affected ASBIS rows. The summary, identifier audit, overlap audit,
+readiness warnings and issue counts use the same canonical intersections; a
+large set of identifiers belonging only to another supplier is not reported as
+an ASBIS overlap.
+
+ProductList rows without ProductCode and PriceAvail rows without WIC are not
+joined or classified as product-only/price-only rows. They are blocked with
+`missing_product_code` or `missing_wic` plus `missing_supplier_sku` as
+appropriate. Missing names are also blockers, and one row may report both a
+missing join key and `missing_name`.
+
+The audit exposes reconciliation details for physical rows, indexed rows,
+unique join keys, valid product-only/price-only keys, missing keys, duplicate
+affected rows and malformed rows. `reconciliation_valid` must be true before a
+completed audit can receive a clean readiness verdict. Primary readiness
+counters remain mutually exclusive: candidates are ready-to-create,
+ready-to-update or ready-with-warning; exclusions are hard blockers, manual
+review, valid unmatched product-only and valid unmatched price-only buckets.
+`apply_excluded_count` is the sum of those exclusion buckets and is an audit
+counter only.
+
+Phase 9C.6.4.2 remains blocked until a corrected, internally consistent audit
+has been deployed and rerun against reviewed local/source fingerprints, with
+duplicate and missing-key blockers resolved and explicit manual approval given.
+
 ## Controlled Supplier Staging Import Apply Safety
 
 Phase 9C.6.4 adds `suppliers:controlled-staging-import` as the first

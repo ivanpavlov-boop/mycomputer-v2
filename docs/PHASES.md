@@ -53,6 +53,7 @@ Phase 8 manual selected UPDATE price/stock sync has been implemented behind a fe
 | Phase 9C.6.4 | Controlled Supplier Staging Import Apply for One Supplier | Complete |
 | Phase 9C.6.4.1 | ASBIS Dual-Feed Local Preview and Join | Complete |
 | Phase 9C.6.4.1c | ASBIS Full-File Streaming Preview and Apply Readiness Audit | Complete; read-only streaming audit with source fingerprints and no apply mode. |
+| Phase 9C.6.4.1d | ASBIS Audit Consistency and Missing-Key Safety | Complete; canonical identifier overlaps, missing-key blockers and reconciliation remain read-only. |
 
 ## Paused / Partial Phases
 
@@ -103,6 +104,7 @@ Phase 8 manual selected UPDATE price/stock sync has been implemented behind a fe
 - Use `suppliers:controlled-staging-import` as the ASBIS-only controlled staging apply command. Dry-run is default; apply requires `--apply --confirm-supplier=asbis` and may write only ASBIS `supplier_products` rows matched by supplier and supplier SKU. It must not fetch remote feeds, dispatch jobs, call Catalog Sync, mutate products/categories/mappings/attributes, enable schedules, or store real feed URLs or credentials.
 - Use `suppliers:preview-asbis-dual-feed` as a local-only ASBIS ProductList plus PriceAvail join preview. It reports join confidence, normalized rows, unmatched rows, overlap candidates, row issues, and future staging action labels, but has no apply mode and must not fetch remote feeds, dispatch jobs, call Catalog Sync, mutate `supplier_products`, mutate catalog data, create categories, apply mappings, import images, or expose secrets.
 - Use `suppliers:audit-asbis-apply-readiness` for a complete local-file streaming audit with exact readiness counts, bounded samples and SHA-256 source fingerprints. Its verdict is advisory only; it has no apply mode and must keep all protected change counters at zero.
+- The ASBIS readiness audit must normalize empty identifiers to null, preserve EAN leading zeroes, report overlap groups separately from affected rows, block missing ProductCode/WIC/name rows, and expose reconciliation before any future controlled staging apply is considered.
 - Use `catalog:review-auto-created-products` as a dry-run-first corrective command for the three known products created before the Phase 9C.4.2 supplier import safety hotfix. The command must remain allowlisted, idempotent, and limited to review/status fields.
 - Use the Project AI Agents and Catalog Sync Safety playbooks as process guardrails only; they do not add autonomous agents, jobs, or runtime behavior.
 

@@ -156,6 +156,76 @@ class AsbisApplyReadinessTest extends TestCase
     }
 
     /**
+     * @throws JsonException
+     */
+    public function test_audit_uses_canonical_overlap_and_blocks_missing_keys_and_names(): void
+    {
+        Http::fake();
+        Queue::fake();
+        Bus::fake();
+
+        $asbis = Supplier::factory()->create(['company_name' => 'ASBIS', 'slug' => 'asbis']);
+        $other = Supplier::factory()->create(['company_name' => 'Other', 'slug' => 'other']);
+        $this->supplierProduct($other, [
+            'supplier_sku' => 'OTHER-EAN-001',
+            'ean' => '00000123',
+            'mpn' => null,
+            'brand_name' => 'Other Brand',
+        ]);
+        $counts = $this->protectedCounts();
+        [$productPath, $pricePath] = $this->writeConsistencyFixtures();
+
+        try {
+            $payload = $this->commandJson([
+                '--supplier' => $asbis->slug,
+                '--product-list-fixture' => $productPath,
+                '--price-avail-fixture' => $pricePath,
+                '--format' => 'json',
+            ]);
+        } finally {
+            @unlink($productPath);
+            @unlink($pricePath);
+        }
+
+        $this->assertTrue($payload['success']);
+        $this->assertTrue($payload['reconciliation']['reconciliation_valid']);
+        $this->assertSame([], $payload['reconciliation']['reconciliation_issues']);
+        $this->assertSame(3, $payload['identifier_audit']['product_code_rows']);
+        $this->assertSame(2, $payload['identifier_audit']['product_code_present_rows']);
+        $this->assertSame(1, $payload['identifier_audit']['product_code_missing_rows']);
+        $this->assertSame(3, $payload['identifier_audit']['wic_rows']);
+        $this->assertSame(2, $payload['identifier_audit']['wic_present_rows']);
+        $this->assertSame(1, $payload['identifier_audit']['wic_missing_rows']);
+        $this->assertSame(1, $payload['identifier_audit']['cross_supplier_ean_overlap_groups']);
+        $this->assertSame(1, $payload['identifier_audit']['cross_supplier_ean_overlap_affected_rows']);
+        $this->assertSame(0, $payload['identifier_audit']['cross_supplier_mpn_overlap_groups']);
+        $this->assertSame(0, $payload['identifier_audit']['cross_supplier_brand_mpn_overlap_groups']);
+        $this->assertSame(1, $payload['overlap_audit']['ean_overlap_groups']);
+        $this->assertSame(1, $payload['overlap_audit']['ean_overlap_affected_rows']);
+        $this->assertSame(0, $payload['overlap_audit']['mpn_overlap_groups']);
+        $this->assertSame(0, $payload['overlap_audit']['brand_mpn_overlap_groups']);
+        $this->assertSame(1, $payload['summary']['ready_with_warning']);
+        $this->assertSame(3, $payload['summary']['hard_blocker_count']);
+        $this->assertSame(0, $payload['summary']['manual_review_count']);
+        $this->assertSame(0, $payload['summary']['unmatched_count']);
+        $this->assertSame(3, $payload['summary']['apply_excluded_count']);
+        $this->assertSame(1, $payload['summary']['apply_candidate_count']);
+        $this->assertSame(1, $payload['issue_counts']['missing_product_code']);
+        $this->assertSame(1, $payload['issue_counts']['missing_wic']);
+        $this->assertSame(2, $payload['issue_counts']['missing_name']);
+        $this->assertTrue($payload['summary']['reconciliation_valid']);
+
+        $missingKeySamples = collect($payload['manual_review_samples'])
+            ->filter(fn (array $row): bool => ($row['missing_product_code'] ?? false) || ($row['missing_wic'] ?? false));
+
+        $this->assertCount(2, $missingKeySamples);
+        $this->assertSame($counts, $this->protectedCounts());
+        Http::assertNothingSent();
+        Queue::assertNothingPushed();
+        Bus::assertNothingDispatched();
+    }
+
+    /**
      * @param  array<string, mixed>  $arguments
      * @return array<string, mixed>
      *
@@ -215,5 +285,68 @@ class AsbisApplyReadinessTest extends TestCase
     private function tableCount(string $table): int
     {
         return Schema::hasTable($table) ? DB::table($table)->count() : 0;
+    }
+
+    /**
+     * @return array{0: string, 1: string}
+     */
+    private function writeConsistencyFixtures(): array
+    {
+        $productPath = tempnam(sys_get_temp_dir(), 'asbis-product-');
+        $pricePath = tempnam(sys_get_temp_dir(), 'asbis-price-');
+
+        file_put_contents($productPath, <<<'XML'
+<?xml version="1.0" encoding="UTF-8"?>
+<ProductCatalog>
+    <Product>
+        <ProductCode>A001</ProductCode>
+        <Vendor>Canonical Brand</Vendor>
+        <ProductDescription>Valid product</ProductDescription>
+        <EAN>00000123</EAN>
+    </Product>
+    <Product>
+        <ProductCode>A002</ProductCode>
+        <Vendor>Missing Name Brand</Vendor>
+        <ProductDescription></ProductDescription>
+        <EAN>00000222</EAN>
+    </Product>
+    <Product>
+        <ProductCode></ProductCode>
+        <Vendor>Missing Key Brand</Vendor>
+        <ProductDescription></ProductDescription>
+    </Product>
+</ProductCatalog>
+XML);
+
+        file_put_contents($pricePath, <<<'XML'
+<?xml version="1.0" encoding="UTF-8"?>
+<CONTENT>
+    <PRICE>
+        <WIC>A001</WIC>
+        <MY_PRICE>10.00</MY_PRICE>
+        <CURRENCY_CODE>EUR</CURRENCY_CODE>
+        <AVAIL>In Stock</AVAIL>
+        <EAN>00000123</EAN>
+        <DESCRIPTION>Valid price name</DESCRIPTION>
+    </PRICE>
+    <PRICE>
+        <WIC>A002</WIC>
+        <MY_PRICE>20.00</MY_PRICE>
+        <CURRENCY_CODE>EUR</CURRENCY_CODE>
+        <AVAIL>In Stock</AVAIL>
+        <EAN>00000222</EAN>
+        <DESCRIPTION></DESCRIPTION>
+    </PRICE>
+    <PRICE>
+        <WIC></WIC>
+        <MY_PRICE>30.00</MY_PRICE>
+        <CURRENCY_CODE>EUR</CURRENCY_CODE>
+        <AVAIL>In Stock</AVAIL>
+        <DESCRIPTION>Missing WIC row</DESCRIPTION>
+    </PRICE>
+</CONTENT>
+XML);
+
+        return [$productPath, $pricePath];
     }
 }
