@@ -664,6 +664,17 @@ Phase 9C.5.8 remains paused until ASBIS and the other planned suppliers are
 staged and reviewed together. Multi-supplier category mapping and supplier
 attribute mapping should not resume from a single-supplier preview alone.
 
+### Phase 9C.6.4.1c Full-File Audit Boundary
+
+The ASBIS full-file streaming audit reports category/content coverage and
+identifier quality for future planning only. Supplier categories remain staging
+metadata and do not create or assign catalog categories, templates, product
+attributes, attribute values or product attribute values.
+
+Mapping review remains paused at 6 approved mappings and 67 `pending_review`
+mappings. The audit does not approve, reject, ignore or apply mappings. It must
+complete and be reviewed before Phase 9C.6.4.2 can be considered.
+
 ## Phase 9C.4 Manual Product Attribute Values
 
 Phase 9C.4 adds a manual Filament workflow for product-specific attribute values.

@@ -8,7 +8,6 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
-use SimpleXMLElement;
 use Throwable;
 
 class AsbisDualFeedPreviewService
@@ -68,6 +67,8 @@ class AsbisDualFeedPreviewService
         'currency' => ['currency_code', 'price_currency_code', 'currency', 'curr'],
         'vat' => ['vat', 'vat_rate', 'tax', 'tax_rate'],
     ];
+
+    public function __construct(private readonly AsbisXmlStreamReader $xmlReader) {}
 
     /**
      * @param  array<string, mixed>  $options
@@ -135,8 +136,8 @@ class AsbisDualFeedPreviewService
         }
 
         try {
-            $productRows = $this->parseXmlRows((string) $productSource['path'])->take($maxRows)->values();
-            $priceRows = $this->parseXmlRows((string) $priceSource['path'])->take($maxRows)->values();
+            $productRows = $this->parseXmlRows((string) $productSource['path'], 'Product', $maxRows);
+            $priceRows = $this->parseXmlRows((string) $priceSource['path'], 'Price', $maxRows);
         } catch (Throwable $exception) {
             return $this->failure(
                 'parse_error',
@@ -299,62 +300,9 @@ class AsbisDualFeedPreviewService
     /**
      * @return Collection<int, array<string, mixed>>
      */
-    private function parseXmlRows(string $path): Collection
+    private function parseXmlRows(string $path, string $rowElement, int $maxRows): Collection
     {
-        $contents = file_get_contents($path);
-
-        if ($contents === false) {
-            return collect();
-        }
-
-        $previous = libxml_use_internal_errors(true);
-        $xml = simplexml_load_string($contents, SimpleXMLElement::class, LIBXML_NONET | LIBXML_NOCDATA);
-        libxml_clear_errors();
-        libxml_use_internal_errors($previous);
-
-        if (! $xml instanceof SimpleXMLElement) {
-            return collect();
-        }
-
-        $nodes = collect($xml->xpath('//*[translate(local-name(), "ABCDEFGHIJKLMNOPQRSTUVWXYZ", "abcdefghijklmnopqrstuvwxyz") = "product" or translate(local-name(), "ABCDEFGHIJKLMNOPQRSTUVWXYZ", "abcdefghijklmnopqrstuvwxyz") = "item" or translate(local-name(), "ABCDEFGHIJKLMNOPQRSTUVWXYZ", "abcdefghijklmnopqrstuvwxyz") = "row" or translate(local-name(), "ABCDEFGHIJKLMNOPQRSTUVWXYZ", "abcdefghijklmnopqrstuvwxyz") = "price"]') ?: []);
-
-        if ($nodes->isEmpty()) {
-            $nodes = collect($xml->children());
-        }
-
-        return $nodes
-            ->map(fn (SimpleXMLElement $node): array => $this->flattenXml($node))
-            ->filter(fn (array $row): bool => $row !== [])
-            ->values();
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private function flattenXml(SimpleXMLElement $node, string $prefix = ''): array
-    {
-        $row = [];
-
-        foreach ($node->attributes() as $key => $value) {
-            $row[trim($prefix.'attr_'.$key, '.')] = trim((string) $value);
-        }
-
-        foreach ($node->children() as $key => $child) {
-            $field = trim($prefix.$key, '.');
-
-            if ($child->children()->count() > 0) {
-                $row = array_merge($row, $this->flattenXml($child, $field.'.'));
-
-                continue;
-            }
-
-            $value = trim((string) $child);
-            $row[$field] = array_key_exists($field, $row) && filled($row[$field])
-                ? $row[$field].' | '.$value
-                : $value;
-        }
-
-        return $row;
+        return collect($this->xmlReader->read($path, $rowElement, $maxRows)['rows'])->values();
     }
 
     /**

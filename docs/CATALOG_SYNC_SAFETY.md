@@ -379,6 +379,38 @@ or enable automatic sync.
 Protected-table counters must always be zero, including `supplier_products`.
 Controlled ASBIS staging writes remain a later explicit phase.
 
+## ASBIS Full-File Streaming Readiness Audit
+
+Phase 9C.6.4.1c extends the local dual-feed preview with `--full-file` and adds
+`suppliers:audit-asbis-apply-readiness`. Both paths use `XMLReader` to stream
+repeated `ProductCatalog > Product` and `CONTENT > PRICE` rows. Full-file mode
+does not apply the bounded preview's 5,000-row cap.
+
+The readiness audit is advisory and read-only. It reports exact full-file join,
+identifier, availability, pricing, category/content coverage and readiness
+counts. It also records the local ProductList and PriceAvail file sizes and
+SHA-256 fingerprints so a future controlled apply can be reviewed against the
+exact audited inputs.
+
+Safety rules:
+
+- Local files or repository fixtures are required; remote feed fetching is
+  refused and source query values are never printed.
+- XML parsing disables DTD loading, entity substitution and network access.
+- There is no `--apply` option and the audit must not write approval records.
+- Apply-readiness states and the final verdict are advisory only.
+- Duplicate ProductCode or WIC keys are blockers and are never resolved by
+  silently selecting a first or last row.
+- Row samples are bounded independently from complete aggregate counts.
+- No supplier schedule is enabled, no job is dispatched, no Catalog Sync path
+  is called and no images are downloaded or imported.
+- Products, `supplier_products`, categories, mappings, canonical families and
+  attribute tables must all retain zero-change counters.
+
+Phase 9C.6.4.2 remains blocked until the full-file audit completes, source
+fingerprints and exact readiness counts are reviewed, duplicate join-key
+blockers are resolved, and explicit manual approval is given.
+
 ## Controlled Supplier Staging Import Apply Safety
 
 Phase 9C.6.4 adds `suppliers:controlled-staging-import` as the first
