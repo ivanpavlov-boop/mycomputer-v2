@@ -179,9 +179,17 @@ class AsbisApplyReadinessAuditService
             ->values()
             ->all();
 
+        $overlapAudit = $this->overlapAudit($classifiedRows, $existing);
         $readiness = $this->readiness($classifiedRows);
         $issueCounts = $this->issueCounts($classifiedRows);
-        $verdict = $this->verdict($readiness, $issueCounts);
+        $reconciliation = $this->reconciliation($productScan, $priceScan, $classifiedRows, $readiness);
+
+        foreach ($reconciliation['reconciliation_issues'] as $issue) {
+            $issueCounts['reconciliation:'.$issue] = ($issueCounts['reconciliation:'.$issue] ?? 0) + 1;
+        }
+
+        ksort($issueCounts);
+        $verdict = $this->verdict($readiness, $issueCounts, $reconciliation);
         $fullFileCompleted = $fullFile
             && (bool) $productScan['completed']
             && (bool) $priceScan['completed'];
@@ -213,9 +221,9 @@ class AsbisApplyReadinessAuditService
             $duplicateEans,
             $duplicateMpns,
             $duplicateBrandMpns,
-            $existing
+            $existing,
+            $overlapAudit
         );
-        $overlapAudit = $this->overlapAudit($classifiedRows, $existing);
         $summary = $this->summary(
             $supplier,
             $productSource,
@@ -226,7 +234,8 @@ class AsbisApplyReadinessAuditService
             $identifierAudit,
             $overlapAudit,
             $parser,
-            $verdict
+            $verdict,
+            $reconciliation
         );
         $samples = $this->samples($classifiedRows, $summaryOnly ? 0 : $sampleLimit, $summaryOnly ? 0 : $issueSampleLimit);
 
@@ -246,6 +255,7 @@ class AsbisApplyReadinessAuditService
                 ...$readiness,
                 ...$verdict,
             ],
+            'reconciliation' => $reconciliation,
             'identifier_audit' => $identifierAudit,
             'availability_audit' => $priceScan['availability_audit'],
             'pricing_audit' => $priceScan['pricing_audit'],
@@ -308,6 +318,9 @@ class AsbisApplyReadinessAuditService
     {
         $index = [];
         $missingKeyRows = [];
+        $keyPresentRows = 0;
+        $keyMissingRows = 0;
+        $indexedRows = 0;
         $availabilityCounts = [
             'in_stock' => 0,
             'limited_stock' => 0,
@@ -329,6 +342,9 @@ class AsbisApplyReadinessAuditService
         $result = $this->xmlReader->scan($path, 'Price', function (array $row, int $rowNumber) use (
             &$index,
             &$missingKeyRows,
+            &$keyPresentRows,
+            &$keyMissingRows,
+            &$indexedRows,
             &$availabilityCounts,
             &$rawAvailabilityCounts,
             &$pricing,
@@ -340,8 +356,11 @@ class AsbisApplyReadinessAuditService
             $key = $normalized['normalized_join_key'];
 
             if ($key === null) {
+                $keyMissingRows++;
                 $missingKeyRows[] = $normalized;
             } else {
+                $keyPresentRows++;
+                $indexedRows++;
                 $this->addIndexRow($index, $key, $normalized, ['price', 'currency', 'availability', 'ean_gtin']);
             }
 
@@ -389,6 +408,14 @@ class AsbisApplyReadinessAuditService
             ...$result,
             'index' => $index,
             'missing_key_rows' => $missingKeyRows,
+            'key_audit' => [
+                'key_name' => $joinKey,
+                'present_rows' => $keyPresentRows,
+                'missing_rows' => $keyMissingRows,
+                'indexed_rows' => $indexedRows,
+                'unique_values' => count($index),
+                'malformed_rows' => 0,
+            ],
             'availability_audit' => [
                 'normalized_in_stock_count' => $availabilityCounts['in_stock'],
                 'normalized_limited_stock_count' => $availabilityCounts['limited_stock'],
@@ -412,6 +439,9 @@ class AsbisApplyReadinessAuditService
     {
         $index = [];
         $missingKeyRows = [];
+        $keyPresentRows = 0;
+        $keyMissingRows = 0;
+        $indexedRows = 0;
         $coverage = [
             'category_present' => 0,
             'category_missing' => 0,
@@ -430,6 +460,9 @@ class AsbisApplyReadinessAuditService
         $result = $this->xmlReader->scan($path, 'Product', function (array $row, int $rowNumber) use (
             &$index,
             &$missingKeyRows,
+            &$keyPresentRows,
+            &$keyMissingRows,
+            &$indexedRows,
             &$coverage,
             &$categories,
             &$imageHosts,
@@ -441,8 +474,11 @@ class AsbisApplyReadinessAuditService
             $key = $normalized['normalized_join_key'];
 
             if ($key === null) {
+                $keyMissingRows++;
                 $missingKeyRows[] = $normalized;
             } else {
+                $keyPresentRows++;
+                $indexedRows++;
                 $this->addIndexRow($index, $key, $normalized, ['ean_gtin', 'mpn', 'brand', 'name', 'category']);
             }
 
@@ -470,6 +506,14 @@ class AsbisApplyReadinessAuditService
             ...$result,
             'index' => $index,
             'missing_key_rows' => $missingKeyRows,
+            'key_audit' => [
+                'key_name' => $joinKey,
+                'present_rows' => $keyPresentRows,
+                'missing_rows' => $keyMissingRows,
+                'indexed_rows' => $indexedRows,
+                'unique_values' => count($index),
+                'malformed_rows' => 0,
+            ],
             'category_content_audit' => [
                 ...$coverage,
                 'distinct_supplier_categories' => count($categories),
@@ -515,6 +559,9 @@ class AsbisApplyReadinessAuditService
                 'image_url_host' => $product['image_url_host'] ?? $price['image_url_host'] ?? null,
                 'product_list_present' => $product !== null,
                 'price_avail_present' => $price !== null,
+                'missing_product_code' => false,
+                'missing_wic' => false,
+                'missing_join_key' => null,
                 'duplicate_product_code' => ($productIndex[$key]['count'] ?? 0) > 1,
                 'duplicate_wic' => ($priceIndex[$key]['count'] ?? 0) > 1,
                 'conflicting_product_rows' => (bool) ($productIndex[$key]['conflicting'] ?? false),
@@ -562,6 +609,9 @@ class AsbisApplyReadinessAuditService
             'image_url_host' => $product['image_url_host'] ?? $price['image_url_host'] ?? null,
             'product_list_present' => $product !== null,
             'price_avail_present' => $price !== null,
+            'missing_product_code' => $product !== null,
+            'missing_wic' => $price !== null,
+            'missing_join_key' => $product !== null ? 'missing_product_code' : 'missing_wic',
             'duplicate_product_code' => false,
             'duplicate_wic' => false,
             'conflicting_product_rows' => false,
@@ -585,6 +635,35 @@ class AsbisApplyReadinessAuditService
         $normalizedSku = $this->normalizeIdentifier($row['supplier_sku']);
         $ean = $this->normalizeIdentifier($row['ean_gtin']);
         $mpn = $this->normalizeIdentifier($row['mpn']);
+
+        if (($row['missing_product_code'] ?? false) || ($row['missing_wic'] ?? false)) {
+            if ($row['missing_product_code'] ?? false) {
+                $issues[] = 'missing_product_code';
+            }
+
+            if ($row['missing_wic'] ?? false) {
+                $issues[] = 'missing_wic';
+            }
+
+            $issues[] = 'missing_supplier_sku';
+
+            if ($row['name'] === null) {
+                $issues[] = 'missing_name';
+            }
+
+            if ($row['price_issue'] !== null) {
+                $issues[] = $row['price_issue'];
+            }
+
+            $row['readiness_state'] = 'blocked';
+            $row['issues'] = array_values(array_unique($issues));
+            $row['warnings'] = [];
+            $row['cross_supplier_overlap_types'] = [];
+            $row['same_supplier_sku_match'] = false;
+            $row['future_staging_action'] = 'would_skip_row';
+
+            return $row;
+        }
 
         if (! $row['product_list_present'] && $row['price_avail_present']) {
             $row['readiness_state'] = $row['duplicate_wic'] ? 'blocked' : 'price_only';
@@ -723,13 +802,19 @@ class AsbisApplyReadinessAuditService
             ];
         }
 
-        $sameSupplierSkus = SupplierProduct::query()
+        $sameSupplierSkus = [];
+
+        SupplierProduct::query()
             ->where('supplier_id', $supplier->getKey())
             ->whereNotNull('supplier_sku')
             ->pluck('supplier_sku')
-            ->mapWithKeys(fn (string $sku): array => [$this->normalizeIdentifier($sku) => true])
-            ->filter(fn (mixed $value, mixed $key): bool => is_string($key) && $key !== '')
-            ->all();
+            ->each(function (mixed $sku) use (&$sameSupplierSkus): void {
+                $normalized = $this->normalizeIdentifier($sku);
+
+                if ($normalized !== null) {
+                    $sameSupplierSkus[$normalized] = true;
+                }
+            });
         $otherRows = SupplierProduct::query()
             ->where('supplier_id', '!=', $supplier->getKey())
             ->get(['ean', 'mpn', 'brand_name']);
@@ -786,6 +871,11 @@ class AsbisApplyReadinessAuditService
 
         $counts['would_create'] = collect($rows)->where('future_staging_action', 'would_create_supplier_product')->count();
         $counts['would_update'] = collect($rows)->where('future_staging_action', 'would_update_supplier_product')->count();
+        $counts['hard_blocker_count'] = $counts['blocked'];
+        $counts['manual_review_count'] = $counts['manual_review'];
+        $counts['unmatched_count'] = $counts['product_only'] + $counts['price_only'];
+        $counts['apply_excluded_count'] = $counts['blocked'] + $counts['manual_review'] + $counts['unmatched_count'];
+        $counts['apply_blocker_count'] = $counts['apply_excluded_count'];
 
         return $counts;
     }
@@ -795,13 +885,13 @@ class AsbisApplyReadinessAuditService
      * @param  array<string, int>  $issueCounts
      * @return array<string, mixed>
      */
-    private function verdict(array $readiness, array $issueCounts): array
+    private function verdict(array $readiness, array $issueCounts, array $reconciliation): array
     {
         $candidateCount = $readiness['ready_to_create'] + $readiness['ready_to_update'] + $readiness['ready_with_warning'];
-        $blockerCount = $readiness['blocked'] + $readiness['manual_review'] + $readiness['product_only'] + $readiness['price_only'];
+        $blockerCount = $readiness['apply_excluded_count'];
         $duplicateJoinKeys = ($issueCounts['duplicate_product_code'] ?? 0) + ($issueCounts['duplicate_wic'] ?? 0);
 
-        if ($candidateCount === 0 || $duplicateJoinKeys > 0) {
+        if (! $reconciliation['reconciliation_valid'] || $candidateCount === 0 || $duplicateJoinKeys > 0) {
             $verdict = 'not_ready_for_controlled_staging_apply';
         } elseif ($blockerCount > 0 || $readiness['ready_with_warning'] > 0) {
             $verdict = 'ready_with_warnings';
@@ -813,6 +903,11 @@ class AsbisApplyReadinessAuditService
             'verdict' => $verdict,
             'apply_candidate_count' => $candidateCount,
             'apply_blocker_count' => $blockerCount,
+            'hard_blocker_count' => $readiness['hard_blocker_count'],
+            'manual_review_count' => $readiness['manual_review_count'],
+            'unmatched_count' => $readiness['unmatched_count'],
+            'apply_excluded_count' => $readiness['apply_excluded_count'],
+            'reconciliation_valid' => $reconciliation['reconciliation_valid'],
             'blocker_reasons' => collect($issueCounts)
                 ->filter(fn (int $count, string $reason): bool => $count > 0 && ! str_starts_with($reason, 'warning:'))
                 ->all(),
@@ -876,13 +971,13 @@ class AsbisApplyReadinessAuditService
                 ->values()
                 ->all(),
             'unmatched_product_samples' => $collection
-                ->filter(fn (array $row): bool => $row['product_list_present'] && ! $row['price_avail_present'])
+                ->filter(fn (array $row): bool => $row['product_list_present'] && ! $row['price_avail_present'] && ! ($row['missing_product_code'] ?? false))
                 ->take($sampleLimit)
                 ->map(fn (array $row): array => $this->sampleRow($row))
                 ->values()
                 ->all(),
             'unmatched_price_samples' => $collection
-                ->filter(fn (array $row): bool => ! $row['product_list_present'] && $row['price_avail_present'])
+                ->filter(fn (array $row): bool => ! $row['product_list_present'] && $row['price_avail_present'] && ! ($row['missing_wic'] ?? false))
                 ->take($sampleLimit)
                 ->map(fn (array $row): array => $this->sampleRow($row))
                 ->values()
@@ -918,6 +1013,9 @@ class AsbisApplyReadinessAuditService
             'future_staging_action' => $row['future_staging_action'],
             'product_list_present' => $row['product_list_present'],
             'price_avail_present' => $row['price_avail_present'],
+            'missing_product_code' => $row['missing_product_code'] ?? false,
+            'missing_wic' => $row['missing_wic'] ?? false,
+            'missing_join_key' => $row['missing_join_key'] ?? null,
             'issues' => $row['issues'],
             'warnings' => $row['warnings'],
             'cross_supplier_overlap_types' => $row['cross_supplier_overlap_types'] ?? [],
@@ -935,26 +1033,33 @@ class AsbisApplyReadinessAuditService
      * @param  array<string, array<int, int>>  $duplicateMpns
      * @param  array<string, array<int, int>>  $duplicateBrandMpns
      * @param  array<string, mixed>  $existing
+     * @param  array<string, int>  $overlapAudit
      * @return array<string, mixed>
      */
-    private function identifierAudit(array $productScan, array $priceScan, array $rows, array $duplicateEans, array $duplicateMpns, array $duplicateBrandMpns, array $existing): array
+    private function identifierAudit(array $productScan, array $priceScan, array $rows, array $duplicateEans, array $duplicateMpns, array $duplicateBrandMpns, array $existing, array $overlapAudit): array
     {
-        $joined = collect($rows)->filter(fn (array $row): bool => $row['product_list_present'] && $row['price_avail_present']);
+        $joined = collect($rows)->filter(fn (array $row): bool => $row['product_list_present'] && $row['price_avail_present'] && ! ($row['missing_product_code'] ?? false) && ! ($row['missing_wic'] ?? false));
         $eanPresent = collect($rows)->filter(fn (array $row): bool => $this->normalizeIdentifier($row['ean_gtin']) !== null)->count();
         $mpnPresent = collect($rows)->filter(fn (array $row): bool => $this->normalizeIdentifier($row['mpn']) !== null)->count();
+        $productKeyAudit = $productScan['key_audit'];
+        $priceKeyAudit = $priceScan['key_audit'];
 
         return [
             'product_code_rows' => $productScan['rows_scanned'],
-            'unique_product_code_values' => count($productScan['index']),
+            'product_code_present_rows' => $productKeyAudit['present_rows'],
+            'product_code_missing_rows' => $productKeyAudit['missing_rows'],
+            'unique_product_code_values' => $productKeyAudit['unique_values'],
             'duplicate_product_code_keys' => collect($productScan['index'])->where('count', '>', 1)->count(),
             'duplicate_product_code_affected_rows' => collect($productScan['index'])->where('count', '>', 1)->sum('count'),
             'wic_rows' => $priceScan['rows_scanned'],
-            'unique_wic_values' => count($priceScan['index']),
+            'wic_present_rows' => $priceKeyAudit['present_rows'],
+            'wic_missing_rows' => $priceKeyAudit['missing_rows'],
+            'unique_wic_values' => $priceKeyAudit['unique_values'],
             'duplicate_wic_keys' => collect($priceScan['index'])->where('count', '>', 1)->count(),
             'duplicate_wic_affected_rows' => collect($priceScan['index'])->where('count', '>', 1)->sum('count'),
             'joined_unique_keys' => $joined->count(),
-            'product_list_only_keys' => collect($rows)->filter(fn (array $row): bool => $row['product_list_present'] && ! $row['price_avail_present'])->count(),
-            'price_avail_only_keys' => collect($rows)->filter(fn (array $row): bool => ! $row['product_list_present'] && $row['price_avail_present'])->count(),
+            'product_list_only_keys' => collect($rows)->filter(fn (array $row): bool => $row['product_list_present'] && ! $row['price_avail_present'] && ! ($row['missing_product_code'] ?? false))->count(),
+            'price_avail_only_keys' => collect($rows)->filter(fn (array $row): bool => ! $row['product_list_present'] && $row['price_avail_present'] && ! ($row['missing_wic'] ?? false))->count(),
             'ean_present' => $eanPresent,
             'ean_missing' => count($rows) - $eanPresent,
             'duplicate_ean_groups' => count($duplicateEans),
@@ -968,9 +1073,12 @@ class AsbisApplyReadinessAuditService
             'same_asbis_supplier_sku_matches' => collect($rows)->where('same_supplier_sku_match', true)->count(),
             'would_create_count' => collect($rows)->where('future_staging_action', 'would_create_supplier_product')->count(),
             'would_update_count' => collect($rows)->where('future_staging_action', 'would_update_supplier_product')->count(),
-            'cross_supplier_ean_overlap_groups' => count($existing['cross_supplier_eans']),
-            'cross_supplier_mpn_overlap_groups' => count($existing['cross_supplier_mpns']),
-            'cross_supplier_brand_mpn_overlap_groups' => count($existing['cross_supplier_brand_mpns']),
+            'cross_supplier_ean_overlap_groups' => $overlapAudit['ean_overlap_groups'],
+            'cross_supplier_ean_overlap_affected_rows' => $overlapAudit['ean_overlap_affected_rows'],
+            'cross_supplier_mpn_overlap_groups' => $overlapAudit['mpn_overlap_groups'],
+            'cross_supplier_mpn_overlap_affected_rows' => $overlapAudit['mpn_overlap_affected_rows'],
+            'cross_supplier_brand_mpn_overlap_groups' => $overlapAudit['brand_mpn_overlap_groups'],
+            'cross_supplier_brand_mpn_overlap_affected_rows' => $overlapAudit['brand_mpn_overlap_affected_rows'],
         ];
     }
 
@@ -981,34 +1089,128 @@ class AsbisApplyReadinessAuditService
      */
     private function overlapAudit(array $rows, array $existing): array
     {
-        $ean = [];
-        $mpn = [];
-        $brandMpn = [];
+        $groups = [
+            'ean' => [],
+            'mpn' => [],
+            'brand_mpn' => [],
+        ];
 
-        foreach ($rows as $row) {
+        foreach ($rows as $rowIndex => $row) {
             $normalizedEan = $this->normalizeIdentifier($row['ean_gtin']);
             $normalizedMpn = $this->normalizeIdentifier($row['mpn']);
             $normalizedBrandMpn = $this->brandMpnKey($row['brand'], $row['mpn']);
 
             if ($normalizedEan !== null && isset($existing['cross_supplier_eans'][$normalizedEan])) {
-                $ean[$normalizedEan] = true;
+                $groups['ean'][$normalizedEan][] = $rowIndex;
             }
 
             if ($normalizedMpn !== null && isset($existing['cross_supplier_mpns'][$normalizedMpn])) {
-                $mpn[$normalizedMpn] = true;
+                $groups['mpn'][$normalizedMpn][] = $rowIndex;
             }
 
             if ($normalizedBrandMpn !== null && isset($existing['cross_supplier_brand_mpns'][$normalizedBrandMpn])) {
-                $brandMpn[$normalizedBrandMpn] = true;
+                $groups['brand_mpn'][$normalizedBrandMpn][] = $rowIndex;
             }
         }
 
         return [
-            'ean_overlap_groups' => count($ean),
-            'mpn_overlap_groups' => count($mpn),
-            'brand_mpn_overlap_groups' => count($brandMpn),
-            'total_overlap_groups' => count($ean) + count($mpn) + count($brandMpn),
+            'ean_overlap_groups' => count($groups['ean']),
+            'ean_overlap_affected_rows' => array_sum(array_map('count', $groups['ean'])),
+            'mpn_overlap_groups' => count($groups['mpn']),
+            'mpn_overlap_affected_rows' => array_sum(array_map('count', $groups['mpn'])),
+            'brand_mpn_overlap_groups' => count($groups['brand_mpn']),
+            'brand_mpn_overlap_affected_rows' => array_sum(array_map('count', $groups['brand_mpn'])),
+            'total_overlap_groups' => count($groups['ean']) + count($groups['mpn']) + count($groups['brand_mpn']),
             'report_only' => 1,
+        ];
+    }
+
+    /**
+     * Reconciles physical source rows, indexed keys, joined keys, and the
+     * mutually-exclusive readiness buckets before the audit can be considered
+     * internally consistent.
+     *
+     * @param  array<string, mixed>  $productScan
+     * @param  array<string, mixed>  $priceScan
+     * @param  array<int, array<string, mixed>>  $rows
+     * @param  array<string, int>  $readiness
+     * @return array<string, mixed>
+     */
+    private function reconciliation(array $productScan, array $priceScan, array $rows, array $readiness): array
+    {
+        $productKeyAudit = $productScan['key_audit'];
+        $priceKeyAudit = $priceScan['key_audit'];
+        $identifierRows = collect($rows);
+        $joined = $identifierRows->filter(fn (array $row): bool => $row['product_list_present'] && $row['price_avail_present'] && ! ($row['missing_product_code'] ?? false) && ! ($row['missing_wic'] ?? false))->count();
+        $productOnly = $identifierRows->filter(fn (array $row): bool => $row['product_list_present'] && ! $row['price_avail_present'] && ! ($row['missing_product_code'] ?? false))->count();
+        $priceOnly = $identifierRows->filter(fn (array $row): bool => ! $row['product_list_present'] && $row['price_avail_present'] && ! ($row['missing_wic'] ?? false))->count();
+        $classifiedBucketCount = array_sum(array_intersect_key($readiness, array_fill_keys([
+            'ready_to_create',
+            'ready_to_update',
+            'ready_with_warning',
+            'manual_review',
+            'blocked',
+            'product_only',
+            'price_only',
+        ], true)));
+        $issues = [];
+
+        if ($productScan['rows_scanned'] !== $productKeyAudit['indexed_rows'] + $productKeyAudit['missing_rows'] + $productKeyAudit['malformed_rows']) {
+            $issues[] = 'product_list_rows_not_reconciled';
+        }
+
+        if ($priceScan['rows_scanned'] !== $priceKeyAudit['indexed_rows'] + $priceKeyAudit['missing_rows'] + $priceKeyAudit['malformed_rows']) {
+            $issues[] = 'price_avail_rows_not_reconciled';
+        }
+
+        if ($productKeyAudit['unique_values'] !== $joined + $productOnly) {
+            $issues[] = 'product_list_keys_not_reconciled';
+        }
+
+        if ($priceKeyAudit['unique_values'] !== $joined + $priceOnly) {
+            $issues[] = 'price_avail_keys_not_reconciled';
+        }
+
+        if (count($rows) !== $classifiedBucketCount) {
+            $issues[] = 'readiness_buckets_not_reconciled';
+        }
+
+        return [
+            'reconciliation_valid' => $issues === [],
+            'reconciliation_issues' => $issues,
+            'classification_basis' => 'unique_join_key_buckets_plus_missing_key_rows',
+            'joined_unique_keys' => $joined,
+            'valid_product_only_keys' => $productOnly,
+            'valid_price_only_keys' => $priceOnly,
+            'missing_product_code_rows' => $productKeyAudit['missing_rows'],
+            'missing_wic_rows' => $priceKeyAudit['missing_rows'],
+            'duplicate_product_code_affected_rows' => collect($productScan['index'])->where('count', '>', 1)->sum('count'),
+            'duplicate_wic_affected_rows' => collect($priceScan['index'])->where('count', '>', 1)->sum('count'),
+            'malformed_product_list_rows' => $productKeyAudit['malformed_rows'],
+            'malformed_price_avail_rows' => $priceKeyAudit['malformed_rows'],
+            'product_list' => [
+                'rows' => $productScan['rows_scanned'],
+                'indexed_rows' => $productKeyAudit['indexed_rows'],
+                'missing_key_rows' => $productKeyAudit['missing_rows'],
+                'malformed_rows' => $productKeyAudit['malformed_rows'],
+                'unique_keys' => $productKeyAudit['unique_values'],
+                'rows_reconciled' => $productScan['rows_scanned'] === $productKeyAudit['indexed_rows'] + $productKeyAudit['missing_rows'] + $productKeyAudit['malformed_rows'],
+                'keys_reconciled' => $productKeyAudit['unique_values'] === $joined + $productOnly,
+            ],
+            'price_avail' => [
+                'rows' => $priceScan['rows_scanned'],
+                'indexed_rows' => $priceKeyAudit['indexed_rows'],
+                'missing_key_rows' => $priceKeyAudit['missing_rows'],
+                'malformed_rows' => $priceKeyAudit['malformed_rows'],
+                'unique_keys' => $priceKeyAudit['unique_values'],
+                'rows_reconciled' => $priceScan['rows_scanned'] === $priceKeyAudit['indexed_rows'] + $priceKeyAudit['missing_rows'] + $priceKeyAudit['malformed_rows'],
+                'keys_reconciled' => $priceKeyAudit['unique_values'] === $joined + $priceOnly,
+            ],
+            'classification' => [
+                'rows' => count($rows),
+                'bucket_rows' => $classifiedBucketCount,
+                'reconciled' => count($rows) === $classifiedBucketCount,
+            ],
         ];
     }
 
@@ -1020,9 +1222,10 @@ class AsbisApplyReadinessAuditService
      * @param  array<string, int>  $overlapAudit
      * @param  array<string, mixed>  $parser
      * @param  array<string, mixed>  $verdict
+     * @param  array<string, mixed>  $reconciliation
      * @return array<string, mixed>
      */
-    private function summary(Supplier $supplier, array $productSource, array $priceSource, array $productScan, array $priceScan, array $readiness, array $identifierAudit, array $overlapAudit, array $parser, array $verdict): array
+    private function summary(Supplier $supplier, array $productSource, array $priceSource, array $productScan, array $priceScan, array $readiness, array $identifierAudit, array $overlapAudit, array $parser, array $verdict, array $reconciliation): array
     {
         return [
             'supplier_name' => $supplier->company_name,
@@ -1046,6 +1249,10 @@ class AsbisApplyReadinessAuditService
             'manual_review' => $readiness['manual_review'],
             'blocked' => $readiness['blocked'],
             'skipped' => $readiness['blocked'] + $readiness['manual_review'] + $readiness['product_only'] + $readiness['price_only'],
+            'hard_blocker_count' => $readiness['hard_blocker_count'],
+            'manual_review_count' => $readiness['manual_review_count'],
+            'unmatched_count' => $readiness['unmatched_count'],
+            'apply_excluded_count' => $readiness['apply_excluded_count'],
             'product_only_rows' => $readiness['product_only'],
             'price_only_rows' => $readiness['price_only'],
             'duplicate_product_code' => $identifierAudit['duplicate_product_code_keys'],
@@ -1058,6 +1265,8 @@ class AsbisApplyReadinessAuditService
             'verdict' => $verdict['verdict'],
             'apply_candidate_count' => $verdict['apply_candidate_count'],
             'apply_blocker_count' => $verdict['apply_blocker_count'],
+            'reconciliation_valid' => $reconciliation['reconciliation_valid'],
+            'reconciliation_issues' => $reconciliation['reconciliation_issues'],
             'safety_status' => 'read_only_no_changes',
             'records_changed' => $this->recordsChanged(),
         ];
