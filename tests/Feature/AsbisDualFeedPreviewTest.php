@@ -172,6 +172,110 @@ class AsbisDualFeedPreviewTest extends TestCase
     /**
      * @throws JsonException
      */
+    public function test_real_asbis_product_catalog_and_price_avail_structure_maps_fields_without_writes(): void
+    {
+        Http::fake();
+        Queue::fake();
+        Bus::fake();
+
+        $asbis = Supplier::factory()->create(['company_name' => 'ASBIS', 'slug' => 'asbis']);
+
+        $this->supplierProduct($asbis, [
+            'supplier_sku' => 'ASBIS-REAL-001',
+            'ean' => '4750000000001',
+            'brand_name' => 'RealBrand',
+            'price' => 100.00,
+        ]);
+
+        $counts = $this->protectedCounts();
+
+        $payload = $this->commandJson([
+            '--supplier' => 'asbis',
+            '--product-list-fixture' => 'tests/Fixtures/Suppliers/asbis_dual/ProductListReal.xml',
+            '--price-avail-fixture' => 'tests/Fixtures/Suppliers/asbis_dual/PriceAvailReal.xml',
+            '--format' => 'json',
+            '--limit' => 25,
+            '--show-field-map' => true,
+            '--show-unmatched' => true,
+            '--show-normalized' => true,
+        ]);
+
+        $this->assertTrue($payload['success']);
+        $this->assertSame('inferred_key_match', $payload['join']['confidence']);
+        $this->assertSame('ProductCode', $payload['join']['product_key']);
+        $this->assertSame('WIC', $payload['join']['price_key']);
+        $this->assertContains('productcode:wic', $payload['join']['candidate_normalized_keys']);
+
+        $this->assertSame(3, $payload['summary']['product_list_rows']);
+        $this->assertSame(4, $payload['summary']['price_avail_rows']);
+        $this->assertSame(2, $payload['summary']['joined_rows']);
+        $this->assertSame(1, $payload['summary']['would_update']);
+        $this->assertSame(1, $payload['summary']['would_create']);
+        $this->assertSame(1, $payload['summary']['product_only_rows']);
+        $this->assertSame(2, $payload['summary']['price_only_rows']);
+        $this->assertSame(0, $payload['records_changed']['products']);
+        $this->assertSame(0, $payload['records_changed']['supplier_products']);
+        $this->assertSame(0, $payload['records_changed']['catalog_sync']);
+
+        $this->assertSame('ProductCode', $payload['detected_product_fields']['normalized_field_map']['supplier_sku']);
+        $this->assertSame('Vendor', $payload['detected_product_fields']['normalized_field_map']['brand']);
+        $this->assertSame('ProductCategory', $payload['detected_product_fields']['normalized_field_map']['category']);
+        $this->assertSame('ProductDescription', $payload['detected_product_fields']['normalized_field_map']['description']);
+        $this->assertSame('WIC', $payload['detected_price_fields']['normalized_field_map']['supplier_sku']);
+        $this->assertSame('MY_PRICE', $payload['detected_price_fields']['normalized_field_map']['price']);
+        $this->assertSame('RETAIL_PRICE', $payload['detected_price_fields']['normalized_field_map']['retail_price']);
+        $this->assertSame('CURRENCY_CODE', $payload['detected_price_fields']['normalized_field_map']['currency']);
+        $this->assertSame('AVAIL', $payload['detected_price_fields']['normalized_field_map']['stock']);
+        $this->assertSame('AVAIL', $payload['detected_price_fields']['normalized_field_map']['availability']);
+        $this->assertSame('EAN', $payload['detected_price_fields']['normalized_field_map']['ean_gtin']);
+        $this->assertSame('DESCRIPTION', $payload['detected_price_fields']['normalized_field_map']['name']);
+
+        $rows = collect($payload['joined_rows']);
+        $existing = $rows->firstWhere('supplier_sku', 'ASBIS-REAL-001');
+        $new = $rows->firstWhere('supplier_sku', 'ASBIS-REAL-002');
+
+        $this->assertSame('would_update_supplier_product', $existing['future_staging_action']);
+        $this->assertSame('RealBrand', $existing['brand']);
+        $this->assertSame('Real ASBIS laptop from PriceAvail', $existing['name']);
+        $this->assertSame('Computers / Laptops', $existing['category']);
+        $this->assertSame(101.25, $existing['price']);
+        $this->assertSame('EUR', $existing['currency']);
+        $this->assertSame(24, $existing['stock']);
+        $this->assertSame('24+', $existing['availability']);
+        $this->assertSame('images.example.invalid', $existing['image_url_host']);
+        $this->assertTrue($existing['description_present']);
+
+        $this->assertSame('would_create_supplier_product', $new['future_staging_action']);
+        $this->assertSame(220.50, $new['price']);
+        $this->assertSame(0, $new['stock']);
+        $this->assertSame('0', $new['availability']);
+        $this->assertSame('Real ASBIS dock from PriceAvail', $new['name']);
+
+        $this->assertTrue(collect($payload['unmatched_product_rows'])->contains(fn (array $row): bool => $row['supplier_sku'] === 'ASBIS-REAL-PRODUCT-ONLY'));
+        $this->assertTrue(collect($payload['unmatched_price_rows'])->contains(fn (array $row): bool => $row['supplier_sku'] === 'ASBIS-REAL-PRICE-ONLY'));
+        $this->assertTrue(collect($payload['unmatched_price_rows'])->contains(fn (array $row): bool => $row['supplier_sku'] === 'ASBIS-REAL-NO-PRODUCT'));
+
+        $explicit = $this->commandJson([
+            '--supplier' => 'asbis',
+            '--product-list-fixture' => 'tests/Fixtures/Suppliers/asbis_dual/ProductListReal.xml',
+            '--price-avail-fixture' => 'tests/Fixtures/Suppliers/asbis_dual/PriceAvailReal.xml',
+            '--product-key' => 'ProductCode',
+            '--price-key' => 'WIC',
+            '--format' => 'json',
+        ]);
+
+        $this->assertSame('explicit_key_match', $explicit['join']['confidence']);
+        $this->assertSame(2, $explicit['summary']['joined_rows']);
+
+        $this->assertSame($counts, $this->protectedCounts());
+        Http::assertNothingSent();
+        Queue::assertNothingPushed();
+        Bus::assertNothingDispatched();
+    }
+
+    /**
+     * @throws JsonException
+     */
     public function test_explicit_join_keys_work_and_ambiguous_auto_join_is_safe(): void
     {
         Supplier::factory()->create(['company_name' => 'ASBIS', 'slug' => 'asbis']);

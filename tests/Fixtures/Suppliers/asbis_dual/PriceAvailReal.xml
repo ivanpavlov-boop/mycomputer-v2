@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CONTENT>
+    <PRICE>
+        <WIC>ASBIS-REAL-001</WIC>
+        <MY_PRICE>101.25</MY_PRICE>
+        <RETAIL_PRICE>130.00</RETAIL_PRICE>
+        <CURRENCY_CODE>EUR</CURRENCY_CODE>
+        <AVAIL>24+</AVAIL>
+        <EAN>4750000000001</EAN>
+        <DESCRIPTION>Real ASBIS laptop from PriceAvail</DESCRIPTION>
+        <PRODUCT_CARD>https://example.invalid/products/real-001</PRODUCT_CARD>
+        <VENDOR_NAME>PriceBrand</VENDOR_NAME>
+        <VENDOR_ID>101</VENDOR_ID>
+        <GROUP_ID>9001</GROUP_ID>
+        <GROUP_NAME>Price Group Laptops</GROUP_NAME>
+        <VPF_NAME>Laptops</VPF_NAME>
+        <SMALL_IMAGE>https://small.example.invalid/asbis/real-001.jpg</SMALL_IMAGE>
+        <WARRANTYTERM>24</WARRANTYTERM>
+    </PRICE>
+    <PRICE>
+        <WIC>ASBIS-REAL-002</WIC>
+        <MY_PRICE></MY_PRICE>
+        <RETAIL_PRICE>220.50</RETAIL_PRICE>
+        <CURRENCY_CODE>EUR</CURRENCY_CODE>
+        <AVAIL>0</AVAIL>
+        <EAN>4750000000002</EAN>
+        <DESCRIPTION>Real ASBIS dock from PriceAvail</DESCRIPTION>
+        <PRODUCT_CARD>https://example.invalid/products/real-002</PRODUCT_CARD>
+        <VENDOR_NAME>RetailFallbackBrand</VENDOR_NAME>
+        <VENDOR_ID>102</VENDOR_ID>
+        <GROUP_ID>9002</GROUP_ID>
+        <GROUP_NAME>Price Group Docks</GROUP_NAME>
+        <VPF_NAME>Docks</VPF_NAME>
+        <SMALL_IMAGE>https://small.example.invalid/asbis/real-002.jpg</SMALL_IMAGE>
+        <WARRANTYTERM>12</WARRANTYTERM>
+    </PRICE>
+    <PRICE>
+        <WIC>ASBIS-REAL-PRICE-ONLY</WIC>
+        <MY_PRICE>55.00</MY_PRICE>
+        <RETAIL_PRICE>70.00</RETAIL_PRICE>
+        <CURRENCY_CODE>EUR</CURRENCY_CODE>
+        <AVAIL>3</AVAIL>
+        <EAN>4750000000003</EAN>
+        <DESCRIPTION>Price-only ASBIS row</DESCRIPTION>
+        <PRODUCT_CARD>https://example.invalid/products/price-only</PRODUCT_CARD>
+        <VENDOR_NAME>PriceOnlyBrand</VENDOR_NAME>
+        <VENDOR_ID>103</VENDOR_ID>
+        <GROUP_ID>9003</GROUP_ID>
+        <GROUP_NAME>Price Group Accessories</GROUP_NAME>
+        <VPF_NAME>Accessories</VPF_NAME>
+        <SMALL_IMAGE>https://small.example.invalid/asbis/price-only.jpg</SMALL_IMAGE>
+        <WARRANTYTERM>12</WARRANTYTERM>
+    </PRICE>
+    <PRICE>
+        <WIC>ASBIS-REAL-NO-PRODUCT</WIC>
+        <MY_PRICE>88.00</MY_PRICE>
+        <RETAIL_PRICE>99.00</RETAIL_PRICE>
+        <CURRENCY_CODE>EUR</CURRENCY_CODE>
+        <AVAIL>1</AVAIL>
+        <EAN>4750000000004</EAN>
+        <DESCRIPTION>Second unmatched price row</DESCRIPTION>
+        <PRODUCT_CARD>https://example.invalid/products/no-product</PRODUCT_CARD>
+        <VENDOR_NAME>NoProductBrand</VENDOR_NAME>
+        <VENDOR_ID>104</VENDOR_ID>
+        <GROUP_ID>9004</GROUP_ID>
+        <GROUP_NAME>Price Group Misc</GROUP_NAME>
+        <VPF_NAME>Misc</VPF_NAME>
+        <SMALL_IMAGE>https://small.example.invalid/asbis/no-product.jpg</SMALL_IMAGE>
+        <WARRANTYTERM>12</WARRANTYTERM>
+    </PRICE>
+</CONTENT>

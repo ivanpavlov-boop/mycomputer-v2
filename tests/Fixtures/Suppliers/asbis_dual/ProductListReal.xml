@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ProductCatalog>
+    <Product>
+        <ProductCode>ASBIS-REAL-001</ProductCode>
+        <Vendor>RealBrand</Vendor>
+        <ProductCategory>Computers / Laptops</ProductCategory>
+        <ProductDescription>Real ASBIS laptop from ProductList</ProductDescription>
+        <Images>
+            <Image>https://images.example.invalid/asbis/real-001.jpg</Image>
+        </Images>
+        <ProductCard>https://example.invalid/products/real-001</ProductCard>
+        <ProductType>Notebook</ProductType>
+        <AttrList>
+            <Attr>
+                <Name>RAM</Name>
+                <Value>16GB</Value>
+            </Attr>
+        </AttrList>
+        <MarketingInfo>Long marketing text should remain raw-only.</MarketingInfo>
+    </Product>
+    <Product>
+        <ProductCode>ASBIS-REAL-002</ProductCode>
+        <Vendor>FallbackBrand</Vendor>
+        <ProductCategory>Accessories / Docks</ProductCategory>
+        <ProductDescription>Fallback ProductList name for row two</ProductDescription>
+        <Image>https://images.example.invalid/asbis/real-002.jpg</Image>
+        <ProductCard>https://example.invalid/products/real-002</ProductCard>
+        <ProductType>Dock</ProductType>
+    </Product>
+    <Product>
+        <ProductCode>ASBIS-REAL-PRODUCT-ONLY</ProductCode>
+        <Vendor>ProductOnlyBrand</Vendor>
+        <ProductCategory>Accessories</ProductCategory>
+        <ProductDescription>Product-only ASBIS row</ProductDescription>
+        <ProductCard>https://example.invalid/products/product-only</ProductCard>
+        <ProductType>Adapter</ProductType>
+    </Product>
+</ProductCatalog>

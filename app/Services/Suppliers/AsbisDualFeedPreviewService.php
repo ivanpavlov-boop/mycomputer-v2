@@ -20,11 +20,13 @@ class AsbisDualFeedPreviewService
     private const JOIN_KEY_ALIASES = [
         'product_id',
         'productid',
+        'product_code',
+        'productcode',
+        'wic',
         'id',
         'sku',
         'code',
         'vendor_code',
-        'product_code',
         'item_code',
         'part_number',
         'mpn',
@@ -34,22 +36,30 @@ class AsbisDualFeedPreviewService
     ];
 
     private const PRODUCT_FIELD_ALIASES = [
-        'supplier_sku' => ['supplier_sku', 'product_id', 'productid', 'sku', 'code', 'item_code', 'product_code', 'vendor_code', 'part_number', 'mpn', 'manufacturer_sku'],
+        'supplier_sku' => ['supplier_sku', 'product_code', 'productcode', 'product_id', 'productid', 'sku', 'code', 'item_code', 'vendor_code', 'part_number', 'mpn', 'manufacturer_sku'],
         'ean_gtin' => ['ean', 'gtin', 'barcode', 'ean13', 'upc'],
         'mpn' => ['mpn', 'manufacturer_sku', 'manufacturer_part_number', 'manufacturerpartnumber', 'part_number', 'vendor_part_number'],
-        'brand' => ['brand', 'brand_name', 'manufacturer', 'vendor'],
-        'name' => ['name', 'product_name', 'title'],
-        'category' => ['category', 'category_name', 'category_path', 'categories', 'path'],
-        'image_url' => ['image', 'image_url', 'picture', 'picture_url', 'thumbnail', 'image1'],
-        'description' => ['description', 'full_description', 'long_description', 'desc'],
+        'brand' => ['vendor', 'brand', 'brand_name', 'manufacturer'],
+        'name' => ['product_description', 'productdescription', 'name', 'product_name', 'title'],
+        'category' => ['product_category', 'productcategory', 'category', 'category_name', 'category_path', 'categories', 'path'],
+        'image_url' => ['image', 'images_image', 'image_url', 'imageurl', 'picture', 'picture_url', 'pictureurl', 'thumbnail', 'image1'],
+        'description' => ['product_description', 'productdescription', 'description', 'full_description', 'long_description', 'desc'],
     ];
 
     private const PRICE_FIELD_ALIASES = [
-        'supplier_sku' => ['supplier_sku', 'product_id', 'productid', 'sku', 'code', 'item_code', 'product_code', 'vendor_code', 'part_number', 'mpn', 'manufacturer_sku'],
-        'price' => ['price', 'supplier_price', 'dealer_price', 'cost', 'net_price', 'regular_price'],
-        'stock' => ['stock', 'qty', 'quantity', 'available_quantity', 'inventory'],
-        'availability' => ['availability', 'availability_status', 'stock_status'],
-        'currency' => ['currency', 'curr'],
+        'supplier_sku' => ['wic', 'price_wic', 'supplier_sku', 'product_code', 'productcode', 'product_id', 'productid', 'sku', 'item_code', 'vendor_code', 'part_number', 'mpn', 'manufacturer_sku'],
+        'ean_gtin' => ['ean', 'price_ean', 'gtin', 'barcode', 'ean13', 'upc'],
+        'mpn' => ['mpn', 'manufacturer_sku', 'manufacturer_part_number', 'manufacturerpartnumber', 'part_number', 'vendor_part_number'],
+        'brand' => ['vendor_name', 'price_vendor_name', 'brand', 'brand_name', 'manufacturer', 'vendor'],
+        'name' => ['description', 'price_description', 'name', 'product_name', 'title'],
+        'category' => ['group_name', 'price_group_name', 'category', 'category_name', 'category_path', 'categories', 'path'],
+        'image_url' => ['small_image', 'smallimage', 'price_small_image', 'image', 'image_url', 'imageurl', 'picture', 'picture_url', 'pictureurl', 'thumbnail', 'image1'],
+        'description' => ['description', 'price_description', 'full_description', 'long_description', 'desc'],
+        'price' => ['my_price', 'price_my_price', 'price', 'supplier_price', 'dealer_price', 'cost', 'net_price', 'regular_price'],
+        'retail_price' => ['retail_price', 'price_retail_price'],
+        'stock' => ['avail', 'price_avail', 'stock', 'qty', 'quantity', 'available_quantity', 'inventory'],
+        'availability' => ['avail', 'price_avail', 'availability', 'availability_status', 'stock_status'],
+        'currency' => ['currency_code', 'price_currency_code', 'currency', 'curr'],
         'vat' => ['vat', 'vat_rate', 'tax', 'tax_rate'],
     ];
 
@@ -300,7 +310,7 @@ class AsbisDualFeedPreviewService
             return collect();
         }
 
-        $nodes = collect($xml->xpath('//*[local-name()="Product" or local-name()="product" or local-name()="Item" or local-name()="item" or local-name()="Row" or local-name()="row" or local-name()="Price" or local-name()="price"]') ?: []);
+        $nodes = collect($xml->xpath('//*[translate(local-name(), "ABCDEFGHIJKLMNOPQRSTUVWXYZ", "abcdefghijklmnopqrstuvwxyz") = "product" or translate(local-name(), "ABCDEFGHIJKLMNOPQRSTUVWXYZ", "abcdefghijklmnopqrstuvwxyz") = "item" or translate(local-name(), "ABCDEFGHIJKLMNOPQRSTUVWXYZ", "abcdefghijklmnopqrstuvwxyz") = "row" or translate(local-name(), "ABCDEFGHIJKLMNOPQRSTUVWXYZ", "abcdefghijklmnopqrstuvwxyz") = "price"]') ?: []);
 
         if ($nodes->isEmpty()) {
             $nodes = collect($xml->children());
@@ -366,7 +376,7 @@ class AsbisDualFeedPreviewService
 
                 foreach ($normalizedKeys as $normalizedKey => $rawKey) {
                     foreach ($aliases as $alias) {
-                        if (str_contains($normalizedKey, $this->normalizeKey($alias))) {
+                        if ($this->normalizedKeyMatchesAlias($normalizedKey, $this->normalizeKey($alias))) {
                             return [$field => $rawKey];
                         }
                     }
@@ -432,6 +442,18 @@ class AsbisDualFeedPreviewService
                 } elseif ($normalizedMatches->count() > 1) {
                     $confidence = 'ambiguous_join_key';
                     $normalizedCandidates = $normalizedMatches->all();
+                }
+            }
+
+            if ($confidence === 'missing_join_key') {
+                $productCodeKey = $this->resolveRawKey($productRows, 'ProductCode');
+                $wicKey = $this->resolveRawKey($priceRows, 'WIC');
+
+                if ($productCodeKey !== null && $wicKey !== null) {
+                    $productKey = $productCodeKey;
+                    $priceKey = $wicKey;
+                    $confidence = 'inferred_key_match';
+                    $normalizedCandidates = ['productcode:wic'];
                 }
             }
         }
@@ -664,10 +686,16 @@ class AsbisDualFeedPreviewService
         $supplierSku = $this->cleanValue($this->mappedValue($productRow ?? [], $productFieldMap['supplier_sku'] ?? null))
             ?: $this->cleanValue($this->mappedValue($priceRow ?? [], $priceFieldMap['supplier_sku'] ?? null))
             ?: $joinKey;
-        $priceRaw = $this->cleanValue($this->mappedValue($priceRow ?? [], $priceFieldMap['price'] ?? null));
+        $priceRaw = $this->cleanValue($this->mappedValue($priceRow ?? [], $priceFieldMap['price'] ?? null))
+            ?: $this->cleanValue($this->mappedValue($priceRow ?? [], $priceFieldMap['retail_price'] ?? null));
         $stockRaw = $this->cleanValue($this->mappedValue($priceRow ?? [], $priceFieldMap['stock'] ?? null));
-        $imageUrl = $this->cleanValue($this->mappedValue($productRow ?? [], $productFieldMap['image_url'] ?? null));
-        $description = $this->cleanValue($this->mappedValue($productRow ?? [], $productFieldMap['description'] ?? null));
+        $productImageUrl = $this->cleanValue($this->mappedValue($productRow ?? [], $productFieldMap['image_url'] ?? null))
+            ?: $this->cleanValue($this->mappedAliasValue($productRow ?? [], ['Images.Image', 'Image', 'ImageURL']));
+        $priceImageUrl = $this->cleanValue($this->mappedValue($priceRow ?? [], $priceFieldMap['image_url'] ?? null))
+            ?: $this->cleanValue($this->mappedAliasValue($priceRow ?? [], ['SMALL_IMAGE', 'PRICE.SMALL_IMAGE']));
+        $imageUrl = $productImageUrl ?: $priceImageUrl;
+        $description = $this->cleanValue($this->mappedValue($productRow ?? [], $productFieldMap['description'] ?? null))
+            ?: $this->cleanValue($this->mappedValue($priceRow ?? [], $priceFieldMap['description'] ?? null));
 
         $row = [
             'row_index' => $rowIndex,
@@ -676,11 +704,16 @@ class AsbisDualFeedPreviewService
             'supplier_sku' => $supplierSku,
             'product_list_key' => $productListPresent ? $joinKey : null,
             'price_avail_key' => $priceAvailPresent ? $joinKey : null,
-            'ean_gtin' => $this->cleanValue($this->mappedValue($productRow ?? [], $productFieldMap['ean_gtin'] ?? null)),
-            'mpn' => $this->cleanValue($this->mappedValue($productRow ?? [], $productFieldMap['mpn'] ?? null)),
-            'brand' => $this->cleanValue($this->mappedValue($productRow ?? [], $productFieldMap['brand'] ?? null)),
-            'name' => $this->cleanValue($this->mappedValue($productRow ?? [], $productFieldMap['name'] ?? null)),
-            'category' => $this->cleanValue($this->mappedValue($productRow ?? [], $productFieldMap['category'] ?? null)),
+            'ean_gtin' => $this->cleanValue($this->mappedValue($productRow ?? [], $productFieldMap['ean_gtin'] ?? null))
+                ?: $this->cleanValue($this->mappedValue($priceRow ?? [], $priceFieldMap['ean_gtin'] ?? null)),
+            'mpn' => $this->cleanValue($this->mappedValue($productRow ?? [], $productFieldMap['mpn'] ?? null))
+                ?: $this->cleanValue($this->mappedValue($priceRow ?? [], $priceFieldMap['mpn'] ?? null)),
+            'brand' => $this->cleanValue($this->mappedValue($productRow ?? [], $productFieldMap['brand'] ?? null))
+                ?: $this->cleanValue($this->mappedValue($priceRow ?? [], $priceFieldMap['brand'] ?? null)),
+            'name' => $this->cleanValue($this->mappedValue($priceRow ?? [], $priceFieldMap['name'] ?? null))
+                ?: $this->cleanValue($this->mappedValue($productRow ?? [], $productFieldMap['name'] ?? null)),
+            'category' => $this->cleanValue($this->mappedValue($productRow ?? [], $productFieldMap['category'] ?? null))
+                ?: $this->cleanValue($this->mappedValue($priceRow ?? [], $priceFieldMap['category'] ?? null)),
             'price' => $this->decimalValue($priceRaw),
             'currency' => $this->cleanValue($this->mappedValue($priceRow ?? [], $priceFieldMap['currency'] ?? null)),
             'stock' => $this->integerValue($stockRaw),
@@ -1165,6 +1198,26 @@ class AsbisDualFeedPreviewService
         return $key === null ? null : ($row[$key] ?? null);
     }
 
+    /**
+     * @param  array<string, mixed>  $row
+     * @param  array<int, string>  $aliases
+     */
+    private function mappedAliasValue(array $row, array $aliases): mixed
+    {
+        $normalizedKeys = collect(array_keys($row))
+            ->mapWithKeys(fn (string $key): array => [$this->normalizeKey($key) => $key]);
+
+        foreach ($aliases as $alias) {
+            $rawKey = $normalizedKeys->get($this->normalizeKey($alias));
+
+            if (is_string($rawKey) && $this->hasValue($row[$rawKey] ?? null)) {
+                return $row[$rawKey];
+            }
+        }
+
+        return null;
+    }
+
     private function cleanValue(mixed $value): ?string
     {
         if ($value === null) {
@@ -1251,6 +1304,15 @@ class AsbisDualFeedPreviewService
             ->replaceMatches('/[^a-z0-9]+/', '_')
             ->trim('_')
             ->toString();
+    }
+
+    private function normalizedKeyMatchesAlias(string $normalizedKey, string $normalizedAlias): bool
+    {
+        if ($normalizedAlias === '' || strlen($normalizedAlias) < 4) {
+            return false;
+        }
+
+        return str_ends_with($normalizedKey, '_'.$normalizedAlias);
     }
 
     private function isRemoteSource(string $source): bool
