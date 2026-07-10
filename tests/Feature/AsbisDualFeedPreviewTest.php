@@ -206,11 +206,11 @@ class AsbisDualFeedPreviewTest extends TestCase
         $this->assertSame('WIC', $payload['join']['price_key']);
         $this->assertContains('productcode:wic', $payload['join']['candidate_normalized_keys']);
 
-        $this->assertSame(3, $payload['summary']['product_list_rows']);
-        $this->assertSame(4, $payload['summary']['price_avail_rows']);
-        $this->assertSame(2, $payload['summary']['joined_rows']);
+        $this->assertSame(6, $payload['summary']['product_list_rows']);
+        $this->assertSame(7, $payload['summary']['price_avail_rows']);
+        $this->assertSame(5, $payload['summary']['joined_rows']);
         $this->assertSame(1, $payload['summary']['would_update']);
-        $this->assertSame(1, $payload['summary']['would_create']);
+        $this->assertSame(2, $payload['summary']['would_create']);
         $this->assertSame(1, $payload['summary']['product_only_rows']);
         $this->assertSame(2, $payload['summary']['price_only_rows']);
         $this->assertSame(0, $payload['records_changed']['products']);
@@ -233,6 +233,9 @@ class AsbisDualFeedPreviewTest extends TestCase
         $rows = collect($payload['joined_rows']);
         $existing = $rows->firstWhere('supplier_sku', 'ASBIS-REAL-001');
         $new = $rows->firstWhere('supplier_sku', 'ASBIS-REAL-002');
+        $onRequest = $rows->firstWhere('supplier_sku', 'ASBIS-REAL-003');
+        $unknownAvailability = $rows->firstWhere('supplier_sku', 'ASBIS-REAL-UNKNOWN-AVAIL');
+        $missingAvailability = $rows->firstWhere('supplier_sku', 'ASBIS-REAL-MISSING-AVAIL');
 
         $this->assertSame('would_update_supplier_product', $existing['future_staging_action']);
         $this->assertSame('RealBrand', $existing['brand']);
@@ -240,16 +243,45 @@ class AsbisDualFeedPreviewTest extends TestCase
         $this->assertSame('Computers / Laptops', $existing['category']);
         $this->assertSame(101.25, $existing['price']);
         $this->assertSame('EUR', $existing['currency']);
-        $this->assertSame(24, $existing['stock']);
-        $this->assertSame('24+', $existing['availability']);
+        $this->assertNull($existing['stock']);
+        $this->assertSame('in_stock', $existing['availability']);
+        $this->assertSame('да', $existing['raw_availability']);
+        $this->assertSame('да', $existing['supplier_availability_label']);
+        $this->assertNotContains('invalid_stock', $existing['issues']);
+        $this->assertNotContains('missing_stock_availability', $existing['issues']);
         $this->assertSame('images.example.invalid', $existing['image_url_host']);
         $this->assertTrue($existing['description_present']);
 
         $this->assertSame('would_create_supplier_product', $new['future_staging_action']);
         $this->assertSame(220.50, $new['price']);
-        $this->assertSame(0, $new['stock']);
-        $this->assertSame('0', $new['availability']);
+        $this->assertNull($new['stock']);
+        $this->assertSame('limited_stock', $new['availability']);
+        $this->assertSame('Ограничено', $new['raw_availability']);
+        $this->assertNotContains('invalid_stock', $new['issues']);
+        $this->assertNotContains('missing_stock_availability', $new['issues']);
         $this->assertSame('Real ASBIS dock from PriceAvail', $new['name']);
+
+        $this->assertSame('would_create_supplier_product', $onRequest['future_staging_action']);
+        $this->assertNull($onRequest['stock']);
+        $this->assertSame('on_request', $onRequest['availability']);
+        $this->assertSame('По заявка', $onRequest['raw_availability']);
+        $this->assertNotContains('invalid_stock', $onRequest['issues']);
+        $this->assertNotContains('missing_stock_availability', $onRequest['issues']);
+
+        $this->assertSame('would_need_manual_review', $unknownAvailability['future_staging_action']);
+        $this->assertNull($unknownAvailability['stock']);
+        $this->assertNull($unknownAvailability['availability']);
+        $this->assertSame('Unexpected status', $unknownAvailability['raw_availability']);
+        $this->assertContains('unknown_availability', $unknownAvailability['issues']);
+        $this->assertContains('missing_stock_availability', $unknownAvailability['issues']);
+        $this->assertNotContains('invalid_stock', $unknownAvailability['issues']);
+
+        $this->assertSame('would_need_manual_review', $missingAvailability['future_staging_action']);
+        $this->assertNull($missingAvailability['stock']);
+        $this->assertNull($missingAvailability['availability']);
+        $this->assertNull($missingAvailability['raw_availability']);
+        $this->assertContains('missing_stock_availability', $missingAvailability['issues']);
+        $this->assertNotContains('invalid_stock', $missingAvailability['issues']);
 
         $this->assertTrue(collect($payload['unmatched_product_rows'])->contains(fn (array $row): bool => $row['supplier_sku'] === 'ASBIS-REAL-PRODUCT-ONLY'));
         $this->assertTrue(collect($payload['unmatched_price_rows'])->contains(fn (array $row): bool => $row['supplier_sku'] === 'ASBIS-REAL-PRICE-ONLY'));
@@ -265,7 +297,7 @@ class AsbisDualFeedPreviewTest extends TestCase
         ]);
 
         $this->assertSame('explicit_key_match', $explicit['join']['confidence']);
-        $this->assertSame(2, $explicit['summary']['joined_rows']);
+        $this->assertSame(5, $explicit['summary']['joined_rows']);
 
         $this->assertSame($counts, $this->protectedCounts());
         Http::assertNothingSent();

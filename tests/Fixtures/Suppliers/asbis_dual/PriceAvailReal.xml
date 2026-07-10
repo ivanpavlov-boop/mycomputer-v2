@@ -5,7 +5,7 @@
         <MY_PRICE>101.25</MY_PRICE>
         <RETAIL_PRICE>130.00</RETAIL_PRICE>
         <CURRENCY_CODE>EUR</CURRENCY_CODE>
-        <AVAIL>24+</AVAIL>
+        <AVAIL>да</AVAIL>
         <EAN>4750000000001</EAN>
         <DESCRIPTION>Real ASBIS laptop from PriceAvail</DESCRIPTION>
         <PRODUCT_CARD>https://example.invalid/products/real-001</PRODUCT_CARD>
@@ -22,7 +22,7 @@
         <MY_PRICE></MY_PRICE>
         <RETAIL_PRICE>220.50</RETAIL_PRICE>
         <CURRENCY_CODE>EUR</CURRENCY_CODE>
-        <AVAIL>0</AVAIL>
+        <AVAIL>Ограничено</AVAIL>
         <EAN>4750000000002</EAN>
         <DESCRIPTION>Real ASBIS dock from PriceAvail</DESCRIPTION>
         <PRODUCT_CARD>https://example.invalid/products/real-002</PRODUCT_CARD>
@@ -32,6 +32,23 @@
         <GROUP_NAME>Price Group Docks</GROUP_NAME>
         <VPF_NAME>Docks</VPF_NAME>
         <SMALL_IMAGE>https://small.example.invalid/asbis/real-002.jpg</SMALL_IMAGE>
+        <WARRANTYTERM>12</WARRANTYTERM>
+    </PRICE>
+    <PRICE>
+        <WIC>ASBIS-REAL-003</WIC>
+        <MY_PRICE>77.77</MY_PRICE>
+        <RETAIL_PRICE>99.99</RETAIL_PRICE>
+        <CURRENCY_CODE>EUR</CURRENCY_CODE>
+        <AVAIL>По заявка</AVAIL>
+        <EAN>4750000000005</EAN>
+        <DESCRIPTION>Special order ASBIS row from PriceAvail</DESCRIPTION>
+        <PRODUCT_CARD>https://example.invalid/products/real-003</PRODUCT_CARD>
+        <VENDOR_NAME>RequestPriceBrand</VENDOR_NAME>
+        <VENDOR_ID>105</VENDOR_ID>
+        <GROUP_ID>9005</GROUP_ID>
+        <GROUP_NAME>Price Group Special Order</GROUP_NAME>
+        <VPF_NAME>Special Order</VPF_NAME>
+        <SMALL_IMAGE>https://small.example.invalid/asbis/real-003.jpg</SMALL_IMAGE>
         <WARRANTYTERM>12</WARRANTYTERM>
     </PRICE>
     <PRICE>
@@ -66,6 +83,39 @@
         <GROUP_NAME>Price Group Misc</GROUP_NAME>
         <VPF_NAME>Misc</VPF_NAME>
         <SMALL_IMAGE>https://small.example.invalid/asbis/no-product.jpg</SMALL_IMAGE>
+        <WARRANTYTERM>12</WARRANTYTERM>
+    </PRICE>
+    <PRICE>
+        <WIC>ASBIS-REAL-UNKNOWN-AVAIL</WIC>
+        <MY_PRICE>44.00</MY_PRICE>
+        <RETAIL_PRICE>50.00</RETAIL_PRICE>
+        <CURRENCY_CODE>EUR</CURRENCY_CODE>
+        <AVAIL>Unexpected status</AVAIL>
+        <EAN>4750000000006</EAN>
+        <DESCRIPTION>Unknown availability ASBIS row</DESCRIPTION>
+        <PRODUCT_CARD>https://example.invalid/products/unknown-availability</PRODUCT_CARD>
+        <VENDOR_NAME>UnknownAvailabilityBrand</VENDOR_NAME>
+        <VENDOR_ID>106</VENDOR_ID>
+        <GROUP_ID>9006</GROUP_ID>
+        <GROUP_NAME>Price Group Unknown</GROUP_NAME>
+        <VPF_NAME>Unknown</VPF_NAME>
+        <SMALL_IMAGE>https://small.example.invalid/asbis/unknown-availability.jpg</SMALL_IMAGE>
+        <WARRANTYTERM>12</WARRANTYTERM>
+    </PRICE>
+    <PRICE>
+        <WIC>ASBIS-REAL-MISSING-AVAIL</WIC>
+        <MY_PRICE>33.00</MY_PRICE>
+        <RETAIL_PRICE>40.00</RETAIL_PRICE>
+        <CURRENCY_CODE>EUR</CURRENCY_CODE>
+        <EAN>4750000000007</EAN>
+        <DESCRIPTION>Missing availability ASBIS row</DESCRIPTION>
+        <PRODUCT_CARD>https://example.invalid/products/missing-availability</PRODUCT_CARD>
+        <VENDOR_NAME>MissingAvailabilityBrand</VENDOR_NAME>
+        <VENDOR_ID>107</VENDOR_ID>
+        <GROUP_ID>9007</GROUP_ID>
+        <GROUP_NAME>Price Group Missing</GROUP_NAME>
+        <VPF_NAME>Missing</VPF_NAME>
+        <SMALL_IMAGE>https://small.example.invalid/asbis/missing-availability.jpg</SMALL_IMAGE>
         <WARRANTYTERM>12</WARRANTYTERM>
     </PRICE>
 </CONTENT>
