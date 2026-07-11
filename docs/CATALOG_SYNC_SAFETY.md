@@ -453,11 +453,13 @@ database IDs, file paths and sample order are excluded from that fingerprint;
 EAN values retain leading zeroes.
 
 Apply requires `--apply`, the false-by-default
-`ASBIS_DUAL_FEED_STAGING_APPLY_ENABLED` flag, explicit confirmations, expected
-ProductList and PriceAvail SHA-256 values, the expected ready-to-create count,
-the expected candidate-set fingerprint, and the expected current ASBIS staging
-count. The source files are hashed again immediately before the transaction;
-any change aborts with `source_changed_during_preflight`.
+`ASBIS_DUAL_FEED_STAGING_APPLY_ENABLED` flag,
+`--confirm-supplier=asbis`, `--confirm-mode=create-only`,
+`--confirm-write-scope=supplier_products-only`, expected ProductList and
+PriceAvail SHA-256 values, the expected ready-to-create count, the expected
+candidate-set fingerprint, and the expected current ASBIS staging count. The
+source files are hashed again immediately before the transaction; any change
+aborts with `source_changed_during_preflight`.
 
 The transaction locks the ASBIS supplier row, takes the existing supplier
 import lock, rechecks every candidate for same-supplier SKU conflicts and

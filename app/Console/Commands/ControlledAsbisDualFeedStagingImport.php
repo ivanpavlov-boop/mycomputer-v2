@@ -22,9 +22,8 @@ class ControlledAsbisDualFeedStagingImport extends Command
         {--batch-size=500 : Insert batch size, from 1 to 1000}
         {--apply : Opt in to the guarded supplier_products-only transaction}
         {--confirm-supplier= : Required apply confirmation: asbis}
-        {--confirm-apply= : Required apply confirmation phrase}
-        {--confirm-create-only= : Required apply confirmation phrase}
-        {--confirm-no-catalog-sync= : Required apply confirmation phrase}
+        {--confirm-mode= : Required apply confirmation: create-only}
+        {--confirm-write-scope= : Required apply confirmation: supplier_products-only}
         {--expected-product-list-sha256= : Expected ProductList SHA-256}
         {--expected-price-avail-sha256= : Expected PriceAvail SHA-256}
         {--expected-ready-count= : Expected ready_to_create candidate count}
@@ -51,9 +50,8 @@ class ControlledAsbisDualFeedStagingImport extends Command
             'batch_size' => (int) ($this->option('batch-size') ?: 500),
             'apply' => (bool) $this->option('apply'),
             'confirm_supplier' => $this->option('confirm-supplier'),
-            'confirm_apply' => $this->option('confirm-apply'),
-            'confirm_create_only' => $this->option('confirm-create-only'),
-            'confirm_no_catalog_sync' => $this->option('confirm-no-catalog-sync'),
+            'confirm_mode' => $this->option('confirm-mode'),
+            'confirm_write_scope' => $this->option('confirm-write-scope'),
             'expected_product_list_sha256' => $this->option('expected-product-list-sha256'),
             'expected_price_avail_sha256' => $this->option('expected-price-avail-sha256'),
             'expected_ready_count' => $this->option('expected-ready-count'),

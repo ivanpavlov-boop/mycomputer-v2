@@ -15,6 +15,8 @@ class ControlledAsbisDualFeedStagingImportService
 
     private const WRITE_SCOPE = 'supplier_products_only';
 
+    private const CONFIRM_WRITE_SCOPE = 'supplier_products-only';
+
     private const SUPPLIER_KEY = 'asbis';
 
     private mixed $expectedReadyCount = null;
@@ -383,11 +385,16 @@ class ControlledAsbisDualFeedStagingImportService
             return array_values(array_unique($reasons));
         }
 
-        if (strtolower((string) ($options['confirm_supplier'] ?? '')) !== self::SUPPLIER_KEY
-            || (string) ($options['confirm_apply'] ?? '') !== 'ASBIS-DUAL-FEED-STAGING'
-            || (string) ($options['confirm_create_only'] ?? '') !== 'CREATE_ONLY'
-            || (string) ($options['confirm_no_catalog_sync'] ?? '') !== 'NO-CATALOG-SYNC') {
-            $reasons[] = 'invalid_confirmation';
+        if (strtolower((string) ($options['confirm_supplier'] ?? '')) !== self::SUPPLIER_KEY) {
+            $reasons[] = 'invalid_supplier_confirmation';
+        }
+
+        if ((string) ($options['confirm_mode'] ?? '') !== 'create-only') {
+            $reasons[] = 'invalid_mode_confirmation';
+        }
+
+        if ((string) ($options['confirm_write_scope'] ?? '') !== self::CONFIRM_WRITE_SCOPE) {
+            $reasons[] = 'invalid_write_scope_confirmation';
         }
 
         $expectedProductHash = trim((string) ($options['expected_product_list_sha256'] ?? ''));

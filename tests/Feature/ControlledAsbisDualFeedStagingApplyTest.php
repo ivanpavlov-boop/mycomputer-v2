@@ -34,6 +34,8 @@ class ControlledAsbisDualFeedStagingApplyTest extends TestCase
             'batch-size',
             'apply',
             'confirm-supplier',
+            'confirm-mode',
+            'confirm-write-scope',
             'expected-candidate-sha256',
         ] as $option) {
             $this->assertTrue($definition->hasOption($option), 'Missing option '.$option);
@@ -114,9 +116,8 @@ class ControlledAsbisDualFeedStagingApplyTest extends TestCase
             $payload = $this->commandJson($asbis, $productPath, $pricePath, [
                 '--apply' => true,
                 '--confirm-supplier' => 'asbis',
-                '--confirm-apply' => 'ASBIS-DUAL-FEED-STAGING',
-                '--confirm-create-only' => 'CREATE_ONLY',
-                '--confirm-no-catalog-sync' => 'NO-CATALOG-SYNC',
+                '--confirm-mode' => 'create-only',
+                '--confirm-write-scope' => 'supplier_products-only',
                 '--expected-product-list-sha256' => $dryRun['source_fingerprints']['product_list_sha256'],
                 '--expected-price-avail-sha256' => $dryRun['source_fingerprints']['price_avail_sha256'],
                 '--expected-ready-count' => $dryRun['calculated_ready_count'],
@@ -161,9 +162,8 @@ class ControlledAsbisDualFeedStagingApplyTest extends TestCase
             $payload = $this->commandJson($asbis, $productPath, $pricePath, [
                 '--apply' => true,
                 '--confirm-supplier' => 'asbis',
-                '--confirm-apply' => 'ASBIS-DUAL-FEED-STAGING',
-                '--confirm-create-only' => 'CREATE_ONLY',
-                '--confirm-no-catalog-sync' => 'NO-CATALOG-SYNC',
+                '--confirm-mode' => 'create-only',
+                '--confirm-write-scope' => 'supplier_products-only',
                 '--expected-product-list-sha256' => $dryRun['source_fingerprints']['product_list_sha256'],
                 '--expected-price-avail-sha256' => $dryRun['source_fingerprints']['price_avail_sha256'],
                 '--expected-ready-count' => 1,
@@ -211,9 +211,8 @@ class ControlledAsbisDualFeedStagingApplyTest extends TestCase
             $arguments = [
                 '--apply' => true,
                 '--confirm-supplier' => 'asbis',
-                '--confirm-apply' => 'ASBIS-DUAL-FEED-STAGING',
-                '--confirm-create-only' => 'CREATE_ONLY',
-                '--confirm-no-catalog-sync' => 'NO-CATALOG-SYNC',
+                '--confirm-mode' => 'create-only',
+                '--confirm-write-scope' => 'supplier_products-only',
                 '--expected-product-list-sha256' => $dryRun['source_fingerprints']['product_list_sha256'],
                 '--expected-price-avail-sha256' => $dryRun['source_fingerprints']['price_avail_sha256'],
                 '--expected-ready-count' => 1,
