@@ -1,180 +1,169 @@
 # AGENTS.md
 
-Guidance for coding agents working on `mycomputer.bg` v2.
+Guidance for AI-assisted development in `mycomputer-v2`.
 
-## Purpose
+## Project
 
-This file defines project-specific safety rules for Codex and other coding agents. Read it before changing supplier import, catalog sync, pricing, exclusions, matching, deployment, or Filament admin behavior.
+MyComputer.bg / COMPUTER2U is a Laravel 12 application with Filament admin,
+Nuxt storefront, MySQL, Docker Compose, Laravel queues, and GitHub Actions CI.
+Bulgarian is the primary language; English is a secondary language prepared for
+the storefront and admin where implemented. Staging is `computer2u.eu`; the
+future production domain is `mycomputer.bg`.
 
-Start with these docs:
+Before changing code, read this file and the relevant canonical docs:
 
 - [Architecture](docs/ARCHITECTURE.md)
 - [Catalog Sync](docs/CATALOG_SYNC.md)
 - [Sync Safety](docs/SYNC_SAFETY.md)
+- [Catalog Sync Safety](docs/CATALOG_SYNC_SAFETY.md)
 - [Data Ownership](docs/DATA_OWNERSHIP.md)
 - [Supplier Import](docs/SUPPLIER_IMPORT.md)
-- [AI Agents](docs/AI_AGENTS.md)
-- [Catalog Sync Safety Playbook](docs/CATALOG_SYNC_SAFETY.md)
-- [Release Checklist](docs/RELEASE_CHECKLIST.md)
 - [Testing](docs/TESTING.md)
 - [Deployment](docs/DEPLOYMENT.md)
-- [Roadmap](docs/ROADMAP.md)
+- [Release Checklist](docs/RELEASE_CHECKLIST.md)
 - [Phases](docs/PHASES.md)
+- [AI Agent Playbook](docs/AI_AGENTS.md)
 
-## Current Status
+The detailed role model and orchestration rules are in [docs/AI_AGENTS.md](docs/AI_AGENTS.md).
 
-The supplier-to-catalog flow is intentionally staged and controlled:
+## Required Workflow
 
-Supplier XML/CSV -> `supplier_products` staging -> Catalog Sync Preview -> pricing rules -> exclusion rules -> matching -> `sync_action` preview -> manual selected CREATE/UPDATE sync -> catalog products.
+1. Coordinator confirms scope and reads the relevant docs.
+2. Select the smallest necessary specialist roles.
+3. Implement only the requested scope.
+4. Run targeted tests, then the appropriate regression suite.
+5. Run Pint for PHP changes and `git diff --check`.
+6. Open a PR only when explicitly requested.
+7. Wait for all required CI checks; never merge failing CI.
+8. Deploy only from merged `origin/main`, only after explicit approval.
+9. Run documented post-deploy smoke checks when deployment is requested.
 
-Selected CREATE sync is enabled. Selected UPDATE price/stock sync is feature-flagged and limited to supplier-controlled commercial fields. Sync All, automatic sync, scheduled sync, and image sync are not enabled.
+No agent may deploy from a feature branch or recommend deployment before merge.
+No agent may merge, push, create a PR, or deploy when the user has prohibited it.
 
-## General Rules
+## Core Commands
 
-- Before coding, read `AGENTS.md` and the relevant docs.
-- Documentation-only changes must remain documentation-only.
-- UI-only changes must remain UI-only.
-- Supplier import must not directly create or update catalog products.
-- Preview must happen before real catalog sync writes.
-- Do not add Sync All unless explicitly requested.
-- Do not broaden UPDATE sync beyond the documented Phase 8 commercial-field allowlist unless there is a dedicated design and safety plan.
-- Do not enable automatic or scheduled catalog sync unless explicitly requested and documented.
-- Every PR must run tests and Pint.
-- No merge with failing CI.
-- No VPS deploy before merge into `main`.
-- Do not deploy to VPS unless explicitly requested.
-- Follow the release checklist for PR, CI, merge, deploy, and post-deploy smoke tests.
-- Return validation results and safety confirmations when handing work back.
-
-## Project Architect
-
-Allowed:
-
-- Clarify architecture in docs.
-- Add ADRs for sync, ownership, import, rollback, or deployment decisions.
-- Propose future phases in [Roadmap](docs/ROADMAP.md) and [Phases](docs/PHASES.md).
-
-Forbidden:
-
-- Adding write paths without safety docs, tests, and explicit user request.
-- Treating planned feature flags as implemented until code exists.
-
-## Supplier Import
-
-Allowed:
-
-- Import XML/CSV supplier data into staging.
-- Preserve raw supplier payloads in `supplier_products.raw_data`.
-- Improve validation, logging, and safe feed handling.
-
-Forbidden:
-
-- Creating or updating catalog products directly from supplier import.
-- Storing live feed secrets in source control or docs.
-- Running destructive catalog changes from import jobs.
-
-See [Supplier Import](docs/SUPPLIER_IMPORT.md).
-
-## Catalog Sync
-
-Rules:
-
-- CREATE and UPDATE sync are separate phases.
-- Manual selected CREATE sync is currently allowed.
-- Manual selected UPDATE sync is allowed only for price, supplier cost, stock, availability, and supplier offer metadata when `CATALOG_SYNC_UPDATE_ENABLED=true`.
-- Sync All is not currently allowed.
-- Automatic sync is not currently allowed.
-- Real write operations require server-side validation.
-- Do not trust UI-selected state.
-- Per-row try/catch is required for batch actions.
-- Batch result summary is required.
-
-See [Catalog Sync](docs/CATALOG_SYNC.md) and [Sync Safety](docs/SYNC_SAFETY.md).
-
-## Data Ownership / Content Safety
-
-Supplier data may update only safe supplier-controlled fields unless explicitly approved.
-
-Supplier data may update:
-
-- supplier cost
-- calculated price
-- stock / quantity
-- availability
-- supplier offer
-- source metadata
-
-Supplier data must not automatically overwrite:
-
-- product name
-- slug
-- SEO title
-- SEO description
-- short description
-- full description
-- manually edited content
-- images
-- categories
-- attributes/specifications
-
-Existing locks: `lock_name`, `lock_seo`, `lock_descriptions`.
-
-See [Data Ownership](docs/DATA_OWNERSHIP.md) and [Content Locks](docs/CONTENT_LOCKS.md).
-
-## QA / Testing
-
-Run before handing work back:
+Use the bundled PHP runtime on this workstation:
 
 ```powershell
 .\.tools\php\php.exe artisan test
 .\.tools\php\php.exe vendor\bin\pint --test
+.\.tools\php\php.exe .\.tools\composer.phar test
+cd frontend
+cmd /c npm run test -- --run
+cmd /c npm run build
+cd ..
+git diff --check
 ```
 
-Catalog Sync changes require feature tests. Risky sync behavior requires regression tests that prove no unintended products or `supplier_products` are modified.
+Documentation-only changes normally require scope, link, diff, secret-pattern,
+and `git diff --check` validation instead of an unnecessary full application
+test run. Code, configuration, migrations, routes, workflows, and frontend
+changes require the relevant tests and build checks.
 
-See [Testing](docs/TESTING.md).
+## Catalog Sync Safety
 
-## DevOps / Deployment
+The controlled flow is:
 
-Rules:
+`supplier feed -> supplier_products staging -> preview -> pricing, exclusions, matching -> sync_action -> manually selected sync`
 
-- Deploy only from `origin/main`.
-- Deploy only after the PR is merged into `main`.
-- Deploy only when the user explicitly requests deployment.
-- Start app containers before nginx.
-- Verify with `curl -I http://localhost:8080`.
-- If nginx cannot resolve upstream `app`, start `app` first, wait, then start nginx.
+- Supplier import must stage data in `supplier_products`; it must not directly
+  create or update catalog products.
+- Manual selected CREATE is the only enabled catalog creation path.
+- Manual selected UPDATE is limited to price, supplier cost, quantity/stock,
+  availability, and selected supplier-offer metadata.
+- UPDATE remains disabled by default:
+  `CATALOG_SYNC_UPDATE_ENABLED=false`.
+- Keep `CATALOG_SYNC_SYNC_ALL_ENABLED=false` and
+  `CATALOG_SYNC_AUTO_ENABLED=false`.
+- No Sync All button, command, or automatic path may be added without an
+  explicit controlled phase. Automatic sync, scheduled sync, and image sync
+  are not enabled.
+- Real writes require server-side revalidation, explicit allowlists, per-row
+  failure isolation, and audit/result summaries.
+- Preview and diagnostic commands must not write protected tables.
+- The Catalog Sync Safety Agent has veto authority over unsafe sync changes.
 
-See [Deployment](docs/DEPLOYMENT.md) and [Release Checklist](docs/RELEASE_CHECKLIST.md).
+Supplier data must not automatically overwrite product name, slug, SEO,
+descriptions, images, categories, attributes/specifications, or localized
+manual content. Supplier image/category/attribute/SEO changes require their own
+reviewed phase.
 
-## AI Agent Playbook
+Do not implement ASBIS Phase 9C.6.4.2 without an explicit request and approved
+design. The current ASBIS readiness audit remains read-only and Phase 9C.6.4.2
+is blocked until the corrected real audit is deployed, rerun, reviewed, and
+explicitly approved.
 
-Use [AI Agents](docs/AI_AGENTS.md) for project AI/Codex roles and review checklists.
-These roles are documentation and process guidance only; they are not autonomous
-production agents, scheduled jobs, background workers, or data-mutating AI code.
+## Admin and Security Safety
 
-## Filament UI
+- Existing active Super Admin access must be preserved.
+- The last active Super Admin must not be downgraded, deleted, or deactivated.
+- Prefer soft deletion for staff users; deleted users cannot log in, access
+  Filament, or reset passwords.
+- Only Super Admin manages users and roles unless a documented permission says
+  otherwise. Viewer/Auditor remains read-only.
+- Do not invalidate active sessions without an explicit requirement.
+- Staff password rules require at least 10 characters, uppercase, lowercase,
+  number, special symbol, and confirmation.
+- Never email or log plain-text passwords. Never log reset tokens or secrets.
+- Password reset links for staff must use the Filament admin reset flow.
 
-Allowed:
+## Nuxt Route Ownership
 
-- Improve readability, spacing, filters, tables, and safe diagnostics.
-- Add view tests for admin pages when useful.
+Laravel/Filament owns `/admin`, `/api/*`, `/livewire/*`, `/vendor/*`,
+`/build/*`, and `/storage/*`.
 
-Forbidden:
+Nuxt owns only the safe read-only storefront routes `/`, `/catalog`,
+`/categories`, `/c/*`, `/p/*`, `/_nuxt/*`, and `/_ipx/*`.
 
-- Hiding business logic changes inside UI changes.
-- Enabling write actions from the UI without server-side validation and tests.
-- Adding UPDATE sync or Sync All buttons unless explicitly requested.
+`/cart`, `/checkout`, `/account`, `/login`, `/register`, `/reset-password`,
+`/wishlist`, and `/compare` remain disabled or safely return the documented
+placeholder/404 until explicitly approved. Do not expose `supplier_products`.
 
-## Safe Change Boundaries
+## Role Selection
 
-Ask or document clearly before changing:
+Use the smallest necessary set of logical roles. The Coordinator reads the
+request and selects specialists; specialists do not create runtime agents.
 
-- Authentication strategy.
-- Customer/order/payment behavior.
-- Inventory reservation.
-- Supplier import execution jobs.
-- Search engine choice.
-- Nuxt frontend structure.
-- Production deployment setup.
-- Catalog sync write behavior.
+- Laravel Backend: services, commands, models, APIs, validation, database, and
+  backend tests.
+- Filament Admin: resources, forms, tables, actions, labels, and authorization.
+- Nuxt Storefront: pages, components, composables, routes, frontend tests, and
+  builds.
+- Catalog Sync Safety: mandatory reviewer for supplier, staging, product-sync,
+  price/stock, matching, availability, mapping, schedule, or sync changes.
+- Supplier Import: feed parsing, local preview, staging classification, and
+  controlled staging apply mechanics.
+- Product Data Quality: workflow, content, attributes, SEO, images, and
+  read-only quality queues.
+- QA/Regression: targeted/full tests, negative cases, invariants, and zero-write
+  guarantees.
+- Security: auth, roles, password reset, secrets, XML/file safety, and privilege
+  boundaries.
+- Release/DevOps: PR, CI, merge, deployment gates, and smoke verification only
+  when that workflow is explicitly requested.
+- Documentation: canonical docs, phase status, links, and safety decisions.
+
+Security is mandatory for auth, roles, password reset, secrets, remote fetch,
+file handling, or XML parsing. Catalog Sync Safety is mandatory for any supplier
+or catalog-sync surface. Release/DevOps is mandatory for PR/CI/merge review or
+an explicitly requested deployment.
+
+## Scope Boundaries
+
+Documentation-only changes must remain documentation-only. UI-only changes must
+not hide business logic. Do not add migrations, runtime agents, autonomous AI
+jobs, OpenAI integrations, MCP servers, customer commerce flows, Sync All,
+automatic sync, supplier content overwrite, or image import without an explicit
+phase, safety design, tests, and user approval.
+
+When instructions conflict, apply this priority:
+
+1. Current explicit user request.
+2. Repository safety rules in this file.
+3. Scoped `AGENTS.md` rules, which may only be stricter.
+4. Canonical docs and phase status.
+5. Implementation preferences.
+
+Scoped instruction files should be added only when they express genuinely
+different local rules. They must link back to this file and must not weaken it.
