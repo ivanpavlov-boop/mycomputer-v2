@@ -73,4 +73,8 @@ return [
         'diagnostic_step' => env('CATALOG_SYNC_PREVIEW_DIAGNOSTIC_STEP'),
     ],
 
+    'asbis_dual_feed_staging_apply' => [
+        'enabled' => env('ASBIS_DUAL_FEED_STAGING_APPLY_ENABLED', false),
+    ],
+
 ];
