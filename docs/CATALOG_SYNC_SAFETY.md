@@ -522,9 +522,11 @@ not exposed. Query failures are classified into safe codes such as
 
 If a batch fails, attempted rows may be reported separately, but committed rows
 and `records_changed.supplier_products` remain zero after rollback. The feature
-flag remains false by default, no production apply has succeeded in this
-development verification, and production post-apply verification remains
-pending for a later explicitly approved operational window.
+flag remains false by default. A later controlled v2 apply was reported as
+successful with 4,844 ASBIS staging-only rows, all unlinked and with Catalog
+Sync disabled afterward; this verifier still does not claim that production
+state has been independently verified. Production post-apply verification
+remains pending for a later explicitly approved operational window.
 
 ## ASBIS Post-Apply Verification and Reconciliation Audit
 

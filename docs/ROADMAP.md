@@ -88,7 +88,9 @@ Manual selected UPDATE price/stock sync is implemented behind `CATALOG_SYNC_UPDA
 2. Keep feature flag/audit visibility read-only.
 3. Phase 9C.6.4.2 is merged as a dry-run-first, false-by-default, create-only
    staging path. The first production apply attempts rolled back safely with
-   zero ASBIS rows inserted and no catalog changes.
+   zero ASBIS rows inserted and no catalog changes. A later controlled v2 apply
+   was reported successful with staging-only, unlinked ASBIS rows; independent
+   post-apply verification is still pending.
 4. Phase 9C.6.4.2a ASBIS MySQL Apply Compatibility and Safe Transaction
    Diagnostics is complete. The v2 payload contract and rollback diagnostics
    remain covered by tests.

@@ -53,6 +53,21 @@ class AsbisPostApplyVerificationTest extends TestCase
         $this->assertStringContainsString('read-only', strtolower((string) $command->getDescription()));
     }
 
+    public function test_table_output_is_readable_for_a_failed_local_audit(): void
+    {
+        $asbis = Supplier::factory()->create(['company_name' => 'ASBIS', 'slug' => 'asbis']);
+
+        $exit = Artisan::call('suppliers:audit-asbis-post-apply-verification', [
+            '--supplier' => $asbis->slug,
+            '--format' => 'table',
+        ]);
+        $output = Artisan::output();
+
+        $this->assertSame(1, $exit);
+        $this->assertStringContainsString('ASBIS post-apply verification', $output);
+        $this->assertStringContainsString('Read-only verification', $output);
+    }
+
     /** @throws JsonException */
     public function test_happy_path_verifies_exact_v2_rows_without_mutation(): void
     {
@@ -98,6 +113,44 @@ class AsbisPostApplyVerificationTest extends TestCase
         Http::assertNothingSent();
         Queue::assertNothingPushed();
         Bus::assertNothingDispatched();
+    }
+
+    /** @throws JsonException */
+    public function test_unicode_truncation_and_multiple_availability_statuses_verify(): void
+    {
+        $this->safeConfig();
+        $asbis = Supplier::factory()->create(['company_name' => 'ASBIS', 'slug' => 'asbis', 'schedule_enabled' => false]);
+        foreach ([['code' => 'in_stock', 'name' => 'In Stock'], ['code' => 'limited_stock', 'name' => 'Limited Stock']] as $status) {
+            AvailabilityStatus::query()->create([
+                ...$status,
+                'color' => 'green',
+                'icon' => 'check',
+                'is_active' => true,
+                'allow_purchase' => true,
+                'show_stock_quantity' => true,
+            ]);
+        }
+        [$productPath, $pricePath] = $this->writeTruncatedFixtures();
+
+        try {
+            $audit = $this->sourceAudit($asbis, $productPath, $pricePath);
+            foreach ($audit['candidate_payloads'] as $payload) {
+                SupplierProduct::query()->create([...$payload, 'received_at' => now()]);
+            }
+            $payload = $this->runVerification($asbis, $productPath, $pricePath, $audit);
+        } finally {
+            @unlink($productPath);
+            @unlink($pricePath);
+        }
+
+        $this->assertTrue($payload['verification_passed']);
+        $this->assertSame(2, $payload['calculated_candidate_count']);
+        $this->assertSame(1, $payload['truncation_verification']['truncated_name_count']);
+        $this->assertSame(1, $payload['truncation_verification']['truncated_rows_with_original_name_count']);
+        $this->assertSame(325, $payload['truncation_verification']['maximum_original_name_length']);
+        $this->assertSame(255, $payload['truncation_verification']['maximum_staged_name_length']);
+        $this->assertSame(['in_stock' => 1, 'limited_stock' => 1], $payload['availability_verification']['normalized_status_counts']);
+        $this->assertSame(0, $payload['records_changed']['catalog_sync']);
     }
 
     /** @throws JsonException */
@@ -309,6 +362,56 @@ XML);
         <AVAIL>In Stock</AVAIL>
         <EAN>000000000001</EAN>
         <DESCRIPTION>Verification product</DESCRIPTION>
+    </PRICE>
+</CONTENT>
+XML);
+
+        return [$productPath, $pricePath];
+    }
+
+    /** @return array{0: string, 1: string} */
+    private function writeTruncatedFixtures(): array
+    {
+        $productPath = tempnam(sys_get_temp_dir(), 'asbis-verify-long-product-');
+        $pricePath = tempnam(sys_get_temp_dir(), 'asbis-verify-long-price-');
+        $longName = str_repeat('Л', 325);
+        file_put_contents($productPath, sprintf(<<<'XML'
+<?xml version="1.0" encoding="UTF-8"?>
+<ProductCatalog>
+    <Product>
+        <ProductCode>VERIFY-001</ProductCode>
+        <EAN>000000000001</EAN>
+        <MPN>VERIFY-MPN-001</MPN>
+        <Vendor>Verify Brand</Vendor>
+        <ProductDescription>Normal verification product</ProductDescription>
+        <ProductCategory>Verification</ProductCategory>
+    </Product>
+    <Product>
+        <ProductCode>VERIFY-002</ProductCode>
+        <EAN>000000000002</EAN>
+        <MPN>VERIFY-MPN-002</MPN>
+        <Vendor>Verify Brand</Vendor>
+        <ProductDescription>%s</ProductDescription>
+        <ProductCategory>Verification</ProductCategory>
+    </Product>
+</ProductCatalog>
+XML, htmlspecialchars($longName, ENT_XML1, 'UTF-8')));
+        file_put_contents($pricePath, <<<'XML'
+<?xml version="1.0" encoding="UTF-8"?>
+<CONTENT>
+    <PRICE>
+        <WIC>VERIFY-001</WIC>
+        <MY_PRICE>10.50</MY_PRICE>
+        <CURRENCY_CODE>EUR</CURRENCY_CODE>
+        <AVAIL>In Stock</AVAIL>
+        <EAN>000000000001</EAN>
+    </PRICE>
+    <PRICE>
+        <WIC>VERIFY-002</WIC>
+        <MY_PRICE>11.50</MY_PRICE>
+        <CURRENCY_CODE>EUR</CURRENCY_CODE>
+        <AVAIL>Limited Stock</AVAIL>
+        <EAN>000000000002</EAN>
     </PRICE>
 </CONTENT>
 XML);

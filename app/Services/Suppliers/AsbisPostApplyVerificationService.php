@@ -141,7 +141,7 @@ class AsbisPostApplyVerificationService
         $skuReconciliation = $this->reconcileSkus($candidates, $stagedRows);
         $rowReconciliation = $this->reconcileRows($candidates, $stagedRows);
         $provenance = $this->verifyProvenance($candidates, $stagedRows, $audit['source_fingerprints'] ?? []);
-        $truncation = $this->verifyTruncation($candidates);
+        $truncation = $this->verifyTruncation($stagedRows);
         $availability = $this->verifyAvailability($candidates, $rowReconciliation);
         $pricing = $this->verifyPricing($candidates, $rowReconciliation);
         $protectedAfter = $this->protectedCounts();
@@ -212,12 +212,18 @@ class AsbisPostApplyVerificationService
                 'expected_price_avail_sha256' => $this->optionString($options, 'expected_price_avail_sha256'),
                 'actual_price_avail_sha256' => $sourceFingerprints['price_avail_sha256'] ?? null,
                 'price_avail_match' => $this->hashMatches($options['expected_price_avail_sha256'] ?? null, $sourceFingerprints['price_avail_sha256'] ?? null),
+                'source_fingerprints_match' => $this->hashMatches($options['expected_product_list_sha256'] ?? null, $sourceFingerprints['product_list_sha256'] ?? null)
+                    && $this->hashMatches($options['expected_price_avail_sha256'] ?? null, $sourceFingerprints['price_avail_sha256'] ?? null),
             ],
             'candidate_payload_schema_version' => $audit['candidate_payload_schema_version'] ?? null,
             'expected_candidate_sha256' => $this->optionString($options, 'expected_candidate_sha256'),
             'calculated_candidate_sha256' => $details['calculated_candidate_sha256'] ?? $this->candidateFingerprint->fingerprint($candidates),
             'expected_candidate_count' => $this->optionalInt($options['expected_ready_count'] ?? null),
             'calculated_candidate_count' => count($candidates),
+            'candidate_count_matches' => $this->optionalInt($options['expected_ready_count'] ?? null) !== null
+                && $this->optionalInt($options['expected_ready_count'] ?? null) === count($candidates),
+            'candidate_set_matches' => $this->optionString($options, 'expected_candidate_sha256') !== null
+                && $this->optionString($options, 'expected_candidate_sha256') === ($details['calculated_candidate_sha256'] ?? $this->candidateFingerprint->fingerprint($candidates)),
             'payload_schema_compatibility' => $details['payload_schema_compatibility'] ?? [
                 'payload_schema_compatible' => false,
             ],
@@ -394,10 +400,13 @@ class AsbisPostApplyVerificationService
             'staged_row_count' => count($stagedRows),
             'missing_count' => count($missing),
             'extra_count' => count($extra),
+            'missing_staged_sku_count' => count($missing),
+            'extra_staged_sku_count' => count($extra),
             'missing_sku_hashes' => $this->skuHashes($missing),
             'extra_sku_hashes' => $this->skuHashes($extra),
             'source_duplicate_group_count' => $candidateDuplicates,
             'staged_duplicate_group_count' => $stagedDuplicates,
+            'duplicate_staged_sku_group_count' => $stagedDuplicates,
             'blank_staged_sku_count' => $blankStaged,
         ];
     }
@@ -422,6 +431,7 @@ class AsbisPostApplyVerificationService
         $rawDataMismatch = 0;
         $productLinked = 0;
         $synced = 0;
+        $pendingReview = 0;
         $compared = 0;
 
         foreach ($candidates as $candidate) {
@@ -470,6 +480,9 @@ class AsbisPostApplyVerificationService
             if ($row->synced_at !== null) {
                 $synced++;
             }
+            if ($row->status === 'pending_review') {
+                $pendingReview++;
+            }
         }
 
         if ($compared !== count($candidates)) {
@@ -481,6 +494,9 @@ class AsbisPostApplyVerificationService
         if ($synced > 0) {
             $this->addIssue('staged_rows_synced');
         }
+        if ($pendingReview > 0) {
+            $this->addIssue('pending_review_rows');
+        }
 
         return [
             'compared_count' => $compared,
@@ -491,6 +507,8 @@ class AsbisPostApplyVerificationService
             'price_mismatch_count' => $priceMismatch,
             'availability_mismatch_count' => $availabilityMismatch,
             'status_mismatch_count' => $statusMismatch,
+            'pending_review_count' => $pendingReview,
+            'new_status_count' => $compared - $pendingReview,
             'raw_data_mismatch_count' => $rawDataMismatch,
             'product_linked_count' => $productLinked,
             'synced_row_count' => $synced,
@@ -503,6 +521,16 @@ class AsbisPostApplyVerificationService
         $rowsBySku = collect($stagedRows)->keyBy(fn (SupplierProduct $row): ?string => $this->normalizeSku($row->supplier_sku));
         $checked = 0;
         $mismatch = 0;
+        $counts = array_fill_keys([
+            'wrong_source_count',
+            'wrong_supplier_key_count',
+            'wrong_source_product_code_count',
+            'wrong_source_wic_count',
+            'wrong_product_list_hash_count',
+            'wrong_price_avail_hash_count',
+            'wrong_candidate_schema_count',
+        ], 0);
+
         foreach ($candidates as $candidate) {
             $sku = $this->normalizeSku($candidate['supplier_sku'] ?? null);
             $row = $sku !== null ? $rowsBySku->get($sku) : null;
@@ -511,14 +539,21 @@ class AsbisPostApplyVerificationService
             }
             $checked++;
             $raw = is_array($row->raw_data) ? $row->raw_data : [];
-            $valid = ($raw['source'] ?? null) === 'asbis_dual_feed'
-                && ($raw['supplier_key'] ?? null) === 'asbis'
-                && $this->normalizeSku($raw['source_product_code'] ?? null) === $sku
-                && $this->normalizeSku($raw['source_wic'] ?? null) === $sku
-                && ($raw['product_list_sha256'] ?? null) === ($fingerprints['product_list_sha256'] ?? null)
-                && ($raw['price_avail_sha256'] ?? null) === ($fingerprints['price_avail_sha256'] ?? null)
-                && ($raw['candidate_payload_schema_version'] ?? null) === AsbisCandidateFingerprintService::SCHEMA_VERSION;
-            if (! $valid) {
+            $checks = [
+                'wrong_source_count' => ($raw['source'] ?? null) !== 'asbis_dual_feed',
+                'wrong_supplier_key_count' => ($raw['supplier_key'] ?? null) !== 'asbis',
+                'wrong_source_product_code_count' => $this->normalizeSku($raw['source_product_code'] ?? null) !== $sku,
+                'wrong_source_wic_count' => $this->normalizeSku($raw['source_wic'] ?? null) !== $sku,
+                'wrong_product_list_hash_count' => ($raw['product_list_sha256'] ?? null) !== ($fingerprints['product_list_sha256'] ?? null),
+                'wrong_price_avail_hash_count' => ($raw['price_avail_sha256'] ?? null) !== ($fingerprints['price_avail_sha256'] ?? null),
+                'wrong_candidate_schema_count' => ($raw['candidate_payload_schema_version'] ?? null) !== AsbisCandidateFingerprintService::SCHEMA_VERSION,
+            ];
+            foreach ($checks as $countKey => $failed) {
+                if ($failed) {
+                    $counts[$countKey]++;
+                }
+            }
+            if (in_array(true, $checks, true)) {
                 $mismatch++;
                 $this->addIssue('raw_provenance_mismatch', ['sku_hash' => $this->skuHash($sku)]);
             }
@@ -530,22 +565,26 @@ class AsbisPostApplyVerificationService
         return [
             'checked_count' => $checked,
             'mismatch_count' => $mismatch,
+            ...$counts,
             'source' => 'asbis_dual_feed',
             'supplier_key' => 'asbis',
             'candidate_payload_schema_version' => AsbisCandidateFingerprintService::SCHEMA_VERSION,
         ];
     }
 
-    /** @param array<int, array<string, mixed>> $candidates */
-    private function verifyTruncation(array $candidates): array
+    /** @param array<int, SupplierProduct> $stagedRows */
+    private function verifyTruncation(array $stagedRows): array
     {
         $truncated = 0;
+        $withOriginalName = 0;
         $inconsistent = 0;
+        $missingOriginalName = 0;
+        $overLimit = 0;
         $maxOriginal = 0;
         $maxStaged = 0;
-        foreach ($candidates as $candidate) {
-            $raw = is_array($candidate['raw_data'] ?? null) ? $candidate['raw_data'] : [];
-            $name = $candidate['name'] ?? null;
+        foreach ($stagedRows as $row) {
+            $raw = is_array($row->raw_data) ? $row->raw_data : [];
+            $name = $row->name;
             $stagedLength = $this->unicodeLength($name);
             $originalName = $raw['original_name'] ?? null;
             $originalLength = $raw['original_name_length'] ?? null;
@@ -554,6 +593,14 @@ class AsbisPostApplyVerificationService
             $maxStaged = max($maxStaged, $stagedLength);
             if ($wasTruncated) {
                 $truncated++;
+                if (is_string($originalName) && $originalName !== '') {
+                    $withOriginalName++;
+                } else {
+                    $missingOriginalName++;
+                }
+            }
+            if ($stagedLength > 255) {
+                $overLimit++;
             }
             $valid = $stagedLength <= 255
                 && ($raw['staged_name_limit'] ?? null) === 255
@@ -565,13 +612,17 @@ class AsbisPostApplyVerificationService
                     : $originalName === null && $originalLength === $stagedLength);
             if (! $valid) {
                 $inconsistent++;
-                $this->addIssue('truncation_metadata_mismatch');
+                $this->addIssue('invalid_truncation_metadata');
             }
         }
 
         return [
-            'checked_count' => count($candidates),
+            'checked_count' => count($stagedRows),
             'truncated_name_count' => $truncated,
+            'truncated_rows_with_original_name_count' => $withOriginalName,
+            'missing_original_name_count' => $missingOriginalName,
+            'names_over_limit_count' => $overLimit,
+            'invalid_truncation_metadata_count' => $inconsistent,
             'inconsistent_count' => $inconsistent,
             'maximum_original_name_length' => $maxOriginal,
             'maximum_staged_name_length' => $maxStaged,
@@ -588,6 +639,11 @@ class AsbisPostApplyVerificationService
             : [];
         $invalidIds = $ids->diff($validIds)->count();
         $unknown = collect($candidates)->filter(fn (array $candidate): bool => ($candidate['external_availability_status'] ?? null) !== null && ! in_array($candidate['external_availability_status'], self::KNOWN_AVAILABILITY, true))->count();
+        $statusCounts = collect($candidates)
+            ->groupBy(fn (array $candidate): string => (string) ($candidate['external_availability_status'] ?? 'missing'))
+            ->map(fn ($rows): int => $rows->count())
+            ->sortKeys()
+            ->all();
         if ($invalidIds > 0) {
             $this->addIssue('invalid_availability_status');
         }
@@ -599,6 +655,7 @@ class AsbisPostApplyVerificationService
             'checked_count' => count($candidates),
             'invalid_availability_status_id_count' => $invalidIds,
             'unknown_external_status_count' => $unknown,
+            'normalized_status_counts' => $statusCounts,
             'availability_mismatch_count' => $rowReconciliation['availability_mismatch_count'] ?? 0,
         ];
     }
@@ -609,6 +666,7 @@ class AsbisPostApplyVerificationService
         $invalid = 0;
         $negative = 0;
         $currencyInvalid = 0;
+        $nonEur = 0;
         foreach ($candidates as $candidate) {
             $price = $candidate['price'] ?? null;
             $currency = $candidate['currency'] ?? null;
@@ -621,6 +679,9 @@ class AsbisPostApplyVerificationService
             if (! is_string($currency) || preg_match('/^[A-Z]{3}$/', $currency) !== 1) {
                 $currencyInvalid++;
             }
+            if ($currency !== 'EUR') {
+                $nonEur++;
+            }
         }
         if ($invalid > 0) {
             $this->addIssue('invalid_price');
@@ -631,12 +692,16 @@ class AsbisPostApplyVerificationService
         if ($currencyInvalid > 0) {
             $this->addIssue('invalid_currency');
         }
+        if ($nonEur > 0) {
+            $this->addIssue('non_eur_currency');
+        }
 
         return [
             'checked_count' => count($candidates),
             'invalid_price_count' => $invalid,
             'negative_price_count' => $negative,
             'invalid_currency_count' => $currencyInvalid,
+            'non_eur_currency_count' => $nonEur,
             'price_mismatch_count' => $rowReconciliation['price_mismatch_count'] ?? 0,
             'supplier_cost_mismatch_count' => ($rowReconciliation['field_mismatch_counts']['supplier_price_raw'] ?? 0),
             'currency_mismatch_count' => ($rowReconciliation['field_mismatch_counts']['currency'] ?? 0),
@@ -654,7 +719,10 @@ class AsbisPostApplyVerificationService
     /** @return array<string, int> */
     private function recordsChanged(): array
     {
-        return collect(self::PROTECTED_TABLES)->mapWithKeys(fn (string $table): array => [$table => 0])->all();
+        return [
+            ...collect(self::PROTECTED_TABLES)->mapWithKeys(fn (string $table): array => [$table => 0])->all(),
+            'catalog_sync' => 0,
+        ];
     }
 
     /** @return array<string, bool> */
