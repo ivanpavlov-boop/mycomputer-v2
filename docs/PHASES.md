@@ -54,12 +54,13 @@ Phase 8 manual selected UPDATE price/stock sync has been implemented behind a fe
 | Phase 9C.6.4.1 | ASBIS Dual-Feed Local Preview and Join | Complete |
 | Phase 9C.6.4.1c | ASBIS Full-File Streaming Preview and Apply Readiness Audit | Complete; read-only streaming audit with source fingerprints and no apply mode. |
 | Phase 9C.6.4.1d | ASBIS Audit Consistency and Missing-Key Safety | Complete; canonical identifier overlaps, missing-key blockers and reconciliation remain read-only. |
+| Phase 9C.6.4.2 | Controlled ASBIS Dual-Feed Staging Apply | Complete; merged dry-run-first, false-by-default, create-only `supplier_products` staging path. Initial production apply attempts rolled back safely with zero ASBIS rows inserted. |
 
 ## In Progress
 
 | Phase | Name | Status |
 | --- | --- | --- |
-| Phase 9C.6.4.2 | Controlled ASBIS Dual-Feed Staging Apply | Implementation in progress; dry-run-first and feature-flagged create-only `supplier_products` staging path. Real apply remains blocked pending reviewed audit fingerprints and explicit operational approval. |
+| Phase 9C.6.4.2a | ASBIS MySQL Apply Compatibility and Safe Transaction Diagnostics | Canonical v2 payload validation, Unicode-safe name compatibility, canonical `new` status, and safe rollback diagnostics are in progress. Production ASBIS staging remains at zero. |
 
 ## Paused / Partial Phases
 
@@ -71,7 +72,7 @@ Phase 8 manual selected UPDATE price/stock sync has been implemented behind a fe
 
 | Phase | Name | Notes |
 | --- | --- | --- |
-| Phase 9C.6.4.2.1 | Controlled ASBIS Apply Operational Approval | Planned follow-up for a controlled window, post-apply checks, and flag disablement; no broader sync. |
+| Phase 9C.6.4.2.1 | Controlled ASBIS Apply Operational Approval | Planned follow-up after the compatibility hotfix for a controlled window, post-apply checks, and flag disablement; no broader sync. |
 | Phase 9C.6.5 | ASBIS Staging Data Discovery Audit | Audit newly staged ASBIS data before broader mapping review. |
 | Phase 9C.6.6 | Multi-Supplier Category Mapping Review | Review mappings in batches using the full multi-supplier picture. |
 | Phase 9C.6.7 | Multi-Supplier Identifier Overlap Review | Review exact and possible overlaps before future offer grouping. |

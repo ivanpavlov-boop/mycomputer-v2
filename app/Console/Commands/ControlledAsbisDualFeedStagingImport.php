@@ -100,9 +100,16 @@ class ControlledAsbisDualFeedStagingImport extends Command
         $this->line('PriceAvail SHA-256: '.data_get($payload, 'source_fingerprints.price_avail_sha256', '-'));
         $this->line('Candidate SHA-256: '.($payload['ready_to_create_candidate_set_sha256'] ?? '-'));
         $this->line('Candidate schema: '.($payload['candidate_payload_schema_version'] ?? '-'));
+        $this->line('Payload schema compatible: '.(($payload['payload_schema_compatible'] ?? false) ? 'yes' : 'no'));
+        $this->line('Truncated names: '.data_get($payload, 'payload_schema_compatibility.truncated_name_count', 0));
+        $this->line('Maximum original/staged name length: '.data_get($payload, 'payload_schema_compatibility.maximum_original_name_length', 0).'/'.data_get($payload, 'payload_schema_compatibility.maximum_staged_name_length', 0));
 
         if (($payload['refusal_reasons'] ?? []) !== []) {
             $this->warn('Refusal reasons: '.implode(', ', $payload['refusal_reasons']));
+        }
+
+        if (($payload['failure_diagnostics'] ?? null) !== null) {
+            $this->warn('Failure diagnostics: '.json_encode($payload['failure_diagnostics'], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
         }
 
         foreach (($payload['candidate_samples'] ?? []) as $sample) {

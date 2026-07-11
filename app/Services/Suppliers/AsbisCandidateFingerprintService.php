@@ -6,7 +6,7 @@ use JsonException;
 
 class AsbisCandidateFingerprintService
 {
-    public const SCHEMA_VERSION = 'asbis-dual-feed-staging-candidate-v1';
+    public const SCHEMA_VERSION = 'asbis-dual-feed-staging-candidate-v2';
 
     /**
      * @param  array<int, array<string, mixed>>  $payloads

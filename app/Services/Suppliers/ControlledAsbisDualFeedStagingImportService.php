@@ -4,9 +4,12 @@ namespace App\Services\Suppliers;
 
 use App\Models\Supplier;
 use App\Models\SupplierProduct;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
+use JsonException;
 use Throwable;
 
 class ControlledAsbisDualFeedStagingImportService
@@ -27,9 +30,32 @@ class ControlledAsbisDualFeedStagingImportService
 
     private int $totalStagedBefore = 0;
 
+    /** @var array<string, mixed> */
+    private array $payloadSchemaCompatibility = [];
+
+    /** @var array<string, mixed>|null */
+    private ?array $failureDiagnostics = null;
+
+    private string $transactionStage = 'not_started';
+
+    private int $transactionBatchNumber = 0;
+
+    private int $transactionTotalBatches = 0;
+
+    private int $transactionBatchSize = 0;
+
+    private int $attemptedRows = 0;
+
+    private int $attemptedBatches = 0;
+
+    private int $committedRows = 0;
+
+    private int $committedBatches = 0;
+
     public function __construct(
         private readonly AsbisApplyReadinessAuditService $audit,
         private readonly AsbisCandidateFingerprintService $fingerprint,
+        private readonly AsbisStagingPayloadSchemaValidator $schemaValidator,
         private readonly SupplierImportExecutionLock $executionLock,
     ) {}
 
@@ -45,7 +71,17 @@ class ControlledAsbisDualFeedStagingImportService
         $this->expectedStagedCount = $options['expected_asbis_staged_count'] ?? null;
         $this->existingConflictCount = 0;
         $this->totalStagedBefore = 0;
+        $this->payloadSchemaCompatibility = [];
+        $this->failureDiagnostics = null;
+        $this->transactionStage = 'not_started';
+        $this->transactionBatchNumber = 0;
+        $this->transactionTotalBatches = 0;
+        $this->attemptedRows = 0;
+        $this->attemptedBatches = 0;
+        $this->committedRows = 0;
+        $this->committedBatches = 0;
         $batchSize = $this->batchSize($options['batch_size'] ?? 500);
+        $this->transactionBatchSize = $batchSize;
         $sampleLimit = max(0, min((int) ($options['sample_limit'] ?? 20), 100));
         $audit = $this->audit->run([
             ...$options,
@@ -73,6 +109,8 @@ class ControlledAsbisDualFeedStagingImportService
         }
 
         $candidatePayloads = $audit['candidate_payloads'] ?? [];
+        $this->payloadSchemaCompatibility = $this->schemaValidator->validate($candidatePayloads);
+        $this->transactionTotalBatches = (int) ceil(count($candidatePayloads) / $batchSize);
         $sourceFingerprints = $audit['source_fingerprints'] ?? [];
         $supplierId = (int) data_get($audit, 'supplier.id', 0);
         $supplier = $supplierId > 0 ? Supplier::query()->find($supplierId) : null;
@@ -105,6 +143,7 @@ class ControlledAsbisDualFeedStagingImportService
             $candidatePayloads,
             $currentCount,
             $conflicts,
+            $this->payloadSchemaCompatibility,
             $options,
             $apply
         );
@@ -149,6 +188,8 @@ class ControlledAsbisDualFeedStagingImportService
             );
         }
 
+        $this->setTransactionStage('acquire_execution_lock');
+
         if (! $this->executionLock->acquire($supplier)) {
             return $this->result(
                 $audit,
@@ -168,6 +209,7 @@ class ControlledAsbisDualFeedStagingImportService
         }
 
         try {
+            $this->setTransactionStage('final_source_fingerprint_check');
             $finalFingerprints = $this->sourceFingerprints($audit);
 
             if (! $this->sameSourceFingerprints($sourceFingerprints, $finalFingerprints)) {
@@ -189,13 +231,18 @@ class ControlledAsbisDualFeedStagingImportService
             }
 
             $totalStagedBefore = $this->totalStagedBefore;
-            $transaction = DB::transaction(function () use ($supplier, $candidatePayloads, $batchSize, $currentCount, $totalStagedBefore): array {
+            $payloadBatches = array_chunk($candidatePayloads, $batchSize);
+            $this->transactionTotalBatches = count($payloadBatches);
+            $this->setTransactionStage('begin_transaction');
+            $transaction = DB::transaction(function () use ($supplier, $candidatePayloads, $payloadBatches, $currentCount, $totalStagedBefore): array {
+                $this->setTransactionStage('lock_supplier');
                 $lockedSupplier = Supplier::query()->whereKey($supplier->getKey())->lockForUpdate()->first();
 
                 if (! $lockedSupplier instanceof Supplier) {
                     throw new ControlledAsbisStagingApplyException('transaction_failed', 'The ASBIS supplier row could not be locked.');
                 }
 
+                $this->setTransactionStage('verify_staging_counts');
                 $lockedCount = $this->supplierProductCount($lockedSupplier);
 
                 if ($lockedCount !== $currentCount || $lockedCount > 0) {
@@ -214,6 +261,7 @@ class ControlledAsbisDualFeedStagingImportService
                     );
                 }
 
+                $this->setTransactionStage('verify_existing_conflicts');
                 $lockedConflicts = $this->existingSkuConflicts($lockedSupplier, $candidatePayloads);
 
                 if ($lockedConflicts !== []) {
@@ -224,11 +272,15 @@ class ControlledAsbisDualFeedStagingImportService
                 }
 
                 $protectedBefore = $this->protectedCounts();
-                $attempted = count($candidatePayloads);
+                $attempted = array_sum(array_map('count', $payloadBatches));
                 $inserted = 0;
                 $batches = 0;
 
-                foreach (array_chunk($candidatePayloads, $batchSize) as $payloadBatch) {
+                foreach ($payloadBatches as $batchIndex => $payloadBatch) {
+                    $this->transactionBatchNumber = $batchIndex + 1;
+                    $this->attemptedBatches = $this->transactionBatchNumber;
+                    $this->attemptedRows += count($payloadBatch);
+                    $this->setTransactionStage('prepare_batch');
                     $rows = array_map(function (array $payload): array {
                         $attributes = $payload;
                         $attributes['raw_data'] = json_encode($attributes['raw_data'], JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
@@ -240,12 +292,14 @@ class ControlledAsbisDualFeedStagingImportService
                     }, $payloadBatch);
 
                     if ($rows !== []) {
+                        $this->setTransactionStage('insert_batch');
                         SupplierProduct::query()->insert($rows);
                         $inserted += count($rows);
                         $batches++;
                     }
                 }
 
+                $this->setTransactionStage('verify_insert_counts');
                 $afterCount = $this->supplierProductCount($lockedSupplier);
                 $totalAfter = SupplierProduct::query()->count();
 
@@ -256,7 +310,9 @@ class ControlledAsbisDualFeedStagingImportService
                     );
                 }
 
+                $this->setTransactionStage('verify_inserted_skus');
                 $this->verifyInsertedSkus($lockedSupplier, $candidatePayloads);
+                $this->setTransactionStage('verify_protected_tables');
                 $protectedAfter = $this->protectedCounts();
 
                 if ($protectedBefore !== $protectedAfter) {
@@ -265,6 +321,8 @@ class ControlledAsbisDualFeedStagingImportService
                         'A protected table changed during ASBIS staging apply.'
                     );
                 }
+
+                $this->setTransactionStage('commit');
 
                 return [
                     'staged_before' => $currentCount,
@@ -277,6 +335,9 @@ class ControlledAsbisDualFeedStagingImportService
                     'protected_records' => $this->zeroProtectedRecords($protectedBefore),
                 ];
             }, 3);
+
+            $this->committedRows = $transaction['inserted'];
+            $this->committedBatches = $transaction['batches'];
 
             return $this->result(
                 $audit,
@@ -296,6 +357,9 @@ class ControlledAsbisDualFeedStagingImportService
                 $transaction['protected_records']
             );
         } catch (ControlledAsbisStagingApplyException $exception) {
+            $this->failureDiagnostics = $this->buildFailureDiagnostics($exception, 'controlled_transaction_failure');
+            Log::warning('ASBIS controlled staging transaction refused or rolled back.', $this->failureDiagnostics);
+
             return $this->result(
                 $audit,
                 $mode,
@@ -305,13 +369,16 @@ class ControlledAsbisDualFeedStagingImportService
                 $candidatePayloads,
                 $currentCount,
                 $currentCount,
-                0,
+                $this->attemptedRows,
                 0,
                 $batchSize,
                 $startedAt,
                 $sampleLimit
             );
-        } catch (Throwable) {
+        } catch (QueryException $exception) {
+            $this->failureDiagnostics = $this->buildFailureDiagnostics($exception, $this->databaseDiagnosticCode($exception));
+            Log::error('ASBIS controlled staging database transaction failed.', $this->failureDiagnostics);
+
             return $this->result(
                 $audit,
                 $mode,
@@ -321,7 +388,29 @@ class ControlledAsbisDualFeedStagingImportService
                 $candidatePayloads,
                 $currentCount,
                 $currentCount,
+                $this->attemptedRows,
                 0,
+                $batchSize,
+                $startedAt,
+                $sampleLimit
+            );
+        } catch (Throwable $exception) {
+            $diagnosticCode = $exception instanceof JsonException
+                ? 'database_json_encoding_failure'
+                : 'unknown_transaction_failure';
+            $this->failureDiagnostics = $this->buildFailureDiagnostics($exception, $diagnosticCode);
+            Log::error('ASBIS controlled staging transaction failed.', $this->failureDiagnostics);
+
+            return $this->result(
+                $audit,
+                $mode,
+                false,
+                false,
+                ['transaction_failed'],
+                $candidatePayloads,
+                $currentCount,
+                $currentCount,
+                $this->attemptedRows,
                 0,
                 $batchSize,
                 $startedAt,
@@ -337,10 +426,11 @@ class ControlledAsbisDualFeedStagingImportService
      * @param  array<string, mixed>  $sourceFingerprints
      * @param  array<int, array<string, mixed>>  $candidatePayloads
      * @param  array<int, string>  $conflicts
+     * @param  array<string, mixed>  $payloadSchemaCompatibility
      * @param  array<string, mixed>  $options
      * @return array<int, string>
      */
-    private function preflightReasons(array $audit, Supplier $supplier, array $sourceFingerprints, array $candidatePayloads, int $currentCount, array $conflicts, array $options, bool $apply): array
+    private function preflightReasons(array $audit, Supplier $supplier, array $sourceFingerprints, array $candidatePayloads, int $currentCount, array $conflicts, array $payloadSchemaCompatibility, array $options, bool $apply): array
     {
         $reasons = [];
         $join = $audit['join'] ?? [];
@@ -373,6 +463,10 @@ class ControlledAsbisDualFeedStagingImportService
 
         if ($candidatePayloads === []) {
             $reasons[] = 'no_ready_to_create_candidates';
+        }
+
+        if (! (bool) ($payloadSchemaCompatibility['payload_schema_compatible'] ?? false)) {
+            $reasons[] = 'payload_schema_incompatible';
         }
 
         if ($conflicts !== []) {
@@ -597,6 +691,8 @@ class ControlledAsbisDualFeedStagingImportService
             'join' => $audit['join'] ?? [],
             'reconciliation' => $audit['reconciliation'] ?? [],
             'source_fingerprints' => $audit['source_fingerprints'] ?? [],
+            'payload_schema_compatibility' => $this->payloadSchemaCompatibility,
+            'payload_schema_compatible' => (bool) ($this->payloadSchemaCompatibility['payload_schema_compatible'] ?? false),
             'candidate_payload_schema_version' => $audit['candidate_payload_schema_version'] ?? AsbisCandidateFingerprintService::SCHEMA_VERSION,
             'ready_to_create_candidate_set_sha256' => $audit['ready_to_create_candidate_set_sha256'] ?? $this->fingerprint->fingerprint([]),
             'ready_to_create_candidate_count' => (int) ($audit['ready_to_create_candidate_count'] ?? count($candidatePayloads)),
@@ -609,8 +705,12 @@ class ControlledAsbisDualFeedStagingImportService
             'total_staged_before' => $this->totalStagedBefore,
             'total_staged_after' => $this->totalStagedBefore + $inserted,
             'planned_insert_count' => count($candidatePayloads),
+            'planned_batches' => $this->transactionTotalBatches,
             'attempted_insert_count' => $attempted,
             'inserted_count' => $inserted,
+            'committed_insert_count' => $this->committedRows,
+            'attempted_batches' => $this->attemptedBatches,
+            'committed_batches' => $this->committedBatches,
             'batches' => $batches,
             'batch_size' => $batchSize,
             'skipped_count' => 0,
@@ -620,6 +720,7 @@ class ControlledAsbisDualFeedStagingImportService
             'candidate_samples' => $this->candidateSamples($candidatePayloads, $sampleLimit),
             'protected_records' => $protectedRecords !== [] ? $protectedRecords : $this->zeroProtectedRecords($this->protectedCounts()),
             'records_changed' => $recordsChanged,
+            'failure_diagnostics' => $this->failureDiagnostics,
             'elapsed_seconds' => round(microtime(true) - $startedAt, 4),
             'peak_memory_bytes' => memory_get_peak_usage(true),
         ];
@@ -664,6 +765,65 @@ class ControlledAsbisDualFeedStagingImportService
             'product_list_file_missing', 'price_avail_file_missing', 'source_file_missing' => 'source_missing',
             'parse_error' => 'malformed_xml',
             default => (string) $reason,
+        };
+    }
+
+    private function setTransactionStage(string $stage): void
+    {
+        $this->transactionStage = $stage;
+    }
+
+    /**
+     * Build a safe diagnostic payload. Exception messages, SQL, bindings and
+     * row values are intentionally excluded.
+     *
+     * @return array<string, mixed>
+     */
+    private function buildFailureDiagnostics(Throwable $exception, string $diagnosticCode): array
+    {
+        $sqlState = null;
+        $driverErrorCode = null;
+
+        if ($exception instanceof QueryException) {
+            $errorInfo = $exception->errorInfo ?? [];
+            $candidateSqlState = $errorInfo[0] ?? $exception->getCode();
+            $candidateDriverCode = $errorInfo[1] ?? null;
+            $sqlState = is_string($candidateSqlState) && preg_match('/^\d{5}$/', $candidateSqlState) === 1
+                ? $candidateSqlState
+                : null;
+            $driverErrorCode = is_numeric($candidateDriverCode) ? (int) $candidateDriverCode : null;
+        }
+
+        return [
+            'transaction_stage' => $this->transactionStage,
+            'batch_number' => $this->transactionBatchNumber > 0 ? $this->transactionBatchNumber : null,
+            'total_batches' => $this->transactionTotalBatches,
+            'batch_size' => $this->transactionBatchSize,
+            'exception_class' => $exception::class,
+            'sqlstate' => $sqlState,
+            'driver_error_code' => $driverErrorCode,
+            'diagnostic_code' => $diagnosticCode,
+            'attempted_rows' => $this->attemptedRows,
+            'committed_rows' => $this->committedRows,
+            'attempted_batches' => $this->attemptedBatches,
+            'committed_batches' => $this->committedBatches,
+        ];
+    }
+
+    private function databaseDiagnosticCode(QueryException $exception): string
+    {
+        $errorInfo = $exception->errorInfo ?? [];
+        $sqlState = (string) ($errorInfo[0] ?? '');
+        $driverErrorCode = (int) ($errorInfo[1] ?? 0);
+
+        return match (true) {
+            $sqlState === '22001' => 'database_string_length_violation',
+            $sqlState === '22003' => 'database_numeric_range_violation',
+            $sqlState === '22032', $driverErrorCode === 3140 => 'database_json_encoding_failure',
+            $driverErrorCode === 1062 => 'database_duplicate_key_violation',
+            in_array($driverErrorCode, [1451, 1452], true) => 'database_foreign_key_violation',
+            $sqlState === '23000' => 'database_constraint_violation',
+            default => 'database_write_failed',
         };
     }
 

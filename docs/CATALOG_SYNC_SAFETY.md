@@ -480,6 +480,52 @@ approval and post-apply verification. Real production apply remains blocked
 until this branch is merged, deployed, dry-run output and fingerprints are
 reviewed, ASBIS staging is confirmed empty, and explicit approval is recorded.
 
+## ASBIS MySQL Apply Compatibility and Transaction Diagnostics
+
+Phase 9C.6.4.2a hardens the controlled ASBIS staging path for the production
+MySQL schema after safely rolled-back apply attempts. The command now builds a
+canonical database-bound payload before the transaction and validates that
+payload against the existing `supplier_products` write contract.
+
+The canonical candidate schema is `asbis-dual-feed-staging-candidate-v2`:
+
+- DB-bound names are truncated deterministically with Unicode-safe character
+  slicing at 255 characters.
+- When a name is truncated, the complete original name and bounded length
+  metadata remain in `raw_data`; untruncated names retain the same length
+  metadata without duplicating the full value.
+- Supplier SKU, ProductCode/WIC, EAN, MPN, currency, payload hash and other
+  identifiers are never silently truncated. An overflow blocks the apply.
+- Descriptive fields are validated against the existing schema contract rather
+  than silently shortened.
+- New rows use the existing canonical staging status `new`, remain unlinked,
+  and keep `product_id` null.
+- The candidate fingerprint includes the final staged name, status, and raw
+  truncation metadata. It remains independent of row order, timestamps, IDs,
+  and source paths; the v1 candidate hash is not valid for v2.
+
+The read-only compatibility report includes candidate count, truncation count,
+maximum original/staged name lengths, field-length violations, bounded samples,
+unknown fields, JSON failures, availability-status validity, nullability,
+decimal and unsigned-integer validation. The apply refuses with
+`payload_schema_incompatible` when the canonical contract is not valid or the
+runtime schema is missing a required column. No migration is required.
+
+Transaction failures report only safe diagnostics: transaction stage, batch
+number, total batches, batch size, exception class, SQLSTATE, driver error
+code, diagnostic code, attempted rows and committed rows/batches. SQL text,
+bindings, product data, source paths, credentials and raw database messages are
+not exposed. Query failures are classified into safe codes such as
+`database_string_length_violation`, `database_numeric_range_violation`,
+`database_foreign_key_violation`, `database_duplicate_key_violation`,
+`database_json_encoding_failure`, and `database_write_failed`.
+
+If a batch fails, attempted rows may be reported separately, but committed rows
+and `records_changed.supplier_products` remain zero after rollback. The feature
+flag remains false by default, no production apply has succeeded, ASBIS staging
+remains at zero in the reported production state, and Phase 9C.6.4.2.1 remains
+pending for a later explicitly approved operational window.
+
 ## Controlled Supplier Staging Import Apply Safety
 
 Phase 9C.6.4 adds `suppliers:controlled-staging-import` as the first
