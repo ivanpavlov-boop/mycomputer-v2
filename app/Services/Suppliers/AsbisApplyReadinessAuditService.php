@@ -172,7 +172,11 @@ class AsbisApplyReadinessAuditService
         $duplicateEans = $this->duplicateGroups($rows, 'ean_gtin');
         $duplicateMpns = $this->duplicateGroups($rows, 'mpn');
         $duplicateBrandMpns = $this->duplicateBrandMpnGroups($rows);
-        $existing = $this->existingComparison($supplier, $rows);
+        $existing = $this->existingComparison(
+            $supplier,
+            $rows,
+            (bool) ($options['ignore_existing_supplier_products'] ?? false)
+        );
         $classifiedRows = collect($rows)
             ->map(fn (array $row): array => $this->classifyRow(
                 $row,
@@ -810,7 +814,7 @@ class AsbisApplyReadinessAuditService
      * @param  array<int, array<string, mixed>>  $rows
      * @return array<string, mixed>
      */
-    private function existingComparison(Supplier $supplier, array $rows): array
+    private function existingComparison(Supplier $supplier, array $rows, bool $ignoreExistingSupplierProducts = false): array
     {
         if (! Schema::hasTable('supplier_products')) {
             return [
@@ -823,17 +827,19 @@ class AsbisApplyReadinessAuditService
 
         $sameSupplierSkus = [];
 
-        SupplierProduct::query()
-            ->where('supplier_id', $supplier->getKey())
-            ->whereNotNull('supplier_sku')
-            ->pluck('supplier_sku')
-            ->each(function (mixed $sku) use (&$sameSupplierSkus): void {
-                $normalized = $this->normalizeIdentifier($sku);
+        if (! $ignoreExistingSupplierProducts) {
+            SupplierProduct::query()
+                ->where('supplier_id', $supplier->getKey())
+                ->whereNotNull('supplier_sku')
+                ->pluck('supplier_sku')
+                ->each(function (mixed $sku) use (&$sameSupplierSkus): void {
+                    $normalized = $this->normalizeIdentifier($sku);
 
-                if ($normalized !== null) {
-                    $sameSupplierSkus[$normalized] = true;
-                }
-            });
+                    if ($normalized !== null) {
+                        $sameSupplierSkus[$normalized] = true;
+                    }
+                });
+        }
         $otherRows = SupplierProduct::query()
             ->where('supplier_id', '!=', $supplier->getKey())
             ->get(['ean', 'mpn', 'brand_name']);
