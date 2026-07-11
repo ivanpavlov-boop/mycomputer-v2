@@ -10,6 +10,8 @@ use RuntimeException;
 
 class AsbisStagingCandidatePayloadBuilder
 {
+    private const STAGED_NAME_LIMIT = 255;
+
     /**
      * @param  array<int, array<string, mixed>>  $classifiedRows
      * @param  array<string, mixed>  $sourceFingerprints
@@ -57,6 +59,10 @@ class AsbisStagingCandidatePayloadBuilder
         $ean = $this->stringValue($row['ean_gtin'] ?? null);
         $availability = $this->stringValue($row['availability'] ?? null);
         $rawAvailability = $this->stringValue($row['raw_availability'] ?? null);
+        $name = $this->stringValue($row['name'] ?? null);
+        $nameMetadata = $this->nameMetadata($name);
+        $stagedName = $nameMetadata['staged_name'];
+        unset($nameMetadata['staged_name']);
         $currency = strtoupper($this->stringValue($row['currency'] ?? null) ?? 'EUR');
         $rawData = [
             'source' => 'asbis_dual_feed',
@@ -68,6 +74,7 @@ class AsbisStagingCandidatePayloadBuilder
             'candidate_payload_schema_version' => AsbisCandidateFingerprintService::SCHEMA_VERSION,
             'price_source' => $row['price_source'] ?? null,
             'availability_source' => 'AVAIL',
+            ...$nameMetadata,
         ];
 
         $logicalPayload = [
@@ -77,7 +84,7 @@ class AsbisStagingCandidatePayloadBuilder
             'supplier_sku' => $supplierSku,
             'ean' => $ean,
             'mpn' => $this->stringValue($row['mpn'] ?? null),
-            'name' => $this->stringValue($row['name'] ?? null),
+            'name' => $stagedName,
             'brand_name' => $this->stringValue($row['brand'] ?? null),
             'category_name' => $this->stringValue($row['category'] ?? null),
             'price' => $this->decimalValue($row['price'] ?? null),
@@ -90,7 +97,7 @@ class AsbisStagingCandidatePayloadBuilder
             'currency' => $currency,
             'raw_data' => $rawData,
             'synced_at' => null,
-            'status' => 'pending_review',
+            'status' => 'new',
             'mapping_notes' => 'ASBIS dual-feed controlled staging; create-only; Catalog Sync not run.',
         ];
 
@@ -147,5 +154,38 @@ class AsbisStagingCandidatePayloadBuilder
         $value = trim((string) $value);
 
         return $value === '' ? null : $value;
+    }
+
+    /**
+     * Keep the complete supplier name in raw_data when the DB-bound value is
+     * shortened. All lengths are Unicode character lengths, never byte lengths.
+     *
+     * @return array<string, mixed>
+     */
+    private function nameMetadata(?string $fullName): array
+    {
+        if ($fullName === null) {
+            return [
+                'staged_name' => null,
+                'original_name_length' => null,
+                'name_was_truncated' => false,
+                'staged_name_length' => null,
+                'staged_name_limit' => self::STAGED_NAME_LIMIT,
+            ];
+        }
+
+        $originalLength = mb_strlen($fullName, 'UTF-8');
+        $stagedName = mb_substr($fullName, 0, self::STAGED_NAME_LIMIT, 'UTF-8');
+        $stagedLength = mb_strlen($stagedName, 'UTF-8');
+        $truncated = $stagedName !== $fullName;
+
+        return [
+            'staged_name' => $stagedName,
+            'original_name' => $truncated ? $fullName : null,
+            'original_name_length' => $originalLength,
+            'name_was_truncated' => $truncated,
+            'staged_name_length' => $stagedLength,
+            'staged_name_limit' => self::STAGED_NAME_LIMIT,
+        ];
     }
 }
