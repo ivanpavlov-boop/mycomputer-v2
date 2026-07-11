@@ -407,9 +407,12 @@ Safety rules:
 - Products, `supplier_products`, categories, mappings, canonical families and
   attribute tables must all retain zero-change counters.
 
-Phase 9C.6.4.2 remains blocked until the full-file audit completes, source
-fingerprints and exact readiness counts are reviewed, duplicate join-key
-blockers are resolved, and explicit manual approval is given.
+Phase 9C.6.4.2 adds the guarded implementation of
+`suppliers:controlled-asbis-dual-feed-staging-import`. The command remains
+dry-run-first and the apply feature flag is false by default. A real apply is
+still blocked until the audit has been run against reviewed local files, the
+source and candidate fingerprints/counts are approved, the ASBIS staging count
+is confirmed, and a controlled approval window is explicitly opened.
 
 ## ASBIS Audit Consistency and Missing-Key Safety
 
@@ -441,9 +444,39 @@ review, valid unmatched product-only and valid unmatched price-only buckets.
 `apply_excluded_count` is the sum of those exclusion buckets and is an audit
 counter only.
 
-Phase 9C.6.4.2 remains blocked until a corrected, internally consistent audit
-has been deployed and rerun against reviewed local/source fingerprints, with
-duplicate and missing-key blockers resolved and explicit manual approval given.
+The controlled apply consumes the same canonical classification and admits
+only `ready_to_create` rows. `ready_with_warning`, `ready_to_update`, manual
+review, product-only and price-only rows are excluded; warnings do not become
+write candidates. The candidate payload is normalized and sorted by supplier
+SKU before a SHA-256 candidate-set fingerprint is calculated. Timestamps,
+database IDs, file paths and sample order are excluded from that fingerprint;
+EAN values retain leading zeroes.
+
+Apply requires `--apply`, the false-by-default
+`ASBIS_DUAL_FEED_STAGING_APPLY_ENABLED` flag, explicit confirmations, expected
+ProductList and PriceAvail SHA-256 values, the expected ready-to-create count,
+the expected candidate-set fingerprint, and the expected current ASBIS staging
+count. The source files are hashed again immediately before the transaction;
+any change aborts with `source_changed_during_preflight`.
+
+The transaction locks the ASBIS supplier row, takes the existing supplier
+import lock, rechecks every candidate for same-supplier SKU conflicts and
+inserts only new `supplier_products` rows in bounded batches. It never updates,
+upserts, silently skips or deletes an existing ASBIS row. Any conflict,
+verification failure or exception rolls the entire transaction back. The only
+allowed non-zero change counter is `supplier_products`; products, categories,
+suppliers, mappings, canonical families, attributes, Catalog Sync tables and
+other protected tables must remain unchanged.
+
+The command does not fetch remote URLs, dispatch jobs, call Catalog Sync,
+enable schedules, download images, expose secrets, or write products. After a
+real controlled apply, the feature flag must be disabled again. A second run
+must report an existing staging conflict rather than duplicate or update rows.
+
+The next planned follow-up is 9C.6.4.2.1: controlled-window operational
+approval and post-apply verification. Real production apply remains blocked
+until this branch is merged, deployed, dry-run output and fingerprints are
+reviewed, ASBIS staging is confirmed empty, and explicit approval is recorded.
 
 ## Controlled Supplier Staging Import Apply Safety
 

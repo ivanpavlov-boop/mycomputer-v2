@@ -46,7 +46,11 @@ class AsbisApplyReadinessAuditService
         'stock' => ['Stock', 'Quantity', 'qty', 'available_quantity', 'AVAIL'],
     ];
 
-    public function __construct(private readonly AsbisXmlStreamReader $xmlReader) {}
+    public function __construct(
+        private readonly AsbisXmlStreamReader $xmlReader,
+        private readonly AsbisStagingCandidatePayloadBuilder $candidatePayloadBuilder,
+        private readonly AsbisCandidateFingerprintService $candidateFingerprintService,
+    ) {}
 
     /**
      * @param  array<string, mixed>  $options
@@ -201,6 +205,8 @@ class AsbisApplyReadinessAuditService
             'product_list_modified_at' => $this->modifiedAt((string) $productSource['path']),
             'price_avail_modified_at' => $this->modifiedAt((string) $priceSource['path']),
         ];
+        $candidatePayloads = $this->candidatePayloadBuilder->build($classifiedRows, $supplier, $fingerprints);
+        $candidateFingerprint = $this->candidateFingerprintService->fingerprint($candidatePayloads);
         $parser = [
             'parser_mode' => 'streaming_xmlreader',
             'requested_mode' => $fullFile ? 'full_file' : 'bounded',
@@ -254,7 +260,13 @@ class AsbisApplyReadinessAuditService
             'readiness' => [
                 ...$readiness,
                 ...$verdict,
+                'ready_to_create_candidate_count' => count($candidatePayloads),
+                'ready_to_create_candidate_set_sha256' => $candidateFingerprint,
+                'candidate_payload_schema_version' => AsbisCandidateFingerprintService::SCHEMA_VERSION,
             ],
+            'ready_to_create_candidate_count' => count($candidatePayloads),
+            'ready_to_create_candidate_set_sha256' => $candidateFingerprint,
+            'candidate_payload_schema_version' => AsbisCandidateFingerprintService::SCHEMA_VERSION,
             'reconciliation' => $reconciliation,
             'identifier_audit' => $identifierAudit,
             'availability_audit' => $priceScan['availability_audit'],
@@ -287,6 +299,13 @@ class AsbisApplyReadinessAuditService
             'overlaps' => $samples['overlap_samples'],
             'issues' => $samples['issue_samples'],
             'records_changed' => $this->recordsChanged(),
+            ...((bool) ($options['include_candidate_payloads'] ?? false) ? [
+                'candidate_payloads' => $candidatePayloads,
+                'source_paths' => [
+                    'product_list' => (string) $productSource['path'],
+                    'price_avail' => (string) $priceSource['path'],
+                ],
+            ] : []),
         ];
     }
 
@@ -1596,6 +1615,9 @@ class AsbisApplyReadinessAuditService
                 'price_avail' => $this->sourcePayload($priceSource ?? []),
             ],
             'source_fingerprints' => [],
+            'ready_to_create_candidate_count' => 0,
+            'ready_to_create_candidate_set_sha256' => $this->candidateFingerprintService->fingerprint([]),
+            'candidate_payload_schema_version' => AsbisCandidateFingerprintService::SCHEMA_VERSION,
             'parser' => [
                 'parser_mode' => 'streaming_xmlreader',
                 'effective_scan_mode' => 'not_started',
@@ -1618,6 +1640,9 @@ class AsbisApplyReadinessAuditService
             'readiness' => [
                 'verdict' => 'not_ready_for_controlled_staging_apply',
                 'apply_candidate_count' => 0,
+                'ready_to_create_candidate_count' => 0,
+                'ready_to_create_candidate_set_sha256' => $this->candidateFingerprintService->fingerprint([]),
+                'candidate_payload_schema_version' => AsbisCandidateFingerprintService::SCHEMA_VERSION,
                 'apply_blocker_count' => 1,
                 'blocker_reasons' => [$reason => 1],
                 'warning_reasons' => [],

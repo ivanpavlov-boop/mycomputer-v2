@@ -86,24 +86,26 @@ Manual selected UPDATE price/stock sync is implemented behind `CATALOG_SYNC_UPDA
 
 1. Keep Phase 7.5 documentation lock current.
 2. Keep feature flag/audit visibility read-only.
-3. Phase 9C.6.4.2 Controlled ASBIS Dual-Feed Staging Apply, blocked until the
-   full-file audit completes, source fingerprints and exact readiness counts
-   are reviewed, duplicate join-key blockers are absent, and explicit manual
-   approval is given.
-4. Phase 9C.6.5 ASBIS Staging Data Discovery Audit.
-5. Phase 9C.6.6 Multi-Supplier Category Mapping Review.
-6. Phase 9C.6.7 Multi-Supplier Identifier Overlap Review.
-7. Phase 9C.7 Supplier Attribute Mapping Foundation.
-8. Product specification data quality polish.
-9. Storefront specification display and later attribute filters.
-10. Product attribute filter design after controlled data quality.
-11. Rollback tooling based on `catalog_sync_batches` and `catalog_sync_logs`.
-12. Keep feature flags locked down before broader sync work.
-13. Conflict/manual mapping workflow.
-14. Sync All later.
-15. Automatic sync later.
-16. Nuxt i18n route integration and localized sitemap expansion.
-17. Data enrichment workflow refinements after queue usage is observed.
+3. Phase 9C.6.4.2 Controlled ASBIS Dual-Feed Staging Apply, implementation in
+   progress as a dry-run-first, false-by-default, create-only staging path.
+   Real apply remains blocked until source/candidate fingerprints, exact
+   ready-to-create counts and an empty ASBIS staging count are reviewed with
+   explicit operational approval.
+4. Phase 9C.6.4.2.1 Controlled ASBIS Apply Operational Approval.
+5. Phase 9C.6.5 ASBIS Staging Data Discovery Audit.
+6. Phase 9C.6.6 Multi-Supplier Category Mapping Review.
+7. Phase 9C.6.7 Multi-Supplier Identifier Overlap Review.
+8. Phase 9C.7 Supplier Attribute Mapping Foundation.
+9. Product specification data quality polish.
+10. Storefront specification display and later attribute filters.
+11. Product attribute filter design after controlled data quality.
+12. Rollback tooling based on `catalog_sync_batches` and `catalog_sync_logs`.
+13. Keep feature flags locked down before broader sync work.
+14. Conflict/manual mapping workflow.
+15. Sync All later.
+16. Automatic sync later.
+17. Nuxt i18n route integration and localized sitemap expansion.
+18. Data enrichment workflow refinements after queue usage is observed.
 
 ## Phase 8 Initial UPDATE Scope
 
