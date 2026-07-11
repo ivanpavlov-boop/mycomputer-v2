@@ -90,9 +90,11 @@ Manual selected UPDATE price/stock sync is implemented behind `CATALOG_SYNC_UPDA
    staging path. The first production apply attempts rolled back safely with
    zero ASBIS rows inserted and no catalog changes.
 4. Phase 9C.6.4.2a ASBIS MySQL Apply Compatibility and Safe Transaction
-   Diagnostics. Production ASBIS staging remains at zero while the v2 payload
-   contract and diagnostics are reviewed.
-5. Phase 9C.6.4.2.1 Controlled ASBIS Apply Operational Approval.
+   Diagnostics is complete. The v2 payload contract and rollback diagnostics
+   remain covered by tests.
+5. Phase 9C.6.4.2.1 ASBIS Post-Apply Verification and Reconciliation Audit is
+   in progress as a read-only local verifier. Production verification has not
+   been performed by this work.
 6. Phase 9C.6.5 ASBIS Staging Data Discovery Audit.
 7. Phase 9C.6.6 Multi-Supplier Category Mapping Review.
 8. Phase 9C.6.7 Multi-Supplier Identifier Overlap Review.
@@ -133,8 +135,9 @@ UPDATE sync must not update:
 Phase 9C.6.4.1d corrects audit consistency for canonical identifier overlaps,
 empty join keys, missing names and row/key reconciliation. It remains
 read-only. Phase 9C.6.4.2 is merged as a guarded staging path; Phase
-9C.6.4.2a remains in progress after safely rolled-back production apply
-attempts, and Phase 9C.6.4.2.1 remains pending explicit operational approval.
+9C.6.4.2a is complete after safely rolled-back production apply attempts.
+Phase 9C.6.4.2.1 adds only a read-only local post-apply verifier; production
+verification and any operational approval remain pending.
 
 Phase 9C.1 adds internal Product Attributes, controlled options, category assignment rules and typed product attribute value storage. Phase 9C.2 improves the Filament admin experience and adds the manual `product-attributes:seed-starter` dry-run/apply command for a starter internal attribute library. Phase 9C.3 adds `product-attributes:assign-category-sets` for controlled assignment of existing internal attributes to existing categories. Phase 9C.4 adds manual product-specific value management from Product edit pages. Phase 9C.4.1 makes category-assigned attributes easier to maintain as ready Product edit specification fields while keeping empty fields non-mutating. Phase 9C.5 adds read-only Product Specification Data Quality reporting based on existing category templates and product values. Phase 9C.5.1 adds `product-attributes:reconcile-legacy-values`, a dry-run-first copy-safe command that can apply safe target value rows only for one explicit SKU or product ID. Phase 9C.5.2 adds read-only admin visibility labels for legacy values that have already been fully or partially reconciled. Phase 9C.5.3 adds `product-attributes:seed-cpu-template`, a dry-run-first explicit-apply command for CPU attributes, safe CPU options, and assignments to existing CPU categories. Phase 9C.5.4 adds `product-attributes:audit-category-template-coverage`, a read-only planning command for direct, inherited, and missing category template coverage with no apply mode. Phase 9C.5.5 adds internal taxonomy and supplier category mapping records for pending review; supplier mappings do not apply to products or catalog categories. Phase 9C.5.6 adds a Filament review workflow for supplier category mapping records only; approval/rejection/ignore/reset mutate only `supplier_category_mappings` review metadata and do not apply mappings to products or categories. Phase 9C.5.8 is partial/paused intentionally after 6 approved mappings and 67 pending review mappings so template decisions can wait for a full multi-supplier view. Phase 9C.6 adds `suppliers:audit-discovery`, a read-only multi-supplier staging audit with no apply mode. Phase 9C.6.1 adds `suppliers:audit-import-capabilities`, a read-only supplier feed/driver/schedule/config audit with no apply mode, no remote feed fetch, no job dispatch, no Catalog Sync call, and redacted secret output. Phase 9C.6.2 adds `suppliers:cleanup-unsafe-schedules`, a dry-run-first cleanup whose explicit apply mode can only turn off unsafe supplier schedules. Phase 9C.6.3 adds `suppliers:preview-staging-import`, a preview-only local XML/CSV/JSON parser for next-supplier feed samples with no apply mode, no remote feed fetch, no job dispatch, no Catalog Sync call, and zero protected-table writes. Phase 9C.6.4 adds `suppliers:controlled-staging-import`, an ASBIS-only dry-run-first command whose explicit apply mode may write only ASBIS `supplier_products` staging rows and must not mutate catalog products, categories, mappings, attributes, schedules, or Catalog Sync. Phase 9C.6.4.1 adds `suppliers:preview-asbis-dual-feed`, a local-only, read-only ASBIS ProductList/PriceAvail join preview with no apply mode, no remote fetch, no job dispatch, and zero protected-table writes. Phase 9C.6.4.1c adds a complete local-file XMLReader audit with source fingerprints and advisory readiness classification. Mapping review remains paused at 6 approved and 67 pending-review mappings. These phases do not sync supplier attributes, do not expose frontend filters, and do not automatically mutate existing products outside explicitly confirmed staging-only apply phases.
 

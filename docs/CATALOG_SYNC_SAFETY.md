@@ -475,10 +475,10 @@ enable schedules, download images, expose secrets, or write products. After a
 real controlled apply, the feature flag must be disabled again. A second run
 must report an existing staging conflict rather than duplicate or update rows.
 
-The next planned follow-up is 9C.6.4.2.1: controlled-window operational
-approval and post-apply verification. Real production apply remains blocked
-until this branch is merged, deployed, dry-run output and fingerprints are
-reviewed, ASBIS staging is confirmed empty, and explicit approval is recorded.
+The next operational follow-up is the separately approved 9C.6.4.2.1
+verification window. Real production verification remains outside this
+implementation and requires local source fingerprints, expected counts and
+explicit approval after deployment; this verifier does not perform that step.
 
 ## ASBIS MySQL Apply Compatibility and Transaction Diagnostics
 
@@ -522,9 +522,43 @@ not exposed. Query failures are classified into safe codes such as
 
 If a batch fails, attempted rows may be reported separately, but committed rows
 and `records_changed.supplier_products` remain zero after rollback. The feature
-flag remains false by default, no production apply has succeeded, ASBIS staging
-remains at zero in the reported production state, and Phase 9C.6.4.2.1 remains
+flag remains false by default, no production apply has succeeded in this
+development verification, and production post-apply verification remains
 pending for a later explicitly approved operational window.
+
+## ASBIS Post-Apply Verification and Reconciliation Audit
+
+Phase 9C.6.4.2.1 adds
+`suppliers:audit-asbis-post-apply-verification` as a read-only verification
+command for a completed controlled v2 staging apply. It reconstructs the
+source-derived candidate set from local ProductList and PriceAvail files and
+compares it with ASBIS `supplier_products` rows without repairing differences.
+
+The audit verifies:
+
+- expected and actual local source SHA-256 fingerprints;
+- the v2 candidate schema, candidate count and candidate-set fingerprint;
+- normalized SKU coverage, missing/extra/duplicate SKU groups and blank staged
+  identifiers;
+- canonical staged row fields, including price, supplier cost, availability,
+  currency, status, payload hash and raw-data equality;
+- ASBIS dual-feed raw-data provenance, Unicode-safe name truncation metadata,
+  availability status validity and pricing invariants;
+- ASBIS and total staging counts, protected-table count invariants, feature flags
+  and supplier schedule state.
+
+The command accepts only local files or fixtures. It has no apply, repair, sync,
+delete, rebuild, schedule, image, or write option; it does not call Catalog
+Sync, dispatch jobs, fetch URLs, expose source paths/secrets, or mutate any
+table. `records_changed` is always zero. Verification exits successfully only
+when all required expectations and reconciliation checks pass. Issue counts and
+samples are bounded and do not include raw payloads or product data.
+
+This phase documents the verifier and its controlled local tests only. It does
+not claim that production post-apply verification has been performed. Any
+future production verification remains a separately approved operational step;
+the apply flag, Catalog Sync UPDATE/Sync All/automatic flags and ASBIS schedule
+must remain disabled unless explicitly approved.
 
 ## Controlled Supplier Staging Import Apply Safety
 
