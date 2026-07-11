@@ -181,6 +181,8 @@ class ControlledAsbisDualFeedStagingApplyTest extends TestCase
         $this->assertTrue($payload['transaction_committed']);
         $this->assertSame(1, $payload['inserted_count']);
         $this->assertSame(1, $payload['batches']);
+        $this->assertSame(0, $payload['total_staged_before']);
+        $this->assertSame(1, $payload['total_staged_after']);
         $this->assertSame('ASBIS-CANDIDATE-001', $staged->supplier_sku);
         $this->assertSame('000000000001', $staged->ean);
         $this->assertSame('10.50', (string) $staged->price);

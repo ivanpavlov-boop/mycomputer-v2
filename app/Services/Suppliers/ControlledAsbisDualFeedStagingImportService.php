@@ -25,6 +25,8 @@ class ControlledAsbisDualFeedStagingImportService
 
     private int $existingConflictCount = 0;
 
+    private int $totalStagedBefore = 0;
+
     public function __construct(
         private readonly AsbisApplyReadinessAuditService $audit,
         private readonly AsbisCandidateFingerprintService $fingerprint,
@@ -42,6 +44,7 @@ class ControlledAsbisDualFeedStagingImportService
         $this->expectedReadyCount = $options['expected_ready_count'] ?? null;
         $this->expectedStagedCount = $options['expected_asbis_staged_count'] ?? null;
         $this->existingConflictCount = 0;
+        $this->totalStagedBefore = 0;
         $batchSize = $this->batchSize($options['batch_size'] ?? 500);
         $sampleLimit = max(0, min((int) ($options['sample_limit'] ?? 20), 100));
         $audit = $this->audit->run([
@@ -92,6 +95,7 @@ class ControlledAsbisDualFeedStagingImportService
         }
 
         $currentCount = $this->supplierProductCount($supplier);
+        $this->totalStagedBefore = SupplierProduct::query()->count();
         $conflicts = $this->existingSkuConflicts($supplier, $candidatePayloads);
         $this->existingConflictCount = count($conflicts);
         $preflightReasons = $this->preflightReasons(
@@ -184,7 +188,8 @@ class ControlledAsbisDualFeedStagingImportService
                 );
             }
 
-            $transaction = DB::transaction(function () use ($supplier, $candidatePayloads, $batchSize, $currentCount): array {
+            $totalStagedBefore = $this->totalStagedBefore;
+            $transaction = DB::transaction(function () use ($supplier, $candidatePayloads, $batchSize, $currentCount, $totalStagedBefore): array {
                 $lockedSupplier = Supplier::query()->whereKey($supplier->getKey())->lockForUpdate()->first();
 
                 if (! $lockedSupplier instanceof Supplier) {
@@ -197,6 +202,15 @@ class ControlledAsbisDualFeedStagingImportService
                     throw new ControlledAsbisStagingApplyException(
                         $lockedCount > 0 ? 'existing_asbis_staging_conflict' : 'expected_asbis_staged_count_mismatch',
                         'The ASBIS staging count changed before the transaction began.'
+                    );
+                }
+
+                $lockedTotalCount = SupplierProduct::query()->count();
+
+                if ($lockedTotalCount !== $totalStagedBefore) {
+                    throw new ControlledAsbisStagingApplyException(
+                        'supplier_products_total_changed',
+                        'The total supplier_products count changed before the transaction began.'
                     );
                 }
 
@@ -233,8 +247,9 @@ class ControlledAsbisDualFeedStagingImportService
                 }
 
                 $afterCount = $this->supplierProductCount($lockedSupplier);
+                $totalAfter = SupplierProduct::query()->count();
 
-                if ($inserted !== $attempted || $afterCount !== $currentCount + $inserted) {
+                if ($inserted !== $attempted || $afterCount !== $currentCount + $inserted || $totalAfter !== $totalStagedBefore + $inserted) {
                     throw new ControlledAsbisStagingApplyException(
                         'post_insert_verification_failed',
                         'ASBIS supplier staging count did not match the inserted candidate count.'
@@ -254,6 +269,8 @@ class ControlledAsbisDualFeedStagingImportService
                 return [
                     'staged_before' => $currentCount,
                     'staged_after' => $afterCount,
+                    'total_staged_before' => $totalStagedBefore,
+                    'total_staged_after' => $totalAfter,
                     'attempted' => $attempted,
                     'inserted' => $inserted,
                     'batches' => $batches,
@@ -589,6 +606,8 @@ class ControlledAsbisDualFeedStagingImportService
             'current_asbis_staged_count' => $stagedBefore,
             'staged_before' => $stagedBefore,
             'staged_after' => $stagedAfter,
+            'total_staged_before' => $this->totalStagedBefore,
+            'total_staged_after' => $this->totalStagedBefore + $inserted,
             'planned_insert_count' => count($candidatePayloads),
             'attempted_insert_count' => $attempted,
             'inserted_count' => $inserted,
@@ -632,10 +651,20 @@ class ControlledAsbisDualFeedStagingImportService
         return collect($audit['issues'] ?? [])
             ->pluck('reason')
             ->filter()
-            ->map(fn (mixed $reason): string => (string) $reason)
+            ->map(fn (mixed $reason): string => $this->normalizeAuditIssue($reason))
             ->unique()
             ->values()
             ->all() ?: ['audit_failed'];
+    }
+
+    private function normalizeAuditIssue(mixed $reason): string
+    {
+        return match ((string) $reason) {
+            'remote_source_disabled' => 'remote_source_refused',
+            'product_list_file_missing', 'price_avail_file_missing', 'source_file_missing' => 'source_missing',
+            'parse_error' => 'malformed_xml',
+            default => (string) $reason,
+        };
     }
 
     /**
