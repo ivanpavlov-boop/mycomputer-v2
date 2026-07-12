@@ -57,12 +57,13 @@ Phase 8 manual selected UPDATE price/stock sync has been implemented behind a fe
 | Phase 9C.6.4.2 | Controlled ASBIS Dual-Feed Staging Apply | Complete; merged dry-run-first, false-by-default, create-only `supplier_products` staging path. Initial attempts rolled back safely; a later controlled v2 apply was reported successful with staging-only, unlinked ASBIS rows. |
 | Phase 9C.6.4.2a | ASBIS MySQL Apply Compatibility and Safe Transaction Diagnostics | Complete; canonical v2 payload validation, Unicode-safe name compatibility, canonical `new` status, and safe rollback diagnostics. |
 | Phase 9C.6.4.2.1 | ASBIS Post-Apply Verification and Reconciliation Audit | Complete in production on 2026-07-11; verdict `verified`, candidate count 4,844, ASBIS staged count 4,844, total `supplier_products` 6,717, linked ASBIS products 0, and `records_changed=0`. |
+| Phase 9C.6.5A | Reusable Supplier Onboarding Framework Discovery & Contracts | Complete locally; immutable contracts, DTOs, pure normalizers, fingerprints, preview/staging/verification structures, tests, and documentation only. |
 
 ## In Progress
 
 | Phase | Name | Status |
 | --- | --- | --- |
-| — | No implementation phase currently in progress | Documentation closeout is complete; the next planned work is Phase 9C.6.5A. |
+| — | No implementation phase currently in progress | Phase 9C.6.5A discovery/contracts are complete locally; the next planned work is Phase 9C.6.5B. |
 
 ## Paused / Partial Phases
 
@@ -74,8 +75,7 @@ Phase 8 manual selected UPDATE price/stock sync has been implemented behind a fe
 
 | Phase | Name | Notes |
 | --- | --- | --- |
-| Phase 9C.6.5A | Reusable Supplier Onboarding Framework Discovery & Contracts | Next; not started. No implementation is complete and no new supplier has been imported. |
-| Phase 9C.6.5 | ASBIS Staging Data Discovery Audit | Audit newly staged ASBIS data before broader mapping review. |
+| Phase 9C.6.5B | Multi-Supplier Readiness Matrix | Next; not started. Review existing staging/import capability before selecting any additional supplier. |
 | Phase 9C.6.6 | Multi-Supplier Category Mapping Review | Review mappings in batches using the full multi-supplier picture. |
 | Phase 9C.6.7 | Multi-Supplier Identifier Overlap Review | Review exact and possible overlaps before future offer grouping. |
 | Phase 9C.7 | Supplier Attribute Mapping Foundation | Preview/planning foundation only until a later explicit approval/write phase. |
@@ -87,22 +87,25 @@ Phase 8 manual selected UPDATE price/stock sync has been implemented behind a fe
 | Phase 11 | Scheduled preview generation | Preview only before scheduled writes. |
 | Phase 12 | Controlled automatic sync | Last, behind feature flags and rollback. |
 
-## Phase 9C.6.5A Intended Scope
+## Phase 9C.6.5A Implemented Scope
 
-This next phase is discovery and contract design only; none of the following
-components is claimed as implemented yet:
+This phase is discovery and contract design only. The following local
+components are implemented without production wiring:
 
 - reusable normalized supplier payload contract;
 - supplier feed driver interface;
 - versioned supplier feed profile contract;
 - source fingerprint and candidate fingerprint contracts;
 - preview/report contract;
-- controlled `supplier_products` staging apply contract;
+- create-only `supplier_products` staging plan contract with updates disabled;
 - post-apply verification contract;
-- availability and pricing normalization contracts;
-- future generic XML/CSV/JSON drivers;
-- future custom API and complex-feed adapters; and
-- a future supplier onboarding playbook.
+- availability and pricing normalization contracts; and
+- validation issue/classification value objects.
+
+No generic XML/CSV/JSON driver, custom API adapter, staging apply, supplier
+registration, production binding, or onboarding command was added. The
+framework remains read-only and local to the contract boundary. Phase 9C.6.5B
+is the next phase and is not started.
 
 No supplier #2 has been selected or imported under this phase.
 

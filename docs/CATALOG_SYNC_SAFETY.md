@@ -33,6 +33,16 @@ CATALOG_SYNC_AUTO_ENABLED=false
 
 ## Supplier Import Staging-Only Rule
 
+### Supplier Onboarding Contract Boundary
+
+Phase 9C.6.5A adds local, immutable onboarding contracts and pure
+normalization/fingerprint services only. They do not register a generic driver,
+fetch feeds, dispatch jobs, write staging or catalog tables, call Catalog Sync,
+import images, or enable schedules. `StagingPlan` is a create-only
+`supplier_products-only` planning structure with updates fixed at zero; it has
+no apply method. The phase does not select supplier #2 and does not add a new
+supplier.
+
 Supplier import may:
 
 - download supplier XML/CSV through approved feed services
