@@ -67,6 +67,9 @@ Manual selected UPDATE price/stock sync is implemented behind `CATALOG_SYNC_UPDA
 - ASBIS Full-File Streaming Preview and Apply Readiness Audit for exact local
   ProductCode-to-WIC counts, bounded samples and source fingerprints without
   staging writes, remote fetches, jobs or Catalog Sync.
+- Controlled ASBIS v2 staging apply and production post-apply verification
+  closeout: 4,844 ASBIS staging rows, zero linked products, and zero protected
+  records changed.
 
 ## Current Safety Position
 
@@ -82,35 +85,67 @@ Manual selected UPDATE price/stock sync is implemented behind `CATALOG_SYNC_UPDA
 - Product enrichment gaps are surfaced in a read-only admin queue; fixes still use existing product edit permissions.
 - Product attributes are catalog-owned internal definitions. Category Attribute Sets can assign existing attributes to existing categories, admins can manually maintain individual product values from Product edit pages, Product Specification Data Quality reports missing important category specs without mutating data, the legacy reconciliation command can copy safe values into existing category-assigned targets one explicit product at a time, reconciled legacy values are marked read-only in admin while staying visible, the CPU template command can explicitly prepare CPU attributes/options/category assignments without product values, the category template coverage audit can report direct/inherited/missing template coverage without an apply mode, supplier category mappings can prepare pending-review taxonomy records without applying them to products, multi-supplier discovery can report staging/category/identifier overlap data without any apply mode, supplier import capability audit can report feed/driver/schedule readiness without fetching feeds, dispatching jobs, or exposing secrets, supplier configuration cleanup can disable only unsafe supplier schedules by explicit apply, the next supplier staging import preview can parse local XML/CSV/JSON samples without writes or remote feed access, the controlled ASBIS staging import can write only ASBIS `supplier_products` rows after explicit dry-run-first confirmation, and the ASBIS dual-feed preview can join local ProductList/PriceAvail files without writes or remote feed access. Supplier attribute mapping and frontend filters are not enabled yet.
 
+## Next Supplier Sequence
+
+1. **ASBIS production closeout — completed.** The controlled v2 staging apply
+   and read-only post-apply verification completed with verdict `verified` on
+   2026-07-11.
+2. **Reusable Supplier Onboarding Framework Discovery & Contracts — next,
+   not started.** No implementation is complete and no new supplier has been
+   imported.
+3. Multi-Supplier Readiness Matrix.
+4. Select supplier #2.
+5. Supplier #2 preview-only integration.
+6. Controlled `supplier_products` staging apply.
+7. Post-apply verification.
+8. Repeat the same controlled sequence for the remaining current suppliers.
+9. Supplier category and canonical mappings.
+10. Controlled manual CREATE sync.
+11. Optional controlled UPDATE pilot later.
+
+Every future supplier must use the same onboarding pipeline rather than an
+uncontrolled one-off importer:
+
+```text
+Supplier registration
+-> capability audit
+-> feed profile
+-> driver/adapter
+-> normalization
+-> preview
+-> controlled supplier_products staging
+-> post-apply verification
+-> mappings
+-> manual CREATE sync
+-> optional controlled UPDATE pilot
+```
+
+Phase 9C.6.5A is intended to define reusable normalized supplier payload,
+driver, versioned feed profile, source/candidate fingerprint, preview/report,
+controlled staging apply, post-apply verification, availability normalization,
+and pricing normalization contracts, plus future generic XML/CSV/JSON drivers,
+custom API/complex-feed adapters, and an onboarding playbook. These are future
+contracts, not completed runtime components.
+
 ## Next
 
 1. Keep Phase 7.5 documentation lock current.
-2. Keep feature flag/audit visibility read-only.
-3. Phase 9C.6.4.2 is merged as a dry-run-first, false-by-default, create-only
-   staging path. The first production apply attempts rolled back safely with
-   zero ASBIS rows inserted and no catalog changes. A later controlled v2 apply
-   was reported successful with staging-only, unlinked ASBIS rows; independent
-   post-apply verification is still pending.
-4. Phase 9C.6.4.2a ASBIS MySQL Apply Compatibility and Safe Transaction
-   Diagnostics is complete. The v2 payload contract and rollback diagnostics
-   remain covered by tests.
-5. Phase 9C.6.4.2.1 ASBIS Post-Apply Verification and Reconciliation Audit is
-   in progress as a read-only local verifier. Production verification has not
-   been performed by this work.
-6. Phase 9C.6.5 ASBIS Staging Data Discovery Audit.
-7. Phase 9C.6.6 Multi-Supplier Category Mapping Review.
-8. Phase 9C.6.7 Multi-Supplier Identifier Overlap Review.
-9. Phase 9C.7 Supplier Attribute Mapping Foundation.
-10. Product specification data quality polish.
-11. Storefront specification display and later attribute filters.
-12. Product attribute filter design after controlled data quality.
-13. Rollback tooling based on `catalog_sync_batches` and `catalog_sync_logs`.
-14. Keep feature flags locked down before broader sync work.
-15. Conflict/manual mapping workflow.
-16. Sync All later.
-17. Automatic sync later.
-18. Nuxt i18n route integration and localized sitemap expansion.
-19. Data enrichment workflow refinements after queue usage is observed.
+2. Keep feature flag and audit visibility read-only.
+3. Phase 9C.6.5A discovery and contract design.
+4. Phase 9C.6.5 ASBIS Staging Data Discovery Audit.
+5. Phase 9C.6.6 Multi-Supplier Category Mapping Review.
+6. Phase 9C.6.7 Multi-Supplier Identifier Overlap Review.
+7. Phase 9C.7 Supplier Attribute Mapping Foundation.
+8. Product specification data quality polish.
+9. Storefront specification display and later attribute filters.
+10. Product attribute filter design after controlled data quality.
+11. Rollback tooling based on `catalog_sync_batches` and `catalog_sync_logs`.
+12. Keep feature flags locked down before broader sync work.
+13. Conflict/manual mapping workflow.
+14. Sync All later.
+15. Automatic sync later.
+16. Nuxt i18n route integration and localized sitemap expansion.
+17. Data enrichment workflow refinements after queue usage is observed.
 
 ## Phase 8 Initial UPDATE Scope
 
