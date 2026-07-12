@@ -2,12 +2,18 @@
 
 ## Status
 
-Phase 9C.6.5A is implemented locally as a discovery and contract foundation.
-It defines reusable data contracts and pure normalization/fingerprint services.
-It is not production wiring and does not select or onboard a new supplier.
+Phase 9C.6.5A is complete and merged. It defines reusable data contracts and
+pure normalization/fingerprint services. It is not production wiring and does
+not select or onboard a new supplier.
 
-The next phase is **9C.6.5B - Multi-Supplier Readiness Matrix**. It is not
-started.
+Phase 9C.6.5B is implemented locally as a strictly read-only multi-supplier
+readiness matrix. It has not been run against production. It does not fetch
+feeds, invoke previews, import data, write staging/catalog/mapping data, call
+Catalog Sync, dispatch jobs, or enable schedules.
+
+The next phase is **9C.6.5C - Supplier #2 Selection & Source Profiling**. It
+has not started and requires a reviewed production read-only matrix plus a
+human supplier-selection decision.
 
 ## Intended Pipeline
 
@@ -99,6 +105,46 @@ The Phase 9C.6.5A code has no HTTP client, queue dispatch, scheduler, storage
 write, Eloquent query, Catalog Sync call, image action, or production service
 container binding. There is no generic XML/CSV/JSON driver yet. A fake driver
 is used only by tests.
+
+## Readiness Matrix
+
+`suppliers:audit-onboarding-readiness-matrix` combines existing redacted
+supplier capability facts, local database metadata, staging provenance, mapping
+counts, and the Phase 9C.6.5A contract surface into a machine-readable report
+with schema `supplier-readiness-matrix-v1`.
+
+The command is read-only. It does not request feeds or APIs, inspect remote
+credentials, invoke a preview or verifier command, import records, create
+staging rows, call Catalog Sync, dispatch jobs, alter schedules, or download
+images. It reports only configuration presence and safe metadata; URLs,
+usernames, passwords, tokens, header values, raw source records, production
+paths, and full supplier SKUs are excluded. Optional staging samples are
+SHA-256 hashes and bounded by `--sample-limit`.
+
+The matrix distinguishes a generic interface/profile contract from a
+production-wired driver or profile. A configured legacy XML/CSV staging driver
+is evidence that a local staging surface exists, but is not evidence that the
+new onboarding driver/profile is ready. ASBIS reference evidence is derived
+from actual staged provenance metadata and the existing isolated capability
+classes, never from the supplier slug or hard-coded counts.
+
+Each supplier has exactly one machine-readable primary stage. Stages range from
+`disabled` and `source_not_configured` through `driver_required`,
+`source_profile_required`, `staging_present_unverified`, and
+`staging_verified`; `blocked` overrides every other stage when linked staging,
+an early schedule, or unsafe global Catalog Sync flags are observed.
+
+The diagnostic score is deterministic and never selects a supplier or permits
+an operation. It awards: active `10`, import enabled `10`, known format `5`,
+source configured `10`, configured required authentication `5`, driver `15`,
+profile `15`, preview `10`, controlled staging capability `10`, post-apply
+verification capability `5`, and verified staging provenance `5`. Schedule
+state awards no points. Blockers override score-based ordering.
+
+The report exposes effective Catalog Sync flags without changing them. UPDATE,
+Sync All, or automatic sync enabled produces the unsafe matrix verdict. CREATE
+being enabled is informational only. All protected-table counters remain zero
+for a normal isolated audit.
 
 ## Explicitly Not Implemented
 

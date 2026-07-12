@@ -43,6 +43,16 @@ import images, or enable schedules. `StagingPlan` is a create-only
 no apply method. The phase does not select supplier #2 and does not add a new
 supplier.
 
+Phase 9C.6.5B adds only `suppliers:audit-onboarding-readiness-matrix`, a
+read-only local matrix over existing supplier configuration, capability audit
+facts, staging provenance/counts, mapping counts, and effective Catalog Sync
+flags. It cannot fetch a feed, invoke an import/preview/apply/verifier command,
+write any protected table, call Catalog Sync, dispatch work, enable schedules,
+or select a supplier. Unsafe UPDATE, Sync All, or automatic-sync flags produce
+an unsafe audit verdict; the command never changes those flags. The next
+supplier-selection phase remains blocked pending a production read-only matrix
+review and explicit human approval.
+
 Supplier import may:
 
 - download supplier XML/CSV through approved feed services

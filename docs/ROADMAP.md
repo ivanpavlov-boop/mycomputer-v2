@@ -60,8 +60,12 @@ Manual selected UPDATE price/stock sync is implemented behind `CATALOG_SYNC_UPDA
   supplier schedules before adding the next staging import.
 - Reusable Supplier Onboarding Framework Discovery & Contracts for immutable
   normalized-record, driver, profile, fingerprint, preview, staging-plan,
-  verification, price, availability, and validation contracts. This is local
-  discovery only; it has no production driver or write path.
+  verification, price, availability, and validation contracts. This foundation
+  is merged; it has no generic production driver or write path.
+- Multi-Supplier Readiness Matrix for local read-only capability, staging,
+  mapping, and safety-flag evidence. It has not run against production and
+  cannot fetch feeds, import, write, call Catalog Sync, dispatch jobs, or
+  change schedules.
 - Next Supplier Staging Import Preview for local XML/CSV/JSON feed samples with
   detected fields, normalized coverage, overlaps, row issues, and zero-write
   safety counters.
@@ -95,10 +99,12 @@ Manual selected UPDATE price/stock sync is implemented behind `CATALOG_SYNC_UPDA
    and read-only post-apply verification completed with verdict `verified` on
    2026-07-11.
 2. **Reusable Supplier Onboarding Framework Discovery & Contracts — complete
-   locally.** Contracts and pure services exist without production wiring, a
-   new supplier, or any import/apply operation.
-3. **Multi-Supplier Readiness Matrix — next, not started.**
-4. Select supplier #2.
+   and merged.** Contracts and pure services exist without a generic production
+   driver, a new supplier, or any import/apply operation.
+3. **Multi-Supplier Readiness Matrix — complete locally.** The read-only matrix
+   has no production run yet and cannot perform an operational action.
+4. **Supplier #2 Selection & Source Profiling — next, not started.** This
+   requires a reviewed production read-only matrix and a human decision.
 5. Supplier #2 preview-only integration.
 6. Controlled `supplier_products` staging apply.
 7. Post-apply verification.
@@ -124,19 +130,26 @@ Supplier registration
 -> optional controlled UPDATE pilot
 ```
 
-Phase 9C.6.5A completed the local discovery contract foundation for reusable
+Phase 9C.6.5A completed and merged the local discovery contract foundation for reusable
 normalized supplier payloads, drivers, versioned feed profiles,
 source/candidate fingerprints, preview/report, create-only staging planning,
 post-apply verification, availability/price normalization, and validation
 issues. It did not add production wiring, a generic driver, a supplier, a
 command, a migration, a remote fetch, a staging apply, or any catalog write.
-Phase 9C.6.5B Multi-Supplier Readiness Matrix is next and is not started.
+Phase 9C.6.5B adds a local read-only readiness matrix with safe configuration
+presence, capability/staging/mapping evidence, deterministic score, blockers,
+and zero-change counters. It does not run a production matrix, fetch a source,
+or mutate any supplier, catalog, mapping, attribute, queue, schedule, or
+Catalog Sync surface. Phase 9C.6.5C Supplier #2 Selection & Source Profiling
+is next and not started; a production read-only matrix and human selection are
+required first.
 
 ## Next
 
 1. Keep Phase 7.5 documentation lock current.
 2. Keep feature flag and audit visibility read-only.
-3. Phase 9C.6.5B Multi-Supplier Readiness Matrix.
+3. Phase 9C.6.5C Supplier #2 Selection & Source Profiling after a reviewed
+   production read-only matrix and explicit human selection.
 4. Phase 9C.6.6 Multi-Supplier Category Mapping Review.
 5. Phase 9C.6.7 Multi-Supplier Identifier Overlap Review.
 6. Phase 9C.7 Supplier Attribute Mapping Foundation.
