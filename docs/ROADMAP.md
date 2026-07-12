@@ -58,6 +58,10 @@ Manual selected UPDATE price/stock sync is implemented behind `CATALOG_SYNC_UPDA
   readiness before adding the next staging import.
 - Supplier Configuration Safety Cleanup for dry-run-first disabling of unsafe
   supplier schedules before adding the next staging import.
+- Reusable Supplier Onboarding Framework Discovery & Contracts for immutable
+  normalized-record, driver, profile, fingerprint, preview, staging-plan,
+  verification, price, availability, and validation contracts. This is local
+  discovery only; it has no production driver or write path.
 - Next Supplier Staging Import Preview for local XML/CSV/JSON feed samples with
   detected fields, normalized coverage, overlaps, row issues, and zero-write
   safety counters.
@@ -90,10 +94,10 @@ Manual selected UPDATE price/stock sync is implemented behind `CATALOG_SYNC_UPDA
 1. **ASBIS production closeout — completed.** The controlled v2 staging apply
    and read-only post-apply verification completed with verdict `verified` on
    2026-07-11.
-2. **Reusable Supplier Onboarding Framework Discovery & Contracts — next,
-   not started.** No implementation is complete and no new supplier has been
-   imported.
-3. Multi-Supplier Readiness Matrix.
+2. **Reusable Supplier Onboarding Framework Discovery & Contracts — complete
+   locally.** Contracts and pure services exist without production wiring, a
+   new supplier, or any import/apply operation.
+3. **Multi-Supplier Readiness Matrix — next, not started.**
 4. Select supplier #2.
 5. Supplier #2 preview-only integration.
 6. Controlled `supplier_products` staging apply.
@@ -120,32 +124,32 @@ Supplier registration
 -> optional controlled UPDATE pilot
 ```
 
-Phase 9C.6.5A is intended to define reusable normalized supplier payload,
-driver, versioned feed profile, source/candidate fingerprint, preview/report,
-controlled staging apply, post-apply verification, availability normalization,
-and pricing normalization contracts, plus future generic XML/CSV/JSON drivers,
-custom API/complex-feed adapters, and an onboarding playbook. These are future
-contracts, not completed runtime components.
+Phase 9C.6.5A completed the local discovery contract foundation for reusable
+normalized supplier payloads, drivers, versioned feed profiles,
+source/candidate fingerprints, preview/report, create-only staging planning,
+post-apply verification, availability/price normalization, and validation
+issues. It did not add production wiring, a generic driver, a supplier, a
+command, a migration, a remote fetch, a staging apply, or any catalog write.
+Phase 9C.6.5B Multi-Supplier Readiness Matrix is next and is not started.
 
 ## Next
 
 1. Keep Phase 7.5 documentation lock current.
 2. Keep feature flag and audit visibility read-only.
-3. Phase 9C.6.5A discovery and contract design.
-4. Phase 9C.6.5 ASBIS Staging Data Discovery Audit.
-5. Phase 9C.6.6 Multi-Supplier Category Mapping Review.
-6. Phase 9C.6.7 Multi-Supplier Identifier Overlap Review.
-7. Phase 9C.7 Supplier Attribute Mapping Foundation.
-8. Product specification data quality polish.
-9. Storefront specification display and later attribute filters.
-10. Product attribute filter design after controlled data quality.
-11. Rollback tooling based on `catalog_sync_batches` and `catalog_sync_logs`.
-12. Keep feature flags locked down before broader sync work.
-13. Conflict/manual mapping workflow.
-14. Sync All later.
-15. Automatic sync later.
-16. Nuxt i18n route integration and localized sitemap expansion.
-17. Data enrichment workflow refinements after queue usage is observed.
+3. Phase 9C.6.5B Multi-Supplier Readiness Matrix.
+4. Phase 9C.6.6 Multi-Supplier Category Mapping Review.
+5. Phase 9C.6.7 Multi-Supplier Identifier Overlap Review.
+6. Phase 9C.7 Supplier Attribute Mapping Foundation.
+7. Product specification data quality polish.
+8. Storefront specification display and later attribute filters.
+9. Product attribute filter design after controlled data quality.
+10. Rollback tooling based on `catalog_sync_batches` and `catalog_sync_logs`.
+11. Keep feature flags locked down before broader sync work.
+12. Conflict/manual mapping workflow.
+13. Sync All later.
+14. Automatic sync later.
+15. Nuxt i18n route integration and localized sitemap expansion.
+16. Data enrichment workflow refinements after queue usage is observed.
 
 ## Phase 8 Initial UPDATE Scope
 
