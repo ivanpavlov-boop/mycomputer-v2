@@ -2,9 +2,9 @@
 
 ## Purpose
 
-This inventory records the supplier integration surfaces that were reviewed
-for Phase 9C.6.5A. It is an architecture reference, not an instruction to run
-an import.
+This inventory records the supplier integration surfaces reviewed for Phase
+9C.6.5A and the local Phase 9C.6.5B readiness matrix. It is an architecture
+reference, not an instruction to run an import.
 
 ## Existing Runtime Surfaces
 
@@ -81,7 +81,26 @@ must be separately reviewed, server-revalidated, bounded to
   or Catalog Sync records were written;
 - no schedule, queue, automatic sync, Sync All, or UPDATE enablement was added.
 
-The next review is the multi-supplier readiness matrix in Phase 9C.6.5B.
+## Phase 9C.6.5B Readiness Matrix Outcome
+
+- `suppliers:audit-onboarding-readiness-matrix` is a local, read-only command
+  with table and JSON output using `supplier-readiness-matrix-v1`.
+- It reads safe supplier configuration presence, existing capability-audit
+  facts, staging counts/provenance, mapping counts, and effective Catalog Sync
+  flag values only.
+- It does not expose URLs, credentials, raw feed content, production paths, or
+  full supplier SKU samples.
+- It does not fetch feeds, call supplier APIs, run a preview/import/apply,
+  create or update staging/catalog/mapping/attribute data, call Catalog Sync,
+  dispatch a job, or change a schedule.
+- A generic Phase 9C.6.5A contract is reported as a contract only; it is not
+  treated as a registered production driver/profile.
+- ASBIS reference capability is evidence-based from staged provenance and
+  existing isolated services, not supplier slug or fixed production counts.
+
+No production matrix run has occurred in this phase. Phase 9C.6.5C is next and
+requires a production read-only matrix review and human selection of supplier
+#2 before source profiling begins.
 
 Facts not confirmed from local code are marked `unknown` or `requires a
 production read-only audit`; this inventory does not infer production feed

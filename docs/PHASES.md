@@ -57,13 +57,14 @@ Phase 8 manual selected UPDATE price/stock sync has been implemented behind a fe
 | Phase 9C.6.4.2 | Controlled ASBIS Dual-Feed Staging Apply | Complete; merged dry-run-first, false-by-default, create-only `supplier_products` staging path. Initial attempts rolled back safely; a later controlled v2 apply was reported successful with staging-only, unlinked ASBIS rows. |
 | Phase 9C.6.4.2a | ASBIS MySQL Apply Compatibility and Safe Transaction Diagnostics | Complete; canonical v2 payload validation, Unicode-safe name compatibility, canonical `new` status, and safe rollback diagnostics. |
 | Phase 9C.6.4.2.1 | ASBIS Post-Apply Verification and Reconciliation Audit | Complete in production on 2026-07-11; verdict `verified`, candidate count 4,844, ASBIS staged count 4,844, total `supplier_products` 6,717, linked ASBIS products 0, and `records_changed=0`. |
-| Phase 9C.6.5A | Reusable Supplier Onboarding Framework Discovery & Contracts | Complete locally; immutable contracts, DTOs, pure normalizers, fingerprints, preview/staging/verification structures, tests, and documentation only. |
+| Phase 9C.6.5A | Reusable Supplier Onboarding Framework Discovery & Contracts | Complete and merged; immutable contracts, DTOs, pure normalizers, fingerprints, preview/staging/verification structures, tests, and documentation only. |
+| Phase 9C.6.5B | Multi-Supplier Readiness Matrix | Complete locally; read-only machine-readable supplier readiness audit with no production matrix run, feed request, import, write, Catalog Sync, job, or schedule action. |
 
 ## In Progress
 
 | Phase | Name | Status |
 | --- | --- | --- |
-| — | No implementation phase currently in progress | Phase 9C.6.5A discovery/contracts are complete locally; the next planned work is Phase 9C.6.5B. |
+| — | No implementation phase currently in progress | Phase 9C.6.5A is merged and Phase 9C.6.5B is complete locally; no production readiness-matrix run has occurred. |
 
 ## Paused / Partial Phases
 
@@ -75,7 +76,7 @@ Phase 8 manual selected UPDATE price/stock sync has been implemented behind a fe
 
 | Phase | Name | Notes |
 | --- | --- | --- |
-| Phase 9C.6.5B | Multi-Supplier Readiness Matrix | Next; not started. Review existing staging/import capability before selecting any additional supplier. |
+| Phase 9C.6.5C | Supplier #2 Selection & Source Profiling | Not started. Requires a reviewed production read-only readiness matrix and explicit human selection before source profiling. |
 | Phase 9C.6.6 | Multi-Supplier Category Mapping Review | Review mappings in batches using the full multi-supplier picture. |
 | Phase 9C.6.7 | Multi-Supplier Identifier Overlap Review | Review exact and possible overlaps before future offer grouping. |
 | Phase 9C.7 | Supplier Attribute Mapping Foundation | Preview/planning foundation only until a later explicit approval/write phase. |
@@ -87,7 +88,7 @@ Phase 8 manual selected UPDATE price/stock sync has been implemented behind a fe
 | Phase 11 | Scheduled preview generation | Preview only before scheduled writes. |
 | Phase 12 | Controlled automatic sync | Last, behind feature flags and rollback. |
 
-## Phase 9C.6.5A Implemented Scope
+## Phase 9C.6.5A and 9C.6.5B Implemented Scope
 
 This phase is discovery and contract design only. The following local
 components are implemented without production wiring:
@@ -104,10 +105,16 @@ components are implemented without production wiring:
 
 No generic XML/CSV/JSON driver, custom API adapter, staging apply, supplier
 registration, production binding, or onboarding command was added. The
-framework remains read-only and local to the contract boundary. Phase 9C.6.5B
-is the next phase and is not started.
+framework remains read-only and local to the contract boundary.
 
-No supplier #2 has been selected or imported under this phase.
+Phase 9C.6.5B adds a read-only multi-supplier readiness matrix. It reports
+safe configuration presence, staged-row/mapping counts, capability evidence,
+readiness stages, deterministic diagnostic scores, blockers, next safe actions,
+effective Catalog Sync flags, and zero protected-table mutation counters. It
+does not fetch remote sources, run a preview/import/apply, write any data, call
+Catalog Sync, dispatch jobs, change schedules, or select a new supplier.
+
+No supplier #2 has been selected, profiled, or imported under these phases.
 
 ## Allowed
 
