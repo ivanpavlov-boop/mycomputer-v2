@@ -522,11 +522,10 @@ not exposed. Query failures are classified into safe codes such as
 
 If a batch fails, attempted rows may be reported separately, but committed rows
 and `records_changed.supplier_products` remain zero after rollback. The feature
-flag remains false by default. A later controlled v2 apply was reported as
-successful with 4,844 ASBIS staging-only rows, all unlinked and with Catalog
-Sync disabled afterward; this verifier still does not claim that production
-state has been independently verified. Production post-apply verification
-remains pending for a later explicitly approved operational window.
+flag remains false by default. A later controlled v2 apply completed
+successfully with 4,844 ASBIS staging-only rows, all unlinked and with Catalog
+Sync disabled afterward. The historical apply and the later production
+verification are documented separately below.
 
 ## ASBIS Post-Apply Verification and Reconciliation Audit
 
@@ -556,11 +555,111 @@ table. `records_changed` is always zero. Verification exits successfully only
 when all required expectations and reconciliation checks pass. Issue counts and
 samples are bounded and do not include raw payloads or product data.
 
-This phase documents the verifier and its controlled local tests only. It does
-not claim that production post-apply verification has been performed. Any
-future production verification remains a separately approved operational step;
-the apply flag, Catalog Sync UPDATE/Sync All/automatic flags and ASBIS schedule
-must remain disabled unless explicitly approved.
+The verifier implementation and its controlled local tests are read-only. The
+production verification closeout record below documents the separately approved
+verification run completed on 2026-07-11. It did not repair differences or run
+Catalog Sync. The apply flag, Catalog Sync UPDATE/Sync All/automatic flags and
+ASBIS schedule remain disabled unless explicitly approved.
+
+## ASBIS Production Apply and Verification Closeout
+
+This is a historical operational record for the controlled ASBIS v2 staging
+apply and its production read-only verification. It does not authorize another
+apply, Catalog Sync, automatic import, or supplier onboarding step.
+
+### Historical controlled staging apply
+
+- 4,844 ASBIS rows were inserted into `supplier_products`.
+- All rows remain staging-only with `product_id` null and `status=new`.
+- No ASBIS row has been synced; no Catalog Sync operation was run.
+- No catalog product was created or updated.
+- Categories, attributes, supplier category mappings, and internal taxonomy
+  were unchanged.
+- The ASBIS apply feature flag was disabled after the controlled apply.
+
+### Production post-apply verification
+
+The production report completed on 2026-07-11 with:
+
+- `success=true`
+- `mode=post_apply_verification`
+- `read_only=true`
+- `verification_passed=true`
+- `verdict=verified`
+- exit code `0`
+- strict validator result `POST_APPLY_VERIFICATION_PASSED`
+
+Locked source and candidate contract:
+
+- ProductList SHA-256:
+  `f23bdcbaeaf1a17dc72a6da3ec21e6e63a5de17851107c65e111484c136173e2`
+- PriceAvail SHA-256:
+  `9b6b82bcf190b3dc76b404d7097393644ea04814329153289b49d90d48da6558`
+- candidate schema: `asbis-dual-feed-staging-candidate-v2`
+- candidate SHA-256:
+  `79771f6d63f7f1f376dafb2a0fe0fa4460de081334134ebe69c6f2602a730c53`
+- expected and calculated candidate count: `4844`
+- candidate count matches: `true`
+- candidate set matches: `true`
+- source fingerprints match: `true`
+
+Database and reconciliation result:
+
+- products: `1865`
+- total `supplier_products`: `6717`
+- ASBIS `supplier_products`: `4844`
+- linked ASBIS rows: `0`
+- ASBIS rows with `status=new`: `4844`
+- ASBIS rows with `pending_review`: `0`
+- source candidate SKUs and staged unique SKUs: `4844`
+- missing, extra, duplicate-group, and blank SKU counts: `0`
+- canonical rows compared: `4844`
+- field, payload hash, name, price, availability, status, and raw-data
+  mismatches: `0`
+- linked product rows, synced rows, and pending-review rows: `0`
+
+Provenance, truncation, availability, and pricing checks all passed:
+
+- 4,844 provenance rows checked with zero mismatches across source, supplier,
+  ProductCode, WIC, source-hash, and candidate-schema metadata.
+- 16 names were truncated safely; all 16 retained `original_name`, with zero
+  missing originals, over-limit staged names, or invalid metadata. Maximum
+  original/staged lengths were 325/255 Unicode characters.
+- Availability normalized to `in_stock=1032`, `limited_stock=1183`, and
+  `on_request=2629`, with zero invalid IDs, unknown statuses, or mismatches.
+- Invalid, negative, non-EUR, price, supplier-cost, currency, and pricing
+  mismatch counts were all `0`.
+
+Safety state during verification:
+
+- ASBIS apply: `false`
+- Catalog Sync CREATE: `true`
+- Catalog Sync UPDATE: `false`
+- Sync All: `false`
+- automatic sync: `false`
+- ASBIS schedule: `false`
+
+All protected-table before/after counts were identical. Every
+`records_changed` counter was `0`, including `products`, `supplier_products`,
+`suppliers`, `categories`, `supplier_category_mappings`,
+`canonical_product_families`, `category_product_attributes`,
+`product_attributes`, `attribute_values`, `product_attribute_values`,
+`catalog_sync_batches`, `catalog_sync_logs`, and `catalog_sync`. Existing
+`catalog_sync_batches` and `catalog_sync_logs` counts were both `1` before and
+after verification; the verifier created no new batch or log.
+
+Production smoke checks returned `/catalog=200`, `/categories=200`,
+`/api/v1/products=200`, `/admin=302` to login, and `/cart=404` as expected;
+Docker, app, MySQL, and Meilisearch remained healthy.
+
+The production JSON report and its `latest` alias under
+`storage/app/imports/asbis/reports/` are runtime artifacts. They must not be
+committed. No second staging apply is permitted for the same approved
+candidate set.
+
+Future supplier onboarding and future manual CREATE sync remain separate,
+explicitly approved phases. These facts do not claim that ASBIS catalog
+products were created, published, or synced.
 
 ## Controlled Supplier Staging Import Apply Safety
 

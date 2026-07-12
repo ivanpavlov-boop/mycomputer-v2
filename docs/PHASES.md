@@ -55,13 +55,14 @@ Phase 8 manual selected UPDATE price/stock sync has been implemented behind a fe
 | Phase 9C.6.4.1c | ASBIS Full-File Streaming Preview and Apply Readiness Audit | Complete; read-only streaming audit with source fingerprints and no apply mode. |
 | Phase 9C.6.4.1d | ASBIS Audit Consistency and Missing-Key Safety | Complete; canonical identifier overlaps, missing-key blockers and reconciliation remain read-only. |
 | Phase 9C.6.4.2 | Controlled ASBIS Dual-Feed Staging Apply | Complete; merged dry-run-first, false-by-default, create-only `supplier_products` staging path. Initial attempts rolled back safely; a later controlled v2 apply was reported successful with staging-only, unlinked ASBIS rows. |
+| Phase 9C.6.4.2a | ASBIS MySQL Apply Compatibility and Safe Transaction Diagnostics | Complete; canonical v2 payload validation, Unicode-safe name compatibility, canonical `new` status, and safe rollback diagnostics. |
+| Phase 9C.6.4.2.1 | ASBIS Post-Apply Verification and Reconciliation Audit | Complete in production on 2026-07-11; verdict `verified`, candidate count 4,844, ASBIS staged count 4,844, total `supplier_products` 6,717, linked ASBIS products 0, and `records_changed=0`. |
 
 ## In Progress
 
 | Phase | Name | Status |
 | --- | --- | --- |
-| Phase 9C.6.4.2a | ASBIS MySQL Apply Compatibility and Safe Transaction Diagnostics | Complete; canonical v2 payload validation, Unicode-safe name compatibility, canonical `new` status, and safe rollback diagnostics. |
-| Phase 9C.6.4.2.1 | ASBIS Post-Apply Verification and Reconciliation Audit | In progress; read-only local source-to-database v2 verification with zero mutation counters. Production verification remains pending. |
+| — | No implementation phase currently in progress | Documentation closeout is complete; the next planned work is Phase 9C.6.5A. |
 
 ## Paused / Partial Phases
 
@@ -73,6 +74,7 @@ Phase 8 manual selected UPDATE price/stock sync has been implemented behind a fe
 
 | Phase | Name | Notes |
 | --- | --- | --- |
+| Phase 9C.6.5A | Reusable Supplier Onboarding Framework Discovery & Contracts | Next; not started. No implementation is complete and no new supplier has been imported. |
 | Phase 9C.6.5 | ASBIS Staging Data Discovery Audit | Audit newly staged ASBIS data before broader mapping review. |
 | Phase 9C.6.6 | Multi-Supplier Category Mapping Review | Review mappings in batches using the full multi-supplier picture. |
 | Phase 9C.6.7 | Multi-Supplier Identifier Overlap Review | Review exact and possible overlaps before future offer grouping. |
@@ -84,6 +86,25 @@ Phase 8 manual selected UPDATE price/stock sync has been implemented behind a fe
 | Phase 10 | Manual Sync All eligible CREATE | Later, after stronger audit controls. |
 | Phase 11 | Scheduled preview generation | Preview only before scheduled writes. |
 | Phase 12 | Controlled automatic sync | Last, behind feature flags and rollback. |
+
+## Phase 9C.6.5A Intended Scope
+
+This next phase is discovery and contract design only; none of the following
+components is claimed as implemented yet:
+
+- reusable normalized supplier payload contract;
+- supplier feed driver interface;
+- versioned supplier feed profile contract;
+- source fingerprint and candidate fingerprint contracts;
+- preview/report contract;
+- controlled `supplier_products` staging apply contract;
+- post-apply verification contract;
+- availability and pricing normalization contracts;
+- future generic XML/CSV/JSON drivers;
+- future custom API and complex-feed adapters; and
+- a future supplier onboarding playbook.
+
+No supplier #2 has been selected or imported under this phase.
 
 ## Allowed
 
@@ -111,7 +132,7 @@ Phase 8 manual selected UPDATE price/stock sync has been implemented behind a fe
 - Use `suppliers:controlled-staging-import` as the ASBIS-only controlled staging apply command. Dry-run is default; apply requires `--apply --confirm-supplier=asbis` and may write only ASBIS `supplier_products` rows matched by supplier and supplier SKU. It must not fetch remote feeds, dispatch jobs, call Catalog Sync, mutate products/categories/mappings/attributes, enable schedules, or store real feed URLs or credentials.
 - Use `suppliers:preview-asbis-dual-feed` as a local-only ASBIS ProductList plus PriceAvail join preview. It reports join confidence, normalized rows, unmatched rows, overlap candidates, row issues, and future staging action labels, but has no apply mode and must not fetch remote feeds, dispatch jobs, call Catalog Sync, mutate `supplier_products`, mutate catalog data, create categories, apply mappings, import images, or expose secrets.
 - Use `suppliers:audit-asbis-apply-readiness` for a complete local-file streaming audit with exact readiness counts, bounded samples and SHA-256 source fingerprints. Its verdict is advisory only; it has no apply mode and must keep all protected change counters at zero.
-- Use `suppliers:audit-asbis-post-apply-verification` for read-only local post-apply reconciliation. It reconstructs the v2 candidate set and compares source fingerprints, normalized SKUs, canonical rows, raw-data provenance, truncation metadata, availability, pricing, staging counts and protected-table invariants. It has no repair/apply/sync mode, never exposes paths or raw payloads, and production verification remains separately pending.
+- Use `suppliers:audit-asbis-post-apply-verification` for read-only post-apply reconciliation. It reconstructs the v2 candidate set and compares source fingerprints, normalized SKUs, canonical rows, raw-data provenance, truncation metadata, availability, pricing, staging counts and protected-table invariants. It has no repair/apply/sync mode and never exposes paths or raw payloads. The 2026-07-11 production verification completed with verdict `verified`; future runs remain separately approved and read-only.
 - The ASBIS readiness audit must normalize empty identifiers to null, preserve EAN leading zeroes, report overlap groups separately from affected rows, block missing ProductCode/WIC/name rows, and expose reconciliation before any future controlled staging apply is considered.
 - Use `catalog:review-auto-created-products` as a dry-run-first corrective command for the three known products created before the Phase 9C.4.2 supplier import safety hotfix. The command must remain allowlisted, idempotent, and limited to review/status fields.
 - Use the Project AI Agents and Catalog Sync Safety playbooks as process guardrails only; they do not add autonomous agents, jobs, or runtime behavior.
