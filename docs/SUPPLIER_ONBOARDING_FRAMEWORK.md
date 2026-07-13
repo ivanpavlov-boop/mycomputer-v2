@@ -11,9 +11,10 @@ readiness matrix. It has not been run against production. It does not fetch
 feeds, invoke previews, import data, write staging/catalog/mapping data, call
 Catalog Sync, dispatch jobs, or enable schedules.
 
-The next phase is **9C.6.5C - Supplier #2 Selection & Source Profiling**. It
-has not started and requires a reviewed production read-only matrix plus a
-human supplier-selection decision.
+Phase 9C.6.5C - APCOM Supplier #1 Legacy Integration Audit & Normalization
+Discovery is implemented locally as read-only tooling. It does not run a
+production audit, change the APCOM schedule, re-import APCOM, or select
+Supplier #3.
 
 ## Intended Pipeline
 
@@ -158,3 +159,33 @@ for a normal isolated audit.
 - no migration, seeder, route, admin page, or deployment.
 
 ASBIS behavior remains in its existing isolated services and is unchanged.
+
+## Phase 9C.6.5C - APCOM Legacy Discovery
+
+APCOM remains Supplier #1, the historically integrated supplier. It is not
+imported again as a new supplier. ASBIS remains Supplier #2 with its completed
+controlled staging verification. Supplier #3 has not been selected.
+
+The local audit command is `suppliers:audit-legacy-staging-state`. It reads
+existing APCOM `supplier_products`, links, catalog comparison indicators,
+mapping state, import history, schedule facts, and effective Catalog Sync
+flags. It returns `supplier-legacy-staging-audit-v1`, bounded aggregate
+diagnostics, hashed identifier samples, before/after table counts, and zero
+mutation counters. It never fetches the APCOM feed, calls a supplier API,
+changes a schedule, links or unlinks products, runs Catalog Sync, dispatches
+work, or writes any table. An enabled schedule with linked and unverified
+staging produces `schedule_must_be_frozen`; the command does not freeze it.
+
+The local source profiler is `suppliers:profile-local-source`. It accepts only
+an explicitly supplied local XML file, uses streaming XMLReader, rejects remote
+URLs and stream wrappers, reports a SHA-256 fingerprint and bounded field/path
+diagnostics, and emits a non-persisted `supplier-feed-profile-draft-v1`
+requiring human review. It never uses the configured supplier feed URL,
+downloads images, persists a profile, or starts an import.
+
+Both commands require CREATE enabled, UPDATE disabled, Sync All disabled, and
+automatic sync disabled. The supplied APCOM operational baseline is 1,872
+staging rows and 989 linked rows, with XML and `XmlImportEngine` configured and
+an enabled twice-daily staging schedule. These are audit inputs, not a
+production audit result. No schedule freeze, cleanup, re-import, link repair,
+Catalog Sync, or production audit is performed in this phase.

@@ -140,16 +140,21 @@ Phase 9C.6.5B adds a local read-only readiness matrix with safe configuration
 presence, capability/staging/mapping evidence, deterministic score, blockers,
 and zero-change counters. It does not run a production matrix, fetch a source,
 or mutate any supplier, catalog, mapping, attribute, queue, schedule, or
-Catalog Sync surface. Phase 9C.6.5C Supplier #2 Selection & Source Profiling
-is next and not started; a production read-only matrix and human selection are
-required first.
+Catalog Sync surface. Phase 9C.6.5C is the APCOM Supplier #1 Legacy
+Integration Audit & Normalization Discovery phase. Its implementation is
+local and read-only. It does not re-import APCOM, run a production audit,
+freeze the schedule, repair links, approve a feed profile, or select Supplier
+#3. A production read-only audit remains separately controlled after review,
+merge, deployment, and schedule freeze.
 
 ## Next
 
 1. Keep Phase 7.5 documentation lock current.
 2. Keep feature flag and audit visibility read-only.
-3. Phase 9C.6.5C Supplier #2 Selection & Source Profiling after a reviewed
-   production read-only matrix and explicit human selection.
+3. Complete review of Phase 9C.6.5C APCOM legacy discovery locally, then
+   perform any production audit only as a separately approved operational step.
+4. Select Supplier #3 only after a reviewed readiness matrix and explicit human
+   decision; ASBIS remains Supplier #2.
 4. Phase 9C.6.6 Multi-Supplier Category Mapping Review.
 5. Phase 9C.6.7 Multi-Supplier Identifier Overlap Review.
 6. Phase 9C.7 Supplier Attribute Mapping Foundation.

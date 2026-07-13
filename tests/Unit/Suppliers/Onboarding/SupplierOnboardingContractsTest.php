@@ -221,7 +221,11 @@ class SupplierOnboardingContractsTest extends TestCase
             glob($root.'/app/Data/Suppliers/Onboarding/*.php') ?: [],
             array_filter(
                 glob($root.'/app/Services/Suppliers/Onboarding/*.php') ?: [],
-                fn (string $path): bool => basename($path) !== 'SupplierReadinessMatrixService.php',
+                fn (string $path): bool => ! in_array(basename($path), [
+                    'SupplierReadinessMatrixService.php',
+                    // This phase deliberately audits existing staging through read-only queries.
+                    'LegacySupplierStagingAuditService.php',
+                ], true),
             ),
         );
 
