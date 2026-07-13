@@ -113,13 +113,13 @@ history, and schedule risk without changing them. The local
 local XML fixture or file and produces a non-persisted, human-review feed
 profile draft.
 
-The supplied operational baseline is APCOM supplier ID 5, 1,872 staging rows,
-989 linked rows, XML source format, `XmlImportEngine`, configured source and
-authentication, and an enabled twice-daily staging schedule. These facts are
-documented as supplied inputs and are not claimed as a production audit result
-from this implementation. A schedule freeze remains a separate approved
-operational step. No cleanup, re-import, link repair, feed-profile approval,
-or Catalog Sync is included.
+The supplied operational baseline reports APCOM supplier ID 5, 1,872 staging
+rows, 989 linked rows, XML source format, `XmlImportEngine`, configured source
+and authentication, and a currently enabled twice-daily production staging
+schedule. These facts are supplied audit inputs, not a production audit result
+from this implementation; a fresh dry-run must confirm them before any apply.
+A schedule freeze remains a separate approved operational step. No cleanup,
+re-import, link repair, feed-profile approval, or Catalog Sync is included.
 
 ASBIS is Supplier #2 and its controlled staging verification is complete.
 Supplier #3 has not been selected.
@@ -127,3 +127,21 @@ Supplier #3 has not been selected.
 Facts not confirmed from local code are marked `unknown` or `requires a
 production read-only audit`; this inventory does not infer production feed
 configuration, supplier coverage, or live staging state.
+
+## Controlled Schedule Freeze
+
+Phase 9C.6.5C.1 adds the separate command
+`suppliers:controlled-schedule-freeze`. It is a dry-run-first guard for one
+explicit supplier before a deterministic read-only audit. It must not be used
+to redefine `suppliers:cleanup-unsafe-schedules`: APCOM remains safe from the
+catalog-safety perspective when its staging is present, but its schedule may
+still require a separately approved temporary freeze for audit stability.
+
+The command reads safe supplier state, staging/link counts, import-run/job
+activity, protected-table counts, and Catalog Sync flags. Apply mode requires
+exact expected-state and operator confirmations and can change only
+`suppliers.schedule_enabled` from true to false. It does not import, fetch,
+queue, link/unlink, write `supplier_products`, mutate products or taxonomy,
+call Catalog Sync, or change feature flags. The scheduler must be stopped by
+the operator before apply; the command does not control containers. No
+production schedule was changed and no production audit was run in this phase.

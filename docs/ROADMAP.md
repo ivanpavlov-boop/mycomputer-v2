@@ -147,6 +147,13 @@ freeze the schedule, repair links, approve a feed profile, or select Supplier
 #3. A production read-only audit remains separately controlled after review,
 merge, deployment, and schedule freeze.
 
+Phase 9C.6.5C.1 adds the separate dry-run-first
+`suppliers:controlled-schedule-freeze` guard. It can only change one
+explicitly selected supplier's `schedule_enabled` flag after exact state
+locking and operator confirmation; it does not perform an import or audit.
+APCOM's staging-safe classification is unchanged. No production schedule was
+changed in this phase, and no automatic unfreeze is implemented.
+
 ## Next
 
 1. Keep Phase 7.5 documentation lock current.

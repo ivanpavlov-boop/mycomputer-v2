@@ -59,13 +59,14 @@ Phase 8 manual selected UPDATE price/stock sync has been implemented behind a fe
 | Phase 9C.6.4.2.1 | ASBIS Post-Apply Verification and Reconciliation Audit | Complete in production on 2026-07-11; verdict `verified`, candidate count 4,844, ASBIS staged count 4,844, total `supplier_products` 6,717, linked ASBIS products 0, and `records_changed=0`. |
 | Phase 9C.6.5A | Reusable Supplier Onboarding Framework Discovery & Contracts | Complete and merged; immutable contracts, DTOs, pure normalizers, fingerprints, preview/staging/verification structures, tests, and documentation only. |
 | Phase 9C.6.5B | Multi-Supplier Readiness Matrix | Complete locally; read-only machine-readable supplier readiness audit with no production matrix run, feed request, import, write, Catalog Sync, job, or schedule action. |
-| Phase 9C.6.5C | APCOM Supplier #1 Legacy Integration Audit & Normalization Discovery | Implementation in progress locally; read-only legacy staging audit and explicit-local XML profiler only. No production audit, schedule freeze, re-import, link repair, or Catalog Sync. |
+| Phase 9C.6.5C | APCOM Supplier #1 Legacy Integration Audit & Normalization Discovery | Implemented locally; read-only legacy staging audit and explicit-local XML profiler only. No production audit, schedule freeze, re-import, link repair, or Catalog Sync. |
+| Phase 9C.6.5C.1 | Controlled Supplier Schedule Freeze for Deterministic Audit | Implemented locally; dry-run-first, exact-state guarded schedule-only command. No production schedule change, import, job, Catalog Sync, or deploy. |
 
 ## In Progress
 
 | Phase | Name | Status |
 | --- | --- | --- |
-| — | Phase 9C.6.5C local implementation | Phase 9C.6.5A is merged, Phase 9C.6.5B is complete locally, and Phase 9C.6.5C remains local/read-only until review and merge. No production readiness-matrix or APCOM legacy audit has run. |
+| — | Phase 9C.6.5C local implementation | Phase 9C.6.5A is merged; Phase 9C.6.5B, 9C.6.5C, and 9C.6.5C.1 are local/read-only implementations. No production readiness matrix, APCOM legacy audit, or schedule freeze has run. |
 
 ## Paused / Partial Phases
 

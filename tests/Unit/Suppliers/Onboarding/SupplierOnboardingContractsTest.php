@@ -225,6 +225,8 @@ class SupplierOnboardingContractsTest extends TestCase
                     'SupplierReadinessMatrixService.php',
                     // This phase deliberately audits existing staging through read-only queries.
                     'LegacySupplierStagingAuditService.php',
+                    // This phase deliberately adds a separately guarded runtime schedule-only service.
+                    'ControlledSupplierScheduleFreezeService.php',
                 ], true),
             ),
         );
