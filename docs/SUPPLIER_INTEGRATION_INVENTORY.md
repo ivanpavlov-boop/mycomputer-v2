@@ -127,3 +127,21 @@ Supplier #3 has not been selected.
 Facts not confirmed from local code are marked `unknown` or `requires a
 production read-only audit`; this inventory does not infer production feed
 configuration, supplier coverage, or live staging state.
+
+## Controlled Schedule Freeze
+
+Phase 9C.6.5C.1 adds the separate command
+`suppliers:controlled-schedule-freeze`. It is a dry-run-first guard for one
+explicit supplier before a deterministic read-only audit. It must not be used
+to redefine `suppliers:cleanup-unsafe-schedules`: APCOM remains safe from the
+catalog-safety perspective when its staging is present, but its schedule may
+still require a separately approved temporary freeze for audit stability.
+
+The command reads safe supplier state, staging/link counts, import-run/job
+activity, protected-table counts, and Catalog Sync flags. Apply mode requires
+exact expected-state and operator confirmations and can change only
+`suppliers.schedule_enabled` from true to false. It does not import, fetch,
+queue, link/unlink, write `supplier_products`, mutate products or taxonomy,
+call Catalog Sync, or change feature flags. The scheduler must be stopped by
+the operator before apply; the command does not control containers. No
+production schedule was changed and no production audit was run in this phase.

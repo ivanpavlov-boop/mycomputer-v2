@@ -834,3 +834,28 @@ Both commands verify the safe flag state: `CATALOG_SYNC_CREATE_ENABLED=true`,
 `CATALOG_SYNC_UPDATE_ENABLED=false`, `CATALOG_SYNC_SYNC_ALL_ENABLED=false`,
 and `CATALOG_SYNC_AUTO_ENABLED=false`. Unsafe flags return
 `unsafe_configuration` and are not changed.
+
+## Phase 9C.6.5C.1 Controlled Supplier Schedule Freeze
+
+The separate `suppliers:controlled-schedule-freeze` command provides a
+dry-run-first stability guard for one explicitly selected supplier before a
+deterministic read-only audit. It does not change the meaning of
+`suppliers:cleanup-unsafe-schedules`; APCOM may remain safe for staging-only
+catalog classification while its schedule is temporarily frozen for audit
+stability through a separately approved operation.
+
+The command reads supplier state, staging/link counts, available active import
+state, protected-table counts, and effective Catalog Sync flags. Dry-run is the
+default and reports the planned `schedule_enabled=true -> false` change with
+zero mutation counters. Apply requires all explicit confirmations and locked
+expected state, revalidates inside a transaction with a supplier row lock, and
+may change only `suppliers.schedule_enabled`. It verifies import settings,
+schedule type, staging/link counts, protected counts, and safe flags before
+commit; a postcondition mismatch rolls back.
+
+Operational coordination remains external: run a fresh dry-run, stop the
+scheduler container, confirm no active import, apply, verify the flag, restart
+the scheduler, then run the separate read-only audit. The command never stops
+or starts containers, never fetches feeds, runs imports, dispatches jobs, calls
+Catalog Sync, writes staging/catalog/taxonomy data, or automatically unfreezes
+a schedule. No production schedule was changed in this phase.

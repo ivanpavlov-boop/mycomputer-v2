@@ -189,3 +189,34 @@ staging rows and 989 linked rows, with XML and `XmlImportEngine` configured and
 an enabled twice-daily staging schedule. These are audit inputs, not a
 production audit result. No schedule freeze, cleanup, re-import, link repair,
 Catalog Sync, or production audit is performed in this phase.
+
+## Phase 9C.6.5C.1 Controlled Supplier Schedule Freeze
+
+`suppliers:controlled-schedule-freeze` is a separate, reusable operational
+guard for deterministic audits. It is not a replacement for
+`suppliers:cleanup-unsafe-schedules`: the cleanup command classifies unsafe
+configuration, while this command temporarily freezes one explicitly selected
+supplier whose staging may otherwise change during an audit. APCOM remains
+`safe_staging_only` for catalog-safety classification.
+
+The command is dry-run-first. It reads one supplier, staging/link counts,
+available import-run/job state, protected-table counts, and effective Catalog
+Sync flags. It does not fetch feeds, run imports, dispatch jobs, call Catalog
+Sync, or write during dry-run. No production freeze has been performed in this
+phase.
+
+Apply mode requires an explicit supplier confirmation, the
+`freeze-for-audit` action, the `schedule-enabled-only` write scope, an
+external scheduler-stopped acknowledgement, a non-empty reason, and locked
+expected supplier/schedule/import/staging values. It rechecks those values
+while holding the selected supplier row with a database `FOR UPDATE` lock.
+The only semantic write is `suppliers.schedule_enabled: true -> false`;
+import settings, schedule type/timestamps, staging links, catalog data,
+mappings, attributes, and Catalog Sync records remain unchanged. Postconditions
+are checked inside the transaction and any mismatch rolls back.
+
+The documented future operational sequence is: fresh dry-run, capture expected
+state, stop the scheduler container operationally, confirm no active import,
+run the guarded apply, verify the schedule flag, restart the scheduler, and
+then run the separate deterministic read-only APCOM audit. This command never
+stops or starts containers and has no automatic unfreeze.
