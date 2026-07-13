@@ -48,8 +48,6 @@ class LegacySupplierStagingAuditTest extends TestCase
     /** @throws JsonException */
     public function test_apcom_style_inventory_links_identifiers_mappings_and_zero_mutations(): void
     {
-        Bus::fake();
-        Http::fake();
         $supplier = Supplier::factory()->create([
             'company_name' => 'APCOM Legacy',
             'slug' => 'apcom',
@@ -79,6 +77,10 @@ class LegacySupplierStagingAuditTest extends TestCase
             'status' => SupplierCategoryMapping::STATUS_PENDING_REVIEW,
         ]);
 
+        // Start side-effect fakes after fixture creation so database Scout indexing
+        // jobs are not mistaken for dispatches made by the read-only audit command.
+        Bus::fake();
+        Http::fake();
         $before = $this->protectedCounts();
         $payload = $this->commandJson([
             '--supplier' => 'apcom',
