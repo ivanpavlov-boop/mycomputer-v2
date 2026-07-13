@@ -6,6 +6,7 @@ use App\Models\Product;
 use App\Models\Supplier;
 use App\Models\SupplierImportRun;
 use App\Models\SupplierProduct;
+use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Bus;
@@ -280,14 +281,22 @@ class ControlledSupplierScheduleFreezeTest extends TestCase
     public function test_failed_postcondition_rolls_back_schedule_change(): void
     {
         $supplier = $this->supplier();
-        $trigger = 'controlled_freeze_postcondition_test';
+        $mutatePostcondition = true;
+        DB::listen(function (QueryExecuted $query) use (&$mutatePostcondition, $supplier): void {
+            $sql = strtolower(preg_replace('/\s+/', ' ', $query->sql) ?? '');
 
-        $this->createPostconditionTrigger($trigger, $supplier->id);
+            if (! $mutatePostcondition || ! str_contains($sql, 'update') || ! str_contains($sql, 'suppliers') || ! str_contains($sql, 'schedule_enabled')) {
+                return;
+            }
+
+            $mutatePostcondition = false;
+            DB::table('suppliers')->where('id', $supplier->id)->update(['import_enabled' => false]);
+        });
 
         try {
             $payload = $this->commandJson($this->applyArguments($supplier), 1);
         } finally {
-            DB::statement("DROP TRIGGER IF EXISTS {$trigger}");
+            $mutatePostcondition = false;
         }
 
         $this->assertContains('postcondition_failed', $payload['refusal_reasons']);
@@ -439,22 +448,5 @@ class ControlledSupplierScheduleFreezeTest extends TestCase
         ksort($recordsChanged);
 
         return $recordsChanged;
-    }
-
-    private function createPostconditionTrigger(string $trigger, int $supplierId): void
-    {
-        if (DB::getDriverName() === 'mysql') {
-            DB::unprepared("CREATE TRIGGER {$trigger} BEFORE UPDATE ON suppliers FOR EACH ROW SET NEW.import_enabled = IF(NEW.id = OLD.id AND NEW.schedule_enabled = 0, 0, NEW.import_enabled)");
-
-            return;
-        }
-
-        if (DB::getDriverName() === 'sqlite') {
-            DB::statement("CREATE TRIGGER {$trigger} AFTER UPDATE OF schedule_enabled ON suppliers WHEN NEW.id = {$supplierId} AND NEW.schedule_enabled = 0 BEGIN UPDATE suppliers SET import_enabled = 0 WHERE id = NEW.id; END");
-
-            return;
-        }
-
-        $this->markTestSkipped('The rollback trigger test supports SQLite and MySQL only.');
     }
 }
