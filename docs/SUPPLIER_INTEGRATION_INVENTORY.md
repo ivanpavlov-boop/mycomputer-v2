@@ -98,9 +98,31 @@ must be separately reviewed, server-revalidated, bounded to
 - ASBIS reference capability is evidence-based from staged provenance and
   existing isolated services, not supplier slug or fixed production counts.
 
-No production matrix run has occurred in this phase. Phase 9C.6.5C is next and
-requires a production read-only matrix review and human selection of supplier
-#2 before source profiling begins.
+No production matrix run has occurred in this phase. Phase 9C.6.5C is now
+implemented locally and requires a separately controlled production read-only
+audit after review, merge, deployment, and an operational APCOM schedule
+freeze. The implementation does not perform that audit.
+
+## APCOM Legacy Integration Audit
+
+APCOM is Supplier #1 and must not be imported again as a new supplier. The
+local `suppliers:audit-legacy-staging-state` command examines existing staging
+rows, existing catalog links, mapping and provenance indicators, import
+history, and schedule risk without changing them. The local
+`suppliers:profile-local-source` command profiles only an explicitly supplied
+local XML fixture or file and produces a non-persisted, human-review feed
+profile draft.
+
+The supplied operational baseline is APCOM supplier ID 5, 1,872 staging rows,
+989 linked rows, XML source format, `XmlImportEngine`, configured source and
+authentication, and an enabled twice-daily staging schedule. These facts are
+documented as supplied inputs and are not claimed as a production audit result
+from this implementation. A schedule freeze remains a separate approved
+operational step. No cleanup, re-import, link repair, feed-profile approval,
+or Catalog Sync is included.
+
+ASBIS is Supplier #2 and its controlled staging verification is complete.
+Supplier #3 has not been selected.
 
 Facts not confirmed from local code are marked `unknown` or `requires a
 production read-only audit`; this inventory does not infer production feed

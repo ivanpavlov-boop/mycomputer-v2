@@ -806,3 +806,31 @@ php artisan test --filter=Product
 
 If any answer is unclear, do not merge until the behavior is documented and
 tested.
+
+## Phase 9C.6.5C APCOM Legacy Discovery
+
+APCOM is Supplier #1 and remains an existing legacy integration. The local
+legacy audit and local XML profiler are discovery-only commands. They do not
+re-import APCOM, fetch its configured feed, call supplier APIs, modify its
+schedule, write `supplier_products`, repair links, change catalog content,
+run Catalog Sync, dispatch jobs, or download images.
+
+The legacy audit returns `supplier-legacy-staging-audit-v1` with safe supplier
+configuration facts, staging inventory, identifier diagnostics, linked-state
+analysis, catalog comparison and content-isolation indicators, mapping state,
+import history, schedule safety, before/after counts, and zero mutation
+counters. Exact or normalized equality is diagnostic only and does not prove
+that supplier content overwrote catalog content. Enabled schedules with
+unverified linked staging produce `schedule_must_be_frozen`; the command never
+changes the schedule.
+
+The local XML profiler returns `supplier-source-profile-v1` and a non-persisted
+`supplier-feed-profile-draft-v1`. It accepts only an explicitly provided local
+XML file, streams it with XMLReader, rejects remote URLs and stream wrappers,
+redacts values and image URLs, and requires human review. It never uses a
+configured feed URL or changes supplier configuration.
+
+Both commands verify the safe flag state: `CATALOG_SYNC_CREATE_ENABLED=true`,
+`CATALOG_SYNC_UPDATE_ENABLED=false`, `CATALOG_SYNC_SYNC_ALL_ENABLED=false`,
+and `CATALOG_SYNC_AUTO_ENABLED=false`. Unsafe flags return
+`unsafe_configuration` and are not changed.

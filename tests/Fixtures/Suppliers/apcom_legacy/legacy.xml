@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<products>
+  <product>
+    <sku>AP-001</sku>
+    <ean>5901234123457</ean>
+    <mpn>MODEL-001</mpn>
+    <name>Example Laptop 14</name>
+    <brand>ExampleBrand</brand>
+    <category>Laptops</category>
+    <price>1099.99</price>
+    <currency>EUR</currency>
+    <quantity>5</quantity>
+    <availability>in_stock</availability>
+    <image>https://example.invalid/images/ap-001.jpg</image>
+  </product>
+  <product>
+    <sku>AP-001</sku>
+    <ean>5901234123457</ean>
+    <mpn>MODEL-002</mpn>
+    <name>Example Laptop 15</name>
+    <brand>ExampleBrand</brand>
+    <category>Laptops</category>
+    <price>1199.99</price>
+    <currency>EUR</currency>
+    <quantity>0</quantity>
+    <availability>unknown</availability>
+    <image>https://example.invalid/images/ap-002.jpg</image>
+  </product>
+  <product>
+    <sku> </sku>
+    <ean>not-an-ean</ean>
+    <mpn>MODEL-001</mpn>
+    <name>Example Monitor</name>
+    <brand>OtherBrand</brand>
+    <category>Monitors</category>
+    <price>-1</price>
+    <currency>EUR</currency>
+    <quantity>2</quantity>
+    <availability>limited</availability>
+  </product>
+  <product>
+    <ean>5909876543210</ean>
+    <mpn>MODEL-003</mpn>
+    <name>Example Printer</name>
+    <brand>OtherBrand</brand>
+    <category>Printers</category>
+    <price>299.50</price>
+    <currency>EUR</currency>
+    <quantity>1</quantity>
+    <availability>in_stock</availability>
+  </product>
+</products>
