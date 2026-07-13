@@ -245,7 +245,7 @@ class ControlledSupplierScheduleFreezeTest extends TestCase
         Bus::fake();
         Http::fake();
         $supplier = $this->supplier();
-        $product = Product::factory()->create();
+        $product = Product::withoutEvents(fn (): Product => Product::factory()->create());
         $this->stagedProduct($supplier, null, ['product_id' => $product->id]);
         $this->stagedProduct($supplier, 'UNLINKED-001');
         $before = $this->protectedCounts();
@@ -282,7 +282,7 @@ class ControlledSupplierScheduleFreezeTest extends TestCase
         $supplier = $this->supplier();
         $trigger = 'controlled_freeze_postcondition_test';
 
-        DB::statement("CREATE TRIGGER {$trigger} AFTER UPDATE OF schedule_enabled ON suppliers WHEN NEW.id = {$supplier->id} AND NEW.schedule_enabled = 0 BEGIN UPDATE suppliers SET import_enabled = 0 WHERE id = NEW.id; END");
+        $this->createPostconditionTrigger($trigger, $supplier->id);
 
         try {
             $payload = $this->commandJson($this->applyArguments($supplier), 1);
@@ -439,5 +439,22 @@ class ControlledSupplierScheduleFreezeTest extends TestCase
         ksort($recordsChanged);
 
         return $recordsChanged;
+    }
+
+    private function createPostconditionTrigger(string $trigger, int $supplierId): void
+    {
+        if (DB::getDriverName() === 'mysql') {
+            DB::unprepared("CREATE TRIGGER {$trigger} BEFORE UPDATE ON suppliers FOR EACH ROW SET NEW.import_enabled = IF(NEW.id = OLD.id AND NEW.schedule_enabled = 0, 0, NEW.import_enabled)");
+
+            return;
+        }
+
+        if (DB::getDriverName() === 'sqlite') {
+            DB::statement("CREATE TRIGGER {$trigger} AFTER UPDATE OF schedule_enabled ON suppliers WHEN NEW.id = {$supplierId} AND NEW.schedule_enabled = 0 BEGIN UPDATE suppliers SET import_enabled = 0 WHERE id = NEW.id; END");
+
+            return;
+        }
+
+        $this->markTestSkipped('The rollback trigger test supports SQLite and MySQL only.');
     }
 }
