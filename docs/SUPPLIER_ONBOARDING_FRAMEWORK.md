@@ -184,11 +184,12 @@ requiring human review. It never uses the configured supplier feed URL,
 downloads images, persists a profile, or starts an import.
 
 Both commands require CREATE enabled, UPDATE disabled, Sync All disabled, and
-automatic sync disabled. The supplied APCOM operational baseline is 1,872
+automatic sync disabled. The supplied APCOM operational baseline reports 1,872
 staging rows and 989 linked rows, with XML and `XmlImportEngine` configured and
-an enabled twice-daily staging schedule. These are audit inputs, not a
-production audit result. No schedule freeze, cleanup, re-import, link repair,
-Catalog Sync, or production audit is performed in this phase.
+a currently enabled twice-daily production staging schedule. These are supplied
+audit inputs, not a production audit result; a fresh dry-run must confirm them
+before any apply. No cleanup, re-import, link repair, Catalog Sync, or
+production audit is performed in this phase.
 
 ## Phase 9C.6.5C.1 Controlled Supplier Schedule Freeze
 

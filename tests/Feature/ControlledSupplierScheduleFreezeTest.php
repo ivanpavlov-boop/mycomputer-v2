@@ -9,7 +9,9 @@ use App\Models\SupplierProduct;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Bus;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Schema;
 use JsonException;
 use Tests\TestCase;
 
@@ -181,6 +183,25 @@ class ControlledSupplierScheduleFreezeTest extends TestCase
         $this->assertTrue(Supplier::query()->findOrFail($supplier->id)->schedule_enabled);
     }
 
+    public function test_unknown_import_state_refuses_apply_without_changing_schedule(): void
+    {
+        $schema = DB::connection()->getSchemaBuilder();
+
+        Schema::shouldReceive('hasTable')
+            ->andReturnUsing(fn (string $table): bool => $table !== 'import_jobs' && $schema->hasTable($table));
+        Schema::shouldReceive('hasColumn')
+            ->andReturnUsing(fn (string $table, string $column): bool => $schema->hasColumn($table, $column));
+        Schema::shouldReceive('getColumnListing')
+            ->andReturnUsing(fn (string $table): array => $schema->getColumnListing($table));
+
+        $supplier = $this->supplier();
+        $payload = $this->commandJson($this->applyArguments($supplier), 1);
+
+        $this->assertContains('import_state_unknown', $payload['refusal_reasons']);
+        $this->assertFalse($payload['transaction_committed']);
+        $this->assertTrue(Supplier::query()->findOrFail($supplier->id)->schedule_enabled);
+    }
+
     public function test_unsafe_catalog_sync_flags_refuse_apply_without_changing_flags_or_schedule(): void
     {
         $supplier = $this->supplier();
@@ -254,6 +275,25 @@ class ControlledSupplierScheduleFreezeTest extends TestCase
         $this->assertSame(2, SupplierProduct::query()->where('supplier_id', $supplier->id)->count());
         Bus::assertNothingDispatched();
         Http::assertNothingSent();
+    }
+
+    public function test_failed_postcondition_rolls_back_schedule_change(): void
+    {
+        $supplier = $this->supplier();
+        $trigger = 'controlled_freeze_postcondition_test';
+
+        DB::statement("CREATE TRIGGER {$trigger} AFTER UPDATE OF schedule_enabled ON suppliers WHEN NEW.id = {$supplier->id} AND NEW.schedule_enabled = 0 BEGIN UPDATE suppliers SET import_enabled = 0 WHERE id = NEW.id; END");
+
+        try {
+            $payload = $this->commandJson($this->applyArguments($supplier), 1);
+        } finally {
+            DB::statement("DROP TRIGGER IF EXISTS {$trigger}");
+        }
+
+        $this->assertContains('postcondition_failed', $payload['refusal_reasons']);
+        $this->assertFalse($payload['transaction_committed']);
+        $this->assertTrue(Supplier::query()->findOrFail($supplier->id)->schedule_enabled);
+        $this->assertTrue(Supplier::query()->findOrFail($supplier->id)->import_enabled);
     }
 
     public function test_second_apply_is_refused_after_the_schedule_is_frozen(): void

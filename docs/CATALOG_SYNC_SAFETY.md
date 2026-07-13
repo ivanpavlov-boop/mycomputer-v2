@@ -858,4 +858,6 @@ scheduler container, confirm no active import, apply, verify the flag, restart
 the scheduler, then run the separate read-only audit. The command never stops
 or starts containers, never fetches feeds, runs imports, dispatches jobs, calls
 Catalog Sync, writes staging/catalog/taxonomy data, or automatically unfreezes
-a schedule. No production schedule was changed in this phase.
+a schedule. The supplied operational baseline reports the production APCOM
+schedule as currently enabled; this branch does not verify or change that
+production state.

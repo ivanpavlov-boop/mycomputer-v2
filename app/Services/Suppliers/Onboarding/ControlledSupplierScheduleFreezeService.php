@@ -78,6 +78,7 @@ final class ControlledSupplierScheduleFreezeService
         }
 
         $supplier = $resolution['supplier'];
+        $protectedSnapshotsBefore = $this->protectedStateFingerprints((int) $supplier->id);
         $observedBefore = $this->observedState($supplier);
         $activeImportCheck = $this->activeImportCheck((int) $supplier->id);
         $refusalReasons = $this->validationReasons($supplier, $observedBefore, $activeImportCheck, $expected, $options, $apply);
@@ -93,6 +94,8 @@ final class ControlledSupplierScheduleFreezeService
                 observedAfter: $observedBefore,
                 refusalReasons: $refusalReasons,
                 warnings: $apply ? [] : ['apply_requires_explicit_confirmation'],
+                protectedSnapshotsBefore: $protectedSnapshotsBefore,
+                protectedSnapshotsAfter: $protectedSnapshotsBefore,
                 activeImportCheck: $activeImportCheck,
             );
         }
@@ -101,7 +104,7 @@ final class ControlledSupplierScheduleFreezeService
         $attemptedSupplierChanges = 0;
 
         try {
-            $result = DB::transaction(function () use ($supplier, $options, $expected, $protectedBefore, &$attemptedSupplierChanges): array {
+            $result = DB::transaction(function () use ($supplier, $options, $expected, $protectedBefore, $protectedSnapshotsBefore, &$attemptedSupplierChanges): array {
                 $freshSupplier = DB::table('suppliers')
                     ->where('id', $supplier->id)
                     ->lockForUpdate()
@@ -155,6 +158,7 @@ final class ControlledSupplierScheduleFreezeService
 
                 $after = $this->observedState($afterSupplier);
                 $afterCounts = $this->protectedCounts();
+                $afterSnapshots = $this->protectedStateFingerprints((int) $supplier->id);
 
                 if (($after['schedule_enabled'] ?? null) !== false
                     || ($after['import_enabled'] ?? null) !== $freshObserved['import_enabled']
@@ -163,6 +167,7 @@ final class ControlledSupplierScheduleFreezeService
                     || ($after['linked_count'] ?? null) !== $freshObserved['linked_count']
                     || ($after['unlinked_count'] ?? null) !== $freshObserved['unlinked_count']
                     || $afterCounts !== $protectedBefore
+                    || $afterSnapshots !== $protectedSnapshotsBefore
                     || ! $this->safeConfiguration()) {
                     $this->abort('postcondition_failed');
                 }
@@ -170,6 +175,7 @@ final class ControlledSupplierScheduleFreezeService
                 return [
                     'observed_after' => $after,
                     'protected_after' => $afterCounts,
+                    'protected_snapshots_after' => $afterSnapshots,
                     'active_import_check' => $freshActiveImportCheck,
                 ];
             });
@@ -186,6 +192,8 @@ final class ControlledSupplierScheduleFreezeService
                 observedAfter: $observedBefore,
                 refusalReasons: [$reason],
                 warnings: [],
+                protectedSnapshotsBefore: $protectedSnapshotsBefore,
+                protectedSnapshotsAfter: $protectedSnapshotsBefore,
                 transactionAttempted: true,
                 attemptedSupplierChanges: $attemptedSupplierChanges,
                 activeImportCheck: $activeImportCheck,
@@ -203,6 +211,8 @@ final class ControlledSupplierScheduleFreezeService
             observedAfter: $result['observed_after'],
             refusalReasons: [],
             warnings: [],
+            protectedSnapshotsBefore: $protectedSnapshotsBefore,
+            protectedSnapshotsAfter: $result['protected_snapshots_after'],
             transactionAttempted: $transactionAttempted,
             transactionCommitted: true,
             attemptedSupplierChanges: $attemptedSupplierChanges,
@@ -216,6 +226,8 @@ final class ControlledSupplierScheduleFreezeService
      * @param  array<string, mixed>  $options
      * @param  array<string, int>  $protectedBefore
      * @param  array<string, int>|null  $protectedAfter
+     * @param  array<string, string>|null  $protectedSnapshotsBefore
+     * @param  array<string, string>|null  $protectedSnapshotsAfter
      * @param  array<string, mixed>|null  $observedBefore
      * @param  array<string, mixed>|null  $observedAfter
      * @param  array<int, string>  $refusalReasons
@@ -233,6 +245,8 @@ final class ControlledSupplierScheduleFreezeService
         array $refusalReasons,
         array $warnings,
         ?array $protectedAfter = null,
+        ?array $protectedSnapshotsBefore = null,
+        ?array $protectedSnapshotsAfter = null,
         bool $transactionAttempted = false,
         bool $transactionCommitted = false,
         int $attemptedSupplierChanges = 0,
@@ -242,6 +256,8 @@ final class ControlledSupplierScheduleFreezeService
     ): ControlledSupplierScheduleFreezeReport {
         $refusalReasons = array_values(array_unique($refusalReasons));
         $protectedAfter ??= $protectedBefore;
+        $protectedSnapshotsBefore ??= [];
+        $protectedSnapshotsAfter ??= $protectedSnapshotsBefore;
         $recordsChanged = $this->zeroRecordsChanged();
         $recordsChanged['suppliers'] = $committedSupplierChanges;
         $dryRun = ! $apply;
@@ -307,6 +323,8 @@ final class ControlledSupplierScheduleFreezeService
             'issues' => array_map(fn (string $reason): array => ['code' => $reason], array_slice($refusalReasons, 0, max(1, (int) ($options['issue_sample_limit'] ?? 20)))),
             'protected_counts_before' => $protectedBefore,
             'protected_counts_after' => $protectedAfter,
+            'protected_state_fingerprints_before' => $protectedSnapshotsBefore,
+            'protected_state_fingerprints_after' => $protectedSnapshotsAfter,
             'records_changed' => $recordsChanged,
             'elapsed_seconds' => round(microtime(true) - $startedAt, 6),
             'peak_memory_bytes' => memory_get_peak_usage(true),
@@ -564,6 +582,42 @@ final class ControlledSupplierScheduleFreezeService
             'linked_count' => (clone $query)->whereNotNull('product_id')->count(),
             'unlinked_count' => (clone $query)->whereNull('product_id')->count(),
         ];
+    }
+
+    /** @return array<string, string> */
+    private function protectedStateFingerprints(int $excludedSupplierId): array
+    {
+        $fingerprints = [];
+
+        foreach (self::PROTECTED_TABLES as $table) {
+            if (! Schema::hasTable($table)) {
+                $fingerprints[$table] = 'missing';
+
+                continue;
+            }
+
+            $columns = Schema::getColumnListing($table);
+            $orderColumn = in_array('id', $columns, true) ? 'id' : ($columns[0] ?? null);
+            $query = DB::table($table);
+
+            if ($table === 'suppliers') {
+                $query->where('id', '<>', $excludedSupplierId);
+            }
+
+            if ($orderColumn !== null) {
+                $query->orderBy($orderColumn);
+            }
+
+            $hash = hash_init('sha256');
+
+            foreach ($query->cursor() as $row) {
+                hash_update($hash, serialize((array) $row));
+            }
+
+            $fingerprints[$table] = hash_final($hash);
+        }
+
+        return $fingerprints;
     }
 
     /** @return array<string, mixed> */
