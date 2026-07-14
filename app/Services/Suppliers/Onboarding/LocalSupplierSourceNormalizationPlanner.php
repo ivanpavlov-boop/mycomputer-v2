@@ -30,13 +30,14 @@ final class LocalSupplierSourceNormalizationPlanner
         'import_jobs',
     ];
 
-    private const ACTIVE_IMPORT_STATUSES = ['pending', 'queued', 'running', 'processing', 'started'];
-
     private const MATERIAL_RECORD_COUNT_DELTA_PERCENTAGE = 20.0;
 
     private const LOW_CONFIDENCE_THRESHOLD = 0.8;
 
-    public function __construct(private readonly LocalSupplierSourceProfiler $profiler) {}
+    public function __construct(
+        private readonly LocalSupplierSourceProfiler $profiler,
+        private readonly SupplierImportActivityInspector $importActivityInspector,
+    ) {}
 
     /** @param array<string, mixed> $options */
     public function plan(array $options): LocalSupplierSourceNormalizationPlanReport
@@ -85,7 +86,7 @@ final class LocalSupplierSourceNormalizationPlanner
         $protectedCountsBefore = $this->protectedCounts();
         $protectedFingerprintsBefore = $this->protectedStateFingerprints((int) $supplier->id);
         $observed = $this->observedState($supplier);
-        $activeImport = $this->activeImportCheck((int) $supplier->id);
+        $activeImport = $this->importActivityInspector->inspect((int) $supplier->id);
         $blockers = $this->baselineMismatches($expected, $observed);
 
         if (($observed['schedule_enabled'] ?? null) !== false) {
@@ -507,37 +508,6 @@ final class LocalSupplierSourceNormalizationPlanner
             'unlinked_count' => $unlinkedCount,
             'last_import_at' => $this->normalizeDate($supplier->last_import_at ?? null),
             'legacy_field_coverage' => $this->legacyFieldCoverage((int) $supplier->id, $stagedCount),
-        ];
-    }
-
-    /** @return array<string, mixed> */
-    private function activeImportCheck(int $supplierId): array
-    {
-        $checked = [];
-        $active = 0;
-        $unknown = 0;
-
-        foreach (['supplier_import_runs', 'import_jobs'] as $table) {
-            if (! Schema::hasTable($table) || ! Schema::hasColumn($table, 'supplier_id') || ! Schema::hasColumn($table, 'status')) {
-                continue;
-            }
-
-            $checked[] = $table;
-            foreach (DB::table($table)->where('supplier_id', $supplierId)->pluck('status') as $status) {
-                $normalized = Str::lower(trim((string) $status));
-                if ($normalized === '' || ! in_array($normalized, ['pending', 'queued', 'running', 'processing', 'started', 'completed', 'completed_with_warnings', 'failed', 'skipped', 'cancelled'], true)) {
-                    $unknown++;
-                } elseif (in_array($normalized, self::ACTIVE_IMPORT_STATUSES, true)) {
-                    $active++;
-                }
-            }
-        }
-
-        return [
-            'state' => $active > 0 ? 'active' : ($checked === [] || $unknown > 0 ? 'unknown' : 'clear'),
-            'active_count' => $active,
-            'unknown_state_count' => $unknown,
-            'checked_sources' => $checked,
         ];
     }
 

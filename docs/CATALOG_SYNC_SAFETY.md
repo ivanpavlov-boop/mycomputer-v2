@@ -896,6 +896,21 @@ policy diagnostics without raw source values or image URLs.
 The command cannot import or write `supplier_products`, catalog products,
 categories, mappings, attributes, images, audit records, or feature flags. It
 has no apply mode and does not call Catalog Sync, run CREATE or UPDATE, add
-Sync All, enable automatic sync, queue a job, or alter a schedule. A real
-APCOM source has not been profiled by this locally implemented tool. See
-`docs/APCOM_LOCAL_SOURCE_NORMALIZATION_PLAN.md`.
+Sync All, enable automatic sync, queue a job, or alter a schedule. An
+authorized C.3 profile has run without writes; the source and report remain
+outside Git. See `docs/APCOM_LOCAL_SOURCE_NORMALIZATION_PLAN.md`.
+
+## Phase 9C.6.5C.3A Official Semantics Reconciliation
+
+`suppliers:reconcile-local-source-staging` is strictly read-only local tooling.
+It uses `apcom-official-v1` only as an internal review contract, validates the
+same frozen baseline and safe Catalog Sync flags, and reuses the active-import
+guard. It never persists a semantics profile or changes a supplier, staging
+row, product, mapping, attribute, image, queue, schedule, or Catalog Sync.
+
+The tool accepts no apply/persist/import/sync/fetch/download controls. Its
+only authoritative match is exact normalized-safe `partno` to staged
+`supplier_sku`; EAN and normalized comparisons are diagnostic only. It must
+not infer quantity from `stock`, MPN from `partno`, currency/VAT, a DAC/FD
+price choice, or greentax. C.3A operational reconciliation remains not run.
+See [APCOM Official Field Semantics And Read-only Reconciliation](APCOM_OFFICIAL_FIELD_SEMANTICS_RECONCILIATION.md).

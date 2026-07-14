@@ -62,6 +62,26 @@ Catalog Sync changes should verify:
 - server-side validation rejects unsafe selected rows
 - read-only diagnostics remain read-only
 
+## Local Supplier Source Reconciliation Tests
+
+Phase 9C.6.5C.3A tests use synthetic local XML fixtures only. They must prove
+that the official APCOM semantics registry keeps stock separate from quantity,
+part number separate from MPN, and DAC/FD price selection unresolved. They
+must also cover baseline locks, active-import and unsafe-flag refusal, source
+fingerprint failure, malformed/remote rejection, duplicate and blank
+identifiers, invalid stock/EOL/price semantics, bounded hash-only samples,
+and zero protected-table changes.
+
+Run the focused checks with:
+
+```powershell
+.\.tools\php\php.exe artisan test tests/Feature/LocalSupplierSourceStagingReconciliationTest.php
+.\.tools\php\php.exe artisan test tests/Unit/Suppliers/Onboarding/SupplierSourceFieldSemanticsProfileTest.php
+```
+
+Tests must never read a real APCOM XML source, a VPS report, a production
+database, a live feed, or credentials.
+
 ## Future Work / Open Questions
 
 - Add more browser-level QA for Filament pages on VPS.

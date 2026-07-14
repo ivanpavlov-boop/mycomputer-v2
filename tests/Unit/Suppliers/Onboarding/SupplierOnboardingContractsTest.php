@@ -229,6 +229,10 @@ class SupplierOnboardingContractsTest extends TestCase
                     'ControlledSupplierScheduleFreezeService.php',
                     // This phase deliberately reads safe aggregate state to produce a zero-write local plan.
                     'LocalSupplierSourceNormalizationPlanner.php',
+                    // This phase deliberately reads import activity state for zero-write local audits.
+                    'SupplierImportActivityInspector.php',
+                    // This phase deliberately compares an explicit local source to staging without writes.
+                    'LocalSupplierSourceStagingReconciler.php',
                 ], true),
             ),
         );
@@ -254,16 +258,19 @@ class SupplierOnboardingContractsTest extends TestCase
         $phasesPath = $root.'/docs/PHASES.md';
         $catalogSafetyPath = $root.'/docs/CATALOG_SYNC_SAFETY.md';
         $planPath = $root.'/docs/APCOM_LOCAL_SOURCE_NORMALIZATION_PLAN.md';
+        $reconciliationPath = $root.'/docs/APCOM_OFFICIAL_FIELD_SEMANTICS_RECONCILIATION.md';
 
         $this->assertFileExists($closeoutPath);
         $this->assertFileExists($phasesPath);
         $this->assertFileExists($catalogSafetyPath);
         $this->assertFileExists($planPath);
+        $this->assertFileExists($reconciliationPath);
 
         $closeout = (string) file_get_contents($closeoutPath);
         $phases = (string) file_get_contents($phasesPath);
         $catalogSafety = (string) file_get_contents($catalogSafetyPath);
         $plan = (string) file_get_contents($planPath);
+        $reconciliation = (string) file_get_contents($reconciliationPath);
 
         foreach ([
             'APCOM is Supplier #1',
@@ -281,7 +288,8 @@ class SupplierOnboardingContractsTest extends TestCase
             'unlinked: `883`',
             'No automatic unfreeze exists',
             'Phase 9C.6.5C.3 - APCOM Local Source Profile and Normalization Plan',
-            'implementation does not mark any operational APCOM source profile as',
+            'authorized local C.3 profile has since run without writes',
+            'Phase 9C.6.5C.3A tooling is implemented locally and in review',
         ] as $fact) {
             $this->assertStringContainsString($fact, $closeout, $fact);
         }
@@ -289,14 +297,19 @@ class SupplierOnboardingContractsTest extends TestCase
         $this->assertStringContainsString('Phase 9C.6.5C.1', $phases);
         $this->assertStringContainsString('Phase 9C.6.5C.2', $phases);
         $this->assertStringContainsString('Phase 9C.6.5C.3', $phases);
+        $this->assertStringContainsString('Phase 9C.6.5C.3A', $phases);
         $this->assertStringContainsString('UPDATE disabled', $catalogSafety);
         $this->assertStringContainsString('Sync All disabled', $catalogSafety);
         $this->assertStringContainsString('automatic sync disabled', $catalogSafety);
         $this->assertStringContainsString('No Catalog Sync', $catalogSafety);
         $this->assertStringContainsString('suppliers:plan-local-source-normalization', $catalogSafety);
+        $this->assertStringContainsString('suppliers:reconcile-local-source-staging', $catalogSafety);
         $this->assertStringContainsString('strictly read-only', $plan);
-        $this->assertStringContainsString('no real APCOM XML has been profiled', $plan);
+        $this->assertStringContainsString('authorized local C.3 profiler run has completed', $plan);
         $this->assertStringContainsString('`--apply` mode is', $plan);
+        $this->assertStringContainsString('apcom-official-v1', $reconciliation);
+        $this->assertStringContainsString('`stock` is never interpreted as quantity', $reconciliation);
+        $this->assertStringContainsString('No C.3A operational', $reconciliation);
     }
 
     private function record(string $sku, string $name): NormalizedSupplierRecord

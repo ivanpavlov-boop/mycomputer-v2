@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xml>
+    <product>
+        <partno>APCOM-SYN-001</partno>
+        <ean>1000000000001</ean>
+        <name>Synthetic official APCOM product one</name>
+        <manufacturer>SyntheticBrand</manufacturer>
+        <category>Synthetic Category</category>
+        <stock>1</stock>
+        <eol>0</eol>
+        <promo>0</promo>
+        <news>1</news>
+        <images><image>synthetic-image-one.jpg</image></images>
+        <cncode>12345678</cncode>
+        <width>1</width><height>2</height><depth>3</depth><weight>4</weight>
+        <group>Synthetic Group</group>
+        <dac_price>100.00</dac_price>
+        <fd_price>100.00</fd_price>
+    </product>
+    <product>
+        <partno>APCOM-SYN-002</partno>
+        <ean></ean>
+        <name>Synthetic official APCOM product two</name>
+        <manufacturer>SyntheticBrand</manufacturer>
+        <category>Synthetic Category</category>
+        <stock>0</stock>
+        <eol>0</eol>
+        <promo>1</promo>
+        <news>0</news>
+        <images><image>synthetic-image-two.jpg</image></images>
+        <cncode>12345678</cncode>
+        <width>1</width><height>2</height><depth>3</depth><weight>4</weight>
+        <group>Synthetic Group</group>
+        <dac_price>120.00</dac_price>
+        <fd_price>100.00</fd_price>
+    </product>
+    <product>
+        <partno>APCOM SYN 003</partno>
+        <ean>1000000000003</ean>
+        <name>Synthetic official APCOM product three</name>
+        <manufacturer>SyntheticBrand</manufacturer>
+        <category>Synthetic Category</category>
+        <stock>1</stock>
+        <eol>0</eol>
+        <promo>0</promo>
+        <news>0</news>
+        <images><image>synthetic-image-three.jpg</image></images>
+        <cncode>12345678</cncode>
+        <width>1</width><height>2</height><depth>3</depth><weight>4</weight>
+        <group>Synthetic Group</group>
+        <dac_price>0</dac_price>
+        <fd_price>0</fd_price>
+    </product>
+    <product>
+        <partno>APCOM-SYN-004</partno>
+        <ean>1000000000004</ean>
+        <name>Synthetic official APCOM product four</name>
+        <manufacturer>SyntheticBrand</manufacturer>
+        <category>Synthetic Category</category>
+        <stock>0</stock>
+        <eol>1</eol>
+        <promo>0</promo>
+        <news>0</news>
+        <images><image>synthetic-image-four.jpg</image></images>
+        <cncode>12345678</cncode>
+        <width>1</width><height>2</height><depth>3</depth><weight>4</weight>
+        <group>Synthetic Group</group>
+        <dac_price>90.00</dac_price>
+        <fd_price>80.00</fd_price>
+    </product>
+</xml>

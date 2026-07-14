@@ -2,10 +2,11 @@
 
 ## Status
 
-Phase 9C.6.5C.3 is implemented locally as a generic, strictly read-only local-source
-normalization planner. It is immediately usable for APCOM as Supplier #1, but
-no real APCOM XML has been profiled by this phase and no operational source
-profile report is stored in Git.
+Phase 9C.6.5C.3 is a generic, strictly read-only local-source normalization
+planner. It is immediately usable for APCOM as Supplier #1. An explicitly
+authorized local C.3 profiler run has completed, but its operational report,
+source file, source path, and report checksum are intentionally not stored in
+Git. The run created no configuration and changed no records.
 
 The tool does not approve an import, a feed profile, mappings, matching, or
 Catalog Sync. Every result requires human review.
@@ -115,3 +116,14 @@ No later phase is authorized by a successful plan. The `--apply` mode is
 absent. The planner does not fetch feeds, write `supplier_products`, write
 products, modify mappings or attributes, run Catalog Sync, dispatch jobs,
 enable schedules, or download images.
+
+## Official APCOM Semantics Follow-up
+
+Phase 9C.6.5C.3A adds the local-only
+`suppliers:reconcile-local-source-staging` command and the versioned
+`apcom-official-v1` semantics registry. It is implemented locally and in
+review; it has not performed an operational reconciliation. It treats
+`partno` as the authoritative supplier SKU, keeps normalized matching and EAN
+as diagnostics only, and leaves MPN, quantity, currency, VAT, and DAC/FD
+price selection unresolved. See
+[APCOM Official Field Semantics And Read-only Reconciliation](APCOM_OFFICIAL_FIELD_SEMANTICS_RECONCILIATION.md).

@@ -256,17 +256,17 @@ interpretation review and must not trigger an automatic configuration change.
 
 ## Next Phase
 
-Phase 9C.6.5C.3 - APCOM Local Source Profile and Normalization Plan is now
-implemented locally as `suppliers:plan-local-source-normalization`. It can
-analyze an explicitly supplied local APCOM XML file with a pinned SHA-256,
-calculate field coverage and record-path diagnostics, compare safe local
-aggregates with legacy staging counts, and propose a non-persisted
-normalization plan requiring human review. No real APCOM XML has been profiled
-by this implementation.
+Phase 9C.6.5C.3 - APCOM Local Source Profile and Normalization Plan is
+implemented as `suppliers:plan-local-source-normalization`. An explicitly
+authorized local C.3 profile has since run without writes or persisted
+configuration. Its safe aggregate findings are documented in
+[APCOM Official Field Semantics And Read-only Reconciliation](APCOM_OFFICIAL_FIELD_SEMANTICS_RECONCILIATION.md);
+the report and source remain outside Git.
 
 It must not fetch the production APCOM feed automatically, run an import,
 change `supplier_products`, modify product links or catalog products, approve
 mappings, re-enable the schedule, run Catalog Sync, or import images.
 
-The implementation does not mark any operational APCOM source profile as
-started or completed.
+Phase 9C.6.5C.3A tooling is implemented locally and in review. It has not run
+an operational source-to-staging reconciliation and does not mark that
+reconciliation as started or completed.

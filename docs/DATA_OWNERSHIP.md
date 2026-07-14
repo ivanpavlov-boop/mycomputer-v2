@@ -66,6 +66,20 @@ Supplier data is staged first. Catalog products are the public product records. 
 - Replacing images/categories/specifications during current CREATE/diagnostic work without explicit design.
 - Updating product name, slug, SEO, descriptions, images, categories, or attributes during Phase 8 selected UPDATE.
 
+## APCOM Source Semantics Review
+
+`apcom-official-v1` may classify local source fields for a read-only
+source-to-staging reconciliation report. It does not transfer ownership of
+supplier name, manufacturer, category, image-path, dimension, group, price,
+or stock observations to the catalog. No report result may overwrite catalog
+content, localized fields, SEO, categories, attributes, images, media, or
+workflow state.
+
+The contract intentionally leaves MPN, quantity, currency, VAT, and DAC/FD
+price selection unresolved. `stock` is not quantity and no source observation
+may auto-activate, deactivate, publish, unpublish, delete, link, or unlink a
+catalog product. See [APCOM Official Field Semantics And Read-only Reconciliation](APCOM_OFFICIAL_FIELD_SEMANTICS_RECONCILIATION.md).
+
 ## Future Work / Open Questions
 
 - Image, category, and attribute ownership need separate designs before sync writes.

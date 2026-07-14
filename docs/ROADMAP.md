@@ -108,16 +108,21 @@ Manual selected UPDATE price/stock sync is implemented behind `CATALOG_SYNC_UPDA
    evidence warnings.
 5. **APCOM Local Source Profile and Normalization Plan — implemented locally.**
    The reusable planner is local-file-only, requires explicit source input and
-   human review, and has not profiled a real APCOM XML source.
-6. Select Supplier #3 only after a reviewed readiness matrix and explicit human
+   human review. Its authorized operational profile created no writes or
+   configuration; source evidence remains outside Git.
+6. **APCOM Official Field Semantics and Hashed Source-to-Staging Reconciliation.**
+   `apcom-official-v1` is a non-persistent, local read-only contract.
+   Operational reconciliation has not run and cannot import, repair links, or
+   invoke Catalog Sync.
+7. Select Supplier #3 only after a reviewed readiness matrix and explicit human
    decision; ASBIS remains Supplier #2.
-7. Supplier #3 preview-only integration.
-8. Controlled `supplier_products` staging apply.
-9. Post-apply verification.
-10. Repeat the same controlled sequence for the remaining current suppliers.
-11. Supplier category and canonical mappings.
-12. Controlled manual CREATE sync.
-13. Optional controlled UPDATE pilot later.
+8. Supplier #3 preview-only integration.
+9. Controlled `supplier_products` staging apply.
+10. Post-apply verification.
+11. Repeat the same controlled sequence for the remaining current suppliers.
+12. Supplier category and canonical mappings.
+13. Controlled manual CREATE sync.
+14. Optional controlled UPDATE pilot later.
 
 Every future supplier must use the same onboarding pipeline rather than an
 uncontrolled one-off importer:
@@ -168,9 +173,9 @@ operational decision.
 
 1. Keep Phase 7.5 documentation lock current.
 2. Keep feature flag and audit visibility read-only.
-3. Review a future explicitly approved operational local-source plan for APCOM;
-   Phase 9C.6.5C.3 tooling is implemented locally but has no real APCOM source
-   profile run.
+3. Review a future explicitly approved APCOM source-to-staging reconciliation;
+   C.3 profiling was read-only and complete, while C.3A tooling is local/in
+   review and has no operational reconciliation run.
 4. Select Supplier #3 only after a reviewed readiness matrix and explicit human
    decision; ASBIS remains Supplier #2.
 5. Phase 9C.6.6 Multi-Supplier Category Mapping Review.
