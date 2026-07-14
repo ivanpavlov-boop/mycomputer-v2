@@ -98,10 +98,10 @@ must be separately reviewed, server-revalidated, bounded to
 - ASBIS reference capability is evidence-based from staged provenance and
   existing isolated services, not supplier slug or fixed production counts.
 
-No production matrix run has occurred in this phase. Phase 9C.6.5C is now
-implemented locally and requires a separately controlled production read-only
-audit after review, merge, deployment, and an operational APCOM schedule
-freeze. The implementation does not perform that audit.
+The readiness matrix remains a local read-only artifact. The separately
+controlled APCOM deterministic audit and schedule freeze have now completed;
+their runtime reports are documented in the APCOM closeout record and are not
+committed as production artifacts.
 
 ## APCOM Legacy Integration Audit
 
@@ -113,13 +113,16 @@ history, and schedule risk without changing them. The local
 local XML fixture or file and produces a non-persisted, human-review feed
 profile draft.
 
-The supplied operational baseline reports APCOM supplier ID 5, 1,872 staging
-rows, 989 linked rows, XML source format, `XmlImportEngine`, configured source
-and authentication, and a currently enabled twice-daily production staging
-schedule. These facts are supplied audit inputs, not a production audit result
-from this implementation; a fresh dry-run must confirm them before any apply.
-A schedule freeze remains a separate approved operational step. No cleanup,
-re-import, link repair, feed-profile approval, or Catalog Sync is included.
+The completed APCOM closeout recorded supplier ID 5, 1,872 staging rows, 989
+linked rows, XML source format, and `XmlImportEngine`. The controlled freeze
+changed only `suppliers.schedule_enabled` from true to false;
+`import_enabled` remains true and `schedule_type` remains `twice_daily`. The
+deterministic audit was read-only, returned
+`APCOM_DETERMINISTIC_AUDIT_COMPARISON_PASSED`, and ended with
+`legacy_state_requires_review`, no blockers, and the warnings
+`staging_present_without_verification` and `historical_causation_unknown`.
+No cleanup, re-import, link repair, feed-profile approval, or Catalog Sync was
+performed.
 
 ASBIS is Supplier #2 and its controlled staging verification is complete.
 Supplier #3 has not been selected.
@@ -142,6 +145,27 @@ activity, protected-table counts, and Catalog Sync flags. Apply mode requires
 exact expected-state and operator confirmations and can change only
 `suppliers.schedule_enabled` from true to false. It does not import, fetch,
 queue, link/unlink, write `supplier_products`, mutate products or taxonomy,
-call Catalog Sync, or change feature flags. The scheduler must be stopped by
-the operator before apply; the command does not control containers. No
-production schedule was changed and no production audit was run in this phase.
+call Catalog Sync, or change feature flags. The scheduler was stopped and
+restarted operationally around the completed APCOM freeze; the command itself
+does not control containers and has no automatic unfreeze.
+
+## APCOM Deterministic Audit Closeout
+
+Phase 9C.6.5C.2 completed the separately approved APCOM audit after the
+controlled freeze. APCOM remains Supplier #1, ASBIS remains Supplier #2, and
+Supplier #3 remains unselected. The audit compared pre-freeze and post-freeze
+state with zero protected-table changes and confirmed that the schedule freeze
+was the only intended state change.
+
+The final audit is read-only and carries no blockers. Its warnings are limited
+to `staging_present_without_verification` and
+`historical_causation_unknown`; these do not authorize re-import, mapping
+approval, link repair, or Catalog Sync. Current safety is
+`schedule_enabled=false`, `import_enabled=true`,
+`CATALOG_SYNC_UPDATE_ENABLED=false`,
+`CATALOG_SYNC_SYNC_ALL_ENABLED=false`, and
+`CATALOG_SYNC_AUTO_ENABLED=false`.
+
+See `docs/APCOM_DETERMINISTIC_AUDIT_CLOSEOUT.md` for the evidence paths,
+aggregate counts, interpretation limits, and the pending local-source profile
+phase. Runtime reports and any credentials remain outside Git.

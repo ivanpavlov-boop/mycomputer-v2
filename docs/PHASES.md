@@ -59,14 +59,15 @@ Phase 8 manual selected UPDATE price/stock sync has been implemented behind a fe
 | Phase 9C.6.4.2.1 | ASBIS Post-Apply Verification and Reconciliation Audit | Complete in production on 2026-07-11; verdict `verified`, candidate count 4,844, ASBIS staged count 4,844, total `supplier_products` 6,717, linked ASBIS products 0, and `records_changed=0`. |
 | Phase 9C.6.5A | Reusable Supplier Onboarding Framework Discovery & Contracts | Complete and merged; immutable contracts, DTOs, pure normalizers, fingerprints, preview/staging/verification structures, tests, and documentation only. |
 | Phase 9C.6.5B | Multi-Supplier Readiness Matrix | Complete locally; read-only machine-readable supplier readiness audit with no production matrix run, feed request, import, write, Catalog Sync, job, or schedule action. |
-| Phase 9C.6.5C | APCOM Supplier #1 Legacy Integration Audit & Normalization Discovery | Implemented locally; read-only legacy staging audit and explicit-local XML profiler only. No production audit, schedule freeze, re-import, link repair, or Catalog Sync. |
-| Phase 9C.6.5C.1 | Controlled Supplier Schedule Freeze for Deterministic Audit | Implemented locally; dry-run-first, exact-state guarded schedule-only command. No production schedule change, import, job, Catalog Sync, or deploy. |
+| Phase 9C.6.5C | APCOM Supplier #1 Legacy Integration Audit & Normalization Discovery | Complete; read-only discovery tooling and the approved deterministic closeout are documented. No re-import, link repair, mapping approval, or Catalog Sync. |
+| Phase 9C.6.5C.1 | Controlled Supplier Schedule Freeze for Deterministic Audit | Complete; one guarded `suppliers.schedule_enabled: true -> false` change, with no import, job, Catalog Sync, or protected-table write. |
+| Phase 9C.6.5C.2 | APCOM Deterministic Audit Closeout | Complete; read-only pre/post comparison passed with no blockers and two documented warnings. |
 
 ## In Progress
 
 | Phase | Name | Status |
 | --- | --- | --- |
-| — | Phase 9C.6.5C local implementation | Phase 9C.6.5A is merged; Phase 9C.6.5B, 9C.6.5C, and 9C.6.5C.1 are local/read-only implementations. No production readiness matrix, APCOM legacy audit, or schedule freeze has run. |
+| Phase 9C.6.5C.3 | APCOM Local Source Profile and Normalization Plan | Next/pending; local source profile and normalization planning only, not started and requiring an explicitly supplied local source plus human review. |
 
 ## Paused / Partial Phases
 
@@ -78,7 +79,7 @@ Phase 8 manual selected UPDATE price/stock sync has been implemented behind a fe
 
 | Phase | Name | Notes |
 | --- | --- | --- |
-| Phase 9C.6.5C | APCOM Supplier #1 Legacy Integration Audit & Normalization Discovery | In progress locally. APCOM is not re-imported; production audit and schedule freeze remain separate operational steps. Supplier #3 is not selected. |
+| Phase 9C.6.5C.3 | APCOM Local Source Profile and Normalization Plan | Next/pending; local source only, non-persisted profile, no import or Catalog Sync. |
 | Phase 9C.6.5D | Supplier #3 Selection & Source Profiling | Future; requires a reviewed readiness matrix and explicit human selection. |
 | Phase 9C.6.6 | Multi-Supplier Category Mapping Review | Review mappings in batches using the full multi-supplier picture. |
 | Phase 9C.6.7 | Multi-Supplier Identifier Overlap Review | Review exact and possible overlaps before future offer grouping. |

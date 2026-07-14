@@ -12,9 +12,10 @@ feeds, invoke previews, import data, write staging/catalog/mapping data, call
 Catalog Sync, dispatch jobs, or enable schedules.
 
 Phase 9C.6.5C - APCOM Supplier #1 Legacy Integration Audit & Normalization
-Discovery is implemented locally as read-only tooling. It does not run a
-production audit, change the APCOM schedule, re-import APCOM, or select
-Supplier #3.
+Discovery is implemented as read-only tooling. Its production deterministic
+audit and controlled schedule freeze completed under the separately approved
+Phase 9C.6.5C.1 and 9C.6.5C.2 operational sequence. Supplier #3 remains
+unselected.
 
 ## Intended Pipeline
 
@@ -184,12 +185,12 @@ requiring human review. It never uses the configured supplier feed URL,
 downloads images, persists a profile, or starts an import.
 
 Both commands require CREATE enabled, UPDATE disabled, Sync All disabled, and
-automatic sync disabled. The supplied APCOM operational baseline reports 1,872
-staging rows and 989 linked rows, with XML and `XmlImportEngine` configured and
-a currently enabled twice-daily production staging schedule. These are supplied
-audit inputs, not a production audit result; a fresh dry-run must confirm them
-before any apply. No cleanup, re-import, link repair, Catalog Sync, or
-production audit is performed in this phase.
+automatic sync disabled. The completed deterministic audit recorded 1,872
+staging rows and 989 linked rows, with XML and `XmlImportEngine` configured.
+The APCOM schedule is now disabled and `import_enabled` remains true. The
+approved feed profile is still missing, staging remains unverified, and no
+cleanup, re-import, link repair, mapping approval, Catalog Sync, or automatic
+operation is authorized.
 
 ## Phase 9C.6.5C.1 Controlled Supplier Schedule Freeze
 
@@ -203,8 +204,8 @@ supplier whose staging may otherwise change during an audit. APCOM remains
 The command is dry-run-first. It reads one supplier, staging/link counts,
 available import-run/job state, protected-table counts, and effective Catalog
 Sync flags. It does not fetch feeds, run imports, dispatch jobs, call Catalog
-Sync, or write during dry-run. No production freeze has been performed in this
-phase.
+Sync, or write during dry-run. The controlled freeze completed with one
+committed `suppliers.schedule_enabled: true -> false` change.
 
 Apply mode requires an explicit supplier confirmation, the
 `freeze-for-audit` action, the `schedule-enabled-only` write scope, an
@@ -216,8 +217,25 @@ import settings, schedule type/timestamps, staging links, catalog data,
 mappings, attributes, and Catalog Sync records remain unchanged. Postconditions
 are checked inside the transaction and any mismatch rolls back.
 
-The documented future operational sequence is: fresh dry-run, capture expected
-state, stop the scheduler container operationally, confirm no active import,
-run the guarded apply, verify the schedule flag, restart the scheduler, and
-then run the separate deterministic read-only APCOM audit. This command never
-stops or starts containers and has no automatic unfreeze.
+The completed operational sequence was: fresh dry-run, capture expected state,
+stop the scheduler container operationally, confirm no active import, run the
+guarded apply, verify the schedule flag, restart the scheduler, and run the
+separate deterministic read-only APCOM audit. The command never stops or
+starts containers and has no automatic unfreeze.
+
+## Phase 9C.6.5C.2 Deterministic Audit Closeout
+
+The APCOM deterministic production audit completed with `read_only=true`,
+`FINAL_AUDIT_EXIT=0`, `COMPARE_EXIT=0`, and comparison result
+`APCOM_DETERMINISTIC_AUDIT_COMPARISON_PASSED`. The audit verdict remains
+`legacy_state_requires_review` with no blockers and the warnings
+`staging_present_without_verification` and `historical_causation_unknown`.
+All audit records-changed counters were zero. Runtime reports are operational
+evidence and are not Git artifacts.
+
+The closeout preserves the deterministic sequence and explicitly keeps APCOM
+frozen. It does not approve automatic imports, mapping approval, content
+normalization, link repair, or Catalog Sync. The next phase is
+Phase 9C.6.5C.3 - APCOM Local Source Profile and Normalization Plan, which is
+pending and not started. It requires an explicitly supplied local source and
+human review.
