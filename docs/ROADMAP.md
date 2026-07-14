@@ -103,15 +103,20 @@ Manual selected UPDATE price/stock sync is implemented behind `CATALOG_SYNC_UPDA
    driver, a new supplier, or any import/apply operation.
 3. **Multi-Supplier Readiness Matrix — complete locally.** The read-only matrix
    has no production run yet and cannot perform an operational action.
-4. **Supplier #2 Selection & Source Profiling — next, not started.** This
-   requires a reviewed production read-only matrix and a human decision.
-5. Supplier #2 preview-only integration.
-6. Controlled `supplier_products` staging apply.
-7. Post-apply verification.
-8. Repeat the same controlled sequence for the remaining current suppliers.
-9. Supplier category and canonical mappings.
-10. Controlled manual CREATE sync.
-11. Optional controlled UPDATE pilot later.
+4. **APCOM deterministic audit closeout — complete.** APCOM remains frozen
+   with `import_enabled=true`; its closeout has no blockers but retains two
+   evidence warnings.
+5. **APCOM Local Source Profile and Normalization Plan — next, pending.**
+   This is local-file-only and requires explicit source input plus human review.
+6. Select Supplier #3 only after a reviewed readiness matrix and explicit human
+   decision; ASBIS remains Supplier #2.
+7. Supplier #3 preview-only integration.
+8. Controlled `supplier_products` staging apply.
+9. Post-apply verification.
+10. Repeat the same controlled sequence for the remaining current suppliers.
+11. Supplier category and canonical mappings.
+12. Controlled manual CREATE sync.
+13. Optional controlled UPDATE pilot later.
 
 Every future supplier must use the same onboarding pipeline rather than an
 uncontrolled one-off importer:
@@ -142,39 +147,43 @@ and zero-change counters. It does not run a production matrix, fetch a source,
 or mutate any supplier, catalog, mapping, attribute, queue, schedule, or
 Catalog Sync surface. Phase 9C.6.5C is the APCOM Supplier #1 Legacy
 Integration Audit & Normalization Discovery phase. Its implementation is
-local and read-only. It does not re-import APCOM, run a production audit,
-freeze the schedule, repair links, approve a feed profile, or select Supplier
-#3. A production read-only audit remains separately controlled after review,
-merge, deployment, and schedule freeze.
+local and read-only. Its separately approved deterministic closeout is now
+documented. It did not re-import APCOM, repair links, approve a feed profile,
+or select Supplier #3. The controlled freeze changed only
+`suppliers.schedule_enabled` from true to false; APCOM `import_enabled` remains
+true. No Catalog Sync, import, mapping approval, link repair, or catalog
+content change occurred.
 
 Phase 9C.6.5C.1 adds the separate dry-run-first
 `suppliers:controlled-schedule-freeze` guard. It can only change one
 explicitly selected supplier's `schedule_enabled` flag after exact state
 locking and operator confirmation; it does not perform an import or audit.
-APCOM's staging-safe classification is unchanged. No production schedule was
-changed in this phase, and no automatic unfreeze is implemented.
+APCOM's staging-safe classification is unchanged. Phase 9C.6.5C.2 performed
+the deterministic read-only closeout after the freeze. No automatic unfreeze
+is implemented, and APCOM remains frozen pending a separately approved
+operational decision.
 
 ## Next
 
 1. Keep Phase 7.5 documentation lock current.
 2. Keep feature flag and audit visibility read-only.
-3. Complete review of Phase 9C.6.5C APCOM legacy discovery locally, then
-   perform any production audit only as a separately approved operational step.
+3. Phase 9C.6.5C.3 APCOM Local Source Profile and Normalization Plan - next,
+   pending explicit local source input and human review.
 4. Select Supplier #3 only after a reviewed readiness matrix and explicit human
    decision; ASBIS remains Supplier #2.
-4. Phase 9C.6.6 Multi-Supplier Category Mapping Review.
-5. Phase 9C.6.7 Multi-Supplier Identifier Overlap Review.
-6. Phase 9C.7 Supplier Attribute Mapping Foundation.
-7. Product specification data quality polish.
-8. Storefront specification display and later attribute filters.
-9. Product attribute filter design after controlled data quality.
-10. Rollback tooling based on `catalog_sync_batches` and `catalog_sync_logs`.
-11. Keep feature flags locked down before broader sync work.
-12. Conflict/manual mapping workflow.
-13. Sync All later.
-14. Automatic sync later.
-15. Nuxt i18n route integration and localized sitemap expansion.
-16. Data enrichment workflow refinements after queue usage is observed.
+5. Phase 9C.6.6 Multi-Supplier Category Mapping Review.
+6. Phase 9C.6.7 Multi-Supplier Identifier Overlap Review.
+7. Phase 9C.7 Supplier Attribute Mapping Foundation.
+8. Product specification data quality polish.
+9. Storefront specification display and later attribute filters.
+10. Product attribute filter design after controlled data quality.
+11. Rollback tooling based on `catalog_sync_batches` and `catalog_sync_logs`.
+12. Keep feature flags locked down before broader sync work.
+13. Conflict/manual mapping workflow.
+14. Sync All later.
+15. Automatic sync later.
+16. Nuxt i18n route integration and localized sitemap expansion.
+17. Data enrichment workflow refinements after queue usage is observed.
 
 ## Phase 8 Initial UPDATE Scope
 

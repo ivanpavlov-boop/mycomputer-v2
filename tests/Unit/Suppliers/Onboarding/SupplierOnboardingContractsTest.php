@@ -245,6 +245,51 @@ class SupplierOnboardingContractsTest extends TestCase
         }
     }
 
+    public function test_apcom_deterministic_audit_closeout_documents_critical_safety_facts(): void
+    {
+        $root = dirname(__DIR__, 4);
+        $closeoutPath = $root.'/docs/APCOM_DETERMINISTIC_AUDIT_CLOSEOUT.md';
+        $phasesPath = $root.'/docs/PHASES.md';
+        $catalogSafetyPath = $root.'/docs/CATALOG_SYNC_SAFETY.md';
+
+        $this->assertFileExists($closeoutPath);
+        $this->assertFileExists($phasesPath);
+        $this->assertFileExists($catalogSafetyPath);
+
+        $closeout = (string) file_get_contents($closeoutPath);
+        $phases = (string) file_get_contents($phasesPath);
+        $catalogSafety = (string) file_get_contents($catalogSafetyPath);
+
+        foreach ([
+            'APCOM is Supplier #1',
+            'ASBIS is Supplier #2',
+            'Supplier #3 remains unselected',
+            'schedule_enabled=false',
+            'APCOM `import_enabled` remains `true`',
+            'APCOM_DETERMINISTIC_AUDIT_COMPARISON_PASSED',
+            'legacy_state_requires_review',
+            'blockers: none',
+            'staging_present_without_verification',
+            'historical_causation_unknown',
+            'total rows: `1872`',
+            'linked: `989`',
+            'unlinked: `883`',
+            'No automatic unfreeze exists',
+            'Phase 9C.6.5C.3 - APCOM Local Source Profile and Normalization Plan',
+            'not started or completed',
+        ] as $fact) {
+            $this->assertStringContainsString($fact, $closeout, $fact);
+        }
+
+        $this->assertStringContainsString('Phase 9C.6.5C.1', $phases);
+        $this->assertStringContainsString('Phase 9C.6.5C.2', $phases);
+        $this->assertStringContainsString('Phase 9C.6.5C.3', $phases);
+        $this->assertStringContainsString('UPDATE disabled', $catalogSafety);
+        $this->assertStringContainsString('Sync All disabled', $catalogSafety);
+        $this->assertStringContainsString('automatic sync disabled', $catalogSafety);
+        $this->assertStringContainsString('No Catalog Sync', $catalogSafety);
+    }
+
     private function record(string $sku, string $name): NormalizedSupplierRecord
     {
         return new NormalizedSupplierRecord(

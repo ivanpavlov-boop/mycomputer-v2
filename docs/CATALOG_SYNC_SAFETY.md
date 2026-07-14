@@ -858,6 +858,30 @@ scheduler container, confirm no active import, apply, verify the flag, restart
 the scheduler, then run the separate read-only audit. The command never stops
 or starts containers, never fetches feeds, runs imports, dispatches jobs, calls
 Catalog Sync, writes staging/catalog/taxonomy data, or automatically unfreezes
-a schedule. The supplied operational baseline reports the production APCOM
-schedule as currently enabled; this branch does not verify or change that
-production state.
+a schedule. The completed APCOM operation changed only
+`suppliers.schedule_enabled: true -> false`; `import_enabled=true` and the
+twice-daily schedule type remain unchanged. The scheduler was coordinated
+externally and restarted after the operation.
+
+## Phase 9C.6.5C.2 Deterministic Audit Closeout
+
+The post-freeze APCOM deterministic audit completed as a read-only comparison
+with `FINAL_AUDIT_EXIT=0`, `COMPARE_EXIT=0`, and
+`APCOM_DETERMINISTIC_AUDIT_COMPARISON_PASSED`. The final verdict is
+`legacy_state_requires_review` with no blockers. The remaining warnings are
+`staging_present_without_verification` and `historical_causation_unknown`.
+They describe evidence limits; they do not authorize a re-import, link repair,
+mapping approval, Catalog Sync, or catalog-content change.
+
+No Catalog Sync, import, queue dispatch, image operation, or protected-table
+write occurred during the audit. The controlled freeze changed only the
+supplier schedule flag; supplier staging, products, taxonomy, mappings,
+attributes, and audit-log counters remained unchanged. Current effective
+safety flags remain CREATE enabled, UPDATE disabled, Sync All disabled, and
+automatic sync disabled. APCOM remains frozen until a separately approved
+operational decision.
+
+The closeout evidence and interpretation limits are recorded in
+`docs/APCOM_DETERMINISTIC_AUDIT_CLOSEOUT.md`. The next phase is the pending,
+not-started `Phase 9C.6.5C.3 - APCOM Local Source Profile and Normalization
+Plan`, which may use only an explicitly supplied local source and human review.
