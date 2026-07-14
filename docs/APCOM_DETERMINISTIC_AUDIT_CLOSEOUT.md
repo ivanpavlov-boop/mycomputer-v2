@@ -267,6 +267,9 @@ It must not fetch the production APCOM feed automatically, run an import,
 change `supplier_products`, modify product links or catalog products, approve
 mappings, re-enable the schedule, run Catalog Sync, or import images.
 
-Phase 9C.6.5C.3A tooling is implemented locally and in review. It has not run
-an operational source-to-staging reconciliation and does not mark that
-reconciliation as started or completed.
+Phase 9C.6.5C.3A tooling is merged and deployed. Its first operational
+source-to-staging reconciliation was read-only and safely failed closed because
+the strict published binary stock contract did not match observed numeric stock
+values. It changed no records and requires no rollback. Phase 9C.6.5C.3A.1
+adds only a local observed-semantics correction layer; its operational run has
+not occurred. See [APCOM Observed Stock Semantics Discrepancy](APCOM_OBSERVED_STOCK_SEMANTICS_DISCREPANCY.md).

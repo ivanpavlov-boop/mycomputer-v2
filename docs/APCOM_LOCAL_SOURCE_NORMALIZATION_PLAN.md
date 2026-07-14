@@ -119,11 +119,16 @@ enable schedules, or download images.
 
 ## Official APCOM Semantics Follow-up
 
-Phase 9C.6.5C.3A adds the local-only
+Phase 9C.6.5C.3A added the local-only
 `suppliers:reconcile-local-source-staging` command and the versioned
-`apcom-official-v1` semantics registry. It is implemented locally and in
-review; it has not performed an operational reconciliation. It treats
-`partno` as the authoritative supplier SKU, keeps normalized matching and EAN
-as diagnostics only, and leaves MPN, quantity, currency, VAT, and DAC/FD
-price selection unresolved. See
-[APCOM Official Field Semantics And Read-only Reconciliation](APCOM_OFFICIAL_FIELD_SEMANTICS_RECONCILIATION.md).
+`apcom-official-v1` semantics registry. Its first operational read-only run
+failed closed on a real-source stock semantics discrepancy, without changing
+records. `partno` remains the authoritative supplier SKU, normalized matching
+and EAN remain diagnostics only, and MPN, quantity, currency, VAT, and DAC/FD
+price selection remain unresolved.
+
+Phase 9C.6.5C.3A.1 adds `apcom-observed-stock-v1` as a non-persistent,
+unresolved numeric-stock review profile. It permits hashed SKU/EAN
+reconciliation when numeric stock values are non-negative integers, but it
+does not approve quantity or availability mapping, import, profile persistence,
+or schedule re-enable. See [APCOM Observed Stock Semantics Discrepancy](APCOM_OBSERVED_STOCK_SEMANTICS_DISCREPANCY.md).

@@ -258,14 +258,18 @@ profile has run without writes; its source and report remain outside Git. See
 
 ## Phase 9C.6.5C.3A Official Semantics Reconciliation
 
-`suppliers:reconcile-local-source-staging` is the next local-only review tool.
-It combines the existing local profiler, the shared active-import guard, an
+`suppliers:reconcile-local-source-staging` is a local-only review tool. It
+combines the existing local profiler, the shared active-import guard, an
 explicit baseline lock, and `apcom-official-v1`. Exact normalized-safe source
 `partno` to staged `supplier_sku` is authoritative; EAN and case/whitespace
 normalization remain diagnostics only. The command emits aggregates and bounded
 domain-separated hashes, not raw source records or IDs.
 
-It has no operational reconciliation run, apply mode, profile persistence,
-remote fetch, import, mapping, link repair, image operation, schedule change,
-job dispatch, or Catalog Sync behavior. See
-[APCOM Official Field Semantics And Read-only Reconciliation](APCOM_OFFICIAL_FIELD_SEMANTICS_RECONCILIATION.md).
+The strict profile's first operational run was read-only and safely failed
+closed when observed stock values exceeded the published binary contract. It
+made no change. Phase 9C.6.5C.3A.1 adds an observed numeric-stock review
+profile so SKU/EAN diagnostics can continue without approving quantity or
+availability semantics. It has no apply mode, profile persistence, remote
+fetch, import, mapping, link repair, image operation, schedule change, job
+dispatch, or Catalog Sync behavior. See
+[APCOM Observed Stock Semantics Discrepancy](APCOM_OBSERVED_STOCK_SEMANTICS_DISCREPANCY.md).

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xml>
+    <product><partno>APCOM-OBS-001</partno><ean>2000000000001</ean><name>Synthetic observed product one</name><manufacturer>SyntheticBrand</manufacturer><category>Synthetic Category</category><stock>0</stock><eol>0</eol><dac_price>10</dac_price><fd_price>10</fd_price></product>
+    <product><partno>APCOM-OBS-002</partno><ean>2000000000002</ean><name>Synthetic observed product two</name><manufacturer>SyntheticBrand</manufacturer><category>Synthetic Category</category><stock>1</stock><eol>0</eol><dac_price>12</dac_price><fd_price>10</fd_price></product>
+    <product><partno>APCOM-OBS-003</partno><ean>2000000000001</ean><name>Synthetic observed product three</name><manufacturer>SyntheticBrand</manufacturer><category>Synthetic Category</category><stock>12</stock><eol>0</eol><dac_price>0</dac_price><fd_price>0</fd_price></product>
+    <product><partno>APCOM-OBS-004</partno><ean></ean><name>Synthetic observed product four</name><manufacturer>SyntheticBrand</manufacturer><category>Synthetic Category</category><stock>100</stock><eol>1</eol><dac_price>10</dac_price><fd_price>20</fd_price></product>
+</xml>

@@ -112,6 +112,127 @@ class LocalSupplierSourceStagingReconciliationTest extends TestCase
     }
 
     /** @throws JsonException */
+    public function test_observed_stock_profile_continues_hashed_reconciliation_without_approving_stock_semantics(): void
+    {
+        $supplier = $this->supplierWithBaseline();
+        $this->observedStagedRows($supplier);
+        Bus::fake();
+        Http::fake();
+        $before = $this->protectedCounts();
+
+        $payload = $this->commandJson($this->arguments($supplier, 'synthetic-apcom-observed-stock.xml', 'apcom-observed-stock-v1'));
+
+        $this->assertTrue($payload['success']);
+        $this->assertSame('reconciliation_requires_stock_semantics_review', $payload['verdict']);
+        $this->assertSame([], $payload['blockers']);
+        $this->assertContains('stock_semantics_discrepancy_requires_review', $payload['warnings']);
+        $this->assertSame('apcom-observed-stock-v1', $payload['selected_semantics_profile']);
+        $this->assertSame('apcom-official-v1', $payload['official_semantics_profile']);
+        $this->assertSame('apcom-observed-stock-v1', $payload['observed_semantics_profile']);
+        $this->assertTrue($payload['semantics_profile']['semantics_discrepancy']);
+        $this->assertSame('unresolved', $payload['semantics_profile']['semantic_resolution']);
+        $this->assertNull($payload['semantics_profile']['quantity_path']);
+        $this->assertNull($payload['semantics_profile']['availability_path']);
+        $this->assertTrue($payload['semantics_profile']['stock_is_not_quantity']);
+        $this->assertTrue($payload['semantics_profile']['stock_is_not_binary_availability']);
+
+        $stock = $payload['observed_stock_analysis'];
+        $this->assertSame(4, $stock['total_records']);
+        $this->assertSame(4, $stock['elements_present']);
+        $this->assertSame(4, $stock['numeric_count']);
+        $this->assertSame(4, $stock['integer_count']);
+        $this->assertSame(1, $stock['zero_count']);
+        $this->assertSame(1, $stock['one_count']);
+        $this->assertSame(2, $stock['greater_than_one_count']);
+        $this->assertSame(3, $stock['positive_count']);
+        $this->assertSame(4, $stock['distinct_numeric_value_count']);
+        $this->assertSame('0', $stock['minimum_numeric_value']);
+        $this->assertSame('100', $stock['maximum_numeric_value']);
+        $this->assertFalse($stock['official_binary_semantics_match']);
+        $this->assertTrue($stock['observed_numeric_contract_valid']);
+        $this->assertSame(1, $payload['source_aggregates']['stock_eol_combinations']['stock_greater_than_one_eol_zero']);
+        $this->assertSame(1, $payload['source_aggregates']['stock_eol_combinations']['stock_greater_than_one_eol_one']);
+
+        $this->assertTrue($payload['stock_semantics_discrepancy']['detected']);
+        $this->assertSame('binary_0_1_availability', $payload['stock_semantics_discrepancy']['official_claim']);
+        $this->assertSame('non_negative_integer_numeric', $payload['stock_semantics_discrepancy']['observed_contract']);
+        $this->assertSame('unresolved', $payload['stock_semantics_discrepancy']['semantic_resolution']);
+        $this->assertFalse($payload['stock_semantics_discrepancy']['quantity_mapping_allowed']);
+        $this->assertFalse($payload['stock_semantics_discrepancy']['availability_mapping_allowed']);
+        $this->assertFalse($payload['stock_semantics_discrepancy']['reconciliation_blocked']);
+        $this->assertTrue($payload['reconciliation_continued_despite_stock_semantics_discrepancy']);
+        $this->assertTrue($payload['unresolved_quantity']);
+        $this->assertTrue($payload['unresolved_availability']);
+        $this->assertSame('invalid_stock_semantics_detected', $payload['previous_strict_failure_reference']['blocker']);
+        $this->assertSame(2, $payload['exact_supplier_sku_reconciliation']['exact_one_to_one_match_count']);
+        $this->assertSame(2, $payload['exact_supplier_sku_reconciliation']['source_only_sku_count']);
+        $this->assertSame(1, $payload['exact_supplier_sku_reconciliation']['staging_only_sku_count']);
+        $this->assertSame(1, $payload['exact_supplier_sku_reconciliation']['matched_linked_staging_row_count']);
+        $this->assertSame(1, $payload['exact_supplier_sku_reconciliation']['matched_unlinked_staging_row_count']);
+        $this->assertSame(1, $payload['exact_supplier_sku_reconciliation']['staging_only_unlinked_row_count']);
+        $this->assertSame(0, array_sum($payload['records_changed']));
+        $this->assertSame($before, $this->protectedCounts());
+        $this->assertFalse($payload['persisted_feed_profile_created']);
+        $this->assertFalse($payload['executable_import_config_created']);
+        $this->assertFalse($payload['import_executed']);
+        $this->assertFalse($payload['catalog_sync_executed']);
+        $this->assertFalse($payload['links_changed']);
+
+        $encoded = json_encode($payload, JSON_THROW_ON_ERROR);
+        $this->assertStringNotContainsString('APCOM-OBS-001', $encoded);
+        $this->assertStringNotContainsString('2000000000001', $encoded);
+        $this->assertStringNotContainsString('Synthetic observed product one', $encoded);
+        Bus::assertNothingDispatched();
+        Http::assertNothingSent();
+    }
+
+    /** @throws JsonException */
+    public function test_observed_stock_profile_blocks_invalid_numeric_values_and_invalid_eol_without_mutation(): void
+    {
+        $supplier = $this->supplierWithBaseline();
+        Bus::fake();
+        Http::fake();
+        $before = $this->protectedCounts();
+
+        foreach ([
+            ['synthetic-apcom-observed-stock-blank.xml', 'invalid_observed_stock_semantics_detected'],
+            ['synthetic-apcom-observed-stock-non-numeric.xml', 'invalid_observed_stock_semantics_detected'],
+            ['synthetic-apcom-observed-stock-fractional.xml', 'invalid_observed_stock_semantics_detected'],
+            ['synthetic-apcom-observed-stock-negative.xml', 'invalid_observed_stock_semantics_detected'],
+            ['synthetic-apcom-observed-stock-invalid-eol.xml', 'invalid_eol_semantics_detected'],
+        ] as [$fixture, $blocker]) {
+            $payload = $this->failedCommandJson($this->arguments($supplier, $fixture, 'apcom-observed-stock-v1'));
+
+            $this->assertSame('audit_failed', $payload['verdict']);
+            $this->assertContains($blocker, $payload['blockers']);
+            $this->assertSame(0, array_sum($payload['records_changed']));
+            $this->assertSame($before, $this->protectedCounts());
+        }
+
+        Bus::assertNothingDispatched();
+        Http::assertNothingSent();
+    }
+
+    /** @throws JsonException */
+    public function test_observed_stock_profile_does_not_impose_a_hard_maximum_of_one_hundred(): void
+    {
+        $supplier = $this->supplierWithBaseline();
+        Bus::fake();
+        Http::fake();
+        $before = $this->protectedCounts();
+
+        $payload = $this->commandJson($this->arguments($supplier, 'synthetic-apcom-observed-stock-above-100.xml', 'apcom-observed-stock-v1'));
+
+        $this->assertTrue($payload['success']);
+        $this->assertSame('101', $payload['observed_stock_analysis']['maximum_numeric_value']);
+        $this->assertTrue($payload['observed_stock_analysis']['observed_numeric_contract_valid']);
+        $this->assertSame($before, $this->protectedCounts());
+        $this->assertSame(0, array_sum($payload['records_changed']));
+        Bus::assertNothingDispatched();
+        Http::assertNothingSent();
+    }
+
+    /** @throws JsonException */
     public function test_duplicate_sku_invalid_stock_and_invalid_price_fail_safely_without_mutation(): void
     {
         $supplier = $this->supplierWithBaseline();
@@ -218,7 +339,7 @@ class LocalSupplierSourceStagingReconciliationTest extends TestCase
     }
 
     /** @return array<string, mixed> */
-    private function arguments(Supplier $supplier, string $fixture = 'synthetic-apcom-official.xml'): array
+    private function arguments(Supplier $supplier, string $fixture = 'synthetic-apcom-official.xml', string $semanticsProfile = 'apcom-official-v1'): array
     {
         $source = base_path('tests/Fixtures/Suppliers/apcom_official_semantics/'.$fixture);
         $stagedCount = SupplierProduct::query()->where('supplier_id', $supplier->id)->count();
@@ -228,7 +349,7 @@ class LocalSupplierSourceStagingReconciliationTest extends TestCase
             '--supplier' => 'apcom',
             '--source' => $source,
             '--source-format' => 'xml',
-            '--semantics-profile' => 'apcom-official-v1',
+            '--semantics-profile' => $semanticsProfile,
             '--expected-sha256' => hash_file('sha256', $source),
             '--full-file' => true,
             '--expected-supplier-id' => (string) $supplier->id,
@@ -277,6 +398,33 @@ class LocalSupplierSourceStagingReconciliationTest extends TestCase
                 'currency' => 'EUR',
                 'raw_data' => ['synthetic' => true],
                 'payload_hash' => hash('sha256', 'synthetic-reconciliation-'.$supplier->id.'-'.$index),
+                'received_at' => now(),
+                'status' => 'new',
+            ]);
+        }
+    }
+
+    private function observedStagedRows(Supplier $supplier): void
+    {
+        $product = Product::factory()->create();
+        foreach ([
+            ['APCOM-OBS-001', '2000000000001', $product->id],
+            ['APCOM-OBS-002', '2000000000999', null],
+            ['APCOM-OBS-STAGING-ONLY', '2000000000099', null],
+        ] as $index => [$sku, $ean, $productId]) {
+            SupplierProduct::query()->create([
+                'supplier_id' => $supplier->id,
+                'product_id' => $productId,
+                'supplier_sku' => $sku,
+                'ean' => $ean,
+                'name' => 'Synthetic observed staged product '.($index + 1),
+                'brand_name' => 'SyntheticBrand',
+                'category_name' => 'Synthetic Category',
+                'price' => '100.00',
+                'quantity' => 1,
+                'currency' => 'EUR',
+                'raw_data' => ['synthetic' => true],
+                'payload_hash' => hash('sha256', 'synthetic-observed-reconciliation-'.$supplier->id.'-'.$index),
                 'received_at' => now(),
                 'status' => 'new',
             ]);
