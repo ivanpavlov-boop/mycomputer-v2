@@ -882,6 +882,20 @@ automatic sync disabled. APCOM remains frozen until a separately approved
 operational decision.
 
 The closeout evidence and interpretation limits are recorded in
-`docs/APCOM_DETERMINISTIC_AUDIT_CLOSEOUT.md`. The next phase is the pending,
-not-started `Phase 9C.6.5C.3 - APCOM Local Source Profile and Normalization
-Plan`, which may use only an explicitly supplied local source and human review.
+`docs/APCOM_DETERMINISTIC_AUDIT_CLOSEOUT.md`.
+
+## Phase 9C.6.5C.3 Local Source Normalization Planning
+
+`suppliers:plan-local-source-normalization` is a strictly read-only planning
+surface. It accepts only an explicitly supplied, SHA-256-pinned local XML
+file; it rejects remote URLs, stream wrappers, malformed sources, stale
+baseline locks, changed schedules, active/unknown imports, and unsafe Catalog
+Sync flag combinations. It emits coverage, normalization, collision, and
+policy diagnostics without raw source values or image URLs.
+
+The command cannot import or write `supplier_products`, catalog products,
+categories, mappings, attributes, images, audit records, or feature flags. It
+has no apply mode and does not call Catalog Sync, run CREATE or UPDATE, add
+Sync All, enable automatic sync, queue a job, or alter a schedule. A real
+APCOM source has not been profiled by this locally implemented tool. See
+`docs/APCOM_LOCAL_SOURCE_NORMALIZATION_PLAN.md`.

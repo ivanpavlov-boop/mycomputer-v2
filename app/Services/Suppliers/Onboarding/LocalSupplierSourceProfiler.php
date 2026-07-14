@@ -15,6 +15,10 @@ final class LocalSupplierSourceProfiler
 
     private const MAX_TEXT_LENGTH = 2048;
 
+    private const MAX_DIAGNOSTIC_FIELDS = 64;
+
+    private const MAX_DIAGNOSTIC_VALUES_PER_FIELD = 1000;
+
     /** @var array<string, bool> */
     private array $globalFlags;
 
@@ -86,7 +90,11 @@ final class LocalSupplierSourceProfiler
                 $structure['path_counts'],
                 $options['record_path'] ?? null,
             );
-            $recordScan = $this->scanRecords($source, $recordPath);
+            $recordScan = $this->scanRecords(
+                $source,
+                $recordPath,
+                (bool) ($options['include_value_diagnostics'] ?? false),
+            );
         } catch (RuntimeException) {
             return $this->failureReport(
                 $supplier,
@@ -172,6 +180,8 @@ final class LocalSupplierSourceProfiler
             fieldInventory: [
                 'record_count' => $recordScan['record_count'],
                 'fields' => $recordScan['fields'],
+                'value_diagnostics' => $recordScan['value_diagnostics'],
+                'value_diagnostics_meta' => $recordScan['value_diagnostics_meta'],
             ],
             likelyFieldRoles: $roles,
             feedProfileDraft: $draft->toArray(),
@@ -374,11 +384,16 @@ final class LocalSupplierSourceProfiler
         return array_values(array_map(fn (array $candidate): string => $candidate['path'], array_slice($candidates, 0, 20)));
     }
 
-    /** @return array{record_count: int, fields: array<string, array<string, mixed>>} */
-    private function scanRecords(string $source, ?string $recordPath): array
+    /** @return array{record_count: int, fields: array<string, array<string, mixed>>, value_diagnostics: array<string, array<string, mixed>>, value_diagnostics_meta: array<string, mixed>} */
+    private function scanRecords(string $source, ?string $recordPath, bool $includeValueDiagnostics = false): array
     {
         if ($recordPath === null || $recordPath === '') {
-            return ['record_count' => 0, 'fields' => []];
+            return [
+                'record_count' => 0,
+                'fields' => [],
+                'value_diagnostics' => [],
+                'value_diagnostics_meta' => $this->valueDiagnosticsMeta($includeValueDiagnostics),
+            ];
         }
 
         $errors = [];
@@ -395,6 +410,8 @@ final class LocalSupplierSourceProfiler
         $recordDepth = null;
         $fields = [];
         $recordFields = [];
+        $valueDiagnostics = [];
+        $valueDiagnosticsMeta = $this->valueDiagnosticsMeta($includeValueDiagnostics);
         $normalizedRecordPath = $this->normalizeComparablePath($recordPath);
 
         while ($reader->read()) {
@@ -421,7 +438,7 @@ final class LocalSupplierSourceProfiler
                 if ($reader->isEmptyElement) {
                     $frame = array_pop($stack);
                     if ($recordDepth !== null && $this->isRecordField($frame['path'], $recordPath)) {
-                        $this->recordField($fields, $recordFields, $recordPath, $frame['path'], '');
+                        $this->recordField($fields, $recordFields, $valueDiagnostics, $valueDiagnosticsMeta, $includeValueDiagnostics, $recordPath, $frame['path'], '');
                     }
                 }
             } elseif (in_array($reader->nodeType, [XMLReader::TEXT, XMLReader::CDATA, XMLReader::WHITESPACE], true) && $stack !== []) {
@@ -431,7 +448,7 @@ final class LocalSupplierSourceProfiler
                 $frame = array_pop($stack);
 
                 if ($frame['has_child'] === false && $recordDepth !== null && $this->isRecordField($frame['path'], $recordPath)) {
-                    $this->recordField($fields, $recordFields, $recordPath, $frame['path'], trim((string) $frame['text']));
+                    $this->recordField($fields, $recordFields, $valueDiagnostics, $valueDiagnosticsMeta, $includeValueDiagnostics, $recordPath, $frame['path'], trim((string) $frame['text']));
                 }
 
                 if ($recordDepth !== null && count($stack) < $recordDepth) {
@@ -460,7 +477,12 @@ final class LocalSupplierSourceProfiler
 
         ksort($fields);
 
-        return ['record_count' => $recordCount, 'fields' => $fields];
+        return [
+            'record_count' => $recordCount,
+            'fields' => $fields,
+            'value_diagnostics' => $includeValueDiagnostics ? $this->finalizeValueDiagnostics($valueDiagnostics) : [],
+            'value_diagnostics_meta' => $valueDiagnosticsMeta,
+        ];
     }
 
     /** @param array<int, array<string, mixed>> $stack */
@@ -480,7 +502,7 @@ final class LocalSupplierSourceProfiler
     }
 
     /** @param array<string, array<string, mixed>> $fields */
-    private function recordField(array &$fields, array &$recordFields, string $recordPath, string $path, string $value): void
+    private function recordField(array &$fields, array &$recordFields, array &$valueDiagnostics, array &$valueDiagnosticsMeta, bool $includeValueDiagnostics, string $recordPath, string $path, string $value): void
     {
         $relative = str_ireplace(rtrim($recordPath, '.').'.', '', $path);
         $relative = trim((string) $relative, '.');
@@ -506,6 +528,118 @@ final class LocalSupplierSourceProfiler
         $type = $this->scalarType($value);
         $field['likely_scalar_types'][$type] = ($field['likely_scalar_types'][$type] ?? 0) + 1;
         $fields[$relative] = $field;
+
+        if ($includeValueDiagnostics) {
+            $this->recordValueDiagnostic($valueDiagnostics, $valueDiagnosticsMeta, $relative, $value);
+        }
+    }
+
+    /** @param array<string, array<string, mixed>> $diagnostics */
+    private function recordValueDiagnostic(array &$diagnostics, array &$meta, string $path, string $value): void
+    {
+        if (! isset($diagnostics[$path]) && count($diagnostics) >= self::MAX_DIAGNOSTIC_FIELDS) {
+            $meta['field_limit_reached'] = true;
+
+            return;
+        }
+
+        $diagnostic = $diagnostics[$path] ?? [
+            'non_blank_count' => 0,
+            'numeric_count' => 0,
+            'digits_only_count' => 0,
+            'negative_numeric_count' => 0,
+            'zero_numeric_count' => 0,
+            'value_diagnostics_truncated' => false,
+            'exact_hashes' => [],
+            'case_normalized_hashes' => [],
+            'whitespace_normalized_hashes' => [],
+        ];
+
+        if ($value === '') {
+            $diagnostics[$path] = $diagnostic;
+
+            return;
+        }
+
+        $diagnostic['non_blank_count']++;
+        $diagnostic['digits_only_count'] += preg_match('/^\d+$/D', $value) === 1 ? 1 : 0;
+        $numeric = str_replace(',', '.', trim($value));
+        $diagnostic['numeric_count'] += is_numeric($numeric) ? 1 : 0;
+        $diagnostic['negative_numeric_count'] += is_numeric($numeric) && (float) $numeric < 0 ? 1 : 0;
+        $diagnostic['zero_numeric_count'] += is_numeric($numeric) && (float) $numeric === 0.0 ? 1 : 0;
+
+        $exact = hash('sha256', $value);
+        $caseNormalized = hash('sha256', $this->normalizeDiagnosticValue($value, true, false));
+        $whitespaceNormalized = hash('sha256', $this->normalizeDiagnosticValue($value, true, true));
+
+        if (! isset($diagnostic['exact_hashes'][$exact]) && count($diagnostic['exact_hashes']) >= self::MAX_DIAGNOSTIC_VALUES_PER_FIELD) {
+            $diagnostic['value_diagnostics_truncated'] = true;
+            $diagnostics[$path] = $diagnostic;
+
+            return;
+        }
+
+        foreach ([
+            'exact_hashes' => $exact,
+            'case_normalized_hashes' => $caseNormalized,
+            'whitespace_normalized_hashes' => $whitespaceNormalized,
+        ] as $key => $hash) {
+            $diagnostic[$key][$hash] = ($diagnostic[$key][$hash] ?? 0) + 1;
+        }
+
+        $diagnostics[$path] = $diagnostic;
+    }
+
+    /** @param array<string, array<string, mixed>> $diagnostics @return array<string, array<string, mixed>> */
+    private function finalizeValueDiagnostics(array $diagnostics): array
+    {
+        ksort($diagnostics);
+
+        foreach ($diagnostics as &$diagnostic) {
+            foreach ([
+                'exact_hashes' => 'exact_duplicate_groups',
+                'case_normalized_hashes' => 'case_normalized_duplicate_groups',
+                'whitespace_normalized_hashes' => 'whitespace_normalized_duplicate_groups',
+            ] as $hashKey => $resultKey) {
+                $duplicates = array_filter($diagnostic[$hashKey], fn (int $count): bool => $count > 1);
+                $diagnostic[$resultKey] = [
+                    'group_count' => count($duplicates),
+                    'duplicate_row_count' => array_sum($duplicates),
+                ];
+                unset($diagnostic[$hashKey]);
+            }
+        }
+        unset($diagnostic);
+
+        return $diagnostics;
+    }
+
+    private function normalizeDiagnosticValue(string $value, bool $caseInsensitive, bool $collapseWhitespace): string
+    {
+        $value = trim((string) (preg_replace('/^\s+|\s+$/u', '', $value) ?? $value));
+
+        if (class_exists('Normalizer')) {
+            /** @var class-string $normalizer */
+            $normalizer = 'Normalizer';
+            $value = $normalizer::normalize($value, $normalizer::FORM_C) ?: $value;
+        }
+
+        if ($collapseWhitespace) {
+            $value = preg_replace('/\s+/u', ' ', $value) ?? $value;
+        }
+
+        return $caseInsensitive ? Str::lower($value) : $value;
+    }
+
+    /** @return array<string, bool|int> */
+    private function valueDiagnosticsMeta(bool $enabled): array
+    {
+        return [
+            'enabled' => $enabled,
+            'max_fields' => self::MAX_DIAGNOSTIC_FIELDS,
+            'max_distinct_values_per_field' => self::MAX_DIAGNOSTIC_VALUES_PER_FIELD,
+            'field_limit_reached' => false,
+        ];
     }
 
     private function normalizePath(mixed $path): ?string

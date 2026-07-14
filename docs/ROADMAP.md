@@ -106,8 +106,9 @@ Manual selected UPDATE price/stock sync is implemented behind `CATALOG_SYNC_UPDA
 4. **APCOM deterministic audit closeout — complete.** APCOM remains frozen
    with `import_enabled=true`; its closeout has no blockers but retains two
    evidence warnings.
-5. **APCOM Local Source Profile and Normalization Plan — next, pending.**
-   This is local-file-only and requires explicit source input plus human review.
+5. **APCOM Local Source Profile and Normalization Plan — implemented locally.**
+   The reusable planner is local-file-only, requires explicit source input and
+   human review, and has not profiled a real APCOM XML source.
 6. Select Supplier #3 only after a reviewed readiness matrix and explicit human
    decision; ASBIS remains Supplier #2.
 7. Supplier #3 preview-only integration.
@@ -167,8 +168,9 @@ operational decision.
 
 1. Keep Phase 7.5 documentation lock current.
 2. Keep feature flag and audit visibility read-only.
-3. Phase 9C.6.5C.3 APCOM Local Source Profile and Normalization Plan - next,
-   pending explicit local source input and human review.
+3. Review a future explicitly approved operational local-source plan for APCOM;
+   Phase 9C.6.5C.3 tooling is implemented locally but has no real APCOM source
+   profile run.
 4. Select Supplier #3 only after a reviewed readiness matrix and explicit human
    decision; ASBIS remains Supplier #2.
 5. Phase 9C.6.6 Multi-Supplier Category Mapping Review.

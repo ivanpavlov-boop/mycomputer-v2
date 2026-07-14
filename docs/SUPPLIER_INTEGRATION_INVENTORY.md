@@ -127,6 +127,22 @@ performed.
 ASBIS is Supplier #2 and its controlled staging verification is complete.
 Supplier #3 has not been selected.
 
+## APCOM Local Source Normalization Planner
+
+Phase 9C.6.5C.3 adds the generic, local-file-only
+`suppliers:plan-local-source-normalization` command. APCOM is its immediate
+target, but no real APCOM source was used while implementing or validating the
+tool. The command requires an explicit local XML file, SHA-256 fingerprint,
+and exact expected supplier/schedule/import/staging baseline. It reads only
+safe aggregates and emits a non-persisted human-review plan.
+
+It does not request configured feed credentials or URLs, fetch a feed, import
+or modify `supplier_products`, modify catalog products or taxonomy, create or
+approve mappings, interpret attributes, download images, change schedules,
+dispatch jobs, or call Catalog Sync. Its source/staging difference and
+identifier collisions are diagnostic only. See
+`docs/APCOM_LOCAL_SOURCE_NORMALIZATION_PLAN.md`.
+
 Facts not confirmed from local code are marked `unknown` or `requires a
 production read-only audit`; this inventory does not infer production feed
 configuration, supplier coverage, or live staging state.
