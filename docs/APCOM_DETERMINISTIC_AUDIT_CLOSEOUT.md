@@ -256,15 +256,17 @@ interpretation review and must not trigger an automatic configuration change.
 
 ## Next Phase
 
-Phase 9C.6.5C.3 - APCOM Local Source Profile and Normalization Plan is the
-next approved, pending phase. It may analyze an explicitly supplied local
-APCOM XML file with `suppliers:profile-local-source`, calculate a local source
-fingerprint, detect record paths and field roles, propose a non-persisted feed
-profile, compare local profile aggregates with legacy staging aggregates,
-and produce a normalization plan requiring human review.
+Phase 9C.6.5C.3 - APCOM Local Source Profile and Normalization Plan is now
+implemented locally as `suppliers:plan-local-source-normalization`. It can
+analyze an explicitly supplied local APCOM XML file with a pinned SHA-256,
+calculate field coverage and record-path diagnostics, compare safe local
+aggregates with legacy staging counts, and propose a non-persisted
+normalization plan requiring human review. No real APCOM XML has been profiled
+by this implementation.
 
 It must not fetch the production APCOM feed automatically, run an import,
 change `supplier_products`, modify product links or catalog products, approve
 mappings, re-enable the schedule, run Catalog Sync, or import images.
 
-Phase 9C.6.5C.3 is not started or completed by this closeout.
+The implementation does not mark any operational APCOM source profile as
+started or completed.

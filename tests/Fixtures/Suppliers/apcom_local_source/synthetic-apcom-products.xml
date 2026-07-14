@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<SyntheticApcomCatalog>
+    <Product>
+        <SupplierSku>SYN-AP-001</SupplierSku>
+        <Ean>1000000000001</Ean>
+        <Mpn>MODEL-001</Mpn>
+        <ProductName>Synthetic APCOM workstation one</ProductName>
+        <Brand>SyntheticBrand</Brand>
+        <Category>Computers</Category>
+        <Price>199.95</Price>
+        <Currency>EUR</Currency>
+        <Quantity>12</Quantity>
+        <Availability>in_stock</Availability>
+        <Image>https://images.example.test/synthetic-apcom-001.jpg</Image>
+        <Description>Synthetic description one.</Description>
+    </Product>
+    <Product>
+        <SupplierSku> syn-ap-001 </SupplierSku>
+        <Ean>1000000000002</Ean>
+        <Mpn>MODEL-002</Mpn>
+        <ProductName>Synthetic APCOM workstation two</ProductName>
+        <Brand>SyntheticBrand</Brand>
+        <Category>Computers</Category>
+        <Price>0</Price>
+        <Currency>EUR</Currency>
+        <Quantity>0</Quantity>
+        <Availability>preorder</Availability>
+        <Image>https://images.example.test/synthetic-apcom-002.jpg</Image>
+        <Description>Synthetic description two.</Description>
+    </Product>
+    <Product>
+        <SupplierSku>SYN-AP-003</SupplierSku>
+        <Ean></Ean>
+        <Mpn>MODEL-003</Mpn>
+        <ProductName>Synthetic APCOM workstation three</ProductName>
+        <Brand>SyntheticBrand</Brand>
+        <Category>Displays</Category>
+        <Price>239.50</Price>
+        <Currency>EUR</Currency>
+        <Quantity>4</Quantity>
+        <Availability>limited_stock</Availability>
+        <Image>https://images.example.test/synthetic-apcom-003.jpg</Image>
+        <Description>Synthetic description three.</Description>
+    </Product>
+    <Product>
+        <SupplierSku>SYN-AP-004</SupplierSku>
+        <Ean>1000000000004</Ean>
+        <Mpn>MODEL-004</Mpn>
+        <ProductName>Synthetic APCOM workstation four</ProductName>
+        <Brand>SyntheticBrand</Brand>
+        <Category>Accessories</Category>
+        <Price>9.99</Price>
+        <Currency>EUR</Currency>
+        <Quantity>1</Quantity>
+        <Availability>in_stock</Availability>
+        <Image>https://images.example.test/synthetic-apcom-004.jpg</Image>
+        <Description>Synthetic description four.</Description>
+    </Product>
+    <Product>
+        <SupplierSku>SYN-AP-005</SupplierSku>
+        <Ean>1000000000005</Ean>
+        <Mpn>MODEL-005</Mpn>
+        <ProductName>Synthetic APCOM workstation five</ProductName>
+        <Brand>SyntheticBrand</Brand>
+        <Category>Accessories</Category>
+        <Price>17.00</Price>
+        <Currency>EUR</Currency>
+        <Quantity>6</Quantity>
+        <Availability>in_stock</Availability>
+        <Image>https://images.example.test/synthetic-apcom-005.jpg</Image>
+        <Description>Synthetic description five.</Description>
+    </Product>
+</SyntheticApcomCatalog>

@@ -14,8 +14,9 @@ Catalog Sync, dispatch jobs, or enable schedules.
 Phase 9C.6.5C - APCOM Supplier #1 Legacy Integration Audit & Normalization
 Discovery is implemented as read-only tooling. Its production deterministic
 audit and controlled schedule freeze completed under the separately approved
-Phase 9C.6.5C.1 and 9C.6.5C.2 operational sequence. Supplier #3 remains
-unselected.
+Phase 9C.6.5C.1 and 9C.6.5C.2 operational sequence. Phase 9C.6.5C.3 now adds
+local-only normalization planning, but no real APCOM XML has been profiled by
+that tool. Supplier #3 remains unselected.
 
 ## Intended Pipeline
 
@@ -235,7 +236,22 @@ evidence and are not Git artifacts.
 
 The closeout preserves the deterministic sequence and explicitly keeps APCOM
 frozen. It does not approve automatic imports, mapping approval, content
-normalization, link repair, or Catalog Sync. The next phase is
-Phase 9C.6.5C.3 - APCOM Local Source Profile and Normalization Plan, which is
-pending and not started. It requires an explicitly supplied local source and
-human review.
+normalization, link repair, or Catalog Sync.
+
+## Phase 9C.6.5C.3 Local Source Normalization Planning
+
+`suppliers:plan-local-source-normalization` is a reusable local XML planner.
+It locks an explicitly supplied expected baseline, requires a SHA-256-pinned
+local source, refuses a changed schedule or active/unknown import state, and
+combines the local source profiler with existing staging counts and safe
+fingerprints. It emits `supplier-local-source-normalization-plan-v1` with
+field coverage, normalization proposals, offer-field diagnostics, category and
+attribute/image policy, collision counts, source-to-staging count drift, and
+zero-change proof.
+
+The planner is read-only and requires human review. It does not persist a feed
+profile, create an executable import configuration, fetch a feed, write
+staging/catalog/mapping/attribute data, repair links, download images, change
+a schedule, dispatch jobs, or call Catalog Sync. Its local implementation has
+not been run against real APCOM source data. See
+`docs/APCOM_LOCAL_SOURCE_NORMALIZATION_PLAN.md` for its full safety contract.

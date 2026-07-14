@@ -227,6 +227,8 @@ class SupplierOnboardingContractsTest extends TestCase
                     'LegacySupplierStagingAuditService.php',
                     // This phase deliberately adds a separately guarded runtime schedule-only service.
                     'ControlledSupplierScheduleFreezeService.php',
+                    // This phase deliberately reads safe aggregate state to produce a zero-write local plan.
+                    'LocalSupplierSourceNormalizationPlanner.php',
                 ], true),
             ),
         );
@@ -245,20 +247,23 @@ class SupplierOnboardingContractsTest extends TestCase
         }
     }
 
-    public function test_apcom_deterministic_audit_closeout_documents_critical_safety_facts(): void
+    public function test_apcom_deterministic_audit_closeout_and_local_planner_document_critical_safety_facts(): void
     {
         $root = dirname(__DIR__, 4);
         $closeoutPath = $root.'/docs/APCOM_DETERMINISTIC_AUDIT_CLOSEOUT.md';
         $phasesPath = $root.'/docs/PHASES.md';
         $catalogSafetyPath = $root.'/docs/CATALOG_SYNC_SAFETY.md';
+        $planPath = $root.'/docs/APCOM_LOCAL_SOURCE_NORMALIZATION_PLAN.md';
 
         $this->assertFileExists($closeoutPath);
         $this->assertFileExists($phasesPath);
         $this->assertFileExists($catalogSafetyPath);
+        $this->assertFileExists($planPath);
 
         $closeout = (string) file_get_contents($closeoutPath);
         $phases = (string) file_get_contents($phasesPath);
         $catalogSafety = (string) file_get_contents($catalogSafetyPath);
+        $plan = (string) file_get_contents($planPath);
 
         foreach ([
             'APCOM is Supplier #1',
@@ -276,7 +281,7 @@ class SupplierOnboardingContractsTest extends TestCase
             'unlinked: `883`',
             'No automatic unfreeze exists',
             'Phase 9C.6.5C.3 - APCOM Local Source Profile and Normalization Plan',
-            'not started or completed',
+            'implementation does not mark any operational APCOM source profile as',
         ] as $fact) {
             $this->assertStringContainsString($fact, $closeout, $fact);
         }
@@ -288,6 +293,10 @@ class SupplierOnboardingContractsTest extends TestCase
         $this->assertStringContainsString('Sync All disabled', $catalogSafety);
         $this->assertStringContainsString('automatic sync disabled', $catalogSafety);
         $this->assertStringContainsString('No Catalog Sync', $catalogSafety);
+        $this->assertStringContainsString('suppliers:plan-local-source-normalization', $catalogSafety);
+        $this->assertStringContainsString('strictly read-only', $plan);
+        $this->assertStringContainsString('no real APCOM XML has been profiled', $plan);
+        $this->assertStringContainsString('`--apply` mode is', $plan);
     }
 
     private function record(string $sku, string $name): NormalizedSupplierRecord
