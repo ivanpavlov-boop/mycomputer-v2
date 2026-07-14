@@ -912,5 +912,8 @@ The tool accepts no apply/persist/import/sync/fetch/download controls. Its
 only authoritative match is exact normalized-safe `partno` to staged
 `supplier_sku`; EAN and normalized comparisons are diagnostic only. It must
 not infer quantity from `stock`, MPN from `partno`, currency/VAT, a DAC/FD
-price choice, or greentax. C.3A operational reconciliation remains not run.
-See [APCOM Official Field Semantics And Read-only Reconciliation](APCOM_OFFICIAL_FIELD_SEMANTICS_RECONCILIATION.md).
+price choice, or greentax. The first strict C.3A run safely failed closed on
+non-binary observed stock values with no mutations. C.3A.1 adds an unresolved
+numeric-stock review profile only; it cannot approve stock or availability,
+persist a profile, import, or alter Catalog Sync. See
+[APCOM Observed Stock Semantics Discrepancy](APCOM_OBSERVED_STOCK_SEMANTICS_DISCREPANCY.md).

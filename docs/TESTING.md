@@ -64,13 +64,13 @@ Catalog Sync changes should verify:
 
 ## Local Supplier Source Reconciliation Tests
 
-Phase 9C.6.5C.3A tests use synthetic local XML fixtures only. They must prove
-that the official APCOM semantics registry keeps stock separate from quantity,
-part number separate from MPN, and DAC/FD price selection unresolved. They
-must also cover baseline locks, active-import and unsafe-flag refusal, source
-fingerprint failure, malformed/remote rejection, duplicate and blank
-identifiers, invalid stock/EOL/price semantics, bounded hash-only samples,
-and zero protected-table changes.
+Phase 9C.6.5C.3A and C.3A.1 tests use synthetic local XML fixtures only. They
+must prove that the strict official APCOM profile rejects stock values outside
+`0`/`1`, while `apcom-observed-stock-v1` accepts only non-negative integer
+numeric stock values and keeps quantity and availability unresolved. They must
+also cover EOL separately, baseline locks, active-import and unsafe-flag
+refusal, source fingerprint failure, malformed/remote rejection, duplicate and
+blank identifiers, bounded hash-only samples, and zero protected-table changes.
 
 Run the focused checks with:
 

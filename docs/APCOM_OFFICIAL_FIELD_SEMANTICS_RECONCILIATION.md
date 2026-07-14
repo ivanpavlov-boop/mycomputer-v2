@@ -4,9 +4,10 @@
 
 Phase 9C.6.5C.3A provides local, deterministic tooling for comparing an
 explicit local APCOM XML source to existing APCOM `supplier_products` staging.
-The tool is implemented locally and in review. No C.3A operational
-reconciliation has been run by this phase, and no operational report, XML
-source, production database data, or source path is stored in Git.
+PR #147 tooling is merged and deployed. The first C.3A operational
+reconciliation ran read-only and safely failed closed because the authorized
+snapshot contained non-binary `stock` values. No records changed, no rollback
+is required, and no operational report or XML source is stored in Git.
 
 This document records the operator-confirmed `apcom-official-v1` semantics.
 It is a read-only contract for review, not an executable supplier mapping or
@@ -89,10 +90,11 @@ The following inferences are prohibited:
 - source name, brand, category, image, or description observations never
   overwrite catalog content.
 
-Stock/EOL review policy is intentionally non-executable: `stock=1,eol=0` is a
-candidate in-stock observation; `stock=0,eol=0` is a candidate out-of-stock
-observation; and `eol=1` requires review. It never auto-deactivates, deletes,
-unpublishes, or changes a product.
+Stock/EOL review policy is intentionally non-executable. The official profile
+continues to represent the published binary claim, but the first operational
+run found a real-source discrepancy and stopped before reconciliation. EOL
+remains a separate binary lifecycle review field. No profile auto-deactivates,
+deletes, unpublishes, or changes a product.
 
 ## Read-only Command
 
@@ -161,5 +163,6 @@ product/catalog mutation in this phase.
 
 `apcom-official-v1` supersedes generic profiler guesses only for the
 read-only C.3A report. It does not rewrite, roll back, or reinterpret historic
-staging data. A future operational reconciliation requires a separately
-approved phase, a fresh baseline, a reviewed report, and explicit approval.
+staging data. Phase 9C.6.5C.3A.1 adds an observed numeric-stock review profile
+without weakening this strict official profile. See
+[APCOM Observed Stock Semantics Discrepancy](APCOM_OBSERVED_STOCK_SEMANTICS_DISCREPANCY.md).

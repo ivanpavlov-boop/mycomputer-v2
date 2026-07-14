@@ -259,18 +259,21 @@ class SupplierOnboardingContractsTest extends TestCase
         $catalogSafetyPath = $root.'/docs/CATALOG_SYNC_SAFETY.md';
         $planPath = $root.'/docs/APCOM_LOCAL_SOURCE_NORMALIZATION_PLAN.md';
         $reconciliationPath = $root.'/docs/APCOM_OFFICIAL_FIELD_SEMANTICS_RECONCILIATION.md';
+        $observedStockPath = $root.'/docs/APCOM_OBSERVED_STOCK_SEMANTICS_DISCREPANCY.md';
 
         $this->assertFileExists($closeoutPath);
         $this->assertFileExists($phasesPath);
         $this->assertFileExists($catalogSafetyPath);
         $this->assertFileExists($planPath);
         $this->assertFileExists($reconciliationPath);
+        $this->assertFileExists($observedStockPath);
 
         $closeout = (string) file_get_contents($closeoutPath);
         $phases = (string) file_get_contents($phasesPath);
         $catalogSafety = (string) file_get_contents($catalogSafetyPath);
         $plan = (string) file_get_contents($planPath);
         $reconciliation = (string) file_get_contents($reconciliationPath);
+        $observedStock = (string) file_get_contents($observedStockPath);
 
         foreach ([
             'APCOM is Supplier #1',
@@ -289,7 +292,7 @@ class SupplierOnboardingContractsTest extends TestCase
             'No automatic unfreeze exists',
             'Phase 9C.6.5C.3 - APCOM Local Source Profile and Normalization Plan',
             'authorized local C.3 profile has since run without writes',
-            'Phase 9C.6.5C.3A tooling is implemented locally and in review',
+            'Phase 9C.6.5C.3A tooling is merged and deployed',
         ] as $fact) {
             $this->assertStringContainsString($fact, $closeout, $fact);
         }
@@ -298,6 +301,7 @@ class SupplierOnboardingContractsTest extends TestCase
         $this->assertStringContainsString('Phase 9C.6.5C.2', $phases);
         $this->assertStringContainsString('Phase 9C.6.5C.3', $phases);
         $this->assertStringContainsString('Phase 9C.6.5C.3A', $phases);
+        $this->assertStringContainsString('Phase 9C.6.5C.3A.1', $phases);
         $this->assertStringContainsString('UPDATE disabled', $catalogSafety);
         $this->assertStringContainsString('Sync All disabled', $catalogSafety);
         $this->assertStringContainsString('automatic sync disabled', $catalogSafety);
@@ -309,7 +313,14 @@ class SupplierOnboardingContractsTest extends TestCase
         $this->assertStringContainsString('`--apply` mode is', $plan);
         $this->assertStringContainsString('apcom-official-v1', $reconciliation);
         $this->assertStringContainsString('`stock` is never interpreted as quantity', $reconciliation);
-        $this->assertStringContainsString('No C.3A operational', $reconciliation);
+        $this->assertStringContainsString('safely failed closed', $reconciliation);
+        $this->assertStringContainsString('apcom-observed-stock-v1', $observedStock);
+        $this->assertStringContainsString('unresolved semantic', $observedStock);
+        $this->assertStringContainsString('The strict profile was correct', $observedStock);
+        $this->assertStringContainsString('Operational reconciliation with the observed profile has not run', $observedStock);
+        $this->assertStringContainsString('EOL remains separate and binary', $observedStock);
+        $this->assertStringContainsString('Sync All', $observedStock);
+        $this->assertStringContainsString('automatic sync', $observedStock);
     }
 
     private function record(string $sku, string $name): NormalizedSupplierRecord

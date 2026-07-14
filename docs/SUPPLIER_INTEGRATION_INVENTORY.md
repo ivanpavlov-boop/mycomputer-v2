@@ -151,7 +151,7 @@ configuration, supplier coverage, or live staging state.
 
 ## APCOM Official Semantics And Reconciliation
 
-Phase 9C.6.5C.3A adds a local, read-only comparison command backed by the
+Phase 9C.6.5C.3A added a local, read-only comparison command backed by the
 operator-confirmed `apcom-official-v1` field contract. It cannot use generic
 role guesses to infer quantity, MPN, currency, VAT, price choice, or greentax.
 `stock` is not quantity; `partno` is not MPN; `cncode` is not an identifier.
@@ -160,8 +160,13 @@ The command's exact source `partno` to staging `supplier_sku` comparison is
 the only authoritative rule. EAN and normalized forms are review-only
 diagnostics. It outputs only aggregates and bounded hashes and cannot modify
 APCOM staging, catalog products, categories, mappings, attributes, images,
-jobs, schedules, or Catalog Sync. Its operational reconciliation has not run.
-See [APCOM Official Field Semantics And Read-only Reconciliation](APCOM_OFFICIAL_FIELD_SEMANTICS_RECONCILIATION.md).
+jobs, schedules, or Catalog Sync. Its first operational reconciliation safely
+failed closed on observed non-binary stock values with no mutations.
+
+Phase 9C.6.5C.3A.1 adds `apcom-observed-stock-v1` for unresolved numeric stock
+evidence only. It permits diagnostics to continue when stock values are
+non-negative integers, but never treats them as quantity or availability. See
+[APCOM Observed Stock Semantics Discrepancy](APCOM_OBSERVED_STOCK_SEMANTICS_DISCREPANCY.md).
 
 ## Controlled Schedule Freeze
 

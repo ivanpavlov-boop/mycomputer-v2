@@ -38,6 +38,20 @@ final class LocalSupplierSourceStagingReconciler
 
     private const HASH_NAMESPACE = 'local-supplier-source-staging-reconciliation-v1';
 
+    private const OFFICIAL_SEMANTICS_PROFILE = 'apcom-official-v1';
+
+    private const OBSERVED_SEMANTICS_PROFILE = 'apcom-observed-stock-v1';
+
+    private const PREVIOUS_STRICT_FAILURE_REFERENCE = [
+        'runtime_report_path' => 'storage/app/imports/apcom-audit/reports/apcom_official_reconciliation_20260714T141523Z.json',
+        'report_sha256' => '86de4ce6d79093954c22eaccfb5ac063d7168cfaf2d0c2228af5fce13baae2cc',
+        'verdict' => 'audit_failed',
+        'blocker' => 'invalid_stock_semantics_detected',
+        'records_changed' => 'zero',
+        'operator_supplied_evidence_only' => true,
+        'loaded_at_runtime' => false,
+    ];
+
     public function __construct(
         private readonly LocalSupplierSourceProfiler $profiler,
         private readonly SupplierSourceFieldSemanticsRegistry $semanticsRegistry,
@@ -290,6 +304,14 @@ final class LocalSupplierSourceStagingReconciler
 
         $blockers = array_values(array_unique($blockers));
         $warnings = array_values(array_unique($warnings));
+        $reconciliationContinued = $semantics->usesObservedNumericStockContract()
+            && $blockers === []
+            && (bool) ($semanticsValidation['observed_numeric_contract_valid'] ?? false);
+        $stockSemanticsDiscrepancy = $this->stockSemanticsDiscrepancy(
+            $semantics,
+            (array) data_get($semanticsValidation, 'aggregates.stock', []),
+            $reconciliationContinued,
+        );
 
         return $this->report(
             success: $blockers === [],
@@ -310,6 +332,17 @@ final class LocalSupplierSourceStagingReconciler
                 'active_import_check' => $activeImport,
                 'global_safety_flags' => $flags,
                 'semantics_profile' => $semantics->toArray(),
+                'selected_semantics_profile' => $semantics->key,
+                'official_semantics_profile' => self::OFFICIAL_SEMANTICS_PROFILE,
+                'observed_semantics_profile' => self::OBSERVED_SEMANTICS_PROFILE,
+                'stock_semantics_discrepancy' => $stockSemanticsDiscrepancy,
+                'observed_stock_analysis' => $semantics->usesObservedNumericStockContract()
+                    ? (array) data_get($semanticsValidation, 'aggregates.stock', [])
+                    : [],
+                'reconciliation_continued_despite_stock_semantics_discrepancy' => $reconciliationContinued,
+                'unresolved_quantity' => true,
+                'unresolved_availability' => true,
+                'previous_strict_failure_reference' => self::PREVIOUS_STRICT_FAILURE_REFERENCE,
                 'source_profile' => $this->safeSourceProfile($profilePayload),
                 'profile_validation' => $profileValidation['summary'],
                 'source_aggregates' => $semanticsValidation['aggregates'],
@@ -562,6 +595,7 @@ final class LocalSupplierSourceStagingReconciler
     /** @param array<string, string> $record @return array<string, string> */
     private function normalizeSourceRecord(array $record): array
     {
+        $record['_stock_present'] = array_key_exists('stock', $record) ? '1' : '0';
         foreach (['partno', 'ean', 'stock', 'eol', 'dac_price', 'fd_price', 'promo', 'news', 'greentax'] as $path) {
             $record[$path] ??= '';
         }
@@ -591,6 +625,7 @@ final class LocalSupplierSourceStagingReconciler
             'warnings' => $warnings,
             'summary' => [
                 'record_path_matches_official_profile' => $this->comparablePath((string) data_get($profile, 'parser_result.selected_record_path')) === $this->comparablePath($semantics->recordPath),
+                'record_path_matches_selected_profile' => $this->comparablePath((string) data_get($profile, 'parser_result.selected_record_path')) === $this->comparablePath($semantics->recordPath),
                 'missing_required_field_count' => count($missing),
                 'missing_required_field_hashes' => array_map(fn (string $path): string => $this->hashSample('missing_required_field', $path), $missing),
                 'documented_greentax_present' => array_key_exists('greentax', $fields),
@@ -605,9 +640,38 @@ final class LocalSupplierSourceStagingReconciler
         $skuGroups = [];
         $blankSku = 0;
         $blankEan = 0;
-        $stock = ['numeric_count' => 0, 'zero_count' => 0, 'positive_count' => 0, 'non_binary_count' => 0];
+        $stock = [
+            'total_records' => count($rows),
+            'elements_present' => 0,
+            'blank_count' => 0,
+            'numeric_count' => 0,
+            'non_numeric_count' => 0,
+            'integer_count' => 0,
+            'fractional_count' => 0,
+            'negative_count' => 0,
+            'zero_count' => 0,
+            'one_count' => 0,
+            'greater_than_one_count' => 0,
+            'positive_count' => 0,
+            'distinct_numeric_value_count' => 0,
+            'minimum_numeric_value' => null,
+            'maximum_numeric_value' => null,
+            'official_binary_semantics_match' => false,
+            'observed_numeric_contract_valid' => false,
+            'non_binary_count' => 0,
+        ];
         $eol = ['zero_count' => 0, 'one_count' => 0, 'invalid_count' => 0];
         $prices = ['dac_price' => $this->priceCounters(), 'fd_price' => $this->priceCounters(), 'both_numeric_count' => 0, 'equal_count' => 0, 'dac_higher_count' => 0, 'dac_lower_count' => 0];
+        $numericStockValues = [];
+        $distinctStockValues = [];
+        $stockEolCombinations = [
+            'stock_zero_eol_zero' => 0,
+            'stock_one_eol_zero' => 0,
+            'stock_greater_than_one_eol_zero' => 0,
+            'stock_zero_eol_one' => 0,
+            'stock_one_eol_one' => 0,
+            'stock_greater_than_one_eol_one' => 0,
+        ];
 
         foreach ($rows as $row) {
             $sku = $this->exactSku($row['partno']);
@@ -620,19 +684,45 @@ final class LocalSupplierSourceStagingReconciler
                 $blankEan++;
             }
 
-            $stockValue = $this->decimalValue($row['stock']);
-            if ($stockValue !== null) {
+            if (($row['_stock_present'] ?? '0') === '1') {
+                $stock['elements_present']++;
+            }
+            $stockRaw = $this->trimNfc($row['stock']);
+            $stockValue = $this->decimalValue($stockRaw);
+            $validObservedStock = false;
+            if ($stockRaw === '') {
+                $stock['blank_count']++;
+                $stock['non_binary_count']++;
+            } elseif ($stockValue === null) {
+                $stock['non_numeric_count']++;
+                $stock['non_binary_count']++;
+            } else {
                 $stock['numeric_count']++;
+                $numericStockValues[] = $stockValue;
+                $distinctStockValues[$this->canonicalNumericKey($stockValue)] = true;
+
+                if (floor($stockValue) !== $stockValue) {
+                    $stock['fractional_count']++;
+                } elseif ($stockValue < 0) {
+                    $stock['negative_count']++;
+                } else {
+                    $stock['integer_count']++;
+                    $validObservedStock = true;
+                }
+
                 if ($stockValue == 0.0) {
                     $stock['zero_count']++;
                 } elseif ($stockValue > 0) {
                     $stock['positive_count']++;
                 }
+                if ($stockValue == 1.0) {
+                    $stock['one_count']++;
+                } elseif ($stockValue > 1.0) {
+                    $stock['greater_than_one_count']++;
+                }
                 if (! in_array($stockValue, [0.0, 1.0], true)) {
                     $stock['non_binary_count']++;
                 }
-            } else {
-                $stock['non_binary_count']++;
             }
 
             $eolValue = $this->decimalValue($row['eol']);
@@ -642,6 +732,12 @@ final class LocalSupplierSourceStagingReconciler
                 $eol['one_count']++;
             } else {
                 $eol['invalid_count']++;
+            }
+
+            if ($validObservedStock && in_array($eolValue, [0.0, 1.0], true)) {
+                $stockBand = $stockValue === 0.0 ? 'zero' : ($stockValue === 1.0 ? 'one' : 'greater_than_one');
+                $eolBand = $eolValue === 0.0 ? 'zero' : 'one';
+                $stockEolCombinations['stock_'.$stockBand.'_eol_'.$eolBand]++;
             }
 
             $dac = $this->countPrice($prices['dac_price'], $row['dac_price']);
@@ -658,6 +754,19 @@ final class LocalSupplierSourceStagingReconciler
             }
         }
 
+        if ($numericStockValues !== []) {
+            sort($numericStockValues, SORT_NUMERIC);
+            $stock['minimum_numeric_value'] = $numericStockValues[0];
+            $stock['maximum_numeric_value'] = $numericStockValues[array_key_last($numericStockValues)];
+        }
+        $stock['distinct_numeric_value_count'] = count($distinctStockValues);
+        $stock['official_binary_semantics_match'] = $stock['non_binary_count'] === 0;
+        $stock['observed_numeric_contract_valid'] = $stock['elements_present'] === count($rows)
+            && $stock['blank_count'] === 0
+            && $stock['non_numeric_count'] === 0
+            && $stock['fractional_count'] === 0
+            && $stock['negative_count'] === 0;
+
         $duplicateGroups = array_filter($skuGroups, fn (int $count): bool => $count > 1);
         $blockers = [];
         if ($blankSku > 0) {
@@ -666,7 +775,10 @@ final class LocalSupplierSourceStagingReconciler
         if ($duplicateGroups !== []) {
             $blockers[] = 'duplicate_authoritative_supplier_sku_detected';
         }
-        if ($stock['non_binary_count'] > 0) {
+        if ($semantics->usesObservedNumericStockContract() && ! $stock['observed_numeric_contract_valid']) {
+            $blockers[] = 'invalid_observed_stock_semantics_detected';
+        }
+        if (! $semantics->usesObservedNumericStockContract() && ! $stock['official_binary_semantics_match']) {
             $blockers[] = 'invalid_stock_semantics_detected';
         }
         if ($eol['invalid_count'] > 0) {
@@ -685,10 +797,40 @@ final class LocalSupplierSourceStagingReconciler
         if ($eol['one_count'] > 0) {
             $warnings[] = 'eol_rows_require_human_review';
         }
+        if ($semantics->usesObservedNumericStockContract()) {
+            $warnings[] = 'stock_semantics_discrepancy_requires_review';
+        }
+
+        $policies = [
+            'stock_is_not_quantity' => true,
+            'price_selection_resolved' => false,
+            'currency_inferred' => false,
+            'vat_inferred' => false,
+            'greentax_inferred' => false,
+            'no_auto_deactivate_delete_unpublish_link_or_catalog_write' => true,
+        ];
+        if ($semantics->usesObservedNumericStockContract()) {
+            $policies += [
+                'stock_semantic_status' => 'unresolved_numeric',
+                'stock_is_not_binary_availability' => true,
+                'quantity_resolved' => false,
+                'availability_resolved' => false,
+                'automatic_quantity_mapping_allowed' => false,
+                'automatic_availability_mapping_allowed' => false,
+                'stock_eol_combinations_review_only' => true,
+            ];
+        } else {
+            $policies += [
+                'stock_zero_eol_zero' => 'candidate_out_of_stock_requires_human_review',
+                'stock_positive_eol_zero' => 'candidate_in_stock_requires_human_review',
+                'eol_one' => 'eol_review_required',
+            ];
+        }
 
         return [
             'blockers' => $blockers,
             'warnings' => $warnings,
+            'observed_numeric_contract_valid' => $stock['observed_numeric_contract_valid'],
             'aggregates' => [
                 'source_record_count' => count($rows),
                 'supplier_sku' => [
@@ -701,19 +843,10 @@ final class LocalSupplierSourceStagingReconciler
                 'ean' => ['blank_count' => $blankEan, 'non_blank_count' => count($rows) - $blankEan],
                 'stock' => $stock,
                 'eol' => $eol,
+                'stock_eol_combinations' => $stockEolCombinations,
                 'price_candidates' => $prices,
             ],
-            'policies' => [
-                'stock_is_not_quantity' => true,
-                'stock_zero_eol_zero' => 'candidate_out_of_stock_requires_human_review',
-                'stock_positive_eol_zero' => 'candidate_in_stock_requires_human_review',
-                'eol_one' => 'eol_review_required',
-                'price_selection_resolved' => false,
-                'currency_inferred' => false,
-                'vat_inferred' => false,
-                'greentax_inferred' => false,
-                'no_auto_deactivate_delete_unpublish_link_or_catalog_write' => true,
-            ],
+            'policies' => $policies,
         ];
     }
 
@@ -1103,6 +1236,9 @@ final class LocalSupplierSourceStagingReconciler
     /** @param array<int, string> $blockers @param array<int, string> $warnings */
     private function failure(string $verdict, array $blockers, float $startedAt, array $supplier = [], array $source = [], array $sourceFingerprint = [], ?array $expectedState = null, array $observedState = [], array $activeImportCheck = [], array $globalSafetyFlags = [], array $semanticsProfile = [], array $sourceProfile = [], array $protectedCountsBefore = [], array $protectedCountsAfter = [], array $protectedFingerprintsBefore = [], array $protectedFingerprintsAfter = []): LocalSupplierSourceStagingReconciliationReport
     {
+        $selectedProfile = $semanticsProfile['key'] ?? null;
+        $isObservedProfile = $selectedProfile === self::OBSERVED_SEMANTICS_PROFILE;
+
         return $this->report(false, $verdict, [
             'supplier' => $supplier,
             'source' => $source,
@@ -1113,6 +1249,24 @@ final class LocalSupplierSourceStagingReconciler
             'active_import_check' => $activeImportCheck,
             'global_safety_flags' => $globalSafetyFlags,
             'semantics_profile' => $semanticsProfile,
+            'selected_semantics_profile' => $selectedProfile,
+            'official_semantics_profile' => self::OFFICIAL_SEMANTICS_PROFILE,
+            'observed_semantics_profile' => self::OBSERVED_SEMANTICS_PROFILE,
+            'stock_semantics_discrepancy' => [
+                'detected' => $isObservedProfile,
+                'official_claim' => $semanticsProfile['official_stock_claim'] ?? null,
+                'observed_contract' => $semanticsProfile['observed_stock_contract'] ?? null,
+                'semantic_resolution' => $semanticsProfile['semantic_resolution'] ?? 'unresolved',
+                'quantity_mapping_allowed' => false,
+                'availability_mapping_allowed' => false,
+                'requires_human_review' => true,
+                'reconciliation_blocked' => $isObservedProfile ? false : null,
+            ],
+            'observed_stock_analysis' => [],
+            'reconciliation_continued_despite_stock_semantics_discrepancy' => false,
+            'unresolved_quantity' => true,
+            'unresolved_availability' => true,
+            'previous_strict_failure_reference' => self::PREVIOUS_STRICT_FAILURE_REFERENCE,
             'source_profile' => $sourceProfile,
             'human_review_required' => true,
             'automatic_mapping_or_import_allowed' => false,
@@ -1182,6 +1336,10 @@ final class LocalSupplierSourceStagingReconciler
             return 'audit_failed';
         }
 
+        if (in_array('stock_semantics_discrepancy_requires_review', $warnings, true)) {
+            return 'reconciliation_requires_stock_semantics_review';
+        }
+
         return $warnings === [] ? 'reconciliation_ready_for_human_review' : 'reconciliation_requires_human_review';
     }
 
@@ -1208,6 +1366,34 @@ final class LocalSupplierSourceStagingReconciler
     private function hashSample(string $bucket, string $value): string
     {
         return hash('sha256', self::HASH_NAMESPACE.'|'.$bucket.'|'.$value);
+    }
+
+    /** @param array<string, mixed> $stock @return array<string, mixed> */
+    private function stockSemanticsDiscrepancy(SupplierSourceFieldSemanticsProfile $semantics, array $stock, bool $reconciliationContinued): array
+    {
+        $evidence = [];
+        foreach ([
+            'total_records', 'elements_present', 'blank_count', 'numeric_count', 'non_numeric_count', 'integer_count',
+            'fractional_count', 'negative_count', 'zero_count', 'one_count', 'greater_than_one_count', 'positive_count',
+            'distinct_numeric_value_count', 'minimum_numeric_value', 'maximum_numeric_value',
+        ] as $key) {
+            $evidence[$key] = $stock[$key] ?? null;
+        }
+
+        return [
+            'detected' => (bool) ($semantics->stockSemantics['semantics_discrepancy'] ?? false),
+            'official_claim' => $semantics->stockSemantics['official_stock_claim'] ?? null,
+            'observed_contract' => $semantics->stockSemantics['observed_stock_contract'] ?? null,
+            'official_binary_semantics_match' => (bool) ($stock['official_binary_semantics_match'] ?? false),
+            'observed_numeric_contract_valid' => (bool) ($stock['observed_numeric_contract_valid'] ?? false),
+            'semantic_resolution' => $semantics->stockSemantics['semantic_resolution'] ?? 'unresolved',
+            'quantity_mapping_allowed' => (bool) ($semantics->stockSemantics['automatic_quantity_mapping_allowed'] ?? false),
+            'availability_mapping_allowed' => (bool) ($semantics->stockSemantics['automatic_availability_mapping_allowed'] ?? false),
+            'requires_human_review' => true,
+            'reconciliation_blocked' => $semantics->usesObservedNumericStockContract() ? false : ! (bool) ($stock['official_binary_semantics_match'] ?? false),
+            'reconciliation_continued' => $reconciliationContinued,
+            'evidence' => $evidence,
+        ];
     }
 
     private function exactSku(string $value): string
@@ -1240,6 +1426,11 @@ final class LocalSupplierSourceStagingReconciler
         $value = str_replace(',', '.', $this->trimNfc($value));
 
         return is_numeric($value) ? (float) $value : null;
+    }
+
+    private function canonicalNumericKey(float $value): string
+    {
+        return rtrim(rtrim(number_format($value, 12, '.', ''), '0'), '.') ?: '0';
     }
 
     private function comparablePath(string $path): string

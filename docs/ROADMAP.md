@@ -112,8 +112,10 @@ Manual selected UPDATE price/stock sync is implemented behind `CATALOG_SYNC_UPDA
    configuration; source evidence remains outside Git.
 6. **APCOM Official Field Semantics and Hashed Source-to-Staging Reconciliation.**
    `apcom-official-v1` is a non-persistent, local read-only contract.
-   Operational reconciliation has not run and cannot import, repair links, or
-   invoke Catalog Sync.
+   Its first operational reconciliation safely failed closed on observed
+   non-binary stock values and cannot import, repair links, or invoke Catalog
+   Sync. The additive `apcom-observed-stock-v1` profile keeps stock semantics
+   unresolved while permitting read-only SKU/EAN diagnostics.
 7. Select Supplier #3 only after a reviewed readiness matrix and explicit human
    decision; ASBIS remains Supplier #2.
 8. Supplier #3 preview-only integration.
@@ -173,9 +175,10 @@ operational decision.
 
 1. Keep Phase 7.5 documentation lock current.
 2. Keep feature flag and audit visibility read-only.
-3. Review a future explicitly approved APCOM source-to-staging reconciliation;
-   C.3 profiling was read-only and complete, while C.3A tooling is local/in
-   review and has no operational reconciliation run.
+3. Review a future explicitly approved APCOM observed-stock reconciliation;
+   C.3 profiling was read-only and complete, C.3A safely failed closed without
+   mutation, and C.3A.1 tooling remains local/in review with no observed-profile
+   operational run.
 4. Select Supplier #3 only after a reviewed readiness matrix and explicit human
    decision; ASBIS remains Supplier #2.
 5. Phase 9C.6.6 Multi-Supplier Category Mapping Review.
