@@ -70,6 +70,13 @@ Must not:
 - Deploy before merge or without explicit user approval.
 - Treat a planned feature flag or phase as implemented without code evidence.
 
+For local supplier-source review work, the Coordinator must also distinguish a
+local synthetic implementation from an authorized operational read-only run.
+Neither grants authority to import, persist a profile, repair links, mutate
+staging/catalog data, or call Catalog Sync. Operational source files and
+reports stay outside Git unless a separately approved evidence-handling phase
+says otherwise.
+
 ### 2. Laravel Backend Agent
 
 Scope:

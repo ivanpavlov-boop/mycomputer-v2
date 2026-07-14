@@ -252,6 +252,20 @@ zero-change proof.
 The planner is read-only and requires human review. It does not persist a feed
 profile, create an executable import configuration, fetch a feed, write
 staging/catalog/mapping/attribute data, repair links, download images, change
-a schedule, dispatch jobs, or call Catalog Sync. Its local implementation has
-not been run against real APCOM source data. See
+a schedule, dispatch jobs, or call Catalog Sync. An authorized local C.3
+profile has run without writes; its source and report remain outside Git. See
 `docs/APCOM_LOCAL_SOURCE_NORMALIZATION_PLAN.md` for its full safety contract.
+
+## Phase 9C.6.5C.3A Official Semantics Reconciliation
+
+`suppliers:reconcile-local-source-staging` is the next local-only review tool.
+It combines the existing local profiler, the shared active-import guard, an
+explicit baseline lock, and `apcom-official-v1`. Exact normalized-safe source
+`partno` to staged `supplier_sku` is authoritative; EAN and case/whitespace
+normalization remain diagnostics only. The command emits aggregates and bounded
+domain-separated hashes, not raw source records or IDs.
+
+It has no operational reconciliation run, apply mode, profile persistence,
+remote fetch, import, mapping, link repair, image operation, schedule change,
+job dispatch, or Catalog Sync behavior. See
+[APCOM Official Field Semantics And Read-only Reconciliation](APCOM_OFFICIAL_FIELD_SEMANTICS_RECONCILIATION.md).

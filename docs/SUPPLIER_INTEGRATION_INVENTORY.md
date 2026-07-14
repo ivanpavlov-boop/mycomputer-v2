@@ -134,7 +134,9 @@ Phase 9C.6.5C.3 adds the generic, local-file-only
 target, but no real APCOM source was used while implementing or validating the
 tool. The command requires an explicit local XML file, SHA-256 fingerprint,
 and exact expected supplier/schedule/import/staging baseline. It reads only
-safe aggregates and emits a non-persisted human-review plan.
+safe aggregates and emits a non-persisted human-review plan. A separately
+authorized C.3 local profile ran without writes; its report and source remain
+outside this repository.
 
 It does not request configured feed credentials or URLs, fetch a feed, import
 or modify `supplier_products`, modify catalog products or taxonomy, create or
@@ -146,6 +148,20 @@ identifier collisions are diagnostic only. See
 Facts not confirmed from local code are marked `unknown` or `requires a
 production read-only audit`; this inventory does not infer production feed
 configuration, supplier coverage, or live staging state.
+
+## APCOM Official Semantics And Reconciliation
+
+Phase 9C.6.5C.3A adds a local, read-only comparison command backed by the
+operator-confirmed `apcom-official-v1` field contract. It cannot use generic
+role guesses to infer quantity, MPN, currency, VAT, price choice, or greentax.
+`stock` is not quantity; `partno` is not MPN; `cncode` is not an identifier.
+
+The command's exact source `partno` to staging `supplier_sku` comparison is
+the only authoritative rule. EAN and normalized forms are review-only
+diagnostics. It outputs only aggregates and bounded hashes and cannot modify
+APCOM staging, catalog products, categories, mappings, attributes, images,
+jobs, schedules, or Catalog Sync. Its operational reconciliation has not run.
+See [APCOM Official Field Semantics And Read-only Reconciliation](APCOM_OFFICIAL_FIELD_SEMANTICS_RECONCILIATION.md).
 
 ## Controlled Schedule Freeze
 

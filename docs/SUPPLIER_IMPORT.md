@@ -93,3 +93,17 @@ Failed supplier feeds must not break the catalog. Import failures should be logg
 - More precise import-run linkage across `supplier_products`, failed imports, import history, and sync logs.
 - Supplier-specific category normalization before large-scale sync.
 - Supplier image import remains not enabled through Catalog Sync.
+
+## APCOM Local Source Reconciliation
+
+Phase 9C.6.5C.3A does not change supplier import. Its
+`suppliers:reconcile-local-source-staging` command is a local-file-only,
+read-only diagnostic that compares a pinned XML source to current APCOM
+staging. It does not fetch a feed, access configured credentials, run an
+import, write `supplier_products`, create a feed profile, change a schedule,
+or call Catalog Sync.
+
+`apcom-official-v1` uses source `partno` only to compare safely with staged
+`supplier_sku`. EAN and normalized values are diagnostic only. Full rules and
+the unresolved price/quantity/currency/VAT decisions are recorded in
+[APCOM Official Field Semantics And Read-only Reconciliation](APCOM_OFFICIAL_FIELD_SEMANTICS_RECONCILIATION.md).

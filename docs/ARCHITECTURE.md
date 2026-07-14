@@ -61,6 +61,19 @@ Important links:
 
 Supplier import and staging are separate from catalog products. Supplier import writes to `supplier_products`; catalog products change only through controlled Catalog Sync paths. Preview is the control layer before writes.
 
+## APCOM Local Semantics Review Boundary
+
+The Phase 9C.6.5C.3A APCOM source-to-staging reconciler is an architecture
+review surface, not a new import path. It reads an explicitly supplied local
+XML source and existing `supplier_products` staging, validates a frozen
+baseline, and emits aggregates and bounded hashes only. It does not enter the
+supplier import or Catalog Sync write paths and does not alter route ownership,
+queues, schedules, public APIs, products, taxonomy, attributes, or media.
+
+The official APCOM profile is non-persistent and review-only. Its semantics
+never grant automatic import, reconciliation, matching, content overwrite, or
+Catalog Sync authority. See [APCOM Official Field Semantics And Read-only Reconciliation](APCOM_OFFICIAL_FIELD_SEMANTICS_RECONCILIATION.md).
+
 APCOM staging diagnostics on VPS recently scanned `1859` supplier products and found `0` CREATE candidates. Most rows were matched, excluded, already linked, or had no meaningful changes. Unmatched rows do not automatically become CREATE candidates, and name similarity remains diagnostic/warning only.
 
 Phase 8 UPDATE sync uses a narrow allowlist: price, supplier cost, stock/quantity, availability, and active supplier offer. It must not update name, slug, descriptions, SEO, images, categories, or attributes without separate design and approval.
