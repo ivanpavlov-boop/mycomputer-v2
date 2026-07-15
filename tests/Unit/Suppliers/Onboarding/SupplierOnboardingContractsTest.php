@@ -349,13 +349,53 @@ class SupplierOnboardingContractsTest extends TestCase
             'selected price: unresolved',
             'feed profile persistence: not approved',
             'import: not approved',
-            'Phase 9C.6.5C.3B remains pending',
+            'at the C3A.2 closeout, Phase 9C.6.5C.3B business decisions were pending',
+            'tooling is now implemented and in review',
             'UPDATE remains disabled',
             'Sync All remains disabled',
             'automatic sync remains disabled',
             'image import is prohibited',
         ] as $fact) {
             $this->assertStringContainsString($fact, $reviewCloseout, $fact);
+        }
+    }
+
+    public function test_apcom_c3b_human_decision_and_preview_profile_docs_keep_execution_blocked(): void
+    {
+        $root = dirname(__DIR__, 4);
+        $registerPath = $root.'/docs/APCOM_HUMAN_DECISION_REGISTER.md';
+        $profilePath = $root.'/docs/APCOM_PREVIEW_ONLY_FEED_PROFILE_DESIGN.md';
+
+        $this->assertFileExists($registerPath);
+        $this->assertFileExists($profilePath);
+
+        $register = (string) file_get_contents($registerPath);
+        $profile = (string) file_get_contents($profilePath);
+
+        foreach ([
+            'apcom-human-decisions-v1',
+            'APCOM-ID-001',
+            'APCOM-STOCK-001',
+            'APCOM-PROHIBIT-AUTO-SYNC-001',
+            'automatic_execution_allowed=false',
+            'catalog_write_allowed=false',
+            'staging_write_allowed=false',
+            'profile_persistence_allowed=false',
+        ] as $fact) {
+            $this->assertStringContainsString($fact, $register, $fact);
+        }
+
+        foreach ([
+            'apcom-preview-feed-profile-v1',
+            'suppliers:design-preview-feed-profile',
+            'preview_feed_profile_requires_human_decisions',
+            'does not expose `--apply`, `--persist`',
+            'no profile was persisted',
+            'no import ran',
+            'no Catalog Sync ran',
+            'No real APCOM XML, production database, operational report, VPS, external feed',
+        ] as $fact) {
+            $this->assertStringContainsString($fact, $profile, $fact);
         }
     }
 

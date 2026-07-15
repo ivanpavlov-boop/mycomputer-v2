@@ -100,6 +100,14 @@ Sync All, and automatic sync disabled.
 Before/after guards cover suppliers, staging, catalog, taxonomy, attributes,
 import history, and Catalog Sync records. `records_changed` must remain zero.
 
+## C3B Decision Register Boundary
+
+The local C3B decision register records numeric stock as pending and explicitly
+keeps quantity and availability mappings unresolved. Its preview-only profile
+can count unresolved-stock review candidates, but does not make a stock,
+quantity, availability, lifecycle, or commercial decision. C3B is local and in
+review only; it is not an operational reconciliation or import approval.
+
 ## Historical Next Operational Sequence
 
 The following sequence was the planned sequence before the observed-profile

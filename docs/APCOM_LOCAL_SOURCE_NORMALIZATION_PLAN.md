@@ -133,3 +133,13 @@ reconciliation completed read-only and permits hashed SKU/EAN reconciliation
 without approving quantity or availability mapping, import, profile
 persistence, or schedule re-enable. See [APCOM Observed Stock Semantics Discrepancy](APCOM_OBSERVED_STOCK_SEMANTICS_DISCREPANCY.md)
 and [APCOM Reconciliation Review and Operational Closeout](APCOM_RECONCILIATION_REVIEW_CLOSEOUT.md).
+
+## C3B Human Decision And Preview Profile Design
+
+C3B adds a local, static human decision register and preview-only feed profile
+design above the reconciler. They do not replace this planner or reuse a plan as
+an executable import configuration. C3B keeps stock, quantity, availability,
+MPN, commercial price selection, currency, VAT, and Green Tax unresolved. It
+reports aggregate candidate classifications only, requires human review, has no
+apply/persist controls, and performs no import, write, link change, schedule
+change, image action, or Catalog Sync action.
