@@ -71,6 +71,7 @@ Phase 8 manual selected UPDATE price/stock sync has been implemented behind a fe
 
 | Phase | Name | Status |
 | --- | --- | --- |
+| Phase 9C.6.5C.3B | APCOM Human Decision Register and Preview-only Feed Profile Design | Implemented locally and in review; no operational preview run, persistence, import, schedule change, or Catalog Sync action is approved. |
 
 ## Paused / Partial Phases
 
@@ -82,7 +83,6 @@ Phase 8 manual selected UPDATE price/stock sync has been implemented behind a fe
 
 | Phase | Name | Notes |
 | --- | --- | --- |
-| Phase 9C.6.5C.3B | APCOM Human Decision Register and Preview-only Feed Profile Design | Next/pending; must remain preview-only and human-approved. |
 | Phase 9C.6.5D | Supplier #3 Selection & Source Profiling | Future; requires a reviewed readiness matrix and explicit human selection. |
 | Phase 9C.6.6 | Multi-Supplier Category Mapping Review | Review mappings in batches using the full multi-supplier picture. |
 | Phase 9C.6.7 | Multi-Supplier Identifier Overlap Review | Review exact and possible overlaps before future offer grouping. |

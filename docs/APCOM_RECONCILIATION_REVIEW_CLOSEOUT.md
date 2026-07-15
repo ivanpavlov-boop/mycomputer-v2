@@ -118,6 +118,16 @@ modify any protected record.
 - automatic sync remains disabled; and
 - image import is prohibited.
 
+## C3B Local Design Follow-up
+
+Phase 9C.6.5C.3B now has local tooling in review: the static
+`apcom-human-decisions-v1` register and `apcom-preview-feed-profile-v1` design.
+This is not an operational preview run and does not change the C3A2 evidence or
+closeout. The design retains every unresolved decision, emits only aggregate
+preview classifications, and cannot persist a profile, import, write staging or
+catalog records, alter links, enable a schedule, import images, or call Catalog
+Sync. Human approval remains required before any later phase.
+
 ## Source and staging inventory
 
 ### Authorized source aggregates

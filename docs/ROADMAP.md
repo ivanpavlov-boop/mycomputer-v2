@@ -181,8 +181,9 @@ operational decision.
 
 1. Keep Phase 7.5 documentation lock current.
 2. Keep feature flag and audit visibility read-only.
-3. Phase 9C.6.5C.3B Human Decision Register and Preview-only Feed Profile
-   Design; pending and not started.
+3. Review the locally implemented Phase 9C.6.5C.3B Human Decision Register and
+   Preview-only Feed Profile Design. It remains non-persistent, non-executable,
+   and has not had an operational preview run.
 4. Select Supplier #3 only after a reviewed readiness matrix and explicit human
    decision; ASBIS remains Supplier #2.
 5. Phase 9C.6.6 Multi-Supplier Category Mapping Review.

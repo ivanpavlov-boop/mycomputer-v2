@@ -90,6 +90,15 @@ The following inferences are prohibited:
 - source name, brand, category, image, or description observations never
   overwrite catalog content.
 
+## C3B Preview-only Design
+
+The locally implemented C3B design references this contract and the additive
+observed-stock review profile. It separates exact `partno` reconciliation from
+diagnostic EAN, review-only EOL/zero-price candidates, and unresolved stock and
+commercial semantics. It is non-persisted and non-executable; it cannot turn a
+field observation into import, link, staging, catalog, image, or Catalog Sync
+writes.
+
 Stock/EOL review policy is intentionally non-executable. The official profile
 continues to represent the published binary claim, but the first operational
 run found a real-source discrepancy and stopped before reconciliation. EOL

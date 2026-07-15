@@ -944,3 +944,19 @@ The observed stock values remain unresolved and do not authorize quantity or
 availability mapping. UPDATE remains disabled, Sync All remains disabled, and
 automatic sync remains disabled. The closeout is documented in
 [APCOM Reconciliation Review and Operational Closeout](APCOM_RECONCILIATION_REVIEW_CLOSEOUT.md).
+
+## Phase 9C.6.5C.3B APCOM Human Decision And Preview-only Profile Design
+
+`suppliers:design-preview-feed-profile` is a local, read-only, non-persistent
+reporting command. It reuses the existing protected-state reconciler directly,
+requires its frozen supplier/import/schedule/source baseline checks, and adds a
+validated human decision register. It has no apply, persist, import, sync,
+network, queue, image, schedule, or destructive source-absence control.
+
+The profile can only emit aggregate preview classes and bounded hashes. It
+cannot write suppliers, `supplier_products`, products, categories, mappings,
+families, attributes, import history, or Catalog Sync tables. It cannot create
+an executable feed configuration or approve source-only CREATE, UPDATE,
+DELETE, LINK, UNLINK, lifecycle, stock, availability, or commercial actions.
+UPDATE remains disabled, Sync All remains disabled, automatic sync remains
+disabled, and image/content overwrite remain prohibited.

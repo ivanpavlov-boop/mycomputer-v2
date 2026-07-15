@@ -300,3 +300,15 @@ and prohibitions are recorded in
 The closeout does not authorize a feed profile, import, staging mutation,
 link repair, catalog mutation, schedule re-enable, or Catalog Sync. The next
 human-decision phase is C.3B and remains pending.
+
+## Phase 9C.6.5C.3B Human Decision Register And Preview-only Design
+
+The C3B implementation is local and in review. It adds
+`apcom-human-decisions-v1`, `apcom-preview-feed-profile-v1`, and
+`suppliers:design-preview-feed-profile`. The command layers static decisions
+over the existing read-only reconciler and reports aggregate candidate classes
+and bounded hashes only. It cannot persist a profile, create executable import
+configuration, import, write staging/catalog data, alter links, change a
+schedule, import images, dispatch jobs, or call Catalog Sync. Pending decisions
+remain blocking, and a safe success verdict means human decisions are still
+required rather than approved.
