@@ -407,6 +407,8 @@ class SupplierOnboardingContractsTest extends TestCase
             'exact one-to-one matches: 1786',
             'source-only: 17',
             'staging-only: 86',
+            '`eol=0` (non-EOL flag rows): 1700',
+            '`eol=1` (EOL review rows): 103',
             'staging-only linked: 38',
             'staging-only unlinked: 48',
             'EAN different: 0',

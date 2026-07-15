@@ -237,8 +237,8 @@ EAN:
 
 EOL:
 
-- zero: 1700;
-- one: 103; and
+- `eol=0` (non-EOL flag rows): 1700;
+- `eol=1` (EOL review rows): 103; and
 - invalid: 0.
 
 ## Staging Inventory
