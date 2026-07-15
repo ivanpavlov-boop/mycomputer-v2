@@ -242,3 +242,12 @@ and explicit prohibitions in `apcom-human-decisions-v1`. The matching
 Neither has run operationally. No real XML or production state is read during
 local validation, and no supplier, staging, product, taxonomy, mapping,
 attribute, image, queue, schedule, or Catalog Sync state can change.
+
+## APCOM Operational Preview Closeout
+
+The operator-supplied APCOM preview completed successfully in read-only mode
+with a passed strict contract. APCOM remains Supplier #1 with import_enabled
+true and schedule_enabled false; staging remains 1872 rows with 989 linked and
+883 unlinked. The preview profile is non-persistent and non-executable, 22
+decisions remain blocking, and no import approval exists. See
+APCOM_PREVIEW_ONLY_FEED_PROFILE_OPERATIONAL_CLOSEOUT.md.

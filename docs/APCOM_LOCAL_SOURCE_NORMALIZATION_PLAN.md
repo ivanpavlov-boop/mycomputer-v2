@@ -134,6 +134,13 @@ without approving quantity or availability mapping, import, profile
 persistence, or schedule re-enable. See [APCOM Observed Stock Semantics Discrepancy](APCOM_OBSERVED_STOCK_SEMANTICS_DISCREPANCY.md)
 and [APCOM Reconciliation Review and Operational Closeout](APCOM_RECONCILIATION_REVIEW_CLOSEOUT.md).
 
+## Current Operational Closeout Addendum
+
+The local planning sequence has now reached a completed operational preview
+and documentation closeout. The profile remained non-persistent and
+non-executable; no plan or preview result authorizes import. See
+APCOM_PREVIEW_ONLY_FEED_PROFILE_OPERATIONAL_CLOSEOUT.md.
+
 ## C3B Human Decision And Preview Profile Design
 
 C3B adds a local, static human decision register and preview-only feed profile

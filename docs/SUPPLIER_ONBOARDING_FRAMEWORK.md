@@ -312,3 +312,13 @@ configuration, import, write staging/catalog data, alter links, change a
 schedule, import images, dispatch jobs, or call Catalog Sync. Pending decisions
 remain blocking, and a safe success verdict means human decisions are still
 required rather than approved.
+
+## Phase 9C.6.5C.3B.1 Operational Closeout
+
+The onboarding sequence now includes the completed read-only operational
+preview and documentation closeout. The strict contract passed, but the
+preview verdict still requires human decisions. The source snapshot produced
+1803 source records, 1872 staging rows, 1786 exact matches, 17 source-only
+rows, 86 staging-only rows, and 22 blocking decisions. No import, persistence,
+link change, schedule change, image action, or Catalog Sync action occurred.
+See APCOM_PREVIEW_ONLY_FEED_PROFILE_OPERATIONAL_CLOSEOUT.md.
