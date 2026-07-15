@@ -177,3 +177,10 @@ without weakening this strict official profile. Its authorized operational
 reconciliation completed read-only with unresolved stock semantics and no
 mutations. See [APCOM Observed Stock Semantics Discrepancy](APCOM_OBSERVED_STOCK_SEMANTICS_DISCREPANCY.md)
 and [APCOM Reconciliation Review and Operational Closeout](APCOM_RECONCILIATION_REVIEW_CLOSEOUT.md).
+
+## Current Operational Closeout Addendum
+
+The operational preview and strict contract followed this historical
+reconciliation. The result remained read-only, with source/staging evidence
+and unresolved commercial semantics documented in
+APCOM_PREVIEW_ONLY_FEED_PROFILE_OPERATIONAL_CLOSEOUT.md.

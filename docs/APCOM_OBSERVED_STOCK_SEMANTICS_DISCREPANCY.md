@@ -127,3 +127,10 @@ aggregate evidence are recorded in
 10. Review SKU and EAN diagnostics.
 11. Do not approve a stock mapping.
 12. Do not import or re-enable the schedule.
+
+## Current Operational Closeout Addendum
+
+The subsequent preview-only profile run completed read-only with a passed
+strict contract. Numeric stock remains unresolved as quantity or availability;
+no import, profile persistence, schedule change, or Catalog Sync was approved.
+See APCOM_PREVIEW_ONLY_FEED_PROFILE_OPERATIONAL_CLOSEOUT.md.

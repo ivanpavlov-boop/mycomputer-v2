@@ -401,3 +401,11 @@ It must not run import, persist a feed profile, mutate `supplier_products`,
 create or update catalog products, link or unlink products, delete staging
 rows, re-enable the schedule, run Catalog Sync, enable UPDATE, add Sync All,
 enable automatic sync, or import images.
+
+## Current Status Addendum
+
+The later Phase 9C.6.5C.3B.1 operational preview completed successfully and
+passed its strict report contract. This historical C3A.2 closeout remains
+unchanged; current operational evidence, 1803 source rows, 1872 staging rows,
+1786 exact matches, 17 source-only rows, 86 staging-only rows, and 22 blocking
+decisions are recorded in APCOM_PREVIEW_ONLY_FEED_PROFILE_OPERATIONAL_CLOSEOUT.md.

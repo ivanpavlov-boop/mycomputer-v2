@@ -71,7 +71,19 @@ Phase 8 manual selected UPDATE price/stock sync has been implemented behind a fe
 
 | Phase | Name | Status |
 | --- | --- | --- |
-| Phase 9C.6.5C.3B | APCOM Human Decision Register and Preview-only Feed Profile Design | Implemented locally and in review; no operational preview run, persistence, import, schedule change, or Catalog Sync action is approved. |
+
+## Completed Documentation Closeout
+
+| Phase | Name | Status |
+| --- | --- | --- |
+| Phase 9C.6.5C.3B | APCOM Human Decision Register and Preview-only Feed Profile Design | Tooling merged, deployed, and exercised read-only; strict operational contract passed. Human decisions remain pending and no import, persistence, schedule, or Catalog Sync action is approved. |
+| Phase 9C.6.5C.3B.1 | APCOM Preview-only Feed Profile Operational Closeout | Completed by documentation and documentation-contract tests; operational evidence is recorded without committing the source or runtime report. |
+
+## Next Pending Phase
+
+| Phase | Name | Status |
+| --- | --- | --- |
+| Phase 9C.6.5C.3C | APCOM Authoritative Human Decision Evidence and Profile Approval Gate | Next/pending; not started. It must not approve execution without authoritative evidence and explicit human decisions. |
 
 ## Paused / Partial Phases
 

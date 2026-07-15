@@ -84,3 +84,11 @@ C3B does not approve a feed profile, persistence, import, schedule re-enable,
 stock/quantity/availability interpretation, price selection, currency, VAT,
 Green Tax, MPN mapping, linking, unlinking, deletion, content overwrite, image
 import, Sync All, automatic sync, or UPDATE sync.
+
+## Current Operational Closeout Addendum
+
+The deployed preview profile was exercised read-only against the operator-
+supplied source snapshot. Its verdict was preview_feed_profile_requires_human_decisions
+with blockers=0, human_review_required=true, persisted=false, and executable=false.
+The strict contract passed; this did not approve the profile or any execution.
+See APCOM_PREVIEW_ONLY_FEED_PROFILE_OPERATIONAL_CLOSEOUT.md.

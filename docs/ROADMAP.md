@@ -121,16 +121,25 @@ Manual selected UPDATE price/stock sync is implemented behind `CATALOG_SYNC_UPDA
    pending human-decision gate. See
    `docs/APCOM_RECONCILIATION_REVIEW_CLOSEOUT.md`.
 8. **APCOM Human Decision Register and Preview-only Feed Profile Design -
-   next/pending.** It must remain preview-only and human-approved.
-9. Select Supplier #3 only after a reviewed readiness matrix and explicit human
+   complete and deployed.** The operational preview completed read-only and
+   passed its strict contract. Human decisions remain pending; the profile is
+   not persisted or executable. See
+   `docs/APCOM_PREVIEW_ONLY_FEED_PROFILE_OPERATIONAL_CLOSEOUT.md`.
+9. **APCOM Preview-only Feed Profile Operational Closeout - complete.** The
+   source/staging evidence and zero-mutation guarantees are documented. No
+   import, schedule re-enable, or Catalog Sync approval exists.
+10. **APCOM Authoritative Human Decision Evidence and Profile Approval Gate -
+   next/pending, not started.** It requires authoritative evidence and explicit
+   human decisions before any future execution design.
+11. Select Supplier #3 only after a reviewed readiness matrix and explicit human
    decision; ASBIS remains Supplier #2.
-10. Supplier #3 preview-only integration.
-11. Controlled `supplier_products` staging apply.
-12. Post-apply verification.
-13. Repeat the same controlled sequence for the remaining current suppliers.
-14. Supplier category and canonical mappings.
-15. Controlled manual CREATE sync.
-16. Optional controlled UPDATE pilot later.
+12. Supplier #3 preview-only integration.
+13. Controlled `supplier_products` staging apply.
+14. Post-apply verification.
+15. Repeat the same controlled sequence for the remaining current suppliers.
+16. Supplier category and canonical mappings.
+17. Controlled manual CREATE sync.
+18. Optional controlled UPDATE pilot later.
 
 Every future supplier must use the same onboarding pipeline rather than an
 uncontrolled one-off importer:

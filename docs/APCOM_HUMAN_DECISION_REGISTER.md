@@ -93,3 +93,11 @@ pending decisions, persist an approval, or create an executable configuration.
 Until then APCOM remains frozen for this review path, UPDATE remains disabled,
 Sync All remains disabled, automatic sync remains disabled, and image import is
 prohibited.
+
+## Current Operational Closeout Addendum
+
+The Phase 9C.6.5C.3B.1 operational preview completed read-only with a passed
+strict contract and 22 blocking decisions. The evidence and aggregate result
+are recorded in APCOM_PREVIEW_ONLY_FEED_PROFILE_OPERATIONAL_CLOSEOUT.md.
+Human decisions remain pending; the register remains non-persistent and
+non-executable.

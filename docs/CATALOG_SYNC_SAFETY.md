@@ -960,3 +960,11 @@ an executable feed configuration or approve source-only CREATE, UPDATE,
 DELETE, LINK, UNLINK, lifecycle, stock, availability, or commercial actions.
 UPDATE remains disabled, Sync All remains disabled, automatic sync remains
 disabled, and image/content overwrite remain prohibited.
+
+## APCOM C3B.1 Operational Preview Closeout
+
+CREATE=true did not create the 17 source-only APCOM records. UPDATE remained
+false, Sync All remained false, and automatic sync remained false. No Catalog
+Sync action occurred and no batch or log was created by the preview. Source-
+only and staging-only classes remain review classifications only; none
+authorizes mutation. See APCOM_PREVIEW_ONLY_FEED_PROFILE_OPERATIONAL_CLOSEOUT.md.

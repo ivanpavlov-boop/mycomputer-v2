@@ -275,6 +275,14 @@ adds only a local observed-semantics correction layer; its authorized
 operational run completed read-only with no mutations. See [APCOM Observed Stock Semantics Discrepancy](APCOM_OBSERVED_STOCK_SEMANTICS_DISCREPANCY.md)
 and [APCOM Reconciliation Review and Operational Closeout](APCOM_RECONCILIATION_REVIEW_CLOSEOUT.md).
 
+## Current Operational Closeout Addendum
+
+PR #150 was subsequently merged and deployed. The follow-on operational
+preview completed read-only and passed its strict contract; the source and
+runtime report remain outside Git. This does not alter the historical audit
+result or authorize import. See
+APCOM_PREVIEW_ONLY_FEED_PROFILE_OPERATIONAL_CLOSEOUT.md.
+
 ## Phase 9C.6.5C.3A.2 Review Closeout
 
 The later observed-profile operational reconciliation retained the unresolved

@@ -360,6 +360,83 @@ class SupplierOnboardingContractsTest extends TestCase
         }
     }
 
+    public function test_apcom_operational_preview_closeout_documents_operator_evidence_and_safety_contract(): void
+    {
+        $root = dirname(__DIR__, 4);
+        $path = $root.'/docs/APCOM_PREVIEW_ONLY_FEED_PROFILE_OPERATIONAL_CLOSEOUT.md';
+
+        $this->assertFileExists($path);
+
+        $closeout = (string) file_get_contents($path);
+
+        foreach ([
+            '# APCOM Preview-only Feed Profile Operational Closeout',
+            'Phase 9C.6.5C.3B.1',
+            '1fdfd9aefb26b9c569b2ecc3d2154cd101ec7b0e',
+            'apcom-product-list-2026-07-14-11-07.xml',
+            'fef5e30eb5e16714014f3654fce34025a14a0fb22750bc01158163b2c14c9ac1',
+            'apcom_preview_feed_profile_20260715T104009Z.json',
+            '8bac357d4cd215b932e4ecadddb19fddd30846886e30d3c124edef6f44c8d830',
+            'apcom_preview_feed_profile_20260715T104009Z.stderr.log',
+            'strict contract result: true, APCOM_PREVIEW_OPERATIONAL_CONTRACT_PASSED',
+            'source_to_staging_reconciliation',
+            'persisted_profile_created',
+            'executable_import_configuration_created',
+            'automatic_execution_allowed',
+            'profile_persistence_allowed',
+            'staging_write_allowed',
+            'catalog_write_allowed',
+            'schema_version: supplier-preview-feed-profile-design-v1',
+            'verdict: preview_feed_profile_requires_human_decisions',
+            'human_review_required: true',
+            'blockers: 0',
+            'apcom-human-decisions-v1',
+            'decision count: 24',
+            'blocking decision count: 22',
+            'confirmed: 2',
+            'diagnostic-only: 1',
+            'review-only: 3',
+            'pending: 11',
+            'prohibited: 7',
+            'apcom-preview-feed-profile-v1',
+            'apcom-observed-stock-v1',
+            'persisted: false',
+            'executable: false',
+            'source unique SKUs: 1803',
+            'staging unique SKUs: 1872',
+            'exact one-to-one matches: 1786',
+            'source-only: 17',
+            'staging-only: 86',
+            '`eol=0` (non-EOL flag rows): 1700',
+            '`eol=1` (EOL review rows): 103',
+            'staging-only linked: 38',
+            'staging-only unlinked: 48',
+            'EAN different: 0',
+            'cross-SKU EAN conflicts: 0',
+            'eol_review',
+            'zero_price_review',
+            'blank_ean_review',
+            'unresolved_stock_review',
+            'Selected price, currency, VAT, and Green Tax remain unresolved',
+            'persisted_profile_created;',
+            'executable_import_configuration_created;',
+            'import_executed;',
+            'catalog_sync_executed;',
+            'schedule_changed;',
+            'images_imported;',
+            'All records_changed values were zero',
+            'catalog_sync_batches',
+            'catalog_sync_logs',
+            'Protected counts before and after were equal',
+            'C.3C is next, pending, and not started',
+            'No Catalog Sync action was invoked',
+            'No staging row was inserted, updated, or deleted',
+            'The source XML, runtime report, and stderr log remain outside Git',
+        ] as $fact) {
+            $this->assertStringContainsString($fact, $closeout, $fact);
+        }
+    }
+
     public function test_apcom_c3b_human_decision_and_preview_profile_docs_keep_execution_blocked(): void
     {
         $root = dirname(__DIR__, 4);
