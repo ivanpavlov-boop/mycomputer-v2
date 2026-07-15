@@ -206,3 +206,29 @@ approval, link repair, or Catalog Sync. Current safety is
 See `docs/APCOM_DETERMINISTIC_AUDIT_CLOSEOUT.md` for the evidence paths,
 aggregate counts, interpretation limits, and the pending local-source profile
 phase. Runtime reports and any credentials remain outside Git.
+
+## APCOM Reconciliation Review Closeout
+
+Phase 9C.6.5C.3A.2 completed a read-only operational source-to-staging review
+using the authorized source snapshot. APCOM remains Supplier #1, ASBIS
+remains Supplier #2, and Supplier #3 remains unselected.
+
+The documented aggregates are:
+
+- schedule disabled;
+- `import_enabled=true`;
+- staging rows: `1872`;
+- linked staging rows: `989`;
+- unlinked staging rows: `883`;
+- authorized source rows: `1803`;
+- exact source/staging matches: `1786`;
+- source-only rows: `17`;
+- staging-only rows: `86`;
+- staging-only linked rows: `38`;
+- staging-only unlinked rows: `48`; and
+- EAN conflicts: `0`.
+
+Stock semantics remain unresolved. The operational reconciliation completed
+read-only with human review required, and automatic import is not approved.
+The feed profile is not approved. Existing staging rows and links remain
+unchanged. See [APCOM Reconciliation Review and Operational Closeout](APCOM_RECONCILIATION_REVIEW_CLOSEOUT.md).

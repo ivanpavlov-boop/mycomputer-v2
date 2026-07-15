@@ -164,5 +164,7 @@ product/catalog mutation in this phase.
 `apcom-official-v1` supersedes generic profiler guesses only for the
 read-only C.3A report. It does not rewrite, roll back, or reinterpret historic
 staging data. Phase 9C.6.5C.3A.1 adds an observed numeric-stock review profile
-without weakening this strict official profile. See
-[APCOM Observed Stock Semantics Discrepancy](APCOM_OBSERVED_STOCK_SEMANTICS_DISCREPANCY.md).
+without weakening this strict official profile. Its authorized operational
+reconciliation completed read-only with unresolved stock semantics and no
+mutations. See [APCOM Observed Stock Semantics Discrepancy](APCOM_OBSERVED_STOCK_SEMANTICS_DISCREPANCY.md)
+and [APCOM Reconciliation Review and Operational Closeout](APCOM_RECONCILIATION_REVIEW_CLOSEOUT.md).

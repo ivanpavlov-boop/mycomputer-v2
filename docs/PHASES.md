@@ -62,9 +62,10 @@ Phase 8 manual selected UPDATE price/stock sync has been implemented behind a fe
 | Phase 9C.6.5C | APCOM Supplier #1 Legacy Integration Audit & Normalization Discovery | Complete; read-only discovery tooling and the approved deterministic closeout are documented. No re-import, link repair, mapping approval, or Catalog Sync. |
 | Phase 9C.6.5C.1 | Controlled Supplier Schedule Freeze for Deterministic Audit | Complete; one guarded `suppliers.schedule_enabled: true -> false` change, with no import, job, Catalog Sync, or protected-table write. |
 | Phase 9C.6.5C.2 | APCOM Deterministic Audit Closeout | Complete; read-only pre/post comparison passed with no blockers and two documented warnings. |
-| Phase 9C.6.5C.3 | APCOM Local Source Profile and Normalization Plan | Implemented and operationally profiled read-only with no writes or persisted configuration. The source and report remain outside Git; human review remains required. |
+| Phase 9C.6.5C.3 | APCOM Local Source Profile and Normalization Plan | Complete and deployed; operationally profiled read-only with no writes or persisted configuration. The source and report remain outside Git; human review remains required. |
 | Phase 9C.6.5C.3A | APCOM Official Field Semantics and Hashed Source-to-Staging Reconciliation | Complete/deployed; read-only `apcom-official-v1` tooling was operationally run and safely failed closed on observed non-binary stock values, with zero mutations. |
-| Phase 9C.6.5C.3A.1 | APCOM Observed Stock Semantics Discrepancy Handling | Implemented locally/in review; additive `apcom-observed-stock-v1` keeps numeric stock unresolved while allowing read-only SKU/EAN diagnostics. Operational reconciliation has not run. |
+| Phase 9C.6.5C.3A.1 | APCOM Observed Stock Semantics Discrepancy Handling | Complete and deployed; additive `apcom-observed-stock-v1` keeps numeric stock unresolved while allowing read-only SKU/EAN diagnostics. |
+| Phase 9C.6.5C.3A.2 | APCOM Reconciliation Review and Operational Closeout | Complete by documentation closeout; observed-profile reconciliation completed read-only with zero mutations, unresolved stock semantics, and a pending human-decision gate. |
 
 ## In Progress
 
@@ -81,6 +82,7 @@ Phase 8 manual selected UPDATE price/stock sync has been implemented behind a fe
 
 | Phase | Name | Notes |
 | --- | --- | --- |
+| Phase 9C.6.5C.3B | APCOM Human Decision Register and Preview-only Feed Profile Design | Next/pending; must remain preview-only and human-approved. |
 | Phase 9C.6.5D | Supplier #3 Selection & Source Profiling | Future; requires a reviewed readiness matrix and explicit human selection. |
 | Phase 9C.6.6 | Multi-Supplier Category Mapping Review | Review mappings in batches using the full multi-supplier picture. |
 | Phase 9C.6.7 | Multi-Supplier Identifier Overlap Review | Review exact and possible overlaps before future offer grouping. |

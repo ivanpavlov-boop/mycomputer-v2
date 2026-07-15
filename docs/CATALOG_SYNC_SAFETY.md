@@ -917,3 +917,30 @@ non-binary observed stock values with no mutations. C.3A.1 adds an unresolved
 numeric-stock review profile only; it cannot approve stock or availability,
 persist a profile, import, or alter Catalog Sync. See
 [APCOM Observed Stock Semantics Discrepancy](APCOM_OBSERVED_STOCK_SEMANTICS_DISCREPANCY.md).
+
+The observed-profile reconciliation completed read-only under C.3A.2. Its
+review outcome did not authorize any Catalog Sync action, stock mapping,
+staging mutation, link change, or catalog mutation.
+
+## Phase 9C.6.5C.3A.2 APCOM Reconciliation Review Closeout
+
+The authorized observed-profile APCOM reconciliation completed read-only. No
+Catalog Sync occurred during reconciliation. No `supplier_products` mutation,
+product mutation, product-link mutation, deletion, import, queue dispatch,
+mapping approval, category change, attribute change, or image operation
+occurred.
+
+The exact source/staging review recorded `1803` source rows, `1872` staging
+rows, `1786` exact matches, `17` source-only rows, `86` staging-only rows,
+`38` staging-only linked rows, `48` staging-only unlinked rows, and zero EAN
+conflicts. These are review aggregates only.
+
+CREATE being enabled does not authorize creation of the `17` source-only
+records. No staging-only record is approved for deletion, and no linked
+staging-only record is approved for unlinking. Absence from the source is not
+an availability or lifecycle decision.
+
+The observed stock values remain unresolved and do not authorize quantity or
+availability mapping. UPDATE remains disabled, Sync All remains disabled, and
+automatic sync remains disabled. The closeout is documented in
+[APCOM Reconciliation Review and Operational Closeout](APCOM_RECONCILIATION_REVIEW_CLOSEOUT.md).

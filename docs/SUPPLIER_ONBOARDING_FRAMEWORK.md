@@ -14,9 +14,11 @@ Catalog Sync, dispatch jobs, or enable schedules.
 Phase 9C.6.5C - APCOM Supplier #1 Legacy Integration Audit & Normalization
 Discovery is implemented as read-only tooling. Its production deterministic
 audit and controlled schedule freeze completed under the separately approved
-Phase 9C.6.5C.1 and 9C.6.5C.2 operational sequence. Phase 9C.6.5C.3 now adds
-local-only normalization planning, but no real APCOM XML has been profiled by
-that tool. Supplier #3 remains unselected.
+Phase 9C.6.5C.1 and 9C.6.5C.2 operational sequence. Phase 9C.6.5C.3 local-only
+normalization planning, C.3A official/observed semantics tooling, and the
+C.3A.2 operational review closeout are complete read-only stages. No feed
+profile, import, or Catalog Sync action is approved. Supplier #3 remains
+unselected.
 
 ## Intended Pipeline
 
@@ -273,3 +275,28 @@ availability semantics. It has no apply mode, profile persistence, remote
 fetch, import, mapping, link repair, image operation, schedule change, job
 dispatch, or Catalog Sync behavior. See
 [APCOM Observed Stock Semantics Discrepancy](APCOM_OBSERVED_STOCK_SEMANTICS_DISCREPANCY.md).
+
+## Phase 9C.6.5C.3A.2 Operational Review Closeout
+
+The reviewed operational sequence was:
+
+```text
+strict profile
+-> fail-closed evidence
+-> observed profile
+-> zero-mutation reconciliation
+-> human review
+-> documentation closeout
+-> separate preview-only decision phase
+```
+
+The observed-profile reconciliation completed read-only with
+`reconciliation_requires_stock_semantics_review`, zero blockers, seven
+warnings, and zero records changed. Exact source-to-staging results,
+linked-state risk groups, EAN consistency, unresolved commercial decisions,
+and prohibitions are recorded in
+[APCOM Reconciliation Review and Operational Closeout](APCOM_RECONCILIATION_REVIEW_CLOSEOUT.md).
+
+The closeout does not authorize a feed profile, import, staging mutation,
+link repair, catalog mutation, schedule re-enable, or Catalog Sync. The next
+human-decision phase is C.3B and remains pending.
