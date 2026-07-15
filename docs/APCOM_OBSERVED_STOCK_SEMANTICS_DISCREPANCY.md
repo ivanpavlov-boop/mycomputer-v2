@@ -6,11 +6,13 @@
 - The first operational official-semantics reconciliation ran read-only.
 - It safely failed closed with `invalid_stock_semantics_detected`.
 - No records were changed and no rollback is required.
-- Phase 9C.6.5C.3A.1 tooling is implemented locally and in review.
-- Operational reconciliation with the observed profile has not run.
+- Phase 9C.6.5C.3A.1 tooling is completed and deployed.
+- The observed-profile operational reconciliation completed read-only with
+  `reconciliation_requires_stock_semantics_review`.
 
-This document records operator-supplied aggregate evidence only. It does not
-load a runtime report, a production database, or a real APCOM XML file.
+This document records operator-supplied aggregate evidence and the resulting
+operational closeout facts. It does not load a runtime report, a production
+database, or a real APCOM XML file.
 
 ## Published Semantics
 
@@ -98,7 +100,12 @@ Sync All, and automatic sync disabled.
 Before/after guards cover suppliers, staging, catalog, taxonomy, attributes,
 import history, and Catalog Sync records. `records_changed` must remain zero.
 
-## Next Operational Sequence
+## Historical Next Operational Sequence
+
+The following sequence was the planned sequence before the observed-profile
+closeout. It is retained as historical context; the completed result and
+aggregate evidence are recorded in
+[APCOM Reconciliation Review and Operational Closeout](APCOM_RECONCILIATION_REVIEW_CLOSEOUT.md).
 
 1. Merge and deploy C.3A.1 tooling.
 2. Restore the authorized local source into the app container.

@@ -260,6 +260,7 @@ class SupplierOnboardingContractsTest extends TestCase
         $planPath = $root.'/docs/APCOM_LOCAL_SOURCE_NORMALIZATION_PLAN.md';
         $reconciliationPath = $root.'/docs/APCOM_OFFICIAL_FIELD_SEMANTICS_RECONCILIATION.md';
         $observedStockPath = $root.'/docs/APCOM_OBSERVED_STOCK_SEMANTICS_DISCREPANCY.md';
+        $reviewCloseoutPath = $root.'/docs/APCOM_RECONCILIATION_REVIEW_CLOSEOUT.md';
 
         $this->assertFileExists($closeoutPath);
         $this->assertFileExists($phasesPath);
@@ -267,6 +268,7 @@ class SupplierOnboardingContractsTest extends TestCase
         $this->assertFileExists($planPath);
         $this->assertFileExists($reconciliationPath);
         $this->assertFileExists($observedStockPath);
+        $this->assertFileExists($reviewCloseoutPath);
 
         $closeout = (string) file_get_contents($closeoutPath);
         $phases = (string) file_get_contents($phasesPath);
@@ -274,6 +276,7 @@ class SupplierOnboardingContractsTest extends TestCase
         $plan = (string) file_get_contents($planPath);
         $reconciliation = (string) file_get_contents($reconciliationPath);
         $observedStock = (string) file_get_contents($observedStockPath);
+        $reviewCloseout = (string) file_get_contents($reviewCloseoutPath);
 
         foreach ([
             'APCOM is Supplier #1',
@@ -317,10 +320,43 @@ class SupplierOnboardingContractsTest extends TestCase
         $this->assertStringContainsString('apcom-observed-stock-v1', $observedStock);
         $this->assertStringContainsString('unresolved semantic', $observedStock);
         $this->assertStringContainsString('The strict profile was correct', $observedStock);
-        $this->assertStringContainsString('Operational reconciliation with the observed profile has not run', $observedStock);
+        $this->assertStringContainsString('The observed-profile operational reconciliation completed read-only', $observedStock);
         $this->assertStringContainsString('EOL remains separate and binary', $observedStock);
         $this->assertStringContainsString('Sync All', $observedStock);
         $this->assertStringContainsString('automatic sync', $observedStock);
+
+        foreach ([
+            'Phase 9C.6.5C.3A.2 is completed by this documentation closeout',
+            'success=true',
+            'verdict=reconciliation_requires_stock_semantics_review',
+            'blockers=0',
+            'warnings=7',
+            'read_only=true',
+            'human_review_required=true',
+            'all `records_changed` values were zero',
+            'source rows: `1803`',
+            'staging rows: `1872`',
+            'exact one-to-one matches: `1786`',
+            'source-only SKUs: `17`',
+            'staging-only SKUs: `86`',
+            'staging-only linked: `38`',
+            'staging-only unlinked: `48`',
+            'EAN differs: `0`',
+            'cross-SKU EAN conflicts: `0`',
+            'stock semantic meaning: unresolved',
+            'quantity mapping: not approved',
+            'availability mapping: not approved',
+            'selected price: unresolved',
+            'feed profile persistence: not approved',
+            'import: not approved',
+            'Phase 9C.6.5C.3B remains pending',
+            'UPDATE remains disabled',
+            'Sync All remains disabled',
+            'automatic sync remains disabled',
+            'image import is prohibited',
+        ] as $fact) {
+            $this->assertStringContainsString($fact, $reviewCloseout, $fact);
+        }
     }
 
     private function record(string $sku, string $name): NormalizedSupplierRecord

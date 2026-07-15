@@ -271,5 +271,14 @@ Phase 9C.6.5C.3A tooling is merged and deployed. Its first operational
 source-to-staging reconciliation was read-only and safely failed closed because
 the strict published binary stock contract did not match observed numeric stock
 values. It changed no records and requires no rollback. Phase 9C.6.5C.3A.1
-adds only a local observed-semantics correction layer; its operational run has
-not occurred. See [APCOM Observed Stock Semantics Discrepancy](APCOM_OBSERVED_STOCK_SEMANTICS_DISCREPANCY.md).
+adds only a local observed-semantics correction layer; its authorized
+operational run completed read-only with no mutations. See [APCOM Observed Stock Semantics Discrepancy](APCOM_OBSERVED_STOCK_SEMANTICS_DISCREPANCY.md)
+and [APCOM Reconciliation Review and Operational Closeout](APCOM_RECONCILIATION_REVIEW_CLOSEOUT.md).
+
+## Phase 9C.6.5C.3A.2 Review Closeout
+
+The later observed-profile operational reconciliation retained the unresolved
+stock-semantics verdict and recorded exact source-to-staging aggregates. It
+changed no staging rows, links, products, or Catalog Sync state. Its evidence
+and next human-decision gate are documented in
+[APCOM Reconciliation Review and Operational Closeout](APCOM_RECONCILIATION_REVIEW_CLOSEOUT.md).

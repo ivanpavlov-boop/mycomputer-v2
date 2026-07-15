@@ -128,7 +128,8 @@ and EAN remain diagnostics only, and MPN, quantity, currency, VAT, and DAC/FD
 price selection remain unresolved.
 
 Phase 9C.6.5C.3A.1 adds `apcom-observed-stock-v1` as a non-persistent,
-unresolved numeric-stock review profile. It permits hashed SKU/EAN
-reconciliation when numeric stock values are non-negative integers, but it
-does not approve quantity or availability mapping, import, profile persistence,
-or schedule re-enable. See [APCOM Observed Stock Semantics Discrepancy](APCOM_OBSERVED_STOCK_SEMANTICS_DISCREPANCY.md).
+unresolved numeric-stock review profile. Its authorized operational
+reconciliation completed read-only and permits hashed SKU/EAN reconciliation
+without approving quantity or availability mapping, import, profile
+persistence, or schedule re-enable. See [APCOM Observed Stock Semantics Discrepancy](APCOM_OBSERVED_STOCK_SEMANTICS_DISCREPANCY.md)
+and [APCOM Reconciliation Review and Operational Closeout](APCOM_RECONCILIATION_REVIEW_CLOSEOUT.md).

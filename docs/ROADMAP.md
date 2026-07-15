@@ -106,25 +106,31 @@ Manual selected UPDATE price/stock sync is implemented behind `CATALOG_SYNC_UPDA
 4. **APCOM deterministic audit closeout — complete.** APCOM remains frozen
    with `import_enabled=true`; its closeout has no blockers but retains two
    evidence warnings.
-5. **APCOM Local Source Profile and Normalization Plan — implemented locally.**
-   The reusable planner is local-file-only, requires explicit source input and
-   human review. Its authorized operational profile created no writes or
-   configuration; source evidence remains outside Git.
+5. **APCOM Local Source Profile and Normalization Plan - complete and
+   deployed.** The reusable planner is local-file-only, requires explicit
+   source input and human review. Its authorized operational profile created no
+   writes or configuration; source evidence remains outside Git.
 6. **APCOM Official Field Semantics and Hashed Source-to-Staging Reconciliation.**
-   `apcom-official-v1` is a non-persistent, local read-only contract.
-   Its first operational reconciliation safely failed closed on observed
-   non-binary stock values and cannot import, repair links, or invoke Catalog
-   Sync. The additive `apcom-observed-stock-v1` profile keeps stock semantics
-   unresolved while permitting read-only SKU/EAN diagnostics.
-7. Select Supplier #3 only after a reviewed readiness matrix and explicit human
+   `apcom-official-v1` is a non-persistent, local read-only contract. Its
+   first operational reconciliation safely failed closed on observed
+   non-binary stock values. The additive `apcom-observed-stock-v1` profile was
+   then reconciled read-only; stock semantics remain unresolved.
+7. **APCOM Reconciliation Review and Operational Closeout - complete.** The
+   C.3A.2 closeout records exact source/staging and linked-state aggregates,
+   EAN consistency, unresolved commercial decisions, zero mutations, and the
+   pending human-decision gate. See
+   `docs/APCOM_RECONCILIATION_REVIEW_CLOSEOUT.md`.
+8. **APCOM Human Decision Register and Preview-only Feed Profile Design -
+   next/pending.** It must remain preview-only and human-approved.
+9. Select Supplier #3 only after a reviewed readiness matrix and explicit human
    decision; ASBIS remains Supplier #2.
-8. Supplier #3 preview-only integration.
-9. Controlled `supplier_products` staging apply.
-10. Post-apply verification.
-11. Repeat the same controlled sequence for the remaining current suppliers.
-12. Supplier category and canonical mappings.
-13. Controlled manual CREATE sync.
-14. Optional controlled UPDATE pilot later.
+10. Supplier #3 preview-only integration.
+11. Controlled `supplier_products` staging apply.
+12. Post-apply verification.
+13. Repeat the same controlled sequence for the remaining current suppliers.
+14. Supplier category and canonical mappings.
+15. Controlled manual CREATE sync.
+16. Optional controlled UPDATE pilot later.
 
 Every future supplier must use the same onboarding pipeline rather than an
 uncontrolled one-off importer:
@@ -175,10 +181,8 @@ operational decision.
 
 1. Keep Phase 7.5 documentation lock current.
 2. Keep feature flag and audit visibility read-only.
-3. Review a future explicitly approved APCOM observed-stock reconciliation;
-   C.3 profiling was read-only and complete, C.3A safely failed closed without
-   mutation, and C.3A.1 tooling remains local/in review with no observed-profile
-   operational run.
+3. Phase 9C.6.5C.3B Human Decision Register and Preview-only Feed Profile
+   Design; pending and not started.
 4. Select Supplier #3 only after a reviewed readiness matrix and explicit human
    decision; ASBIS remains Supplier #2.
 5. Phase 9C.6.6 Multi-Supplier Category Mapping Review.
