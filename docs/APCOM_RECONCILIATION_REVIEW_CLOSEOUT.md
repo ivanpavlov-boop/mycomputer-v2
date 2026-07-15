@@ -112,7 +112,7 @@ modify any protected record.
 - feed profile persistence: not approved;
 - import: not approved;
 - schedule re-enable: not approved;
-- Phase 9C.6.5C.3B remains pending;
+- at the C3A.2 closeout, Phase 9C.6.5C.3B business decisions were pending;
 - UPDATE remains disabled;
 - Sync All remains disabled;
 - automatic sync remains disabled; and
@@ -377,9 +377,10 @@ preserved.
 
 ## Next gate
 
-Phase 9C.6.5C.3B - APCOM Human Decision Register and Preview-only Feed Profile
-Design is the next pending decision phase. It is not started or completed by
-this closeout.
+At the C3A.2 closeout, Phase 9C.6.5C.3B - APCOM Human Decision Register and
+Preview-only Feed Profile Design was the next pending decision phase. Its local
+tooling is now implemented and in review, but it is not operationally completed
+by this closeout.
 
 That phase may:
 
