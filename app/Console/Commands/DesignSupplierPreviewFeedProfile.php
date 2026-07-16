@@ -15,6 +15,7 @@ final class DesignSupplierPreviewFeedProfile extends Command
         {--record-path= : Optional record path; must match the selected semantics profile}
         {--semantics-profile= : Required versioned field semantics profile}
         {--decision-register= : Required versioned human decision register}
+        {--preview-profile= : Versioned non-persisted preview feed profile}
         {--expected-sha256= : Required SHA-256 fingerprint of the local source}
         {--full-file : Parse the complete local file; streaming is always used}
         {--expected-supplier-id= : Required expected supplier ID baseline}
@@ -49,6 +50,7 @@ final class DesignSupplierPreviewFeedProfile extends Command
                 'record_path' => $this->option('record-path'),
                 'semantics_profile' => $this->option('semantics-profile'),
                 'decision_register' => $this->option('decision-register'),
+                'preview_profile' => $this->option('preview-profile'),
                 'expected_sha256' => $this->option('expected-sha256'),
                 'full_file' => (bool) $this->option('full-file'),
                 'expected_supplier_id' => $this->option('expected-supplier-id'),
@@ -103,6 +105,19 @@ final class DesignSupplierPreviewFeedProfile extends Command
                 ['Import executed', data_get($report, 'import_executed', false) ? 'yes' : 'no'],
                 ['Catalog Sync executed', data_get($report, 'catalog_sync_executed', false) ? 'yes' : 'no'],
             ]);
+
+            if (isset($report['profile_approval_gate'])) {
+                $this->table(['V2 section', 'Value'], [
+                    ['Canonical status model', data_get($report, 'canonical_status_model.supplier_neutral', false) ? 'supplier-neutral, preview-only' : 'not available'],
+                    ['Supplier availability policy', (string) data_get($report, 'supplier_availability_policy.policy_key', '-')],
+                    ['Public quantity policy', (string) data_get($report, 'public_quantity_policy.policy_key', '-')],
+                    ['Availability mapping preview', count((array) ($report['availability_mapping_preview'] ?? []))],
+                    ['Lifecycle mapping preview', count((array) ($report['lifecycle_mapping_preview'] ?? []))],
+                    ['Price mapping preview', (string) data_get($report, 'price_mapping_preview.supplier_purchase_price_role', '-')],
+                    ['Green Tax policy', data_get($report, 'green_tax_policy.included_in_fd_price', false) ? 'included in fd_price' : 'review required'],
+                    ['Profile approval gate', (string) data_get($report, 'profile_approval_gate.gate_status', '-')],
+                ]);
+            }
         }
 
         foreach ((array) ($report['records_changed'] ?? []) as $table => $count) {

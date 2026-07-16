@@ -11,6 +11,7 @@ final class SupplierSourceFieldSemanticsRegistry
         return match ($key) {
             'apcom-official-v1' => SupplierSourceFieldSemanticsProfile::apcomOfficialV1(),
             'apcom-observed-stock-v1' => SupplierSourceFieldSemanticsProfile::apcomObservedStockV1(),
+            ApcomAuthoritativeBusinessPolicy::SEMANTICS_PROFILE_KEY => SupplierSourceFieldSemanticsProfile::apcomApprovedBusinessSemanticsV2(),
             default => null,
         };
     }

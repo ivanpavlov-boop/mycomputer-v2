@@ -409,3 +409,12 @@ passed its strict report contract. This historical C3A.2 closeout remains
 unchanged; current operational evidence, 1803 source rows, 1872 staging rows,
 1786 exact matches, 17 source-only rows, 86 staging-only rows, and 22 blocking
 decisions are recorded in APCOM_PREVIEW_ONLY_FEED_PROFILE_OPERATIONAL_CLOSEOUT.md.
+
+## C3C Authoritative Decision Addendum
+
+C3B.1 is completed, merged, and synced. C3C tooling is implemented locally
+and in review, while its operational v2 preview has not run. Its blocked gate
+does not approve profile persistence, import, schedule enablement, or Catalog
+Sync. MPN and missing-product handling remain pending; zero-price remains
+review-only. See APCOM_AUTHORITATIVE_HUMAN_DECISIONS_V2.md and
+APCOM_PREVIEW_FEED_PROFILE_V2.md.

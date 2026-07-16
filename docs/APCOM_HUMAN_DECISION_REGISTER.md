@@ -2,8 +2,8 @@
 
 ## Status
 
-Phase 9C.6.5C.3B tooling is implemented locally and is in review. It has not
-been deployed and no operational preview has been run through this register.
+Phase 9C.6.5C.3B.1 completed, merged, and synced its read-only operational
+preview. This v1 register remains a historical immutable contract.
 
 The versioned register key is `apcom-human-decisions-v1`. It is an in-code,
 read-only review contract. It is not stored in a database, cache, file, or
@@ -101,3 +101,9 @@ strict contract and 22 blocking decisions. The evidence and aggregate result
 are recorded in APCOM_PREVIEW_ONLY_FEED_PROFILE_OPERATIONAL_CLOSEOUT.md.
 Human decisions remain pending; the register remains non-persistent and
 non-executable.
+
+## V2 Addendum
+
+Phase 9C.6.5C.3C adds `apcom-human-decisions-v2` without rewriting v1. It
+records partial operator-confirmed business semantics while retaining a blocked
+approval gate. See [APCOM Authoritative Human Decisions V2](APCOM_AUTHORITATIVE_HUMAN_DECISIONS_V2.md).

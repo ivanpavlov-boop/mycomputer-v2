@@ -83,7 +83,7 @@ Phase 8 manual selected UPDATE price/stock sync has been implemented behind a fe
 
 | Phase | Name | Status |
 | --- | --- | --- |
-| Phase 9C.6.5C.3C | APCOM Authoritative Human Decision Evidence and Profile Approval Gate | Next/pending; not started. It must not approve execution without authoritative evidence and explicit human decisions. |
+| Phase 9C.6.5C.3C | APCOM Authoritative Human Decision Evidence and Profile Approval Gate | Tooling implemented locally/in review; v2 operational preview not run. Operator-confirmed semantics are partial, while the approval gate remains blocked and import/persistence/schedule/Catalog Sync are not approved. |
 
 ## Paused / Partial Phases
 

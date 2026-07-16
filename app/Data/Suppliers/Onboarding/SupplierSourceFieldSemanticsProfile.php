@@ -2,6 +2,8 @@
 
 namespace App\Data\Suppliers\Onboarding;
 
+use App\Services\Suppliers\Onboarding\ApcomAuthoritativeBusinessPolicy;
+use App\Services\Suppliers\Onboarding\ApcomAvailabilityMapper;
 use JsonSerializable;
 
 /**
@@ -13,7 +15,7 @@ final readonly class SupplierSourceFieldSemanticsProfile implements JsonSerializ
      * @param  array<string, string|array<int, string>|null>  $fieldMap
      * @param  array<int, string>  $requiredFields
      * @param  array<int, string>  $unresolvedFields
-     * @param  array<string, bool|string|null>  $stockSemantics
+     * @param  array<string, bool|int|string|null>  $stockSemantics
      */
     public function __construct(
         public string $key,
@@ -114,9 +116,64 @@ final readonly class SupplierSourceFieldSemanticsProfile implements JsonSerializ
         );
     }
 
+    public static function apcomApprovedBusinessSemanticsV2(): self
+    {
+        return new self(
+            key: 'apcom-approved-business-semantics-v2',
+            supplierKey: 'apcom',
+            recordPath: 'xml.product',
+            fieldMap: [
+                'supplier_sku' => 'partno',
+                'ean' => 'ean',
+                'product_name' => 'name',
+                'brand' => 'manufacturer',
+                'supplier_category' => 'category',
+                'observed_stock' => 'stock',
+                'quantity' => null,
+                'availability' => null,
+                'lifecycle_eol' => 'eol',
+                'promo' => 'promo',
+                'news' => 'news',
+                'image_paths' => ['images', 'images.image'],
+                'cn_code' => 'cncode',
+                'dimensions' => ['width', 'height', 'depth', 'weight'],
+                'supplier_group' => 'group',
+                'price_candidates' => ['dac_price', 'fd_price'],
+                'mpn' => null,
+                'currency' => null,
+                'vat' => null,
+                'selected_price' => 'fd_price',
+                'greentax' => 'greentax',
+            ],
+            requiredFields: ['partno', 'stock', 'eol', 'dac_price', 'fd_price'],
+            unresolvedFields: ['mpn', 'quantity', 'missing_product_handling', 'snapshot_freshness_threshold', 'cart_limit_policy'],
+            stockSemantics: [
+                'automatic_availability_mapping_allowed' => false,
+                'automatic_quantity_mapping_allowed' => false,
+                'canonical_availability_policy_key' => ApcomAvailabilityMapper::POLICY_KEY,
+                'observed_stock_contract' => 'non_negative_integer_numeric',
+                'observed_stock_semantic_status' => 'approved_supplier_snapshot',
+                'official_stock_claim' => 'supplier_available_quantity_snapshot',
+                'public_exact_quantity_allowed' => false,
+                'public_quantity_policy_key' => ApcomAuthoritativeBusinessPolicy::PUBLIC_QUANTITY_POLICY_KEY,
+                'quantity_cap' => ApcomAvailabilityMapper::QUANTITY_CAP,
+                'quantity_cap_meaning' => '100_or_more',
+                'requires_human_review' => true,
+                'semantic_resolution' => 'approved_supplier_snapshot',
+                'semantics_discrepancy' => false,
+                'validation_mode' => 'non_negative_integer_numeric',
+            ],
+        );
+    }
+
     public function usesObservedNumericStockContract(): bool
     {
         return ($this->stockSemantics['validation_mode'] ?? null) === 'non_negative_integer_numeric';
+    }
+
+    public function hasApprovedSupplierAvailabilitySemantics(): bool
+    {
+        return ($this->stockSemantics['semantic_resolution'] ?? null) === 'approved_supplier_snapshot';
     }
 
     /** @return array<string, mixed> */

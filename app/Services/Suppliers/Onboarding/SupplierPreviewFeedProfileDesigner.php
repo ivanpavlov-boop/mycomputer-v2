@@ -2,6 +2,8 @@
 
 namespace App\Services\Suppliers\Onboarding;
 
+use App\Data\Suppliers\Onboarding\SupplierHumanDecisionRegister;
+use App\Data\Suppliers\Onboarding\SupplierPreviewFeedProfileDesign;
 use App\Data\Suppliers\Onboarding\SupplierPreviewFeedProfileDesignReport;
 
 /**
@@ -33,6 +35,9 @@ final class SupplierPreviewFeedProfileDesigner
         private readonly SupplierHumanDecisionRegisterValidator $decisionValidator,
         private readonly SupplierPreviewFeedProfileDesignRegistry $profileRegistry,
         private readonly SupplierPreviewFeedProfileDesignValidator $profileValidator,
+        private readonly ApcomAvailabilityMapper $apcomAvailabilityMapper,
+        private readonly ApcomAuthoritativeBusinessPolicy $apcomBusinessPolicy,
+        private readonly SupplierFeedProfileApprovalGateFactory $approvalGateFactory,
         private readonly LocalSupplierSourceStagingReconciler $reconciler,
     ) {}
 
@@ -49,6 +54,14 @@ final class SupplierPreviewFeedProfileDesigner
                 $register === null ? 'unknown_decision_register' : null,
                 $profile === null ? 'unknown_preview_feed_profile' : null,
             ]));
+        }
+
+        if (trim((string) ($options['semantics_profile'] ?? '')) !== $profile->semanticsProfileKey) {
+            return $this->failure(
+                ['preview_profile_semantics_mismatch'],
+                $register->toArray(),
+                $profile->toArray(),
+            );
         }
 
         $decisionValidation = $this->decisionValidator->validate($register);
@@ -105,6 +118,7 @@ final class SupplierPreviewFeedProfileDesigner
                 'blockers' => count($hardBlockers),
                 'warnings' => count($this->warnings($reconciliation)),
             ],
+            ...$this->v2Payload($profile, $register),
         ];
 
         return new SupplierPreviewFeedProfileDesignReport(
@@ -222,6 +236,35 @@ final class SupplierPreviewFeedProfileDesigner
         sort($warnings, SORT_STRING);
 
         return $warnings;
+    }
+
+    /** @return array<string, mixed> */
+    private function v2Payload(SupplierPreviewFeedProfileDesign $profile, SupplierHumanDecisionRegister $register): array
+    {
+        if ($profile->key !== SupplierPreviewFeedProfileDesignRegistry::APCOM_PROFILE_V2) {
+            return [];
+        }
+
+        $examples = [];
+        foreach ([[0, 0], [1, 0], [5, 0], [6, 0], [40, 0], [100, 0], [3, 1], [100, 1], [0, 1]] as [$stock, $eol]) {
+            $examples[] = $this->apcomAvailabilityMapper->map($stock, $eol)->toArray();
+        }
+
+        return [
+            'availability_mapping_preview' => $examples,
+            'canonical_status_model' => $this->apcomBusinessPolicy->canonicalStatusModel(),
+            'green_tax_policy' => $this->apcomBusinessPolicy->greenTaxPolicy(),
+            'lifecycle_mapping_preview' => array_map(static fn (array $example): array => [
+                'canonical_lifecycle_status' => $example['canonical_lifecycle_status'],
+                'canonical_public_status' => $example['canonical_public_status'],
+                'orderable_in_principle' => $example['orderable_in_principle'],
+                'raw_quantity_observed' => $example['raw_quantity_observed'],
+            ], $examples),
+            'price_mapping_preview' => $this->apcomBusinessPolicy->priceMappingPreview(),
+            'profile_approval_gate' => $this->approvalGateFactory->create($profile, $register)->toArray(),
+            'public_quantity_policy' => $this->apcomBusinessPolicy->publicQuantityPolicy(),
+            'supplier_availability_policy' => $this->apcomAvailabilityMapper->policy(),
+        ];
     }
 
     /** @param array<int, string> $blockers @param array<string, mixed> $register @param array<string, mixed> $profile @param array<string, mixed> $decisionValidation @param array<string, mixed> $profileValidation */

@@ -428,7 +428,8 @@ class SupplierOnboardingContractsTest extends TestCase
             'catalog_sync_batches',
             'catalog_sync_logs',
             'Protected counts before and after were equal',
-            'C.3C is next, pending, and not started',
+            'C.3C tooling is implemented locally and in review',
+            'C.3C operational v2',
             'No Catalog Sync action was invoked',
             'No staging row was inserted, updated, or deleted',
             'The source XML, runtime report, and stderr log remain outside Git',
@@ -474,6 +475,83 @@ class SupplierOnboardingContractsTest extends TestCase
         ] as $fact) {
             $this->assertStringContainsString($fact, $profile, $fact);
         }
+    }
+
+    public function test_apcom_c3c_documents_authoritative_preview_semantics_and_a_blocked_gate(): void
+    {
+        $root = dirname(__DIR__, 4);
+        $canonicalPath = $root.'/docs/CANONICAL_SUPPLIER_AVAILABILITY_MODEL.md';
+        $decisionsPath = $root.'/docs/APCOM_AUTHORITATIVE_HUMAN_DECISIONS_V2.md';
+        $profilePath = $root.'/docs/APCOM_PREVIEW_FEED_PROFILE_V2.md';
+        $phasesPath = $root.'/docs/PHASES.md';
+        $catalogSafetyPath = $root.'/docs/CATALOG_SYNC_SAFETY.md';
+
+        foreach ([$canonicalPath, $decisionsPath, $profilePath] as $path) {
+            $this->assertFileExists($path);
+        }
+
+        $canonical = (string) preg_replace('/\s+/', ' ', (string) file_get_contents($canonicalPath));
+        $decisions = (string) preg_replace('/\s+/', ' ', (string) file_get_contents($decisionsPath));
+        $profile = (string) preg_replace('/\s+/', ' ', (string) file_get_contents($profilePath));
+        $phases = (string) file_get_contents($phasesPath);
+        $catalogSafety = (string) file_get_contents($catalogSafetyPath);
+
+        foreach ([
+            'Availability and lifecycle are separate facts',
+            'public-supplier-quantity-policy-v1',
+            'public_exact_quantity_allowed=false',
+            'apcom-availability-policy-v1',
+            'APCOM EOL cannot make a catalog product EOL',
+            'no storefront change',
+            'no Catalog Sync integration',
+        ] as $fact) {
+            $this->assertStringContainsString($fact, $canonical, $fact);
+        }
+
+        foreach ([
+            'apcom-human-decisions-v2',
+            'operator_confirmed_business_evidence',
+            'stock=100',
+            '100_or_more',
+            'stock=0` -> `on_request',
+            'stock=1..5` -> `limited',
+            'stock>=6` -> `in_stock',
+            'last_units',
+            'discontinued',
+            'supplier_purchase_price',
+            'EUR',
+            'VAT `exclusive`',
+            'Green Tax is included',
+            'contradictory official supplier evidence returns the decision to review',
+            'MPN remains pending',
+            'Source-only, staging-only, and linked staging-only',
+            'blocked_pending_human_decisions',
+            'does not authorize import execution',
+        ] as $fact) {
+            $this->assertStringContainsString($fact, $decisions, $fact);
+        }
+
+        foreach ([
+            'apcom-preview-feed-profile-v2',
+            'apcom-preview-feed-profile-v1',
+            'apcom-human-decisions-v2',
+            'apcom-approved-business-semantics-v2',
+            'preview-only',
+            'non-persisted',
+            'blocked_pending_human_decisions',
+            'operational v2 preview has not run',
+            'UPDATE remains disabled',
+            'Sync All remains disabled',
+            'automatic sync remains disabled',
+        ] as $fact) {
+            $this->assertStringContainsString($fact, $profile, $fact);
+        }
+
+        $this->assertStringContainsString('Phase 9C.6.5C.3C | APCOM Authoritative Human Decision Evidence', $phases);
+        $this->assertStringContainsString('approval gate remains blocked', $phases);
+        $this->assertStringContainsString('APCOM C3C Authoritative Decisions', $catalogSafety);
+        $this->assertStringContainsString('Sync All', $catalogSafety);
+        $this->assertStringContainsString('automatic sync', $catalogSafety);
     }
 
     private function record(string $sku, string $name): NormalizedSupplierRecord

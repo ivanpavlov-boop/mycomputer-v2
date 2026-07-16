@@ -235,13 +235,13 @@ unchanged. See [APCOM Reconciliation Review and Operational Closeout](APCOM_RECO
 
 ## APCOM C3B Human Decision Register
 
-The local C3B implementation records APCOM source/staging identity, diagnostic
-EAN, review-only lifecycle evidence, pending stock and commercial decisions,
-and explicit prohibitions in `apcom-human-decisions-v1`. The matching
-`apcom-preview-feed-profile-v1` remains non-persisted and non-executable.
-Neither has run operationally. No real XML or production state is read during
-local validation, and no supplier, staging, product, taxonomy, mapping,
-attribute, image, queue, schedule, or Catalog Sync state can change.
+The historical C3B implementation records APCOM source/staging identity,
+diagnostic EAN, review-only lifecycle evidence, pending stock and commercial
+decisions, and explicit prohibitions in `apcom-human-decisions-v1`. Its
+read-only operational preview completed under C3B.1. No real XML or production
+state is read during local validation, and no supplier, staging, product,
+taxonomy, mapping, attribute, image, queue, schedule, or Catalog Sync state can
+change.
 
 ## APCOM Operational Preview Closeout
 
@@ -251,3 +251,15 @@ true and schedule_enabled false; staging remains 1872 rows with 989 linked and
 883 unlinked. The preview profile is non-persistent and non-executable, 22
 decisions remain blocking, and no import approval exists. See
 APCOM_PREVIEW_ONLY_FEED_PROFILE_OPERATIONAL_CLOSEOUT.md.
+
+## APCOM C3C Authoritative Decision Contracts
+
+The additive `apcom-human-decisions-v2` and
+`apcom-preview-feed-profile-v2` contracts use supplier-neutral canonical
+availability/lifecycle statuses and the APCOM-only
+`apcom-availability-policy-v1`. Exact supplier quantity remains internal,
+public status is computed preview-only, and future multi-supplier aggregation
+is not implemented. The profile approval gate is blocked: MPN and missing
+product handling are pending, zero-price is review-only, profile persistence
+and import are not approved, schedule remains disabled, and Catalog Sync is
+not approved.
