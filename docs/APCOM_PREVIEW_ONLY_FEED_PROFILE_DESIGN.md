@@ -2,9 +2,8 @@
 
 ## Status
 
-Phase 9C.6.5C.3B is implemented locally and in review. The local design has
-not been deployed and no operational preview run has been performed in this
-phase.
+Phase 9C.6.5C.3B.1 completed, merged, and synced its read-only operational
+preview. This v1 profile remains an immutable historical contract.
 
 The profile key is `apcom-preview-feed-profile-v1`. It is static,
 non-persisted, read-only, and non-executable. It references
@@ -92,3 +91,9 @@ supplied source snapshot. Its verdict was preview_feed_profile_requires_human_de
 with blockers=0, human_review_required=true, persisted=false, and executable=false.
 The strict contract passed; this did not approve the profile or any execution.
 See APCOM_PREVIEW_ONLY_FEED_PROFILE_OPERATIONAL_CLOSEOUT.md.
+
+## V2 Addendum
+
+`apcom-preview-feed-profile-v2` is additive and preserves this v1 profile. It
+uses an immutable blocked approval gate and still cannot persist, import, alter
+the schedule, or call Catalog Sync. See [APCOM Preview Feed Profile V2](APCOM_PREVIEW_FEED_PROFILE_V2.md).

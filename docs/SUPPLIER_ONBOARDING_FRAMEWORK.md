@@ -298,8 +298,9 @@ and prohibitions are recorded in
 [APCOM Reconciliation Review and Operational Closeout](APCOM_RECONCILIATION_REVIEW_CLOSEOUT.md).
 
 The closeout does not authorize a feed profile, import, staging mutation,
-link repair, catalog mutation, schedule re-enable, or Catalog Sync. The next
-human-decision phase is C.3B and remains pending.
+link repair, catalog mutation, schedule re-enable, or Catalog Sync. C3B.1 is
+completed, merged, and synced; C3C tooling is implemented locally and in
+review, and its operational v2 preview has not run.
 
 ## Phase 9C.6.5C.3B Human Decision Register And Preview-only Design
 
@@ -322,3 +323,19 @@ preview verdict still requires human decisions. The source snapshot produced
 rows, 86 staging-only rows, and 22 blocking decisions. No import, persistence,
 link change, schedule change, image action, or Catalog Sync action occurred.
 See APCOM_PREVIEW_ONLY_FEED_PROFILE_OPERATIONAL_CLOSEOUT.md.
+
+## Phase 9C.6.5C.3C Authoritative Decisions And Blocked Gate
+
+`apcom-human-decisions-v2` and `apcom-preview-feed-profile-v2` are additive
+read-only contracts. They introduce supplier-neutral availability/lifecycle
+statuses and the APCOM-only `apcom-availability-policy-v1`; exact supplier
+quantities remain hidden publicly. The policy confirms 0 -> on_request, 1-5
+-> limited, 6+ -> in_stock, EOL positive stock -> last_units, and EOL zero
+stock -> discontinued. It does not implement catalog aggregation, storefront
+behavior, import, profile persistence, schedule enablement, or Catalog Sync.
+
+The immutable profile approval gate is
+`blocked_pending_human_decisions`. MPN and missing-product handling remain
+pending, zero-price remains review-only, and snapshot freshness remains
+unresolved. UPDATE remains disabled, Sync All remains disabled, automatic sync
+remains disabled, and images remain prohibited.

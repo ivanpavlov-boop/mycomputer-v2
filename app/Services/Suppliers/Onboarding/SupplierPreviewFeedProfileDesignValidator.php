@@ -35,6 +35,12 @@ final class SupplierPreviewFeedProfileDesignValidator
             }
         }
 
+        foreach (['import_allowed', 'catalog_sync_allowed', 'schedule_enablement_allowed', 'profile_persistence_allowed'] as $flag) {
+            if (($profile->safetyPolicy[$flag] ?? false) === true) {
+                $errors[] = 'preview_profile_execution_flag_not_allowed:'.$flag;
+            }
+        }
+
         $errors = array_values(array_unique($errors));
         sort($errors, SORT_STRING);
 

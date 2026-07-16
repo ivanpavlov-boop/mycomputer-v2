@@ -403,8 +403,7 @@ remain disabled and Catalog Sync must not run.
 - C.3B tooling: completed, merged, and deployed;
 - C.3B operational preview: completed read-only;
 - C.3B strict contract: passed;
-- C.3B.1 closeout: implemented locally and in review by this documentation
-  change;
+- C.3B.1 closeout: completed, merged, and synced;
 - human decisions: pending;
 - profile persistence: not approved;
 - executable import configuration: not approved;
@@ -416,12 +415,12 @@ remain disabled and Catalog Sync must not run.
 
 ### Phase 9C.6.5C.3C - APCOM Authoritative Human Decision Evidence and Profile Approval Gate
 
-C.3C is next, pending, and not started. It may collect authoritative written
-evidence for stock semantics, select a commercial price field, establish
-currency, VAT, Green Tax, and MPN policy, define human-approved review policies
-for the 17 source-only, 86 staging-only, 38 linked staging-only, 103 EOL, and
-72 zero-price groups, update decision statuses after explicit approval, and
-design another preview-only validation step.
+C.3C tooling is implemented locally and in review. The C.3C operational v2
+preview has not run. Operator-confirmed business evidence partially confirms
+stock, availability, lifecycle, FD price, EUR, VAT-exclusive, and Green Tax
+semantics. MPN and missing-product handling remain pending, zero-price remains
+review-only, profile persistence and import remain unapproved, and the profile
+approval gate remains blocked.
 
 C.3C must not automatically persist a feed profile, execute import, write
 supplier_products, create or update catalog products, delete staging rows, link
@@ -430,9 +429,10 @@ Sync All, enable automatic sync, or import images.
 
 ## Non-Approval And Safety Boundary
 
-APCOM is not normalized or approved for import. Stock is not declared to be
-quantity or availability. DAC and FD are not selected, currency is not known,
-VAT and Green Tax treatment are not known, and EOL does not mean automatic
-deactivation. Source-only rows are not approved for creation, staging-only
-rows are not approved for deletion, linked staging-only rows are not approved
+At the C3B.1 operational closeout, APCOM was not normalized or approved for
+import. Stock was not declared to be quantity or availability, DAC and FD were
+not selected, currency/VAT/Green Tax treatment were not known, and EOL did not
+mean automatic deactivation. C3C records partial operator-confirmed preview
+semantics only; source-only rows remain unapproved for creation, staging-only
+rows remain unapproved for deletion, linked staging-only rows remain unapproved
 for unlinking, and the schedule cannot be re-enabled.

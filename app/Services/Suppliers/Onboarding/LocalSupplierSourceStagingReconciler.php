@@ -797,7 +797,7 @@ final class LocalSupplierSourceStagingReconciler
         if ($eol['one_count'] > 0) {
             $warnings[] = 'eol_rows_require_human_review';
         }
-        if ($semantics->usesObservedNumericStockContract()) {
+        if ($semantics->usesObservedNumericStockContract() && ! $semantics->hasApprovedSupplierAvailabilitySemantics()) {
             $warnings[] = 'stock_semantics_discrepancy_requires_review';
         }
 
@@ -811,10 +811,12 @@ final class LocalSupplierSourceStagingReconciler
         ];
         if ($semantics->usesObservedNumericStockContract()) {
             $policies += [
-                'stock_semantic_status' => 'unresolved_numeric',
+                'stock_semantic_status' => $semantics->hasApprovedSupplierAvailabilitySemantics()
+                    ? 'approved_supplier_snapshot'
+                    : 'unresolved_numeric',
                 'stock_is_not_binary_availability' => true,
                 'quantity_resolved' => false,
-                'availability_resolved' => false,
+                'availability_resolved' => $semantics->hasApprovedSupplierAvailabilitySemantics(),
                 'automatic_quantity_mapping_allowed' => false,
                 'automatic_availability_mapping_allowed' => false,
                 'stock_eol_combinations_review_only' => true,

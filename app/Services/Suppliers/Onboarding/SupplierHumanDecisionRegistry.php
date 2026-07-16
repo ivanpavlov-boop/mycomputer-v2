@@ -10,9 +10,15 @@ final class SupplierHumanDecisionRegistry
 {
     public const APCOM_REGISTER = 'apcom-human-decisions-v1';
 
+    public const APCOM_REGISTER_V2 = 'apcom-human-decisions-v2';
+
     public function find(string $key): ?SupplierHumanDecisionRegister
     {
-        return $key === self::APCOM_REGISTER ? $this->apcomV1() : null;
+        return match ($key) {
+            self::APCOM_REGISTER => $this->apcomV1(),
+            self::APCOM_REGISTER_V2 => $this->apcomV2(),
+            default => null,
+        };
     }
 
     public function apcomV1(): SupplierHumanDecisionRegister
@@ -43,6 +49,36 @@ final class SupplierHumanDecisionRegistry
             $this->decision('APCOM-PROHIBIT-IMAGE-IMPORT-001', 'Supplier image import', SupplierHumanDecisionStatus::Prohibited, 'supplier images', 'prohibited', 'Images are presence-only diagnostics and must not be imported.', false, true),
             $this->decision('APCOM-PROHIBIT-CONTENT-OVERWRITE-001', 'Supplier content overwrite', SupplierHumanDecisionStatus::Prohibited, 'product content fields', 'prohibited', 'Names, slugs, SEO, descriptions, images, categories, attributes, and workflow cannot be overwritten.', false, true),
         ]);
+    }
+
+    public function apcomV2(): SupplierHumanDecisionRegister
+    {
+        return new SupplierHumanDecisionRegister(self::APCOM_REGISTER_V2, 'apcom', [
+            $this->decision('APCOM-ID-001', 'Supplier SKU identity', SupplierHumanDecisionStatus::Confirmed, 'xml.product.partno', 'source_to_staging_identity', 'Authoritative source identity for preview-only reconciliation.', false, false),
+            $this->decision('APCOM-SOURCE-001', 'Local XML source evidence', SupplierHumanDecisionStatus::Confirmed, 'xml.product source', 'pinned_local_source_evidence', 'The operator must supply a pinned local SHA-256 fingerprint before a preview reads the source.', false, false, 'pinned_local_sha256'),
+            $this->decision('APCOM-ID-002', 'EAN or GTIN', SupplierHumanDecisionStatus::DiagnosticOnly, 'xml.product.ean', 'diagnostic_only', 'EAN can report discrepancies but cannot create, link, update, or merge records.', true, true),
+            $this->decision('APCOM-LIFECYCLE-001', 'End of life state', SupplierHumanDecisionStatus::Confirmed, 'xml.product.eol', 'canonical_supplier_lifecycle_status', 'eol=0 maps to active and eol=1 maps to eol; no destructive action is approved.', true, false, 'operator_confirmed_business_evidence', 'operator_portal_crosscheck_eol_positive_stock_orderable'),
+            $this->decision('APCOM-STOCK-001', 'Supplier available quantity snapshot', SupplierHumanDecisionStatus::Confirmed, 'xml.product.stock', 'supplier_available_quantity_snapshot', 'Non-negative integer snapshot; 100 means 100 or more and exact public quantity remains prohibited.', true, false, 'operator_confirmed_business_evidence', 'operator_portal_crosscheck_stock_exact_quantity,operator_portal_crosscheck_stock_cap_100_plus'),
+            $this->decision('APCOM-QUANTITY-001', 'Catalog quantity mapping', SupplierHumanDecisionStatus::ReviewOnly, 'xml.product.stock', 'internal_supplier_snapshot_metadata_only', 'The source snapshot is not approved for catalog quantity, public exact quantity, or guaranteed orderable quantity.', true, true),
+            $this->decision('APCOM-AVAILABILITY-001', 'Availability mapping', SupplierHumanDecisionStatus::Confirmed, 'xml.product.stock with xml.product.eol', 'apcom-availability-policy-v1', 'Active stock maps 0 to on_request, 1-5 to limited, and 6+ to in_stock; exact public quantity stays hidden.', true, false, 'operator_confirmed_business_evidence', 'operator_portal_crosscheck_stock_zero_on_request,operator_approved_public_availability_policy'),
+            $this->decision('APCOM-MPN-001', 'Manufacturer part number', SupplierHumanDecisionStatus::Pending, 'xml.product.mpn', 'unresolved', 'partno remains supplier SKU identity only and is not approved as manufacturer MPN.', true, true),
+            $this->decision('APCOM-PRICE-001', 'Selected commercial price', SupplierHumanDecisionStatus::Confirmed, 'xml.product.fd_price', 'supplier_purchase_price', 'fd_price is the supplier purchase price without VAT; no staging or catalog price write is approved.', true, false, 'operator_confirmed_business_evidence', 'operator_portal_crosscheck_fd_price_exact_match'),
+            $this->decision('APCOM-CURRENCY-001', 'Currency semantics', SupplierHumanDecisionStatus::Confirmed, 'operator-confirmed commercial interpretation', 'EUR', 'The approved supplier purchase price currency is EUR.', true, false, 'operator_confirmed_business_evidence', 'operator_confirmed_currency_eur'),
+            $this->decision('APCOM-VAT-001', 'VAT treatment', SupplierHumanDecisionStatus::Confirmed, 'operator-confirmed commercial interpretation', 'exclusive', 'fd_price represents supplier purchase price without VAT.', true, false, 'operator_confirmed_business_evidence', 'operator_confirmed_vat_exclusive'),
+            $this->decision('APCOM-GREEN-TAX-001', 'Green Tax treatment', SupplierHumanDecisionStatus::Confirmed, 'operator-confirmed commercial interpretation', 'included_in_fd_price', 'Green Tax is included in fd_price and is not added separately; contradictory future evidence requires review.', true, false, 'operator_confirmed_business_evidence', 'operator_confirmed_green_tax_included'),
+            $this->decision('APCOM-SOURCE-ONLY-001', 'Source-only SKU classification', SupplierHumanDecisionStatus::Pending, 'exact supplier SKU source-only class', 'preview_only', 'Source-only rows are a preview classification, not an approved CREATE action.', true, true),
+            $this->decision('APCOM-STAGING-ONLY-001', 'Staging-only classification', SupplierHumanDecisionStatus::Pending, 'exact supplier SKU staging-only class', 'staging_only_preview', 'Source absence does not establish EOL and cannot authorize deletion.', true, true),
+            $this->decision('APCOM-LINKED-STAGING-ONLY-001', 'Linked staging-only classification', SupplierHumanDecisionStatus::Pending, 'linked staging-only class', 'staging_only_preview', 'Linked staging-only rows require human review and cannot trigger unlinking.', true, true),
+            $this->decision('APCOM-EOL-REVIEW-001', 'EOL review candidates', SupplierHumanDecisionStatus::ReviewOnly, 'xml.product.eol equals 1', 'review_only', 'EOL populations remain human-review candidates even though lifecycle semantics are confirmed.', true, true),
+            $this->decision('APCOM-ZERO-PRICE-001', 'Zero price review candidates', SupplierHumanDecisionStatus::ReviewOnly, 'xml.product.fd_price equals 0', 'review_only', 'Zero-price candidates require review and cannot select or write a price.', true, true),
+            $this->decision('APCOM-PROHIBIT-AUTO-IMPORT-001', 'Automatic supplier import', SupplierHumanDecisionStatus::Prohibited, 'automatic import', 'prohibited', 'Automatic imports remain disabled for this design phase.', false, true),
+            $this->decision('APCOM-PROHIBIT-SCHEDULE-001', 'Schedule enablement', SupplierHumanDecisionStatus::Prohibited, 'supplier schedule enablement', 'prohibited', 'Schedules must remain frozen.', false, true),
+            $this->decision('APCOM-PROHIBIT-SYNC-ALL-001', 'Catalog Sync All', SupplierHumanDecisionStatus::Prohibited, 'Catalog Sync All', 'prohibited', 'Sync All is not approved.', false, true),
+            $this->decision('APCOM-PROHIBIT-AUTO-SYNC-001', 'Automatic catalog sync', SupplierHumanDecisionStatus::Prohibited, 'automatic catalog sync', 'prohibited', 'Automatic catalog sync is not approved.', false, true),
+            $this->decision('APCOM-PROHIBIT-UPDATE-SYNC-001', 'Catalog UPDATE sync', SupplierHumanDecisionStatus::Prohibited, 'Catalog UPDATE sync', 'prohibited', 'UPDATE sync is not part of this preview-only phase.', false, true),
+            $this->decision('APCOM-PROHIBIT-IMAGE-IMPORT-001', 'Supplier image import', SupplierHumanDecisionStatus::Prohibited, 'supplier images', 'prohibited', 'Images are presence-only diagnostics and must not be imported.', false, true),
+            $this->decision('APCOM-PROHIBIT-CONTENT-OVERWRITE-001', 'Supplier content overwrite', SupplierHumanDecisionStatus::Prohibited, 'product content fields', 'prohibited', 'Names, slugs, SEO, descriptions, images, categories, attributes, and workflow cannot be overwritten.', false, true),
+        ], self::APCOM_REGISTER);
     }
 
     private function decision(

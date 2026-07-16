@@ -968,3 +968,13 @@ false, Sync All remained false, and automatic sync remained false. No Catalog
 Sync action occurred and no batch or log was created by the preview. Source-
 only and staging-only classes remain review classifications only; none
 authorizes mutation. See APCOM_PREVIEW_ONLY_FEED_PROFILE_OPERATIONAL_CLOSEOUT.md.
+
+## APCOM C3C Authoritative Decisions
+
+The C3C v2 availability and price semantics are immutable preview evidence,
+not Catalog Sync integration. `apcom-availability-policy-v1` has no catalog
+quantity, price, lifecycle, workflow, content, or availability write path.
+Its profile approval gate is blocked, and it does not authorize import,
+schedule enablement, profile persistence, CREATE, UPDATE, Sync All, or
+automatic sync. Exact supplier quantity remains hidden publicly; images and
+content overwrite remain prohibited.
