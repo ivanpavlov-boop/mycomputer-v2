@@ -6,6 +6,11 @@ Document the current safe VPS deployment process and common container startup is
 
 Related docs: [Testing](TESTING.md), [Sync Safety](SYNC_SAFETY.md), [Rollback Plan](ROLLBACK_PLAN.md).
 
+For Docker daemon and VPS restart recovery, see
+[Docker Service Restart Recovery](DOCKER_SERVICE_RESTART_RECOVERY.md). Its
+post-merge procedure is operational guidance only and requires explicit human
+approval; no Docker daemon restart is part of normal local validation.
+
 ## Current Status
 
 Deployment is Docker-based. Deploy only from `origin/main` after PR merge and passing CI. The stack serves Laravel/Filament through `app` and selected read-only Nuxt storefront routes through `frontend`.
