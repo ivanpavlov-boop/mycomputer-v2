@@ -49,7 +49,7 @@ json_string() {
 }
 
 json_nullable() {
-    if [[ -z "$1" || "$1" == 'not_available' ]]; then
+    if [[ -z "$1" || "$1" == 'not_available' || "$1" == 'failed' ]]; then
         printf 'null'
     else
         json_string "$1"
@@ -123,6 +123,46 @@ mode_is_group_or_world_writable() {
     (( (10#$group_digit & 2) != 0 || (10#$other_digit & 2) != 0 ))
 }
 
+mode_has_group_writable() {
+    local mode=${1:-}
+    local group_digit
+
+    [[ "$mode" =~ ^[0-7]{3,4}$ ]] || return 1
+    group_digit=${mode: -2:1}
+    (( (10#$group_digit & 2) != 0 ))
+}
+
+mode_has_world_readable() {
+    local mode=${1:-}
+    local other_digit
+
+    [[ "$mode" =~ ^[0-7]{3,4}$ ]] || return 1
+    other_digit=${mode: -1}
+    (( (10#$other_digit & 4) != 0 ))
+}
+
+mode_has_world_writable() {
+    local mode=${1:-}
+    local other_digit
+
+    [[ "$mode" =~ ^[0-7]{3,4}$ ]] || return 1
+    other_digit=${mode: -1}
+    (( (10#$other_digit & 2) != 0 ))
+}
+
+mode_has_executable_bits() {
+    local mode=${1:-}
+    local digits digit
+
+    [[ "$mode" =~ ^[0-7]{3,4}$ ]] || return 1
+    digits=${mode: -3}
+    for ((digit = 0; digit < ${#digits}; digit++)); do
+        (( (10#${digits:digit:1} & 1) != 0 )) && return 0
+    done
+
+    return 1
+}
+
 effective_value() {
     local key=$1
     local fallback=${2:-not_available}
@@ -163,11 +203,7 @@ port_is_listening() {
 fingerprints_for_key_file() {
     local file=$1
 
-    if ! command_available ssh-keygen || [[ ! -r "$file" ]]; then
-        return
-    fi
-
-    ssh-keygen -lf "$file" 2>/dev/null | awk '{ for (index = 1; index <= NF; index++) if ($index ~ /^SHA256:/) print $index }'
+    ssh-keygen -lf "$file" 2>/dev/null | awk '{ for (field_no = 1; field_no <= NF; field_no++) if ($field_no ~ /^SHA256:/) print $field_no }'
 }
 
 authorized_key_count() {
@@ -183,6 +219,30 @@ authorized_key_count() {
 
 append_finding() {
     findings+=("$1|$2|$3")
+}
+
+severity_rank() {
+    case "$1" in
+        informational) printf '0' ;;
+        review_required) printf '1' ;;
+        high_risk) printf '2' ;;
+        *) printf '0' ;;
+    esac
+}
+
+calculate_verdict() {
+    local finding classification rank highest_rank=0 result='informational'
+
+    for finding in "${findings[@]}"; do
+        IFS='|' read -r classification _ _ <<<"$finding"
+        rank=$(severity_rank "$classification")
+        if (( rank > highest_rank )); then
+            highest_rank=$rank
+            result=$classification
+        fi
+    done
+
+    printf '%s' "$result"
 }
 
 json_string_array() {
@@ -315,7 +375,10 @@ done
 host_key_types=()
 host_key_fingerprints=()
 host_key_metadata=()
+host_key_diagnostics=()
 host_key_unsafe_permissions='false'
+host_key_group_review_required='false'
+host_key_fingerprint_status='not_available'
 for host_key in /etc/ssh/ssh_host_*_key; do
     [[ -e "$host_key" ]] || continue
     host_key_type=${host_key##*/ssh_host_}
@@ -323,12 +386,34 @@ for host_key in /etc/ssh/ssh_host_*_key; do
     host_key_types+=("$host_key_type")
     IFS='|' read -r host_owner host_group host_mode <<<"$(file_metadata "$host_key")"
     host_key_metadata+=("${host_key_type}:owner=${host_owner},group=${host_group},mode=${host_mode}")
-    if [[ "$host_owner" != 'root' || "$host_group" != 'root' ]] || mode_is_group_or_world_writable "$host_mode"; then
+    host_owner_unexpected='false'
+    host_group_unexpected='false'
+    host_group_writable='false'
+    host_world_readable='false'
+    host_world_writable='false'
+    host_executable='false'
+    [[ "$host_owner" != 'root' && "$host_owner" != 'not_available' ]] && host_owner_unexpected='true'
+    [[ "$host_group" != 'root' && "$host_group" != 'not_available' ]] && host_group_unexpected='true'
+    mode_has_group_writable "$host_mode" && host_group_writable='true'
+    mode_has_world_readable "$host_mode" && host_world_readable='true'
+    mode_has_world_writable "$host_mode" && host_world_writable='true'
+    mode_has_executable_bits "$host_mode" && host_executable='true'
+    host_key_diagnostics+=("${host_key_type}:owner=${host_owner},group=${host_group},mode=${host_mode},owner_unexpected=${host_owner_unexpected},group_unexpected=${host_group_unexpected},group_writable=${host_group_writable},world_readable=${host_world_readable},world_writable=${host_world_writable},executable=${host_executable}")
+    if [[ "$host_owner_unexpected" == 'true' || "$host_group_writable" == 'true' || "$host_world_readable" == 'true' || "$host_world_writable" == 'true' || "$host_executable" == 'true' ]]; then
         host_key_unsafe_permissions='true'
     fi
-    while IFS= read -r fingerprint; do
-        [[ -n "$fingerprint" ]] && host_key_fingerprints+=("$fingerprint")
-    done < <(fingerprints_for_key_file "$host_key")
+    [[ "$host_group_unexpected" == 'true' ]] && host_key_group_review_required='true'
+    if ! command_available ssh-keygen || [[ ! -r "$host_key" ]]; then
+        continue
+    fi
+    if fingerprint_output=$(fingerprints_for_key_file "$host_key"); then
+        [[ "$host_key_fingerprint_status" != 'failed' ]] && host_key_fingerprint_status='available'
+        while IFS= read -r fingerprint; do
+            [[ -n "$fingerprint" ]] && host_key_fingerprints+=("$fingerprint")
+        done <<<"$fingerprint_output"
+    else
+        host_key_fingerprint_status='failed'
+    fi
 done
 
 interactive_account_count=0
@@ -340,12 +425,20 @@ root_authorized_keys='/root/.ssh/authorized_keys'
 root_authorized_keys_present='false'
 root_authorized_key_count=0
 root_authorized_key_fingerprints=()
+root_authorized_key_fingerprint_status='not_available'
 if [[ -r "$root_authorized_keys" ]]; then
     root_authorized_keys_present='true'
     root_authorized_key_count=$(authorized_key_count "$root_authorized_keys")
-    while IFS= read -r fingerprint; do
-        [[ -n "$fingerprint" ]] && root_authorized_key_fingerprints+=("$fingerprint")
-    done < <(fingerprints_for_key_file "$root_authorized_keys")
+    if command_available ssh-keygen; then
+        if fingerprint_output=$(fingerprints_for_key_file "$root_authorized_keys"); then
+            root_authorized_key_fingerprint_status='available'
+            while IFS= read -r fingerprint; do
+                [[ -n "$fingerprint" ]] && root_authorized_key_fingerprints+=("$fingerprint")
+            done <<<"$fingerprint_output"
+        else
+            root_authorized_key_fingerprint_status='failed'
+        fi
+    fi
 fi
 
 non_root_authorized_key_accounts=0
@@ -368,22 +461,37 @@ if command_available getent; then
 fi
 
 journal_available='false'
+authentication_journal_status='not_available'
 failed_password_attempts=0
 invalid_user_attempts=0
 accepted_public_key_logins=0
 accepted_password_logins=0
 root_login_successes=0
-unique_failed_source_count=0
+unique_failed_source_count='not_available'
+unique_failed_source_status='not_available'
 if command_available journalctl; then
     journal_available='true'
-    authentication_journal=$(journalctl --since '24 hours ago' -u sshd --no-pager 2>/dev/null || true)
-    [[ -z "$authentication_journal" ]] && authentication_journal=$(journalctl --since '24 hours ago' -u ssh --no-pager 2>/dev/null || true)
-    failed_password_attempts=$(printf '%s\n' "$authentication_journal" | grep -Eic 'Failed password' || true)
-    invalid_user_attempts=$(printf '%s\n' "$authentication_journal" | grep -Eic 'Invalid user' || true)
-    accepted_public_key_logins=$(printf '%s\n' "$authentication_journal" | grep -Eic 'Accepted publickey' || true)
-    accepted_password_logins=$(printf '%s\n' "$authentication_journal" | grep -Eic 'Accepted password' || true)
-    root_login_successes=$(printf '%s\n' "$authentication_journal" | grep -Eic 'Accepted (publickey|password).* for root' || true)
-    unique_failed_source_count=$(printf '%s\n' "$authentication_journal" | awk '/Failed password|Invalid user/ { for (index = 1; index <= NF; index++) if ($index == "from") print $(index + 1) }' | sort -u | awk 'NF { count += 1 } END { print count + 0 }')
+    if authentication_journal=$(journalctl --since '24 hours ago' -u sshd --no-pager 2>/dev/null); then
+        authentication_journal_status='available'
+    elif authentication_journal=$(journalctl --since '24 hours ago' -u ssh --no-pager 2>/dev/null); then
+        authentication_journal_status='available'
+    else
+        authentication_journal=''
+        authentication_journal_status='failed'
+    fi
+    if [[ "$authentication_journal_status" == 'available' ]]; then
+        failed_password_attempts=$(printf '%s\n' "$authentication_journal" | grep -Eic 'Failed password' || true)
+        invalid_user_attempts=$(printf '%s\n' "$authentication_journal" | grep -Eic 'Invalid user' || true)
+        accepted_public_key_logins=$(printf '%s\n' "$authentication_journal" | grep -Eic 'Accepted publickey' || true)
+        accepted_password_logins=$(printf '%s\n' "$authentication_journal" | grep -Eic 'Accepted password' || true)
+        root_login_successes=$(printf '%s\n' "$authentication_journal" | grep -Eic 'Accepted (publickey|password).* for root' || true)
+        if unique_failed_source_count=$(printf '%s\n' "$authentication_journal" | awk '/Failed password|Invalid user/ { for (field_no = 1; field_no <= NF; field_no++) if ($field_no == "from") print $(field_no + 1) }' | sort -u | awk 'NF { count += 1 } END { print count + 0 }'); then
+            unique_failed_source_status='available'
+        else
+            unique_failed_source_count='not_available'
+            unique_failed_source_status='failed'
+        fi
+    fi
 fi
 
 current_ssh_session_count=0
@@ -392,7 +500,10 @@ if command_available who; then
 fi
 
 firewalld_installed='false'
-firewalld_active='not_available'
+firewalld_active='not_installed'
+firewalld_service_state='not_installed'
+firewalld_command_state='not_installed'
+firewalld_query_status='not_available'
 firewalld_enabled='not_available'
 firewall_active_zones='not_available'
 firewall_ssh_allowed='false'
@@ -400,16 +511,42 @@ firewall_cockpit_allowed='false'
 firewall_open_port_count=0
 if command_available firewall-cmd; then
     firewalld_installed='true'
-    firewalld_active=$(trim "$(firewall-cmd --state 2>/dev/null || printf 'not_available')")
+    firewalld_service_state=$(service_state firewalld)
+    case "$firewalld_service_state" in
+        active|inactive|failed) ;;
+        *) firewalld_service_state='not_available' ;;
+    esac
+    firewalld_active=$firewalld_service_state
     firewalld_enabled=$(service_enabled firewalld)
-    firewall_active_zones=$(firewall-cmd --get-active-zones 2>/dev/null | awk 'NR % 2 == 1 { print }' | paste -sd ',' -)
-    firewall_active_zones=${firewall_active_zones:-not_available}
-    firewall_services=$(firewall-cmd --list-services 2>/dev/null || true)
-    firewall_ports=$(firewall-cmd --list-ports 2>/dev/null || true)
-    [[ " $firewall_services " == *' ssh '* ]] && firewall_ssh_allowed='true'
-    [[ " $firewall_services " == *' cockpit '* ]] && firewall_cockpit_allowed='true'
-    [[ " $firewall_ports " == *'9090/'* ]] && firewall_cockpit_allowed='true'
-    firewall_open_port_count=$(printf '%s\n' "$firewall_ports" | awk '{ print NF + 0 }')
+    if firewall_command_output=$(firewall-cmd --state 2>/dev/null); then
+        case "$(trim "$firewall_command_output")" in
+            running|active) firewalld_command_state='active' ;;
+            inactive) firewalld_command_state='inactive' ;;
+            failed) firewalld_command_state='failed' ;;
+            *) firewalld_command_state='not_available' ;;
+        esac
+    else
+        case "$firewalld_service_state" in
+            inactive) firewalld_command_state='inactive' ;;
+            failed) firewalld_command_state='failed' ;;
+            *) firewalld_command_state='failed' ;;
+        esac
+    fi
+    if [[ "$firewalld_command_state" == 'active' ]]; then
+        if firewall_zones_output=$(firewall-cmd --get-active-zones 2>/dev/null) && firewall_services=$(firewall-cmd --list-services 2>/dev/null) && firewall_ports=$(firewall-cmd --list-ports 2>/dev/null); then
+            firewalld_query_status='available'
+            firewall_active_zones=$(printf '%s\n' "$firewall_zones_output" | awk 'NR % 2 == 1 { print }' | paste -sd ',' -)
+            firewall_active_zones=${firewall_active_zones:-not_available}
+            [[ " $firewall_services " == *' ssh '* ]] && firewall_ssh_allowed='true'
+            [[ " $firewall_services " == *' cockpit '* ]] && firewall_cockpit_allowed='true'
+            [[ " $firewall_ports " == *'9090/'* ]] && firewall_cockpit_allowed='true'
+            firewall_open_port_count=$(printf '%s\n' "$firewall_ports" | awk '{ print NF + 0 }')
+        else
+            firewalld_query_status='failed'
+        fi
+    elif [[ "$firewalld_command_state" == 'failed' ]]; then
+        firewalld_query_status='failed'
+    fi
 fi
 
 fail2ban_installed='false'
@@ -457,16 +594,19 @@ if [[ "$permit_root_login" == 'yes' && "$password_authentication" == 'yes' ]]; t
 fi
 [[ "$permit_empty_passwords" == 'yes' ]] && append_finding 'high_risk' 'empty_passwords_enabled' 'Empty passwords are permitted.'
 [[ "$config_group_or_world_writable" == 'true' ]] && append_finding 'high_risk' 'sshd_config_writable' 'An SSH configuration file is writable by group or others.'
-[[ "$host_key_unsafe_permissions" == 'true' ]] && append_finding 'high_risk' 'host_key_permissions' 'An SSH host key has unexpected owner, group, or writable permissions.'
+[[ "$host_key_unsafe_permissions" == 'true' ]] && append_finding 'high_risk' 'host_key_permissions' 'An SSH host key has unsafe owner, readable, writable, or executable permission bits.'
 [[ "$effective_config_status" == 'failed' ]] && append_finding 'high_risk' 'sshd_effective_config_failed' 'The effective SSH daemon configuration could not be read.'
 [[ "$password_authentication" == 'yes' ]] && append_finding 'review_required' 'password_authentication_enabled' 'Password authentication remains enabled.'
+[[ "$host_key_group_review_required" == 'true' ]] && append_finding 'review_required' 'host_key_group_review' 'An SSH host key has a non-root group and requires an ownership review.'
+[[ "$host_key_fingerprint_status" == 'failed' ]] && append_finding 'review_required' 'host_key_fingerprint_collection_failed' 'SSH host key fingerprint collection failed; no private key content was emitted.'
+[[ "$unique_failed_source_status" == 'failed' ]] && append_finding 'review_required' 'authentication_source_parser_failed' 'Failed-source aggregation could not be completed; no source addresses were emitted.'
 if [[ "$non_root_authorized_key_accounts" -eq 0 || "$non_root_sudo_capable" != 'true' ]]; then
     append_finding 'review_required' 'non_root_recovery_access_unverified' 'A tested non-root key-based administrator is not evidenced by this local audit.'
 fi
 if [[ "$fail2ban_installed" != 'true' && "$other_rate_limiting_detected" != 'true' ]]; then
     append_finding 'review_required' 'brute_force_mitigation_unverified' 'No recognized SSH brute-force mitigation service is detected.'
 fi
-if [[ "$firewalld_installed" == 'true' && "$firewalld_active" != 'running' ]]; then
+if [[ "$firewalld_installed" == 'true' && "$firewalld_command_state" != 'active' ]]; then
     append_finding 'review_required' 'firewall_inactive' 'Firewalld is installed but does not report a running state.'
 fi
 if [[ "$cockpit_active" == 'active' && "$cockpit_listening" == 'true' ]]; then
@@ -476,12 +616,7 @@ if [[ "$max_auth_tries" =~ ^[0-9]+$ && "$max_auth_tries" -gt 6 ]]; then
     append_finding 'review_required' 'weak_max_auth_tries' 'MaxAuthTries is higher than the audit review threshold.'
 fi
 
-verdict='informational'
-for finding in "${findings[@]}"; do
-    IFS='|' read -r classification _ _ <<<"$finding"
-    [[ "$classification" == 'review_required' ]] && verdict='review_required'
-    [[ "$classification" == 'high_risk' ]] && verdict='high_risk'
-done
+verdict=$(calculate_verdict)
 
 text_report() {
     printf 'schema: %s\nmode: %s\ngenerated_at_utc: %s\n' "$AUDIT_SCHEMA" "$AUDIT_MODE" "$generated_at_utc"
@@ -489,10 +624,10 @@ text_report() {
     printf 'sshd_service.present: %s\nsshd_service.version: %s\nsshd_service.active: %s\nsshd_service.enabled: %s\nsshd_service.listening: %s\nsshd_service.ports: %s\n' "$sshd_present" "$sshd_version" "$sshd_active" "$sshd_enabled" "$sshd_listening" "$sshd_ports"
     printf 'effective_configuration.status: %s\neffective_configuration.permitrootlogin: %s\neffective_configuration.passwordauthentication: %s\neffective_configuration.pubkeyauthentication: %s\n' "$effective_config_status" "$permit_root_login" "$password_authentication" "$public_key_authentication"
     printf 'configuration_files.primary_exists: %s\nconfiguration_files.primary_owner: %s\nconfiguration_files.primary_group: %s\nconfiguration_files.primary_mode: %s\nconfiguration_files.drop_in_count: %s\nconfiguration_files.include_directive_count: %s\nconfiguration_files.group_or_world_writable: %s\n' "$primary_config_exists" "$primary_config_owner" "$primary_config_group" "$primary_config_mode" "$config_drop_in_count" "$configured_include_directive_count" "$config_group_or_world_writable"
-    printf 'host_keys.types: %s\nhost_keys.unsafe_permissions: %s\n' "$(IFS=,; printf '%s' "${host_key_types[*]:-not_available}")" "$host_key_unsafe_permissions"
+    printf 'host_keys.types: %s\nhost_keys.fingerprint_collection_status: %s\nhost_keys.unsafe_permissions: %s\n' "$(IFS=,; printf '%s' "${host_key_types[*]:-not_available}")" "$host_key_fingerprint_status" "$host_key_unsafe_permissions"
     printf 'authorized_access.interactive_account_count: %s\nauthorized_access.root_authorized_key_count: %s\nauthorized_access.non_root_authorized_key_accounts: %s\nauthorized_access.non_root_sudo_capable: %s\n' "$interactive_account_count" "$root_authorized_key_count" "$non_root_authorized_key_accounts" "$non_root_sudo_capable"
-    printf 'authentication_activity_24h.failed_password_attempts: %s\nauthentication_activity_24h.invalid_user_attempts: %s\nauthentication_activity_24h.unique_failed_source_count: %s\nauthentication_activity_24h.current_ssh_session_count: %s\n' "$failed_password_attempts" "$invalid_user_attempts" "$unique_failed_source_count" "$current_ssh_session_count"
-    printf 'firewall.installed: %s\nfirewall.active: %s\nbrute_force_protection.fail2ban_installed: %s\nselinux.installed: %s\ncockpit.socket_exists: %s\n' "$firewalld_installed" "$firewalld_active" "$fail2ban_installed" "$selinux_installed" "$cockpit_socket_exists"
+    printf 'authentication_activity_24h.failed_password_attempts: %s\nauthentication_activity_24h.invalid_user_attempts: %s\nauthentication_activity_24h.unique_failed_source_count: %s\nauthentication_activity_24h.unique_failed_source_status: %s\nauthentication_activity_24h.current_ssh_session_count: %s\n' "$failed_password_attempts" "$invalid_user_attempts" "$unique_failed_source_count" "$unique_failed_source_status" "$current_ssh_session_count"
+    printf 'firewall.installed: %s\nfirewall.active: %s\nfirewall.service_state: %s\nfirewall.command_state: %s\nfirewall.query_status: %s\nbrute_force_protection.fail2ban_installed: %s\nselinux.installed: %s\ncockpit.socket_exists: %s\n' "$firewalld_installed" "$firewalld_active" "$firewalld_service_state" "$firewalld_command_state" "$firewalld_query_status" "$fail2ban_installed" "$selinux_installed" "$cockpit_socket_exists"
     for finding in "${findings[@]}"; do
         IFS='|' read -r classification code message <<<"$finding"
         printf 'finding.%s: %s (%s)\n' "$classification" "$code" "$message"
@@ -549,15 +684,29 @@ json_report() {
     printf ',"unexpected_owner":'; json_boolean "$config_unexpected_owner"; printf '}'
     printf ',"host_keys":{"types":'; json_string_array host_key_types
     printf ',"metadata":'; json_string_array host_key_metadata
+    printf ',"diagnostics":'; json_string_array host_key_diagnostics
     printf ',"fingerprints":'; json_string_array host_key_fingerprints
+    printf ',"fingerprint_collection_status":'; json_string "$host_key_fingerprint_status"
     printf ',"unsafe_permissions":'; json_boolean "$host_key_unsafe_permissions"; printf '}'
     printf ',"authorized_access":{"interactive_account_count":%s,"root_authorized_keys_present":' "$interactive_account_count"; json_boolean "$root_authorized_keys_present"
     printf ',"root_authorized_key_count":%s,"root_authorized_key_fingerprints":' "$root_authorized_key_count"; json_string_array root_authorized_key_fingerprints
+    printf ',"root_authorized_key_fingerprint_status":'; json_string "$root_authorized_key_fingerprint_status"
     printf ',"non_root_authorized_key_accounts":%s,"non_root_sudo_capable":' "$non_root_authorized_key_accounts"; json_boolean "$non_root_sudo_capable"; printf '}'
     printf ',"authentication_activity_24h":{"journal_available":'; json_boolean "$journal_available"
-    printf ',"failed_password_attempts":%s,"invalid_user_attempts":%s,"accepted_public_key_logins":%s,"accepted_password_logins":%s,"root_login_successes":%s,"unique_failed_source_count":%s,"current_ssh_session_count":%s}' "$failed_password_attempts" "$invalid_user_attempts" "$accepted_public_key_logins" "$accepted_password_logins" "$root_login_successes" "$unique_failed_source_count" "$current_ssh_session_count"
+    printf ',"journal_status":'; json_string "$authentication_journal_status"
+    printf ',"failed_password_attempts":%s,"invalid_user_attempts":%s,"accepted_public_key_logins":%s,"accepted_password_logins":%s,"root_login_successes":%s,"unique_failed_source_count":' "$failed_password_attempts" "$invalid_user_attempts" "$accepted_public_key_logins" "$accepted_password_logins" "$root_login_successes"
+    if [[ "$unique_failed_source_status" == 'available' ]]; then
+        printf '%s' "$unique_failed_source_count"
+    else
+        printf 'null'
+    fi
+    printf ',"unique_failed_source_status":'; json_string "$unique_failed_source_status"
+    printf ',"current_ssh_session_count":%s}' "$current_ssh_session_count"
     printf ',"firewall":{"installed":'; json_boolean "$firewalld_installed"
     printf ',"active":'; json_nullable "$firewalld_active"
+    printf ',"service_state":'; json_string "$firewalld_service_state"
+    printf ',"command_state":'; json_string "$firewalld_command_state"
+    printf ',"query_status":'; json_string "$firewalld_query_status"
     printf ',"enabled":'; json_nullable "$firewalld_enabled"
     printf ',"active_zones":'; json_nullable "$firewall_active_zones"
     printf ',"ssh_allowed":'; json_boolean "$firewall_ssh_allowed"

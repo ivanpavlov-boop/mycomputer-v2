@@ -36,6 +36,25 @@ explicit approval. It writes to stdout and supports `--format=text` and
 `--format=json`; retain any report outside Git and redact it before sharing.
 The script is read-only and makes no operational change.
 
+The audit reports collection status separately from a numeric result. A valid
+zero is not interchangeable with `not_available` or `failed`: for example,
+the unique failed-source count is JSON `null` unless its parser completed
+successfully, and no source address is emitted. SSH host-key output is limited
+to key type, standard fingerprint, and permission metadata; it never emits
+private key content. A non-root host-key group is a review signal, not by
+itself a safe or unsafe classification. Owner, writable, world-readable, and
+executable permission diagnostics provide the evidence for review.
+
+Firewalld evidence distinguishes an absent binary, service state, command
+state, and query status. An inactive daemon can make `firewall-cmd --state`
+fail; that does not mean the command is unavailable and does not authorize an
+operational firewall change.
+
+The first VPS audit taken before the Infrastructure Security 2A portability
+fix must be rerun before any hardening decision. Its failed-source aggregation
+and host-key fingerprint fields are not decision-quality evidence because the
+AlmaLinux AWK parser failure could be reported as zero.
+
 ## Target End State
 
 The future target is a named non-root administrator using a tested modern SSH
@@ -189,7 +208,8 @@ or image data is changed.
 ## Phase Status
 
 - Audit tooling: implemented locally.
-- VPS audit: not run.
+- VPS audit: first run requires a post-fix rerun; do not use its source-count
+  or fingerprint fields for hardening decisions.
 - SSH configuration change: not performed.
 - User creation: not performed.
 - Key installation: not performed.
