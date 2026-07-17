@@ -75,3 +75,12 @@ supplier's in-stock result. Runtime aggregation is not implemented here.
 This phase makes no storefront change, no import change, and no Catalog Sync
 integration. UPDATE remains disabled, Sync All remains disabled, automatic sync
 remains disabled, and supplier images remain prohibited.
+
+## Missing Offer Lifecycle Preview Addendum
+
+Phase 9C.6.5C.3D adds policy-only offer-presence tracking and aggregation
+contracts. `in_stock`, `limited`, `on_request`, and `last_units` are the valid
+active commercial statuses for future multi-supplier aggregation. A missing,
+inactive, or EOL offer from one supplier cannot deactivate a catalog product
+with another valid active offer. No aggregation or visibility result is written
+to a product in this phase.

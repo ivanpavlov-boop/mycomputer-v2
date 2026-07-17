@@ -54,3 +54,12 @@ The immutable approval gate is valid but has status
 `blocked_pending_human_decisions`. Semantic confirmation remains incomplete;
 operational import, profile persistence, schedule enablement, and Catalog Sync
 approval are all false. This document does not authorize import execution.
+
+## V3 Missing Offer Addendum
+
+Phase 9C.6.5C.3D preserves this v2 evidence unchanged and adds the separate,
+non-executable [APCOM Missing Offer Decisions V3](APCOM_MISSING_OFFER_DECISIONS_V3.md).
+The v3 policy confirms preview semantics for qualified missing-offer observations
+without approving persistence, offer writes, product visibility writes,
+storefront behavior, sitemap/noindex behavior, import, schedule, or Catalog
+Sync.

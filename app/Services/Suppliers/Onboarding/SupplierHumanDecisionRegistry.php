@@ -12,11 +12,14 @@ final class SupplierHumanDecisionRegistry
 
     public const APCOM_REGISTER_V2 = 'apcom-human-decisions-v2';
 
+    public const APCOM_REGISTER_V3 = 'apcom-human-decisions-v3';
+
     public function find(string $key): ?SupplierHumanDecisionRegister
     {
         return match ($key) {
             self::APCOM_REGISTER => $this->apcomV1(),
             self::APCOM_REGISTER_V2 => $this->apcomV2(),
+            self::APCOM_REGISTER_V3 => $this->apcomV3(),
             default => null,
         };
     }
@@ -79,6 +82,54 @@ final class SupplierHumanDecisionRegistry
             $this->decision('APCOM-PROHIBIT-IMAGE-IMPORT-001', 'Supplier image import', SupplierHumanDecisionStatus::Prohibited, 'supplier images', 'prohibited', 'Images are presence-only diagnostics and must not be imported.', false, true),
             $this->decision('APCOM-PROHIBIT-CONTENT-OVERWRITE-001', 'Supplier content overwrite', SupplierHumanDecisionStatus::Prohibited, 'product content fields', 'prohibited', 'Names, slugs, SEO, descriptions, images, categories, attributes, and workflow cannot be overwritten.', false, true),
         ], self::APCOM_REGISTER);
+    }
+
+    public function apcomV3(): SupplierHumanDecisionRegister
+    {
+        $decisions = array_map(function (SupplierHumanDecision $decision): SupplierHumanDecision {
+            return match ($decision->decisionId) {
+                'APCOM-STAGING-ONLY-001' => $this->decision(
+                    'APCOM-STAGING-ONLY-001',
+                    'Missing supplier offer lifecycle classification',
+                    SupplierHumanDecisionStatus::Confirmed,
+                    'qualified full snapshot absence',
+                    'supplier_offer_missing_policy_preview',
+                    'One missing snapshot is not EOL. Three qualified consecutive absences plus 48 hours may become a future supplier-offer-only eligibility signal; execution remains prohibited.',
+                    true,
+                    false,
+                    'approved_missing_offer_policy',
+                    SupplierOfferLifecyclePolicy::POLICY_KEY,
+                ),
+                'APCOM-LINKED-STAGING-ONLY-001' => $this->decision(
+                    'APCOM-LINKED-STAGING-ONLY-001',
+                    'Linked supplier offer lifecycle classification',
+                    SupplierHumanDecisionStatus::Confirmed,
+                    'linked supplier offer absent from qualified snapshot',
+                    'supplier_offer_only_lifecycle_preview',
+                    'A linked catalog product remains linked. No automatic unlink is allowed; only the supplier offer may become future deactivation-eligible after the approved policy threshold.',
+                    true,
+                    false,
+                    'approved_linked_offer_lifecycle_policy',
+                    CatalogOfferAggregationPolicy::POLICY_KEY,
+                ),
+                default => $decision,
+            };
+        }, $this->apcomV2()->decisions);
+
+        $decisions[] = $this->decision(
+            'APCOM-MISSING-OFFER-REAPPEARANCE-001',
+            'Missing supplier offer reappearance',
+            SupplierHumanDecisionStatus::Confirmed,
+            'qualified full snapshot reappearance',
+            'supplier_offer_reappearance_policy_preview',
+            'A valid exact-SKU reappearance resets absence tracking and may be future reactivation-eligible. Zero price and identifier conflicts remain blocked; execution remains prohibited.',
+            true,
+            false,
+            'approved_reappearance_policy',
+            SupplierOfferReappearancePolicy::POLICY_KEY,
+        );
+
+        return new SupplierHumanDecisionRegister(self::APCOM_REGISTER_V3, 'apcom', $decisions, self::APCOM_REGISTER_V2);
     }
 
     private function decision(

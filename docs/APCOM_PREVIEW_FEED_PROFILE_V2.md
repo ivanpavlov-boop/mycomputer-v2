@@ -41,3 +41,11 @@ The C3C operational v2 preview has not run.
 
 The next phase requires a separately approved design. UPDATE remains disabled,
 Sync All remains disabled, and automatic sync remains disabled.
+
+## V3 Missing Offer Addendum
+
+`apcom-preview-feed-profile-v3` is additive and keeps this v2 profile and its
+business-semantics dependency unchanged. The v3 profile records only
+supplier-offer missing/reappearance policy preview fields and remains
+read-only, non-persistent, and non-executable. See
+[APCOM Missing Offer Decisions V3](APCOM_MISSING_OFFER_DECISIONS_V3.md).
