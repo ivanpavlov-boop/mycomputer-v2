@@ -263,3 +263,11 @@ is not implemented. The profile approval gate is blocked: MPN and missing
 product handling are pending, zero-price is review-only, profile persistence
 and import are not approved, schedule remains disabled, and Catalog Sync is
 not approved.
+
+## APCOM C3D Missing Offer Lifecycle Preview
+
+The local/in-review C3D contracts add a synthetic-only offer-missing,
+reappearance, multi-supplier aggregation, product-visibility archival, and
+retention planning layer. No real APCOM feed, source record, operational
+preview, import, offer write, product visibility write, retention cleanup,
+schedule, or Catalog Sync action is authorized.

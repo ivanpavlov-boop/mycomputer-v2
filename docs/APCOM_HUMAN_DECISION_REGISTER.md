@@ -107,3 +107,10 @@ non-executable.
 Phase 9C.6.5C.3C adds `apcom-human-decisions-v2` without rewriting v1. It
 records partial operator-confirmed business semantics while retaining a blocked
 approval gate. See [APCOM Authoritative Human Decisions V2](APCOM_AUTHORITATIVE_HUMAN_DECISIONS_V2.md).
+
+## V3 Missing Offer Addendum
+
+Phase 9C.6.5C.3D adds `apcom-human-decisions-v3`, which supersedes v2 without
+rewriting v1 or v2. It confirms staging-only missing-offer and linked-offer
+policy interpretation plus reappearance preview semantics; source-only and MPN
+remain pending, zero-price remains review-only, and execution remains blocked.

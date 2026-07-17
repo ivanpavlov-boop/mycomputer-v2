@@ -97,3 +97,10 @@ See APCOM_PREVIEW_ONLY_FEED_PROFILE_OPERATIONAL_CLOSEOUT.md.
 `apcom-preview-feed-profile-v2` is additive and preserves this v1 profile. It
 uses an immutable blocked approval gate and still cannot persist, import, alter
 the schedule, or call Catalog Sync. See [APCOM Preview Feed Profile V2](APCOM_PREVIEW_FEED_PROFILE_V2.md).
+
+## V3 Missing Offer Addendum
+
+`apcom-preview-feed-profile-v3` is a planning profile only. It references the
+v3 decision register and retained v2 business semantics, records the missing
+offer and reappearance policy keys, and cannot persist a profile, import,
+write offers, change visibility, alter a schedule, or call Catalog Sync.

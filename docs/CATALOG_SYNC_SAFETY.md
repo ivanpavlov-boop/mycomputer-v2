@@ -978,3 +978,12 @@ Its profile approval gate is blocked, and it does not authorize import,
 schedule enablement, profile persistence, CREATE, UPDATE, Sync All, or
 automatic sync. Exact supplier quantity remains hidden publicly; images and
 content overwrite remain prohibited.
+
+## APCOM C3D Missing Offer Lifecycle Preview
+
+The C3D missing-offer lifecycle contracts are also not Catalog Sync. They are
+synthetic, deterministic policy previews with zero mutation counters. They do
+not deactivate or reactivate offers, change product visibility or workflow,
+run Scout or sitemap behavior, create links, or alter `supplier_products`.
+UPDATE remains disabled, Sync All remains disabled, automatic sync remains
+disabled, and the APCOM schedule remains disabled.

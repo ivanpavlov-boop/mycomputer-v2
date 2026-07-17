@@ -71,6 +71,7 @@ Phase 8 manual selected UPDATE price/stock sync has been implemented behind a fe
 
 | Phase | Name | Status |
 | --- | --- | --- |
+| Phase 9C.6.5C.3D | Missing Supplier Offer Lifecycle and Catalog Archival Policy Preview | Tooling implemented locally/in review. Operational lifecycle preview has not run; offer deactivation/reactivation, storefront visibility, sitemap/noindex behavior, retention cleanup, and persistence remain unimplemented. Approval gate is blocked. |
 
 ## Completed Documentation Closeout
 
@@ -78,12 +79,13 @@ Phase 8 manual selected UPDATE price/stock sync has been implemented behind a fe
 | --- | --- | --- |
 | Phase 9C.6.5C.3B | APCOM Human Decision Register and Preview-only Feed Profile Design | Tooling merged, deployed, and exercised read-only; strict operational contract passed. Human decisions remain pending and no import, persistence, schedule, or Catalog Sync action is approved. |
 | Phase 9C.6.5C.3B.1 | APCOM Preview-only Feed Profile Operational Closeout | Completed by documentation and documentation-contract tests; operational evidence is recorded without committing the source or runtime report. |
+| Phase 9C.6.5C.3C | APCOM Authoritative Human Decision Evidence and Profile Approval Gate | Completed, merged, deployed, and verified. PR #152 merged at `b2b4fb95f1d2bfe2382fe6cab9a8462fa6f7e277`; CI #322 succeeded. VPS was synced and verified. The approval gate remains blocked for implementation approvals. APCOM schedule remains disabled; UPDATE, Sync All, and automatic sync remain disabled. |
 
 ## Next Pending Phase
 
 | Phase | Name | Status |
 | --- | --- | --- |
-| Phase 9C.6.5C.3C | APCOM Authoritative Human Decision Evidence and Profile Approval Gate | Tooling implemented locally/in review; v2 operational preview not run. Operator-confirmed semantics are partial, while the approval gate remains blocked and import/persistence/schedule/Catalog Sync are not approved. |
+| Phase 9C.6.5C.3D | Missing Supplier Offer Lifecycle and Catalog Archival Policy Preview | Local synthetic policy tooling is in review only. No operational preview, source read, persistence, lifecycle write, storefront visibility, sitemap/noindex behavior, or retention cleanup is authorized. |
 
 ## Paused / Partial Phases
 

@@ -10,11 +10,14 @@ final class SupplierPreviewFeedProfileDesignRegistry
 
     public const APCOM_PROFILE_V2 = 'apcom-preview-feed-profile-v2';
 
+    public const APCOM_PROFILE_V3 = 'apcom-preview-feed-profile-v3';
+
     public function find(string $key): ?SupplierPreviewFeedProfileDesign
     {
         return match ($key) {
             self::APCOM_PROFILE => $this->apcomV1(),
             self::APCOM_PROFILE_V2 => $this->apcomV2(),
+            self::APCOM_PROFILE_V3 => $this->apcomV3(),
             default => null,
         };
     }
@@ -110,6 +113,35 @@ final class SupplierPreviewFeedProfileDesignRegistry
                 'import_allowed' => false,
                 'profile_persistence_allowed' => false,
                 'schedule_enablement_allowed' => false,
+            ],
+        );
+    }
+
+    public function apcomV3(): SupplierPreviewFeedProfileDesign
+    {
+        $v2 = $this->apcomV2();
+
+        return new SupplierPreviewFeedProfileDesign(
+            key: self::APCOM_PROFILE_V3,
+            supplierKey: 'apcom',
+            decisionRegisterKey: SupplierHumanDecisionRegistry::APCOM_REGISTER_V3,
+            semanticsProfileKey: $v2->semanticsProfileKey,
+            fieldMappings: [
+                ...$v2->fieldMappings,
+                $this->field('missing_offer_lifecycle', 'qualified full snapshot presence observation', 'supplier-offer-missing-policy-v1', 'APCOM-STAGING-ONLY-001'),
+                $this->field('offer_reappearance', 'qualified full snapshot exact supplier SKU', 'supplier-offer-reappearance-policy-v1', 'APCOM-MISSING-OFFER-REAPPEARANCE-001'),
+            ],
+            actionMatrix: [
+                ...$v2->actionMatrix,
+                $this->action('Supplier offer lifecycle preview', 'qualified_missing_observation', 'APCOM-STAGING-ONLY-001', 'supplier-offer-only policy preview; no write, unlink, product visibility, or catalog action'),
+                $this->action('Supplier offer reappearance preview', 'qualified_exact_sku_reappearance', 'APCOM-MISSING-OFFER-REAPPEARANCE-001', 'preview only; zero price and identifier conflicts remain blocked'),
+            ],
+            safetyPolicy: [
+                ...$v2->safetyPolicy,
+                'offer_lifecycle_write_allowed' => false,
+                'product_visibility_write_allowed' => false,
+                'retention_cleanup_allowed' => false,
+                'storefront_visibility_runtime_allowed' => false,
             ],
         );
     }

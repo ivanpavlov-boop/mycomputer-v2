@@ -190,24 +190,28 @@ operational decision.
 
 1. Keep Phase 7.5 documentation lock current.
 2. Keep feature flag and audit visibility read-only.
-3. Review the C3B.1 read-only operational closeout and the locally implemented
-   C3C v2 authoritative-decision tooling. The v2 approval gate remains blocked:
-   no profile persistence, import, schedule enablement, or Catalog Sync is
-   approved, and no C3C operational preview has run.
-4. Select Supplier #3 only after a reviewed readiness matrix and explicit human
+3. Preserve the completed C3C v2 operational record: PR #152 merged at
+   `b2b4fb95f1d2bfe2382fe6cab9a8462fa6f7e277`, CI #322 succeeded, and VPS was
+   synced and verified. APCOM schedule remains disabled; Catalog Sync UPDATE,
+   Sync All, and automatic sync remain disabled.
+4. Review the local/in-review C3D synthetic missing-offer lifecycle policy.
+   It does not authorize operational lifecycle preview, offer writes,
+   storefront visibility, sitemap/noindex behavior, retention cleanup,
+   persistence, schedule enablement, import, or Catalog Sync.
+5. Select Supplier #3 only after a reviewed readiness matrix and explicit human
    decision; ASBIS remains Supplier #2.
-5. Phase 9C.6.6 Multi-Supplier Category Mapping Review.
-6. Phase 9C.6.7 Multi-Supplier Identifier Overlap Review.
-7. Phase 9C.7 Supplier Attribute Mapping Foundation.
-8. Product specification data quality polish.
-9. Storefront specification display and later attribute filters.
-10. Product attribute filter design after controlled data quality.
-11. Rollback tooling based on `catalog_sync_batches` and `catalog_sync_logs`.
-12. Keep feature flags locked down before broader sync work.
-13. Conflict/manual mapping workflow.
-14. Sync All later.
-15. Automatic sync later.
-16. Nuxt i18n route integration and localized sitemap expansion.
+6. Phase 9C.6.6 Multi-Supplier Category Mapping Review.
+7. Phase 9C.6.7 Multi-Supplier Identifier Overlap Review.
+8. Phase 9C.7 Supplier Attribute Mapping Foundation.
+9. Product specification data quality polish.
+10. Storefront specification display and later attribute filters.
+11. Product attribute filter design after controlled data quality.
+12. Rollback tooling based on `catalog_sync_batches` and `catalog_sync_logs`.
+13. Keep feature flags locked down before broader sync work.
+14. Conflict/manual mapping workflow.
+15. Sync All later.
+16. Automatic sync later.
+17. Nuxt i18n route integration and localized sitemap expansion.
 17. Data enrichment workflow refinements after queue usage is observed.
 
 ## Phase 8 Initial UPDATE Scope
