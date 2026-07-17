@@ -11,6 +11,11 @@ For Docker daemon and VPS restart recovery, see
 post-merge procedure is operational guidance only and requires explicit human
 approval; no Docker daemon restart is part of normal local validation.
 
+For Infrastructure Security 1, see
+[SSH Security Baseline Audit And Safe Hardening](SSH_SECURITY_HARDENING.md).
+The audit tooling is read-only; VPS audit and every SSH hardening operation
+remain separate, explicitly approved operational work.
+
 ## Current Status
 
 Deployment is Docker-based. Deploy only from `origin/main` after PR merge and passing CI. The stack serves Laravel/Filament through `app` and selected read-only Nuxt storefront routes through `frontend`.
