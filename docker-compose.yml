@@ -1,5 +1,6 @@
 services:
   app:
+    restart: unless-stopped
     build:
       context: .
     env_file:
@@ -30,6 +31,7 @@ services:
       start_period: 30s
 
   nginx:
+    restart: unless-stopped
     image: nginx:1.27-alpine
     ports:
       - "8080:80"
@@ -44,6 +46,7 @@ services:
       - ./deploy/nginx/mycomputer.conf:/etc/nginx/conf.d/default.conf:ro
 
   frontend:
+    restart: unless-stopped
     build:
       context: ./frontend
     env_file:
@@ -59,6 +62,7 @@ services:
       - "3000"
 
   queue:
+    restart: unless-stopped
     build:
       context: .
     command: sh -c "until php artisan migrate:status --no-interaction >/dev/null 2>&1; do echo 'Waiting for database migrations before queue worker starts...'; sleep 10; done; php artisan queue:work redis --queue=default,emails,loyalty,imports,exports,sync,analytics,search,erp --sleep=3 --tries=3 --timeout=1200"
@@ -84,6 +88,7 @@ services:
       - app-storage:/var/www/html/storage
 
   scheduler:
+    restart: unless-stopped
     build:
       context: .
     command: sh -c "until php artisan migrate:status --no-interaction >/dev/null 2>&1; do echo 'Waiting for database migrations before scheduler starts...'; sleep 10; done; while true; do php artisan schedule:run --no-interaction; sleep 60; done"
@@ -107,6 +112,7 @@ services:
       - app-storage:/var/www/html/storage
 
   mysql:
+    restart: unless-stopped
     image: mysql:8.4
     environment:
       MYSQL_DATABASE: ${DB_DATABASE:-mycomputer_v2}
@@ -121,6 +127,7 @@ services:
       start_period: 30s
 
   redis:
+    restart: unless-stopped
     image: redis:7-alpine
     command: redis-server --appendonly yes --maxmemory-policy allkeys-lru
     volumes:
@@ -133,6 +140,7 @@ services:
       start_period: 5s
 
   meilisearch:
+    restart: unless-stopped
     build:
       context: ./deploy/meilisearch
     environment:
