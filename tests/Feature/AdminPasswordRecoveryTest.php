@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Filament\Pages\Auth\RequestAdminPasswordReset as RequestPasswordReset;
 use App\Filament\Pages\Auth\ResetAdminPassword as ResetPassword;
 use App\Filament\Pages\CatalogSyncPreview;
 use App\Filament\Resources\Users\Pages\CreateUser;
@@ -11,7 +12,6 @@ use App\Filament\Resources\Users\UserResource;
 use App\Models\User;
 use App\Notifications\AdminPasswordResetNotification;
 use Database\Seeders\RolesAndPermissionsSeeder;
-use Filament\Auth\Pages\PasswordReset\RequestPasswordReset;
 use Filament\Notifications\Notification as FilamentNotification;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Mail\Markdown;
@@ -72,20 +72,15 @@ class AdminPasswordRecoveryTest extends TestCase
             ->call('request')
             ->assertNotified(
                 FilamentNotification::make()
-                    ->title('Линкът за смяна на парола е изпратен')
-                    ->body('Ако този имейл съществува и акаунтът е активен, ще получите линк за смяна на парола.')
+                    ->title(__('admin-password-reset.notifications.request_sent.title'))
+                    ->body(__('admin-password-reset.notifications.request_sent.body'))
                     ->success(),
             );
 
-        $this->assertSame('Линкът за смяна на парола е изпратен', __('passwords.sent'));
+        $this->assertSame('Проверете имейла си', __('admin-password-reset.notifications.request_sent.title'));
         $this->assertSame(
-            'Ако този имейл съществува и акаунтът е активен, ще получите линк за смяна на парола.',
-            __('filament-panels::auth/pages/password-reset/request-password-reset.notifications.sent.body'),
-        );
-        $this->assertNotSame('passwords.sent', __('passwords.sent'));
-        $this->assertNotSame(
-            'filament-panels::auth/pages/password-reset/request-password-reset.notifications.sent.body',
-            __('filament-panels::auth/pages/password-reset/request-password-reset.notifications.sent.body'),
+            'Ако съществува активен администраторски акаунт с този имейл, ще получите линк за възстановяване на паролата.',
+            __('admin-password-reset.notifications.request_sent.body'),
         );
 
         Notification::assertSentTo($admin, AdminPasswordResetNotification::class);
