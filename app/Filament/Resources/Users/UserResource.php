@@ -77,7 +77,7 @@ class UserResource extends Resource
                         ->rules(fn (?string $state, string $operation): array => filled($state) || $operation === 'create' ? [new AdminStaffPassword] : [])
                         ->same('password_confirmation')
                         ->validationMessages([
-                            'same' => 'Потвърждението на паролата не съвпада.',
+                            'same' => __('admin-password-reset.validation.password.same'),
                         ]),
                     TextInput::make('password_confirmation')
                         ->label('Password confirmation')

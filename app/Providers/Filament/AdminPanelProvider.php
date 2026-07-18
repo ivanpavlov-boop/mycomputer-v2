@@ -2,6 +2,7 @@
 
 namespace App\Providers\Filament;
 
+use App\Filament\Pages\Auth\RequestAdminPasswordReset;
 use App\Filament\Pages\Auth\ResetAdminPassword;
 use App\Filament\Widgets\AiUsageStats;
 use App\Filament\Widgets\ProductSyncStats;
@@ -39,7 +40,10 @@ class AdminPanelProvider extends PanelProvider
             ->id('admin')
             ->path('admin')
             ->login()
-            ->passwordReset(resetAction: ResetAdminPassword::class)
+            ->passwordReset(
+                requestAction: RequestAdminPasswordReset::class,
+                resetAction: ResetAdminPassword::class,
+            )
             ->colors([
                 'primary' => Color::Amber,
             ])
