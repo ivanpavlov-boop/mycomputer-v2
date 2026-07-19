@@ -180,8 +180,8 @@ describe('catalog page', () => {
     expect(products[0]?.name).toBe('Logitech Universal Folio Keyboard')
     expect(page).toContain('CatalogProductGrid v-if="products.length" :products="products"')
     expect(grid).toContain('CatalogProductCard v-for="product in products"')
-    expect(card).toContain('{{ product.name }}')
-    expect(card).toContain(':to="`/p/${product.slug}`"')
+    expect(card).toContain('{{ productName }}')
+    expect(card).toContain(':to="localePath(`/p/${product.slug}`)"')
     expect(card).toContain('Няма снимка')
   })
 
@@ -207,7 +207,7 @@ describe('catalog page', () => {
   it('keeps product cards linked to product detail pages with image placeholders', () => {
     const card = source('app/components/catalog/ProductCard.vue')
 
-    expect(card).toContain(':to="`/p/${product.slug}`"')
+    expect(card).toContain(':to="localePath(`/p/${product.slug}`)"')
     expect(card).toContain('Няма снимка')
     expect(card).toContain('@error="primaryImageFailed = true"')
     expect(card).toContain('watch(primaryImagePath')

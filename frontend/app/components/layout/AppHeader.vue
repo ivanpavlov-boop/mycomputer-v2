@@ -4,7 +4,7 @@
       <button class="rounded-md p-2 hover:bg-slate-100 lg:hidden" aria-label="Меню" @click="ui.mobileMenuOpen = true">
         ☰
       </button>
-      <NuxtLink to="/" class="flex items-center gap-2 text-lg font-bold text-slate-950">
+      <NuxtLink :to="localePath('/')" class="flex items-center gap-2 text-lg font-bold text-slate-950">
         <span class="rounded-md bg-brand-600 px-2 py-1 text-white">MC</span>
         mycomputer.bg
       </NuxtLink>
@@ -15,6 +15,7 @@
         <NuxtLink to="/leasing">Лизинг</NuxtLink>
       </nav>
       <SearchBar class="ml-auto hidden max-w-md flex-1 md:block" />
+      <LayoutLanguageSwitcher class="hidden sm:flex" />
       <NuxtLink v-if="!isReadOnlyStorefrontRoute" to="/compare" class="hidden text-sm font-semibold text-slate-700 hover:text-brand-700 sm:block">
         Сравни {{ compare.count ? `(${compare.count})` : '' }}
       </NuxtLink>
@@ -40,6 +41,7 @@ const compare = useCompareStore()
 const wishlist = useWishlistStore()
 const auth = useAuthStore()
 const isReadOnlyStorefrontRoute = useReadOnlyStorefrontRoute()
+const localePath = useLocalePath()
 onMounted(async () => {
   await auth.fetchUser()
   if (!isReadOnlyStorefrontRoute.value) {

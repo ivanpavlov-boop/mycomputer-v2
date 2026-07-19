@@ -116,8 +116,10 @@ class MultilingualFoundationTest extends TestCase
         ]);
 
         $this
-            ->getJson('/api/v1/products/'.$product->slug.'?locale=en')
+            ->withHeader('X-Locale', 'en')
+            ->getJson('/api/v1/products/'.$product->slug)
             ->assertOk()
+            ->assertHeader('Content-Language', 'en')
             ->assertJsonPath('data.name', 'Лаптоп Lenovo')
             ->assertJsonPath('data.slug', 'laptop-lenovo')
             ->assertJsonPath('data.locale', 'en')

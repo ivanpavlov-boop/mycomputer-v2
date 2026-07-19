@@ -59,6 +59,7 @@ const route = useRoute()
 const router = useRouter()
 const productsApi = useProducts()
 const seo = useSeo()
+const { locale } = useI18n()
 
 const forwardedQueryKeys = [
   'category',
@@ -110,10 +111,10 @@ const catalogQuery = computed(() => {
 })
 
 const { data: productsResponse, error, pending } = await useAsyncData(
-  'catalog-products',
+  () => `catalog-products-${locale.value}`,
   async () => paginatedResource<ProductCard>(await productsApi.list(catalogQuery.value)),
   {
-    watch: [catalogQuery],
+    watch: [catalogQuery, locale],
     default: () => paginatedResource<ProductCard>(null),
   },
 )

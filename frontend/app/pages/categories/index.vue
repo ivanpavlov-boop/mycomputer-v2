@@ -22,12 +22,12 @@
           :key="category.id"
           class="surface flex h-full flex-col overflow-hidden border border-slate-200 bg-white"
         >
-          <NuxtLink :to="`/c/${category.slug}`" class="block p-4">
+          <NuxtLink :to="localePath(`/c/${category.slug}`)" class="block p-4">
             <div class="flex aspect-[16/9] items-center justify-center overflow-hidden rounded-md bg-slate-100 text-brand-700">
               <NuxtImg
                 v-if="categoryImagePath(category)"
                 :src="categoryImageSrc(categoryImagePath(category)!)"
-                :alt="category.name"
+                :alt="category.localized?.name || category.name"
                 class="h-full w-full object-cover"
                 loading="lazy"
                 @error="markCategoryImageFailed(categoryImagePath(category)!)"
@@ -38,11 +38,11 @@
 
           <div class="flex flex-1 flex-col gap-4 p-4 pt-0">
             <div>
-              <NuxtLink :to="`/c/${category.slug}`" class="text-lg font-semibold text-slate-950 hover:text-brand-700">
-                {{ category.name }}
+              <NuxtLink :to="localePath(`/c/${category.slug}`)" class="text-lg font-semibold text-slate-950 hover:text-brand-700">
+                {{ category.localized?.name || category.name }}
               </NuxtLink>
-              <p v-if="category.description" class="mt-2 line-clamp-2 text-sm text-slate-600">
-                {{ category.description }}
+              <p v-if="category.localized?.description || category.description" class="mt-2 line-clamp-2 text-sm text-slate-600">
+                {{ category.localized?.description || category.description }}
               </p>
             </div>
 
@@ -52,10 +52,10 @@
                 <NuxtLink
                   v-for="child in childCategories(category)"
                   :key="child.id"
-                  :to="`/c/${child.slug}`"
+                  :to="localePath(`/c/${child.slug}`)"
                   class="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-700 hover:border-brand-200 hover:text-brand-700"
                 >
-                  {{ child.name }}
+                  {{ child.localized?.name || child.name }}
                 </NuxtLink>
               </div>
             </div>
@@ -63,7 +63,7 @@
             <div class="mt-auto flex items-center justify-between gap-3 pt-2">
               <span class="text-xs text-slate-500">Продукти в категорията</span>
               <NuxtLink
-                :to="`/c/${category.slug}`"
+                :to="localePath(`/c/${category.slug}`)"
                 class="inline-flex items-center justify-center rounded-md border border-brand-200 bg-brand-50 px-3 py-2 text-sm font-semibold text-brand-700 hover:bg-brand-100"
               >
                 Виж категорията
@@ -88,10 +88,13 @@ import { collectionData } from '~/utils/apiCollections'
 const categoryApi = useCategories()
 const seo = useSeo()
 const config = useRuntimeConfig()
+const localePath = useLocalePath()
+const { locale } = useI18n()
 
 const { data: categoryResponse, pending, error } = await useAsyncData(
-  'public-category-navigation',
+  () => `public-category-navigation-${locale.value}`,
   () => categoryApi.navigation(),
+  { watch: [locale] },
 )
 
 const categories = computed<Category[]>(() => collectionData<Category>(categoryResponse.value))

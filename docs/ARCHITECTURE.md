@@ -1152,6 +1152,29 @@ Nuxt responsibilities:
 - Maintain local cart fallback.
 - Sync cart/checkout with backend when API is available.
 
+### Multilingual Storefront Foundation
+
+Bulgarian (`bg`) is the default and fallback locale. English (`en`) is an
+optional secondary locale using Nuxt's `prefix_except_default` strategy:
+Bulgarian URLs remain unprefixed, while Nuxt generates `/en`, `/en/catalog`,
+`/en/categories`, `/en/c/{slug}`, and `/en/p/{slug}`.
+
+The shared language switcher uses Nuxt locale routes rather than hard-coded
+domains. The public API client sends the current locale as `X-Locale`; Laravel
+resolves that header first, then `Accept-Language`, then the legacy validated
+`?locale=` API option, and otherwise falls back to Bulgarian. API resources
+keep their legacy fields and expose optional localized payloads. Storefront
+components use those localized display fields when present and safely fall back
+to the primary Bulgarian catalog content when English content is absent.
+
+This is a read-only presentation foundation. It does not create translations,
+change stored catalog content, alter API write behavior, localize Filament, or
+expand deployment routing. English pages are `noindex, follow` by default;
+alternate English hreflang links require the explicit
+`NUXT_PUBLIC_ENGLISH_LOCALE_INDEXABLE=true` review gate. Existing Laravel
+ownership of `/admin`, `/api/*`, `/livewire/*`, `/vendor/*`, `/build/*`, and
+`/storage/*` remains unchanged.
+
 ```mermaid
 flowchart TD
     Pages["Nuxt Pages"] --> Composables["API Composables"]

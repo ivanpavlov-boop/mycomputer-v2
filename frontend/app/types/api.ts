@@ -19,6 +19,14 @@ export interface Category {
   sort_order?: number
   meta_title?: string | null
   meta_description?: string | null
+  localized?: {
+    name?: string | null
+    slug?: string | null
+    description?: string | null
+    meta_title?: string | null
+    meta_description?: string | null
+    has_translation?: boolean
+  }
   children?: Category[]
 }
 
@@ -60,6 +68,15 @@ export interface ProductCard {
   name: string
   slug: string
   short_description?: string | null
+  localized?: {
+    name?: string | null
+    slug?: string | null
+    short_description?: string | null
+    description?: string | null
+    meta_title?: string | null
+    meta_description?: string | null
+    has_translation?: boolean
+  }
   currency?: string
   price: string | number
   promo_price?: string | number | null

@@ -1,15 +1,25 @@
+import { normalizeStorefrontLocale } from '~/utils/locales'
+
 export function useApi() {
   const config = useRuntimeConfig()
   const baseURL = import.meta.server
     ? String(config.apiServerBaseUrl || config.public.apiBaseUrl)
     : config.public.apiBaseUrl
   const auth = useAuthStore()
+  const { locale } = useI18n()
+
+  function requestHeaders() {
+    return {
+      ...auth.authHeaders(),
+      'X-Locale': normalizeStorefrontLocale(locale.value),
+    }
+  }
 
   async function get<T>(path: string, query?: Record<string, unknown>) {
     return await $fetch<T>(path, {
       baseURL,
       query,
-      headers: auth.authHeaders(),
+      headers: requestHeaders(),
     })
   }
 
@@ -18,7 +28,7 @@ export function useApi() {
       baseURL,
       method: 'POST',
       body,
-      headers: auth.authHeaders(),
+      headers: requestHeaders(),
     })
   }
 
@@ -27,7 +37,7 @@ export function useApi() {
       baseURL,
       method: 'PATCH',
       body,
-      headers: auth.authHeaders(),
+      headers: requestHeaders(),
     })
   }
 
@@ -35,7 +45,7 @@ export function useApi() {
     return await $fetch<T>(path, {
       baseURL,
       method: 'DELETE',
-      headers: auth.authHeaders(),
+      headers: requestHeaders(),
     })
   }
 
