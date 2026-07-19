@@ -4,6 +4,9 @@ namespace App\Filament\Resources\Products\Pages;
 
 use App\Filament\Resources\Products\ProductResource;
 use App\Models\Product;
+use App\Models\User;
+use App\Services\Products\ProductWorkflowService;
+use App\Support\ProductFormFieldAccess;
 use Filament\Actions\Action;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\ForceDeleteAction;
@@ -11,6 +14,7 @@ use Filament\Actions\RestoreAction;
 use Filament\Forms\Components\Textarea;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\EditRecord;
+use Illuminate\Auth\Access\AuthorizationException;
 
 class EditProduct extends EditRecord
 {
@@ -27,84 +31,116 @@ class EditProduct extends EditRecord
             Action::make('submitForReview')
                 ->label('Изпрати за преглед')
                 ->color('warning')
-                ->visible(fn (): bool => $this->record->canTransitionWorkflowTo(Product::WORKFLOW_PENDING_REVIEW))
-                ->action(fn (): null => $this->transitionWorkflow(Product::WORKFLOW_PENDING_REVIEW)),
+                ->visible(fn (): bool => $this->canRunWorkflowAction(ProductWorkflowService::ACTION_SUBMIT_FOR_REVIEW))
+                ->requiresConfirmation()
+                ->modalHeading('Изпращане за преглед')
+                ->modalDescription('Продуктът ще остане скрит, докато не бъде одобрен и публикуван отделно.')
+                ->modalSubmitActionLabel('Изпрати за преглед')
+                ->action(fn (): null => $this->transitionWorkflow(ProductWorkflowService::ACTION_SUBMIT_FOR_REVIEW)),
             Action::make('requestChanges')
                 ->label('Върни за корекции')
-                ->color('gray')
-                ->visible(fn (): bool => $this->record->canTransitionWorkflowTo(Product::WORKFLOW_CHANGES_REQUESTED))
+                ->color('danger')
+                ->visible(fn (): bool => $this->canRunWorkflowAction(ProductWorkflowService::ACTION_REQUEST_CHANGES))
+                ->requiresConfirmation()
+                ->modalHeading('Връщане за корекции')
+                ->modalDescription('Продуктът ще бъде скрит. Опишете ясно необходимите корекции.')
+                ->modalSubmitActionLabel('Върни за корекции')
                 ->form([
                     Textarea::make('review_notes')
                         ->label('Бележка за корекция')
                         ->rows(3)
                         ->required(),
                 ])
-                ->action(fn (array $data): null => $this->transitionWorkflow(Product::WORKFLOW_CHANGES_REQUESTED, $data['review_notes'] ?? null)),
+                ->action(fn (array $data): null => $this->transitionWorkflow(ProductWorkflowService::ACTION_REQUEST_CHANGES, $data['review_notes'] ?? null)),
             Action::make('approve')
                 ->label('Одобри')
-                ->color('success')
-                ->visible(fn (): bool => $this->record->canTransitionWorkflowTo(Product::WORKFLOW_APPROVED))
-                ->action(fn (): null => $this->transitionWorkflow(Product::WORKFLOW_APPROVED)),
+                ->color('info')
+                ->visible(fn (): bool => $this->canRunWorkflowAction(ProductWorkflowService::ACTION_APPROVE))
+                ->requiresConfirmation()
+                ->modalHeading('Одобряване на продукт')
+                ->modalDescription('Одобрението не публикува продукта. Той ще остане скрит до отделно публикуване.')
+                ->modalSubmitActionLabel('Одобри')
+                ->action(fn (): null => $this->transitionWorkflow(ProductWorkflowService::ACTION_APPROVE)),
             Action::make('publish')
                 ->label('Публикувай')
                 ->color('success')
-                ->visible(fn (): bool => $this->record->canTransitionWorkflowTo(Product::WORKFLOW_PUBLISHED))
+                ->visible(fn (): bool => $this->canRunWorkflowAction(ProductWorkflowService::ACTION_PUBLISH))
                 ->requiresConfirmation()
-                ->action(fn (): null => $this->transitionWorkflow(Product::WORKFLOW_PUBLISHED)),
-            Action::make('unpublish')
+                ->modalHeading('Публикуване на продукт')
+                ->modalDescription('След потвърждение продуктът ще стане публично видим, ако покрива техническите изисквания.')
+                ->modalSubmitActionLabel('Публикувай')
+                ->action(fn (): null => $this->transitionWorkflow(ProductWorkflowService::ACTION_PUBLISH)),
+            Action::make('hide')
                 ->label('Скрий')
                 ->color('danger')
-                ->visible(fn (): bool => $this->record->workflow_status === Product::WORKFLOW_PUBLISHED && auth()->user()?->canPublishProducts())
+                ->visible(fn (): bool => $this->canRunWorkflowAction(ProductWorkflowService::ACTION_HIDE))
                 ->requiresConfirmation()
-                ->action(function (): void {
-                    $this->record->forceFill([
-                        'workflow_status' => Product::WORKFLOW_APPROVED,
-                        'active' => false,
-                        'product_status' => 'hidden',
-                    ])->save();
-
-                    $this->refreshFormData(['workflow_status', 'active', 'product_status']);
-
-                    Notification::make()
-                        ->title('Продуктът е скрит')
-                        ->success()
-                        ->send();
-                }),
+                ->modalHeading('Скриване на продукт')
+                ->modalDescription('Продуктът ще изчезне от публичния каталог и търсенето. Историята на публикуването ще се запази.')
+                ->modalSubmitActionLabel('Скрий')
+                ->action(fn (): null => $this->transitionWorkflow(ProductWorkflowService::ACTION_HIDE)),
             DeleteAction::make()->label('Изтриване'),
             RestoreAction::make()->label('Възстановяване'),
             ForceDeleteAction::make()->label('Изтрий завинаги'),
         ];
     }
 
-    protected function transitionWorkflow(string $status, ?string $notes = null): null
+    /**
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>
+     */
+    protected function mutateFormDataBeforeSave(array $data): array
     {
-        $this->record->transitionWorkflowTo($status, auth()->user(), $notes);
-        $this->record->refresh();
-        $this->refreshFormData([
-            'workflow_status',
-            'active',
-            'product_status',
-            'published_at',
-            'review_notes',
-        ]);
+        $actor = auth()->user();
+
+        if (! $actor instanceof User || ! $actor->isActiveAdminAccount()) {
+            throw new AuthorizationException('Необходим е активен администратор.');
+        }
+
+        return ProductFormFieldAccess::sanitize($data, $actor);
+    }
+
+    protected function canRunWorkflowAction(string $action): bool
+    {
+        return app(ProductWorkflowService::class)->can($this->record, $action, auth()->user());
+    }
+
+    protected function transitionWorkflow(string $action, ?string $notes = null): null
+    {
+        $this->record = app(ProductWorkflowService::class)->transition(
+            $this->record,
+            $action,
+            $this->workflowActor(),
+            $notes,
+        );
+
+        $this->fillForm();
 
         Notification::make()
-            ->title('Работният статус е обновен')
-            ->body(self::workflowStatusLabel($this->record->workflow_status))
+            ->title(match ($action) {
+                ProductWorkflowService::ACTION_SUBMIT_FOR_REVIEW => 'Продуктът е изпратен за преглед',
+                ProductWorkflowService::ACTION_REQUEST_CHANGES => 'Продуктът е върнат за корекции',
+                ProductWorkflowService::ACTION_APPROVE => 'Продуктът е одобрен, но остава скрит',
+                ProductWorkflowService::ACTION_PUBLISH => 'Продуктът е публикуван',
+                ProductWorkflowService::ACTION_HIDE => 'Продуктът е скрит',
+                default => 'Работният статус е обновен',
+            })
+            ->body(Product::workflowStatusLabel($this->record->workflow_status))
             ->success()
             ->send();
 
         return null;
     }
 
-    protected static function workflowStatusLabel(?string $status): string
+    /** @throws AuthorizationException */
+    protected function workflowActor(): User
     {
-        return [
-            Product::WORKFLOW_DRAFT => 'Чернова',
-            Product::WORKFLOW_PENDING_REVIEW => 'За преглед',
-            Product::WORKFLOW_CHANGES_REQUESTED => 'Върнат за корекции',
-            Product::WORKFLOW_APPROVED => 'Одобрен',
-            Product::WORKFLOW_PUBLISHED => 'Публикуван',
-        ][$status] ?? 'Неизвестен';
+        $user = auth()->user();
+
+        if (! $user instanceof User) {
+            throw new AuthorizationException('Необходим е активен администратор.');
+        }
+
+        return $user;
     }
 }

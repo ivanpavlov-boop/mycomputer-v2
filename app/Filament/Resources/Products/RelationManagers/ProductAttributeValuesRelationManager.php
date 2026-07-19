@@ -30,6 +30,7 @@ use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Validator;
@@ -45,6 +46,11 @@ class ProductAttributeValuesRelationManager extends RelationManager
     protected static ?string $modelLabel = 'характеристика';
 
     protected static ?string $pluralModelLabel = 'Характеристики';
+
+    public static function canViewForRecord(Model $ownerRecord, string $pageClass): bool
+    {
+        return (bool) auth()->user()?->canEditProductContent();
+    }
 
     public function form(Schema $schema): Schema
     {

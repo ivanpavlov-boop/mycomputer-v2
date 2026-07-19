@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Concerns\HasLocalizedFields;
+use App\Services\Products\ProductWorkflowService;
 use Database\Factories\ProductFactory;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -181,6 +182,10 @@ class Product extends Model
                 $product->stock_status = self::defaultStockStatusForQuantity($product->quantity);
             }
         });
+
+        static::restoring(function (Product $product): void {
+            app(ProductWorkflowService::class)->prepareForRestore($product);
+        });
     }
 
     public function searchableAs(): string
@@ -190,7 +195,18 @@ class Product extends Model
 
     public function shouldBeSearchable(): bool
     {
-        return $this->active && $this->published_at !== null && $this->workflow_status === self::WORKFLOW_PUBLISHED;
+        return $this->isPubliclyVisible();
+    }
+
+    public function isPubliclyVisible(): bool
+    {
+        return ! $this->trashed()
+            && (bool) $this->active
+            && $this->published_at !== null
+            && $this->workflow_status === self::WORKFLOW_PUBLISHED
+            && $this->product_status === 'active'
+            && filled($this->slug)
+            && $this->category()->where('is_active', true)->exists();
     }
 
     public function shouldApplyPricingEngine(): bool
@@ -378,27 +394,27 @@ class Product extends Model
 
     public function createdBy(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'created_by');
+        return $this->belongsTo(User::class, 'created_by')->withTrashed();
     }
 
     public function submittedBy(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'submitted_by');
+        return $this->belongsTo(User::class, 'submitted_by')->withTrashed();
     }
 
     public function approvedBy(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'approved_by');
+        return $this->belongsTo(User::class, 'approved_by')->withTrashed();
     }
 
     public function publishedBy(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'published_by');
+        return $this->belongsTo(User::class, 'published_by')->withTrashed();
     }
 
     public function returnedBy(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'returned_by');
+        return $this->belongsTo(User::class, 'returned_by')->withTrashed();
     }
 
     public function assignedTo(): BelongsTo
@@ -472,6 +488,7 @@ class Product extends Model
     public function scopePublished(Builder $query): Builder
     {
         return $query
+            ->whereNull($this->qualifyColumn('deleted_at'))
             ->where('active', true)
             ->whereNotNull('published_at')
             ->where('workflow_status', self::WORKFLOW_PUBLISHED)
@@ -505,6 +522,17 @@ class Product extends Model
         return self::workflowStatusOptions()[$status] ?? 'Неизвестен';
     }
 
+    public static function workflowStatusColor(?string $status): string
+    {
+        return match ($status) {
+            self::WORKFLOW_PUBLISHED => 'success',
+            self::WORKFLOW_APPROVED => 'info',
+            self::WORKFLOW_PENDING_REVIEW => 'warning',
+            self::WORKFLOW_CHANGES_REQUESTED => 'danger',
+            default => 'gray',
+        };
+    }
+
     /**
      * @return array<string, string>
      */
@@ -522,70 +550,6 @@ class Product extends Model
         return (int) ($quantity ?? 0) > 0
             ? self::STOCK_STATUS_IN_STOCK
             : self::STOCK_STATUS_OUT_OF_STOCK;
-    }
-
-    public function canTransitionWorkflowTo(string $status, ?User $user = null): bool
-    {
-        $user ??= auth()->user();
-
-        if (! $user?->isActiveAdminAccount()) {
-            return false;
-        }
-
-        return match ($status) {
-            self::WORKFLOW_PENDING_REVIEW => $user->canEditProductContent()
-                && in_array($this->workflow_status, [self::WORKFLOW_DRAFT, self::WORKFLOW_CHANGES_REQUESTED], true),
-            self::WORKFLOW_CHANGES_REQUESTED => $user->canApproveProducts()
-                && in_array($this->workflow_status, [self::WORKFLOW_PENDING_REVIEW, self::WORKFLOW_APPROVED, self::WORKFLOW_PUBLISHED], true),
-            self::WORKFLOW_APPROVED => $user->canApproveProducts()
-                && in_array($this->workflow_status, [self::WORKFLOW_PENDING_REVIEW, self::WORKFLOW_PUBLISHED], true),
-            self::WORKFLOW_PUBLISHED => $user->canPublishProducts()
-                && $this->workflow_status === self::WORKFLOW_APPROVED,
-            default => false,
-        };
-    }
-
-    public function transitionWorkflowTo(string $status, ?User $user = null, ?string $notes = null): void
-    {
-        $user ??= auth()->user();
-
-        if (! $this->canTransitionWorkflowTo($status, $user)) {
-            return;
-        }
-
-        $updates = ['workflow_status' => $status];
-
-        if ($notes !== null) {
-            $updates['review_notes'] = $notes;
-        }
-
-        match ($status) {
-            self::WORKFLOW_PENDING_REVIEW => $updates = array_merge($updates, [
-                'submitted_by' => $user?->id,
-                'submitted_at' => now(),
-            ]),
-            self::WORKFLOW_CHANGES_REQUESTED => $updates = array_merge($updates, [
-                'returned_by' => $user?->id,
-                'returned_at' => now(),
-                'active' => false,
-                'product_status' => 'hidden',
-            ]),
-            self::WORKFLOW_APPROVED => $updates = array_merge($updates, [
-                'approved_by' => $user?->id,
-                'approved_at' => now(),
-                'active' => false,
-                'product_status' => 'hidden',
-            ]),
-            self::WORKFLOW_PUBLISHED => $updates = array_merge($updates, [
-                'published_by' => $user?->id,
-                'published_at' => now(),
-                'active' => true,
-                'product_status' => 'active',
-            ]),
-            default => null,
-        };
-
-        $this->forceFill($updates)->save();
     }
 
     private function searchableCategoryPath(): array

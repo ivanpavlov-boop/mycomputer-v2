@@ -90,7 +90,10 @@ class ProductBundle extends Model
 
     public function toSearchableArray(): array
     {
-        $this->loadMissing(['items.product.brand', 'options.product.brand']);
+        $this->loadMissing([
+            'items.product' => fn ($query) => $query->published()->with('brand'),
+            'options.product' => fn ($query) => $query->published()->with('brand'),
+        ]);
 
         $products = $this->items
             ->pluck('product')

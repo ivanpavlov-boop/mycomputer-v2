@@ -91,13 +91,7 @@ class ProductDataQualityQueueResource extends Resource
                     ->label('Работен статус')
                     ->badge()
                     ->formatStateUsing(fn (?string $state): string => Product::workflowStatusLabel($state))
-                    ->color(fn (?string $state): string => match ($state) {
-                        Product::WORKFLOW_PUBLISHED => 'success',
-                        Product::WORKFLOW_APPROVED => 'info',
-                        Product::WORKFLOW_PENDING_REVIEW => 'warning',
-                        Product::WORKFLOW_CHANGES_REQUESTED => 'danger',
-                        default => 'gray',
-                    })
+                    ->color(fn (?string $state): string => Product::workflowStatusColor($state))
                     ->sortable(),
                 TextColumn::make('visibility_status')
                     ->label('Видимост')
@@ -177,14 +171,8 @@ class ProductDataQualityQueueResource extends Resource
                         'hidden' => 'Скрит',
                     ])
                     ->query(fn (Builder $query, array $data): Builder => match ($data['value'] ?? null) {
-                        'public' => $query
-                            ->where('active', true)
-                            ->whereNotNull('published_at')
-                            ->where('workflow_status', Product::WORKFLOW_PUBLISHED),
-                        'hidden' => $query->where(fn (Builder $query): Builder => $query
-                            ->where('active', false)
-                            ->orWhereNull('published_at')
-                            ->orWhere('workflow_status', '!=', Product::WORKFLOW_PUBLISHED)),
+                        'public' => $query->whereIn('products.id', Product::query()->published()->select('products.id')),
+                        'hidden' => $query->whereNotIn('products.id', Product::query()->published()->select('products.id')),
                         default => $query,
                     }),
                 SelectFilter::make('stock_status')
@@ -332,9 +320,7 @@ class ProductDataQualityQueueResource extends Resource
 
     protected static function isPubliclyVisible(Product $product): bool
     {
-        return (bool) $product->active
-            && $product->published_at !== null
-            && $product->workflow_status === Product::WORKFLOW_PUBLISHED;
+        return $product->isPubliclyVisible();
     }
 
     /**

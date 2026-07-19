@@ -10,7 +10,10 @@ class BundleService
     {
         return ProductBundle::query()
             ->available()
-            ->with(['items.product.images', 'options.product.images'])
+            ->with([
+                'items.product' => fn ($query) => $query->published()->with('images'),
+                'options.product' => fn ($query) => $query->published()->with('images'),
+            ])
             ->orderBy('sort_order')
             ->orderBy('name');
     }

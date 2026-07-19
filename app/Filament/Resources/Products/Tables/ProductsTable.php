@@ -47,14 +47,8 @@ class ProductsTable
                 TextColumn::make('workflow_status')
                     ->label('Работен статус')
                     ->badge()
-                    ->formatStateUsing(fn (?string $state): string => self::workflowStatusOptions()[$state] ?? 'Неизвестен')
-                    ->color(fn (?string $state): string => match ($state) {
-                        Product::WORKFLOW_PUBLISHED => 'success',
-                        Product::WORKFLOW_APPROVED => 'info',
-                        Product::WORKFLOW_PENDING_REVIEW => 'warning',
-                        Product::WORKFLOW_CHANGES_REQUESTED => 'danger',
-                        default => 'gray',
-                    })
+                    ->formatStateUsing(fn (?string $state): string => Product::workflowStatusLabel($state))
+                    ->color(fn (?string $state): string => Product::workflowStatusColor($state))
                     ->sortable(),
                 TextColumn::make('active_quality_flag_assignments_count')
                     ->label('Флагове за качество')
@@ -97,7 +91,7 @@ class ProductsTable
                 SelectFilter::make('availability_status_id')->relationship('availabilityStatus', 'name')->label('Наличност')->searchable()->preload(),
                 SelectFilter::make('workflow_status')
                     ->label('Работен статус')
-                    ->options(self::workflowStatusOptions()),
+                    ->options(Product::workflowStatusOptions()),
                 SelectFilter::make('stock_status')
                     ->label('Статус на наличност')
                     ->options(self::stockStatusOptions()),
@@ -118,6 +112,8 @@ class ProductsTable
                 BulkActionGroup::make([
                     BulkAction::make('assignAvailability')
                         ->label('Задай наличност')
+                        ->visible(fn (): bool => (bool) auth()->user()?->canEditProductStock())
+                        ->authorize(fn (): bool => (bool) auth()->user()?->canEditProductStock())
                         ->form([
                             Select::make('availability_status_id')
                                 ->label('Статус на наличност')
@@ -170,20 +166,6 @@ class ProductsTable
         }
 
         return 'Липсват: '.$missing;
-    }
-
-    /**
-     * @return array<string, string>
-     */
-    protected static function workflowStatusOptions(): array
-    {
-        return [
-            Product::WORKFLOW_DRAFT => 'Чернова',
-            Product::WORKFLOW_PENDING_REVIEW => 'За преглед',
-            Product::WORKFLOW_CHANGES_REQUESTED => 'Върнат за корекции',
-            Product::WORKFLOW_APPROVED => 'Одобрен',
-            Product::WORKFLOW_PUBLISHED => 'Публикуван',
-        ];
     }
 
     /**

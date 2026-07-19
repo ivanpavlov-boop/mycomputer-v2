@@ -16,7 +16,10 @@ class BundleRecommendationService
                     ->whereHas('items', fn ($items) => $items->where('product_id', $product->id))
                     ->orWhereHas('options', fn ($options) => $options->where('product_id', $product->id));
             })
-            ->with(['items.product.images', 'options.product.images'])
+            ->with([
+                'items.product' => fn ($query) => $query->published()->with('images'),
+                'options.product' => fn ($query) => $query->published()->with('images'),
+            ])
             ->orderBy('sort_order')
             ->limit(12)
             ->get();

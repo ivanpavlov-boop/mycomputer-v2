@@ -127,7 +127,7 @@ class CartService
 
     private function assertPublicProduct(Product $product): void
     {
-        abort_unless($product->active && $product->published_at !== null, 422, 'Product is not available.');
+        abort_unless($product->isPubliclyVisible(), 422, 'Product is not available.');
         abort_unless($this->availability->allowsPurchase($product), 422, 'Product is not available for purchase.');
     }
 }

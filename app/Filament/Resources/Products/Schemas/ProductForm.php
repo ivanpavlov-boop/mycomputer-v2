@@ -14,6 +14,7 @@ use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
+use Filament\Infolists\Components\TextEntry;
 use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Utilities\Set;
@@ -44,18 +45,15 @@ class ProductForm
                             Select::make('category_id')->label('Категория')->relationship('category', 'name')->searchable()->preload(),
                             Select::make('brand_id')->label('Бранд')->relationship('brand', 'name')->searchable()->preload(),
                             Select::make('supplier_id')->label('Доставчик')->relationship('supplier', 'company_name')->searchable()->preload(),
-                            Select::make('source')
+                            TextEntry::make('source_display')
                                 ->label('Източник')
-                                ->options([
-                                    Product::SOURCE_MANUAL => 'Ръчно',
-                                    Product::SOURCE_SUPPLIER_IMPORT => 'От доставчик',
-                                ])
-                                ->default(Product::SOURCE_MANUAL)
-                                ->required(),
+                                ->state(fn (?Product $record): string => $record?->source === Product::SOURCE_SUPPLIER_IMPORT ? 'От доставчик' : 'Ръчно')
+                                ->badge(),
                             Toggle::make('apply_pricing_rules')
                                 ->label('Прилагай ценови правила')
                                 ->default(false)
-                                ->helperText('Прилага ценовите правила към продукта дори когато е управляван ръчно.'),
+                                ->helperText('Прилага ценовите правила към продукта дори когато е управляван ръчно.')
+                                ->disabled(fn (): bool => ! (bool) auth()->user()?->canEditProductPrices()),
                             TextInput::make('weight')->label('Тегло')->numeric()->suffix('kg'),
                             TextInput::make('warranty_months')->label('Гаранция')->numeric()->suffix('месеца'),
                         ]),
@@ -65,7 +63,8 @@ class ProductForm
                                 ->helperText('Не позволява синхронизация от доставчик да презапише ръчното име на продукта.'),
                             Toggle::make('lock_seo')
                                 ->label('Заключи SEO')
-                                ->helperText('Не позволява синхронизация от доставчик да презапише meta заглавие и meta описание.'),
+                                ->helperText('Не позволява синхронизация от доставчик да презапише meta заглавие и meta описание.')
+                                ->disabled(fn (): bool => ! (bool) auth()->user()?->canEditProductSeo()),
                             Toggle::make('lock_descriptions')
                                 ->label('Заключи описанията')
                                 ->helperText('Не позволява синхронизация от доставчик да презапише кратко и пълно описание.'),
@@ -84,26 +83,70 @@ class ProductForm
                                 'style' => 'min-height: 24rem; max-height: 42rem; overflow-y: auto;',
                             ])
                             ->columnSpanFull(),
-                    ]),
+                    ])
+                    ->disabled(fn (): bool => ! (bool) auth()->user()?->canEditProductContent()),
                 Section::make('Работен процес на продукта')
                     ->description('Ръчно създадените продукти започват като чернова. Използвайте действията в страницата за редакция за изпращане, одобрение и публикуване.')
                     ->schema([
                         Grid::make(3)->schema([
-                            Select::make('workflow_status')
+                            TextEntry::make('workflow_status_display')
                                 ->label('Работен статус')
-                                ->options(self::workflowStatusOptions())
-                                ->default(Product::WORKFLOW_DRAFT)
-                                ->disabled()
-                                ->dehydrated()
-                                ->required(),
+                                ->state(fn (?Product $record): string => Product::workflowStatusLabel($record?->workflow_status ?? Product::WORKFLOW_DRAFT))
+                                ->badge()
+                                ->color(fn (?Product $record): string => Product::workflowStatusColor($record?->workflow_status ?? Product::WORKFLOW_DRAFT)),
                             Select::make('assigned_to')
                                 ->label('Възложен на')
                                 ->relationship('assignedTo', 'name')
                                 ->searchable()
-                                ->preload(),
-                            Textarea::make('review_notes')
-                                ->label('Бележки за преглед')
-                                ->rows(2)
+                                ->preload()
+                                ->disabled(fn (): bool => ! (bool) auth()->user()?->canEditProductContent()),
+                        ]),
+                        Grid::make(4)->schema([
+                            TextEntry::make('submitted_by_display')
+                                ->label('Изпратен от')
+                                ->state(fn (?Product $record): string => $record?->submittedBy?->name ?? 'Няма')
+                                ->visible(fn (?Product $record): bool => $record !== null),
+                            TextEntry::make('submitted_at_display')
+                                ->label('Изпратен на')
+                                ->state(fn (?Product $record) => $record?->submitted_at)
+                                ->dateTime('d.m.Y H:i')
+                                ->placeholder('Няма')
+                                ->visible(fn (?Product $record): bool => $record !== null),
+                            TextEntry::make('approved_by_display')
+                                ->label('Одобрен от')
+                                ->state(fn (?Product $record): string => $record?->approvedBy?->name ?? 'Няма')
+                                ->visible(fn (?Product $record): bool => $record !== null),
+                            TextEntry::make('approved_at_display')
+                                ->label('Одобрен на')
+                                ->state(fn (?Product $record) => $record?->approved_at)
+                                ->dateTime('d.m.Y H:i')
+                                ->placeholder('Няма')
+                                ->visible(fn (?Product $record): bool => $record !== null),
+                            TextEntry::make('published_by_display')
+                                ->label('Публикуван от')
+                                ->state(fn (?Product $record): string => $record?->publishedBy?->name ?? 'Няма')
+                                ->visible(fn (?Product $record): bool => $record !== null),
+                            TextEntry::make('published_at_display')
+                                ->label('Публикуван на')
+                                ->state(fn (?Product $record) => $record?->published_at)
+                                ->dateTime('d.m.Y H:i')
+                                ->placeholder('Няма')
+                                ->visible(fn (?Product $record): bool => $record !== null),
+                            TextEntry::make('returned_by_display')
+                                ->label('Върнат от')
+                                ->state(fn (?Product $record): string => $record?->returnedBy?->name ?? 'Няма')
+                                ->visible(fn (?Product $record): bool => $record !== null),
+                            TextEntry::make('returned_at_display')
+                                ->label('Върнат на')
+                                ->state(fn (?Product $record) => $record?->returned_at)
+                                ->dateTime('d.m.Y H:i')
+                                ->placeholder('Няма')
+                                ->visible(fn (?Product $record): bool => $record !== null),
+                            TextEntry::make('review_notes_display')
+                                ->label('Последна бележка за преглед')
+                                ->state(fn (?Product $record): ?string => $record?->review_notes)
+                                ->placeholder('Няма')
+                                ->visible(fn (?Product $record): bool => $record !== null)
                                 ->columnSpanFull(),
                         ]),
                     ]),
@@ -135,25 +178,29 @@ class ProductForm
                         Grid::make(2)->schema([
                             TextInput::make('meta_title_translations.en')
                                 ->label('SEO заглавие на английски')
-                                ->maxLength(255),
+                                ->maxLength(255)
+                                ->disabled(fn (): bool => ! (bool) auth()->user()?->canEditProductSeo()),
                             Textarea::make('meta_description_translations.en')
                                 ->label('SEO описание на английски')
-                                ->rows(2),
+                                ->rows(2)
+                                ->disabled(fn (): bool => ! (bool) auth()->user()?->canEditProductSeo()),
                         ]),
                     ])
+                    ->disabled(fn (): bool => ! (bool) auth()->user()?->canEditProductContent())
                     ->collapsible()
                     ->collapsed(),
                 Section::make('Цени и наличност')
                     ->schema([
                         Grid::make(4)->schema([
-                            TextInput::make('purchase_price')->label('Доставна цена')->numeric()->prefix('EUR'),
-                            TextInput::make('regular_price')->label('Редовна цена')->numeric()->prefix('EUR'),
+                            TextInput::make('purchase_price')->label('Доставна цена')->numeric()->prefix('EUR')->disabled(fn (): bool => ! (bool) auth()->user()?->canEditProductPrices()),
+                            TextInput::make('regular_price')->label('Редовна цена')->numeric()->prefix('EUR')->disabled(fn (): bool => ! (bool) auth()->user()?->canEditProductPrices()),
                             TextInput::make('price')
                                 ->label('Цена')
                                 ->numeric()
                                 ->prefix('EUR')
                                 ->default(0)
-                                ->required(),
+                                ->required()
+                                ->disabled(fn (): bool => ! (bool) auth()->user()?->canEditProductPrices()),
                             Select::make('price_source')
                                 ->label('Източник на цена')
                                 ->options([
@@ -162,14 +209,17 @@ class ProductForm
                                     Product::PRICE_SOURCE_ADMIN_OVERRIDE => 'Админ корекция',
                                 ])
                                 ->default(Product::PRICE_SOURCE_MANUAL)
-                                ->required(),
-                            TextInput::make('sale_price')->label('Промо цена')->numeric()->prefix('EUR'),
+                                ->required()
+                                ->disabled(fn (): bool => ! (bool) auth()->user()?->canEditProductPrices()),
+                            TextInput::make('sale_price')->label('Промо цена')->numeric()->prefix('EUR')->disabled(fn (): bool => ! (bool) auth()->user()?->canEditProductPrices()),
                             DateTimePicker::make('sale_price_starts_at')
                                 ->label('Начало на промо цена')
-                                ->helperText('Незадължително. Използвайте за промо цена за седмица, месец или конкретна кампания.'),
+                                ->helperText('Незадължително. Използвайте за промо цена за седмица, месец или конкретна кампания.')
+                                ->disabled(fn (): bool => ! (bool) auth()->user()?->canEditProductPrices()),
                             DateTimePicker::make('sale_price_ends_at')
                                 ->label('Край на промо цена')
-                                ->helperText('Незадължително. Промо цената е активна само в зададения период.'),
+                                ->helperText('Незадължително. Промо цената е активна само в зададения период.')
+                                ->disabled(fn (): bool => ! (bool) auth()->user()?->canEditProductPrices()),
                             Select::make('sale_price_source')
                                 ->label('Източник на промо цена')
                                 ->options([
@@ -177,41 +227,31 @@ class ProductForm
                                     Product::SALE_PRICE_SOURCE_PROMOTION_RULE => 'Промо правило',
                                     Product::SALE_PRICE_SOURCE_SUPPLIER_FEED => 'Доставчик',
                                 ])
-                                ->nullable(),
-                            TextInput::make('quantity')->label('Количество')->numeric()->default(0)->required(),
-                            TextInput::make('reserved_quantity')->label('Резервирано количество')->numeric()->default(0)->required(),
+                                ->nullable()
+                                ->disabled(fn (): bool => ! (bool) auth()->user()?->canEditProductPrices()),
+                            TextInput::make('quantity')->label('Количество')->numeric()->default(0)->required()->disabled(fn (): bool => ! (bool) auth()->user()?->canEditProductStock()),
+                            TextInput::make('reserved_quantity')->label('Резервирано количество')->numeric()->default(0)->required()->disabled(fn (): bool => ! (bool) auth()->user()?->canEditProductStock()),
                             Select::make('availability_status_id')
                                 ->label('Наличност')
                                 ->relationship('availabilityStatus', 'name', fn ($query) => $query->where('is_active', true)->orderBy('sort_order'))
                                 ->searchable()
                                 ->preload()
-                                ->helperText('Админ управляван статус на наличност. Оставете ръчната наличност изключена за автоматично определяне според количеството.'),
-                            Select::make('product_status')
-                                ->label('Продуктов статус')
-                                ->options([
-                                    'draft' => 'Чернова',
-                                    'active' => 'Активен',
-                                    'hidden' => 'Скрит',
-                                    'archived' => 'Архивиран',
-                                    'discontinued' => 'Спрян',
-                                ])
-                                ->default('draft')
-                                ->required(),
+                                ->helperText('Админ управляван статус на наличност. Оставете ръчната наличност изключена за автоматично определяне според количеството.')
+                                ->disabled(fn (): bool => ! (bool) auth()->user()?->canEditProductStock()),
                             Select::make('stock_status')
                                 ->label('Статус на наличност')
                                 ->options(self::stockStatusOptions())
                                 ->default(Product::STOCK_STATUS_IN_STOCK)
                                 ->required()
-                                ->helperText('Огледален статус за по-стари интеграции.'),
-                            Toggle::make('manual_override')->label('Ръчна наличност')->default(false),
-                            TextInput::make('availability_message')->label('Съобщение за наличност')->maxLength(255),
-                            DateTimePicker::make('expected_date')->label('Очаквана дата'),
-                            TextInput::make('supplier_lead_time_days')->label('Срок от доставчик')->numeric()->suffix('дни'),
-                            DateTimePicker::make('published_at')->label('Публикуван на'),
-                            Toggle::make('active')->label('Активен')->default(false),
-                            Toggle::make('featured')->label('Препоръчан')->default(false),
-                            Toggle::make('new_product')->label('Нов продукт')->default(false),
-                            Toggle::make('bestseller')->label('Бестселър')->default(false),
+                                ->helperText('Огледален статус за по-стари интеграции.')
+                                ->disabled(fn (): bool => ! (bool) auth()->user()?->canEditProductStock()),
+                            Toggle::make('manual_override')->label('Ръчна наличност')->default(false)->disabled(fn (): bool => ! (bool) auth()->user()?->canEditProductStock()),
+                            TextInput::make('availability_message')->label('Съобщение за наличност')->maxLength(255)->disabled(fn (): bool => ! (bool) auth()->user()?->canEditProductStock()),
+                            DateTimePicker::make('expected_date')->label('Очаквана дата')->disabled(fn (): bool => ! (bool) auth()->user()?->canEditProductStock()),
+                            TextInput::make('supplier_lead_time_days')->label('Срок от доставчик')->numeric()->suffix('дни')->disabled(fn (): bool => ! (bool) auth()->user()?->canEditProductStock()),
+                            Toggle::make('featured')->label('Препоръчан')->default(false)->disabled(fn (): bool => ! (bool) auth()->user()?->canEditProductContent()),
+                            Toggle::make('new_product')->label('Нов продукт')->default(false)->disabled(fn (): bool => ! (bool) auth()->user()?->canEditProductContent()),
+                            Toggle::make('bestseller')->label('Бестселър')->default(false)->disabled(fn (): bool => ! (bool) auth()->user()?->canEditProductContent()),
                         ]),
                     ]),
                 Section::make('Флагове за качество')
@@ -261,6 +301,7 @@ class ProductForm
                             ->columns(4)
                             ->defaultItems(0),
                     ])
+                    ->disabled(fn (): bool => ! (bool) auth()->user()?->canEditProductContent())
                     ->collapsible(),
                 Section::make('Свързани продукти')
                     ->schema([
@@ -277,6 +318,7 @@ class ProductForm
                             ->searchable()
                             ->preload(),
                     ])
+                    ->disabled(fn (): bool => ! (bool) auth()->user()?->canEditProductContent())
                     ->collapsible(),
                 Section::make('SEO')
                     ->schema([
@@ -284,6 +326,7 @@ class ProductForm
                         Textarea::make('meta_description')->label('Meta описание')->rows(2),
                         Textarea::make('meta_keywords')->label('Meta ключови думи')->rows(2),
                     ])
+                    ->disabled(fn (): bool => ! (bool) auth()->user()?->canEditProductSeo())
                     ->collapsible(),
                 Section::make('Структурирани спецификации')
                     ->schema([
@@ -297,23 +340,10 @@ class ProductForm
                             ->keyLabel('Спецификация')
                             ->valueLabel('Стойност'),
                     ])
+                    ->disabled(fn (): bool => ! (bool) auth()->user()?->canEditProductContent())
                     ->collapsible()
                     ->collapsed(),
             ]);
-    }
-
-    /**
-     * @return array<string, string>
-     */
-    private static function workflowStatusOptions(): array
-    {
-        return [
-            Product::WORKFLOW_DRAFT => 'Чернова',
-            Product::WORKFLOW_PENDING_REVIEW => 'За преглед',
-            Product::WORKFLOW_CHANGES_REQUESTED => 'Върнат за корекции',
-            Product::WORKFLOW_APPROVED => 'Одобрен',
-            Product::WORKFLOW_PUBLISHED => 'Публикуван',
-        ];
     }
 
     /**

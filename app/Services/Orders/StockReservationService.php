@@ -23,7 +23,7 @@ class StockReservationService
 
         foreach ($cart->items as $item) {
             $product = $item->product;
-            abort_unless($product && $product->active && $product->published_at !== null, 422, 'Product is no longer available.');
+            abort_unless($product && $product->isPubliclyVisible(), 422, 'Product is no longer available.');
             abort_unless($this->availability->allowsPurchase($product), 422, 'Product is not available for purchase.');
             abort_if($this->availability->requiresStock($product) && $product->quantity < $item->quantity, 422, 'Insufficient stock for '.$product->name.'.');
         }

@@ -13,7 +13,9 @@ use App\Models\ProductQualityFlagAssignment;
 use App\Models\Supplier;
 use App\Models\SupplierProduct;
 use App\Models\User;
+use App\Services\Products\ProductWorkflowService;
 use Database\Seeders\RolesAndPermissionsSeeder;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
 use Tests\TestCase;
@@ -223,21 +225,28 @@ class ProductWorkflowQualityFlagsTest extends TestCase
     {
         $editor = $this->actingAsRole(User::ROLE_PRODUCT_EDITOR);
         $manager = $this->userWithRole(User::ROLE_CATALOG_MANAGER);
+        $workflow = app(ProductWorkflowService::class);
 
         $product = Product::factory()->manualDraft()->create();
 
-        $product->transitionWorkflowTo(Product::WORKFLOW_PENDING_REVIEW, $editor);
+        $product = $workflow->submitForReview($product, $editor);
         $this->assertSame(Product::WORKFLOW_PENDING_REVIEW, $product->fresh()->workflow_status);
         $this->assertSame($editor->id, $product->fresh()->submitted_by);
 
-        $product->transitionWorkflowTo(Product::WORKFLOW_APPROVED, $editor);
+        try {
+            $workflow->approve($product, $editor);
+            $this->fail('Product Editor approval must fail explicitly.');
+        } catch (AuthorizationException) {
+            // Expected: UI visibility is not the authorization boundary.
+        }
+
         $this->assertSame(Product::WORKFLOW_PENDING_REVIEW, $product->fresh()->workflow_status);
 
-        $product->transitionWorkflowTo(Product::WORKFLOW_APPROVED, $manager);
+        $product = $workflow->approve($product, $manager);
         $this->assertSame(Product::WORKFLOW_APPROVED, $product->fresh()->workflow_status);
         $this->assertFalse((bool) $product->fresh()->active);
 
-        $product->transitionWorkflowTo(Product::WORKFLOW_PUBLISHED, $manager);
+        $product = $workflow->publish($product, $manager);
         $product->refresh();
 
         $this->assertSame(Product::WORKFLOW_PUBLISHED, $product->workflow_status);
@@ -250,12 +259,13 @@ class ProductWorkflowQualityFlagsTest extends TestCase
     public function test_changes_can_be_requested_with_review_notes(): void
     {
         $manager = $this->actingAsRole(User::ROLE_CATALOG_MANAGER);
+        $workflow = app(ProductWorkflowService::class);
         $product = Product::factory()->manualDraft()->create([
             'workflow_status' => Product::WORKFLOW_PENDING_REVIEW,
             'submitted_at' => now(),
         ]);
 
-        $product->transitionWorkflowTo(Product::WORKFLOW_CHANGES_REQUESTED, $manager, 'Please add Bulgarian SEO description.');
+        $workflow->requestChanges($product, $manager, 'Please add Bulgarian SEO description.');
         $product->refresh();
 
         $this->assertSame(Product::WORKFLOW_CHANGES_REQUESTED, $product->workflow_status);

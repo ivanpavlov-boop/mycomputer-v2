@@ -311,11 +311,21 @@ Main entities:
 
 Product rules:
 
-- Public products must be `active = true`.
-- Public products must have `published_at`.
+- `ProductWorkflowService` is the authoritative, transactional state machine for manual product review and publication.
+- Manual Filament products start as `draft`, inactive, and non-public; approval and publication are separate actions.
+- Generic product CSV creation also starts as a manual, inactive draft and cannot inherit the legacy published database default.
+- Workflow state, public-state fields, actor IDs, and timestamps cannot be changed through normal product form payloads.
+- Product form writes are server-allowlisted by role domain: content, pricing, stock/availability, and SEO permissions remain separate.
+- Public products must be `active = true`, `workflow_status = published`, `product_status = active`, and have `published_at` and a slug.
+- Public products must belong to an active category and must not be soft-deleted.
+- Product APIs, search hydration and indexing eligibility, homepage sections, relations, sitemaps, and feeds use the central `published()` boundary.
+- Hiding a published product returns it to `approved`, removes public visibility, and preserves publication history.
+- Restoring a deleted product never republishes it automatically.
 - API responses must not expose `purchase_price`.
 - API responses must not expose `source_payload`.
 - API responses must not expose supplier internals.
+
+See [Product Workflow](PRODUCT_WORKFLOW.md) for the transition and role matrices. Quality flags and missing English content remain non-blocking. Supplier imports and Catalog Sync do not use the manual Filament form and cannot overwrite managed product content.
 
 Product relationships:
 

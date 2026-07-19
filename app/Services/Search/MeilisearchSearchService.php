@@ -30,7 +30,7 @@ class MeilisearchSearchService extends DatabaseSearchService
                 }
 
                 return $index->search($query, $options);
-            })->query(fn ($query) => $query->with(['brand', 'category', 'images', 'availabilityStatus']));
+            })->query(fn ($query) => $query->published()->with(['brand', 'category', 'images', 'availabilityStatus']));
 
             $products = $builder->paginate($perPage, 'page', $page);
 
@@ -133,7 +133,10 @@ class MeilisearchSearchService extends DatabaseSearchService
 
                 return $index->search($query, $options);
             })
-                ->query(fn ($query) => $query->with(['items.product.images', 'items.product.brand', 'options.product.images', 'options.product.brand']))
+                ->query(fn ($query) => $query->with([
+                    'items.product' => fn ($product) => $product->published()->with(['images', 'brand']),
+                    'options.product' => fn ($product) => $product->published()->with(['images', 'brand']),
+                ]))
                 ->paginate($perPage, 'bundle_page', $page);
         } catch (Throwable) {
             return $this->matchingBundles($criteria);

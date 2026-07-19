@@ -42,6 +42,11 @@ class ProductResource extends Resource
         return ProductForm::configure($schema);
     }
 
+    public static function canCreate(): bool
+    {
+        return (bool) auth()->user()?->canEditProductContent();
+    }
+
     public static function table(Table $table): Table
     {
         return ProductsTable::configure($table);

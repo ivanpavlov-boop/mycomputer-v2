@@ -90,6 +90,7 @@ class ProductSeeder extends Seeder
                     'stock_status' => 'in_stock',
                     'availability_status_id' => $inStockStatusId,
                     'product_status' => 'active',
+                    'workflow_status' => Product::WORKFLOW_PUBLISHED,
                     'warranty_months' => 24,
                     'active' => true,
                     'featured' => true,

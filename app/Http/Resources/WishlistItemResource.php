@@ -11,7 +11,7 @@ class WishlistItemResource extends JsonResource
     public function toArray(Request $request): array
     {
         $product = $this->whenLoaded('product');
-        $publicProduct = $product instanceof Product && $product->active && $product->published_at !== null;
+        $publicProduct = $product instanceof Product && $product->isPubliclyVisible();
 
         return [
             'id' => $this->id,

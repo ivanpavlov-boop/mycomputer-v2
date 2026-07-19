@@ -130,7 +130,7 @@ class CompareService
     {
         return $list->items
             ->pluck('product')
-            ->filter(fn (?Product $product): bool => $product !== null && $product->active && $product->published_at !== null)
+            ->filter(fn (?Product $product): bool => $product !== null && $product->isPubliclyVisible())
             ->values();
     }
 
@@ -141,6 +141,6 @@ class CompareService
 
     private function assertPublicProduct(Product $product): void
     {
-        abort_unless($product->active && $product->published_at !== null, 422, 'Product is not available.');
+        abort_unless($product->isPubliclyVisible(), 422, 'Product is not available.');
     }
 }

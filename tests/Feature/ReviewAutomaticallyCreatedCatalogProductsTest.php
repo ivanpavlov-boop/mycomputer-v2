@@ -138,7 +138,7 @@ class ReviewAutomaticallyCreatedCatalogProductsTest extends TestCase
             $fresh = $product->fresh();
 
             $this->assertSame(Product::WORKFLOW_PENDING_REVIEW, $fresh->workflow_status);
-            $this->assertSame('draft', $fresh->product_status);
+            $this->assertSame('hidden', $fresh->product_status);
             $this->assertFalse((bool) $fresh->active);
             $this->assertStringContainsString('Phase 9C.4.2 supplier import safety hotfix', (string) $fresh->review_notes);
             $this->assertStringContainsString(
