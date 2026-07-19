@@ -316,7 +316,7 @@ class EmailMarketingService
 
             foreach (($record->cart_snapshot['items'] ?? []) as $item) {
                 $product = Product::query()->find($item['product_id'] ?? null);
-                if (! $product || ! $product->active || $product->published_at === null) {
+                if (! $product || ! $product->isPubliclyVisible()) {
                     continue;
                 }
 

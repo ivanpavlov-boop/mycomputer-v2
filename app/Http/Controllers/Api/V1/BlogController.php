@@ -32,9 +32,7 @@ class BlogController extends Controller
                 'category',
                 'tags',
                 'author',
-                'relatedProducts.brand',
-                'relatedProducts.category',
-                'relatedProducts.images',
+                'relatedProducts' => fn ($query) => $query->published()->with(['brand', 'category', 'images']),
                 'relatedCategories',
                 'relatedBrands',
             ])
@@ -42,6 +40,6 @@ class BlogController extends Controller
 
         $this->blog->incrementViews($post);
 
-        return BlogPostDetailResource::make($post->refresh()->loadMissing(['category', 'tags', 'author']));
+        return BlogPostDetailResource::make($post);
     }
 }

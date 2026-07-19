@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Models\Product;
+use App\Services\Products\ProductWorkflowService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 
@@ -22,7 +23,7 @@ class ReviewAutomaticallyCreatedCatalogProducts extends Command
 
     private const REVIEW_NOTE = 'Moved to manual review by catalog:review-auto-created-products because this product was automatically created before the Phase 9C.4.2 supplier import safety hotfix.';
 
-    public function handle(): int
+    public function handle(ProductWorkflowService $workflow): int
     {
         $targetStatus = $this->targetStatus();
 
@@ -51,7 +52,7 @@ class ReviewAutomaticallyCreatedCatalogProducts extends Command
         $changed = 0;
 
         if ($apply) {
-            $changed = DB::transaction(function () use ($rows, $targetStatus): int {
+            $changed = DB::transaction(function () use ($rows, $targetStatus, $workflow): int {
                 $changed = 0;
 
                 foreach ($rows as $row) {
@@ -62,7 +63,11 @@ class ReviewAutomaticallyCreatedCatalogProducts extends Command
                         continue;
                     }
 
-                    $product->forceFill($this->desiredReviewValues($targetStatus, $product))->save();
+                    $workflow->moveToReviewForMaintenance(
+                        $product,
+                        $targetStatus,
+                        $this->reviewNotesWithSafetyNote($product),
+                    );
                     $changed++;
                 }
 
@@ -75,7 +80,7 @@ class ReviewAutomaticallyCreatedCatalogProducts extends Command
             : 'Dry-run only. No records were changed.');
         $this->line('Known SKUs considered: '.implode(', ', self::KNOWN_SKUS));
         $this->line('Target workflow_status: '.$targetStatus);
-        $this->line('Target product_status: draft');
+        $this->line('Target product_status: '.$this->targetProductStatus($targetStatus));
         $this->line('Target active: false');
         $this->line('Products found: '.$rows->whereNotNull('product')->count());
         $this->line('Products missing: '.$rows->whereNull('product')->count());
@@ -164,10 +169,15 @@ class ReviewAutomaticallyCreatedCatalogProducts extends Command
     {
         return [
             'workflow_status' => $targetStatus,
-            'product_status' => 'draft',
+            'product_status' => $this->targetProductStatus($targetStatus),
             'active' => false,
             'review_notes' => $this->reviewNotesWithSafetyNote($product),
         ];
+    }
+
+    private function targetProductStatus(string $targetStatus): string
+    {
+        return $targetStatus === Product::WORKFLOW_DRAFT ? 'draft' : 'hidden';
     }
 
     private function needsReviewMove(Product $product, string $targetStatus): bool

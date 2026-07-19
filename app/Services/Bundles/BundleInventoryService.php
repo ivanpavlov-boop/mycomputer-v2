@@ -52,7 +52,7 @@ class BundleInventoryService
 
         foreach ($lines as $line) {
             $product = Product::query()->find($line['product_id']);
-            if (! $product || ! $product->active || $product->published_at === null || ! $this->availability->allowsPurchase($product)) {
+            if (! $product || ! $product->isPubliclyVisible() || ! $this->availability->allowsPurchase($product)) {
                 throw ValidationException::withMessages(['selected_items' => 'Bundle contains unavailable product.']);
             }
 

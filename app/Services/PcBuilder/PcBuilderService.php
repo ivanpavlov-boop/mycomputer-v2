@@ -32,7 +32,7 @@ class PcBuilderService
 
     public function addItem(PcBuild $build, Product $product, string $componentType, int $quantity = 1): PcBuild
     {
-        abort_unless($product->active && $product->published_at !== null, 422, 'Product is not available.');
+        abort_unless($product->isPubliclyVisible(), 422, 'Product is not available.');
         abort_unless(in_array($componentType, PcBuildItem::COMPONENT_TYPES, true), 422, 'Invalid component type.');
 
         $build->items()->updateOrCreate(

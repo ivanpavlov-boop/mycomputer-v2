@@ -208,7 +208,10 @@ class DatabaseSearchService implements SearchServiceInterface
 
         return ProductBundle::query()
             ->available()
-            ->with(['items.product.images', 'items.product.brand', 'options.product.images', 'options.product.brand'])
+            ->with([
+                'items.product' => fn ($product) => $product->published()->with(['images', 'brand']),
+                'options.product' => fn ($product) => $product->published()->with(['images', 'brand']),
+            ])
             ->when($query !== '', function (Builder $builder) use ($query): void {
                 $builder->where(function (Builder $builder) use ($query): void {
                     $builder
@@ -218,10 +221,10 @@ class DatabaseSearchService implements SearchServiceInterface
                         ->orWhere('description', 'like', "%{$query}%")
                         ->orWhere('type', 'like', "%{$query}%")
                         ->orWhere('pricing_type', 'like', "%{$query}%")
-                        ->orWhereHas('items.product', fn (Builder $product) => $product->where('name', 'like', "%{$query}%")->orWhere('sku', 'like', "%{$query}%"))
-                        ->orWhereHas('items.product.brand', fn (Builder $brand) => $brand->where('name', 'like', "%{$query}%"))
-                        ->orWhereHas('options.product', fn (Builder $product) => $product->where('name', 'like', "%{$query}%")->orWhere('sku', 'like', "%{$query}%"))
-                        ->orWhereHas('options.product.brand', fn (Builder $brand) => $brand->where('name', 'like', "%{$query}%"));
+                        ->orWhereHas('items.product', fn (Builder $product) => $product->published()->where(fn (Builder $product) => $product->where('name', 'like', "%{$query}%")->orWhere('sku', 'like', "%{$query}%")))
+                        ->orWhereHas('items.product', fn (Builder $product) => $product->published()->whereHas('brand', fn (Builder $brand) => $brand->where('name', 'like', "%{$query}%")))
+                        ->orWhereHas('options.product', fn (Builder $product) => $product->published()->where(fn (Builder $product) => $product->where('name', 'like', "%{$query}%")->orWhere('sku', 'like', "%{$query}%")))
+                        ->orWhereHas('options.product', fn (Builder $product) => $product->published()->whereHas('brand', fn (Builder $brand) => $brand->where('name', 'like', "%{$query}%")));
                 });
             })
             ->orderBy('sort_order')

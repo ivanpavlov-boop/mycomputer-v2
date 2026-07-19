@@ -2,46 +2,138 @@
 
 ## Purpose
 
-Phase 8.5B adds an explicit admin workflow for manually curated products without changing supplier import or broad catalog sync behavior.
+The product workflow controls manual catalog publication. It is server-authoritative, role-aware, atomic, and separate from supplier staging and Catalog Sync. Quality flags remain advisory and non-blocking in this phase.
 
-## Statuses
+`ProductWorkflowService` is the authoritative transition boundary. Filament action visibility is only a usability aid; every executed transition is authorized and validated again inside the service.
 
-| Status | Meaning |
-| --- | --- |
-| `draft` | Manual work in progress. Not publicly visible. |
-| `pending_review` | Submitted for Catalog Manager or Super Admin review. |
-| `changes_requested` | Returned for correction with optional review notes. |
-| `approved` | Approved but not publicly visible yet. |
-| `published` | Publicly visible when `active=true` and `published_at` is set. |
+## States
 
-## Defaults
+| State | Meaning | Public |
+| --- | --- | --- |
+| `draft` | Manual work in progress. | No |
+| `pending_review` | Submitted for review. | No |
+| `changes_requested` | Returned with a required correction note. | No |
+| `approved` | Approved and ready for an explicit publish action. | No |
+| `published` | Published, subject to all public-scope conditions. | Yes |
 
-- Manually created products default to `draft`.
-- Supplier/catalog-sync-created products default to `published`.
-- Existing visible products are backfilled as `published`.
-- Existing hidden/inactive products keep hidden behavior and are backfilled as `draft`.
+Approval never publishes automatically.
 
-## Actions
+## Transition Matrix
 
-Filament product edit pages expose workflow actions where allowed:
+| Action | From | To | Required role capability |
+| --- | --- | --- | --- |
+| Submit for review | `draft`, `changes_requested` | `pending_review` | Edit product content |
+| Request changes | `pending_review`, `approved`, `published` | `changes_requested` | Approve products |
+| Approve | `pending_review` | `approved` | Approve products |
+| Publish | `approved` | `published` | Publish products |
+| Hide | `published` | `approved` | Publish products |
 
-- Submit for review
-- Request changes
-- Approve
-- Publish
-- Unpublish
+No other transition is allowed. Invalid transitions fail with a validation exception, unauthorized transitions fail with an authorization exception, and neither kind of failure mutates the product.
 
-Only Super Admin and Catalog Manager can approve or publish products. Product editors and data entry users can submit eligible draft/correction products for review.
+Role behavior:
 
-## Content Safety
+| Role | Submit | Request changes | Approve | Publish / hide |
+| --- | --- | --- | --- | --- |
+| Super Admin | Yes | Yes | Yes | Yes |
+| Catalog Manager | Yes | Yes | Yes | Yes |
+| Product Editor | Yes | No | No | No |
+| Product Data Entry | Yes | No | No | No |
+| Pricing Manager | No | No | No | No |
+| Inventory Manager | No | No | No | No |
+| SEO / Marketing | No | No | No | No |
+| Order Manager | No | No | No | No |
+| Viewer / Auditor | No | No | No | No |
 
-Workflow does not allow supplier sync to overwrite manually curated content. Supplier UPDATE remains limited to documented commercial fields:
+Inactive, soft-deleted, and non-admin users cannot transition products.
 
-- price
-- supplier cost
-- stock / quantity
-- availability
-- selected supplier offer metadata
+## Atomic State Changes
 
-Supplier sync must not overwrite product name, slug, SEO, descriptions, images, categories, attributes, or localized manual content.
+Each transition runs in a database transaction and locks the product row. The service compares the caller's observed state with the locked state, so a stale action fails instead of overwriting a newer transition.
 
+The workflow updates the status and coupled public fields together:
+
+- Submit: sets `submitted_by` and `submitted_at`; keeps the product hidden.
+- Request changes: requires `review_notes`, sets `returned_by` and `returned_at`, and hides the product.
+- Approve: sets `approved_by` and `approved_at`; keeps the product hidden.
+- Publish: validates technical prerequisites, sets `published_by` and `published_at`, then sets `active=true` and `product_status=active`.
+- Hide: moves the product to `approved`, sets `active=false` and `product_status=hidden`, and preserves publication metadata.
+
+Actor and timestamp columns record the latest occurrence of their corresponding transition. Existing metadata for other transitions is preserved. Deleted staff accounts remain resolvable in historical actor fields through soft-deleted relations. There is no generic product activity log in the current architecture, so this phase does not invent a speculative history table.
+
+## Workflow-Owned Fields
+
+Normal Filament create and edit payloads cannot set:
+
+- `source`
+- `workflow_status`
+- `product_status`
+- `active`
+- `published_at`
+- `created_by`
+- `submitted_by`, `submitted_at`
+- `approved_by`, `approved_at`
+- `published_by`
+- `returned_by`, `returned_at`
+- `review_notes`
+
+The product form displays workflow state and metadata read-only. Workflow changes occur only through the explicit Bulgarian Filament actions, backed by the server-side workflow service.
+
+Normal product form saves are also restricted by field domain on the server: content roles cannot submit price or stock changes, Pricing Manager can submit only pricing fields, and Inventory Manager can submit only stock and availability fields. Product attribute editing and the bulk availability action follow the same capability checks.
+
+Manual Filament creation always forces:
+
+```text
+source=manual
+workflow_status=draft
+product_status=draft
+active=false
+published_at=null
+```
+
+A crafted manual form payload cannot claim `source=supplier_import` or self-publish. Supplier and Catalog Sync creation paths retain their existing controlled defaults and are not routed through the manual form.
+
+Generic product CSV creation follows the manual path as well: newly imported CSV products are explicitly `manual`, `draft`, inactive, and unpublished. CSV price and stock update modes retain their existing scoped behavior, but a product CSV row cannot activate or publish a product.
+
+## Publishability
+
+Publishing requires only the current technical public prerequisites:
+
+- non-empty product name;
+- non-empty unique slug;
+- non-empty SKU;
+- an active category;
+- a non-deleted product in the `approved` state.
+
+Images, specifications, English content, SEO completeness, and quality flags are not publication blockers in this phase. English remains optional and Bulgarian fallback behavior is unchanged.
+
+## Public Visibility
+
+`Product::published()` is the canonical public query scope. A product is public only when all conditions hold:
+
+- it is not soft-deleted;
+- `active=true`;
+- `workflow_status=published`;
+- `product_status=active`;
+- `published_at` is not null;
+- the slug is present;
+- the category is active.
+
+Product collections, direct details, category and brand listings, related and accessory products, homepage sections, database search, Meilisearch hydration, sitemaps, and marketing feeds use this boundary. `Product::shouldBeSearchable()` uses the same conditions. A non-public direct product request returns 404 and does not expose workflow metadata.
+
+Soft-deleted products cannot transition or appear publicly. Restoring a formerly published product moves it to the safe `approved` and hidden state while retaining prior publication metadata; restore never republishes automatically.
+
+## Maintenance Exception
+
+The existing allowlisted `catalog:review-auto-created-products` remediation command remains an explicit maintenance exception. Its mutation now uses the same transaction, stale-state check, row lock, and visibility coupling as the workflow service. A `draft` target uses `product_status=draft`; a `pending_review` target uses `product_status=hidden`. Both targets remain inactive and non-public.
+
+## Catalog Sync Safety
+
+This workflow hardening does not change supplier import or Catalog Sync behavior:
+
+- supplier feeds continue to stage in `supplier_products`;
+- controlled manual CREATE remains the catalog creation path;
+- UPDATE remains disabled by default;
+- Sync All and automatic sync remain disabled;
+- supplier data cannot overwrite managed names, slugs, descriptions, SEO, images, categories, attributes, or localized content.
+
+No migration or production data backfill is part of this workflow hardening.

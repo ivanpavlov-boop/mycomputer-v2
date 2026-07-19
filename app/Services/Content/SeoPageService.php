@@ -14,9 +14,7 @@ class SeoPageService
             ->with([
                 'relatedCategory',
                 'relatedBrand',
-                'relatedProducts.brand',
-                'relatedProducts.category',
-                'relatedProducts.images',
+                'relatedProducts' => fn ($query) => $query->published()->with(['brand', 'category', 'images']),
                 'relatedCategories',
                 'relatedBrands',
             ])

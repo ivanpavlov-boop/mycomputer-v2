@@ -73,7 +73,7 @@ class QuoteRequestService
 
     public function createFromProduct(User $user, Product $product, array $data): QuoteRequest
     {
-        abort_unless($product->active && $product->published_at !== null, 422, 'Product is not available.');
+        abort_unless($product->isPubliclyVisible(), 422, 'Product is not available.');
 
         return $this->submit($this->create($user, $data + [
             'items' => [[

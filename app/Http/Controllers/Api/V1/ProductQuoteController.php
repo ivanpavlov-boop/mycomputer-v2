@@ -12,7 +12,7 @@ class ProductQuoteController extends Controller
 {
     public function __invoke(string $slug, ProductQuoteRequest $request, QuoteRequestService $quotes): QuoteRequestResource
     {
-        $product = Product::query()->where('slug', $slug)->firstOrFail();
+        $product = Product::query()->published()->where('slug', $slug)->firstOrFail();
 
         return new QuoteRequestResource($quotes->createFromProduct($request->user(), $product, $request->validated()));
     }

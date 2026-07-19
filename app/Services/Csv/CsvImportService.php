@@ -162,9 +162,14 @@ class CsvImportService
             'slug' => $row['slug'] ?? $this->uniqueSlug(Product::class, $row['name']),
             'name' => $row['name'],
             'price' => $row['price'] ?? 0,
-            'active' => $this->toBool($row['active'] ?? false),
             'source_payload' => ['csv_import_job_id' => $job->id],
-        ], $payload));
+        ], $payload, [
+            'source' => Product::SOURCE_MANUAL,
+            'workflow_status' => Product::WORKFLOW_DRAFT,
+            'product_status' => 'draft',
+            'active' => false,
+            'published_at' => null,
+        ]));
     }
 
     private function updatePrices(array $row): void
@@ -291,7 +296,7 @@ class CsvImportService
             }
         }
 
-        foreach (['active', 'featured', 'new_product', 'bestseller'] as $field) {
+        foreach (['featured', 'new_product', 'bestseller'] as $field) {
             if (array_key_exists($field, $row) && filled($row[$field])) {
                 $payload[$field] = $this->toBool($row[$field]);
             }

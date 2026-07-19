@@ -28,9 +28,8 @@ class BundleController extends Controller
     public function forProduct(string $slug, BundleRecommendationService $recommendations): AnonymousResourceCollection
     {
         $product = Product::query()
+            ->published()
             ->where('slug', $slug)
-            ->where('active', true)
-            ->whereNotNull('published_at')
             ->firstOrFail();
 
         return ProductBundleResource::collection($recommendations->forProduct($product));

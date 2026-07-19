@@ -209,6 +209,34 @@ class ProductAdminUxTest extends TestCase
         $this->assertNotNull($remainingProduct->published_at);
     }
 
+    public function test_bulk_restore_keeps_formerly_published_products_non_public(): void
+    {
+        $this->actingAsRole(User::ROLE_SUPER_ADMIN);
+
+        $products = Product::factory()->count(2)->create([
+            'workflow_status' => Product::WORKFLOW_PUBLISHED,
+            'product_status' => 'active',
+            'active' => true,
+            'published_at' => now(),
+        ]);
+        $products->each->delete();
+
+        Livewire::test(ListProducts::class)
+            ->filterTable('trashed', false)
+            ->callTableBulkAction('restore', $products)
+            ->assertHasNoTableBulkActionErrors();
+
+        $products->each(function (Product $product): void {
+            $product->refresh();
+
+            $this->assertSame(Product::WORKFLOW_APPROVED, $product->workflow_status);
+            $this->assertSame('hidden', $product->product_status);
+            $this->assertFalse((bool) $product->active);
+            $this->assertNotNull($product->published_at);
+            $this->assertFalse($product->isPubliclyVisible());
+        });
+    }
+
     private function actingAsRole(string $role): User
     {
         $this->seed(RolesAndPermissionsSeeder::class);

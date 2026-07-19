@@ -28,8 +28,12 @@ class CsvImportExportCenterTest extends TestCase
             'name' => 'CSV Laptop',
             'price' => 1299.99,
             'quantity' => 7,
-            'active' => true,
+            'source' => Product::SOURCE_MANUAL,
+            'workflow_status' => Product::WORKFLOW_DRAFT,
+            'product_status' => 'draft',
+            'active' => false,
         ]);
+        $this->assertNull(Product::query()->where('sku', 'CSV-LAP-001')->value('published_at'));
         $this->assertSame('completed', $job->fresh()->status);
     }
 

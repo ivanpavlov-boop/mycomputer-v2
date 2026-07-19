@@ -49,10 +49,12 @@ class CatalogController extends Controller
 
     public function product(Product $product): ProductResource
     {
-        abort_unless($product->active && $product->published_at !== null, 404);
+        $publicProduct = Product::query()
+            ->published()
+            ->whereKey($product->getKey())
+            ->with(['brand', 'category', 'images', 'attributes.attribute.group', 'attributes.value'])
+            ->firstOrFail();
 
-        return ProductResource::make(
-            $product->load(['brand', 'category', 'images', 'attributes.attribute.group', 'attributes.value']),
-        );
+        return ProductResource::make($publicProduct);
     }
 }

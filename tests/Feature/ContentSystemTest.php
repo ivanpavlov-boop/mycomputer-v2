@@ -52,6 +52,41 @@ class ContentSystemTest extends TestCase
         $this->assertSame(1, $post->refresh()->views_count);
     }
 
+    public function test_public_content_relations_exclude_non_public_products(): void
+    {
+        $category = Category::factory()->create();
+        $brand = Brand::factory()->create();
+        $visible = Product::factory()->create([
+            'category_id' => $category->id,
+            'brand_id' => $brand->id,
+            'sku' => 'CONTENT-PUBLIC-001',
+        ]);
+        $hidden = Product::factory()->create([
+            'category_id' => $category->id,
+            'brand_id' => $brand->id,
+            'sku' => 'CONTENT-HIDDEN-001',
+            'workflow_status' => Product::WORKFLOW_APPROVED,
+            'product_status' => 'hidden',
+            'active' => false,
+        ]);
+
+        $post = $this->blogPost(['slug' => 'workflow-related-products']);
+        $post->relatedProducts()->attach([$visible->id, $hidden->id]);
+
+        $page = SeoPage::query()->create($this->pagePayload(['slug' => 'workflow-related-seo-page']));
+        $page->relatedProducts()->attach([$visible->id, $hidden->id]);
+
+        $this->getJson('/api/v1/blog/workflow-related-products')
+            ->assertOk()
+            ->assertJsonFragment(['sku' => $visible->sku])
+            ->assertJsonMissing(['sku' => $hidden->sku]);
+
+        $this->getJson('/api/v1/seo-pages/workflow-related-seo-page')
+            ->assertOk()
+            ->assertJsonFragment(['sku' => $visible->sku])
+            ->assertJsonMissing(['sku' => $hidden->sku]);
+    }
+
     public function test_blog_category_and_tag_pages(): void
     {
         $category = BlogCategory::query()->create(['name' => 'Guides', 'slug' => 'guides', 'is_active' => true]);
