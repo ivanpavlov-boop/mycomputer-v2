@@ -35,9 +35,12 @@ class MultilingualRoutingTest extends TestCase
         $config = $this->nginxConfig();
 
         $this->assertStringContainsString(
-            "location = /en/ {\n        return 308 /en\$is_args\$args;\n    }",
+            "location = /en/ {\n        absolute_redirect off;\n        return 308 /en\$is_args\$args;\n    }",
             $config,
         );
+
+        $this->assertSame(1, substr_count($config, 'absolute_redirect off;'));
+        $this->assertDoesNotMatchRegularExpression('/^    absolute_redirect\\s+off;/m', $config);
     }
 
     public function test_english_routing_has_no_broad_or_protected_nuxt_proxy(): void
