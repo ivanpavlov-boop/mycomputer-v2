@@ -22,14 +22,6 @@ Route::get('/', function () {
         ->header('Content-Language', $locale);
 });
 
-Route::get('/en', function () {
-    app()->setLocale('en');
-
-    return response()
-        ->view('welcome')
-        ->header('Content-Language', 'en');
-})->name('storefront.en');
-
 Route::middleware(['auth', 'can:manage imports'])->group(function (): void {
     Route::get('/admin/csv/exports/{csvExportJob}/download', function (CsvExportJob $csvExportJob, CsvMappingService $mappingService, StorageSecurityService $storageSecurity) {
         abort_unless(filled($csvExportJob->file_path), 404);

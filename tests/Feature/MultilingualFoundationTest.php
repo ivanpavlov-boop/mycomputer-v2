@@ -31,7 +31,7 @@ class MultilingualFoundationTest extends TestCase
         $this->assertSame('English', config('locales.supported.en.label'));
     }
 
-    public function test_default_and_english_storefront_entrypoints_render_with_expected_locales(): void
+    public function test_default_storefront_entrypoint_renders_with_bulgarian_locale(): void
     {
         $this
             ->get('/')
@@ -39,16 +39,11 @@ class MultilingualFoundationTest extends TestCase
             ->assertHeader('Content-Language', 'bg')
             ->assertSee('<html lang="bg"', false);
 
-        $this
-            ->get('/en')
-            ->assertOk()
-            ->assertHeader('Content-Language', 'en')
-            ->assertSee('<html lang="en"', false);
     }
 
     public function test_admin_password_reset_and_catalog_sync_routes_are_not_affected_by_en_entrypoint(): void
     {
-        $this->assertTrue(Route::has('storefront.en'));
+        $this->assertFalse(Route::has('storefront.en'));
         $this->assertTrue(Route::has('filament.admin.auth.password-reset.request'));
         $this->assertTrue(Route::has('filament.admin.auth.password-reset.reset'));
 

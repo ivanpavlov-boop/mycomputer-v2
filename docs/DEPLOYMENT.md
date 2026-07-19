@@ -82,6 +82,28 @@ The Docker nginx config intentionally exposes only the safe Phase 9A storefront 
 - `/_nuxt/*`
 - `/_ipx/*`
 
+The multilingual foundation adds only the corresponding explicit English
+storefront routes:
+
+- `/en`
+- `/en/catalog`
+- `/en/categories`
+- `/en/c/*`
+- `/en/p/*`
+
+`/en/` uses a relative permanent redirect to `/en` and preserves its query
+string. Nginx does not use a broad `/en/*` route, so `/en/admin`, `/en/api`,
+and English commerce/account paths are not accidentally forwarded to Nuxt.
+
+| Path family | Owner |
+| --- | --- |
+| `/` | Nuxt |
+| `/catalog`, `/categories`, `/c/*`, `/p/*` | Nuxt |
+| `/en`, `/en/catalog`, `/en/categories`, `/en/c/*`, `/en/p/*` | Nuxt |
+| `/admin/*` | Laravel / Filament |
+| `/api/*` | Laravel |
+| All other paths | Existing Laravel/nginx fallback behavior |
+
 Laravel remains authoritative for:
 
 - `/admin`
@@ -91,6 +113,14 @@ Laravel remains authoritative for:
 - `/storage/*`
 
 Customer cart, checkout, account, wishlist, compare and auth storefront routes are not enabled through nginx in this phase. Keep them blocked until those flows are explicitly approved.
+
+Nuxt uses the same-origin API base `/api/v1`; no custom CORS header allowlist
+is required for `X-Locale` in this deployment model. Locale-dependent API
+responses include `Content-Language` and `Vary: X-Locale, Accept-Language`,
+while retaining any existing `Vary` values. English remains non-indexable by
+default, English content may fall back to Bulgarian, and this route integration
+does not add a multilingual database schema or supplier ownership of managed
+translations.
 
 Frontend runtime configuration:
 

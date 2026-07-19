@@ -24,6 +24,21 @@ class ResolveApiLocale
         $response = $next($request);
         $response->headers->set('Content-Language', $locale);
 
+        $vary = $response->getVary();
+
+        foreach (['X-Locale', 'Accept-Language'] as $header) {
+            $alreadyVaried = array_filter(
+                $vary,
+                static fn (string $existingHeader): bool => strcasecmp($existingHeader, $header) === 0,
+            );
+
+            if ($alreadyVaried === []) {
+                $vary[] = $header;
+            }
+        }
+
+        $response->setVary($vary);
+
         return $response;
     }
 }
