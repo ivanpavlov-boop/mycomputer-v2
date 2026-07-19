@@ -10,7 +10,12 @@ use Filament\Auth\Http\Responses\Contracts\PasswordResetResponse;
 use Filament\Auth\Pages\PasswordReset\ResetPassword;
 use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
+use Filament\Schemas\Components\Actions;
 use Filament\Schemas\Components\Component;
+use Filament\Schemas\Components\RenderHook;
+use Filament\Schemas\Components\Text;
+use Filament\Schemas\Schema;
+use Filament\View\PanelsRenderHook;
 use Illuminate\Auth\Events\PasswordReset;
 use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Contracts\Auth\CanResetPassword;
@@ -20,9 +25,20 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
+use Livewire\Attributes\Locked;
 
 class ResetAdminPassword extends ResetPassword
 {
+    #[Locked]
+    public bool $hasValidResetLink = false;
+
+    public function mount(?string $email = null, #[\SensitiveParameter] ?string $token = null): void
+    {
+        parent::mount($email, $token);
+
+        $this->hasValidResetLink = $this->hasValidResetLink();
+    }
+
     public function resetPassword(): ?PasswordResetResponse
     {
         Validator::make(
@@ -153,23 +169,73 @@ class ResetAdminPassword extends ResetPassword
 
     public function getTitle(): string|Htmlable
     {
-        return __('admin-password-reset.reset.title');
+        return $this->hasValidResetLink
+            ? __('admin-password-reset.reset.title')
+            : __('admin-password-reset.invalid_link.title');
     }
 
     public function getHeading(): string|Htmlable|null
     {
-        return __('admin-password-reset.reset.heading');
+        return $this->hasValidResetLink
+            ? __('admin-password-reset.reset.heading')
+            : __('admin-password-reset.invalid_link.title');
     }
 
     public function getSubheading(): string|Htmlable|null
     {
-        return filament()->hasLogin() ? $this->loginAction : null;
+        return $this->hasValidResetLink && filament()->hasLogin() ? $this->loginAction : null;
     }
 
     public function getResetPasswordFormAction(): Action
     {
         return parent::getResetPasswordFormAction()
             ->label(__('admin-password-reset.reset.submit'));
+    }
+
+    public function content(Schema $schema): Schema
+    {
+        return $schema
+            ->components([
+                RenderHook::make(PanelsRenderHook::AUTH_PASSWORD_RESET_RESET_FORM_BEFORE),
+                $this->hasValidResetLink
+                    ? $this->getFormContentComponent()
+                    : $this->getInvalidLinkContentComponent(),
+                RenderHook::make(PanelsRenderHook::AUTH_PASSWORD_RESET_RESET_FORM_AFTER),
+            ]);
+    }
+
+    private function getInvalidLinkContentComponent(): Component
+    {
+        return Actions::make([
+            Action::make('requestNewPasswordResetLink')
+                ->label(__('admin-password-reset.invalid_link.request_action'))
+                ->url(filament()->getRequestPasswordResetUrl())
+                ->button()
+                ->color('primary'),
+            $this->loginAction(),
+        ])
+            ->aboveContent(
+                Text::make(__('admin-password-reset.invalid_link.body'))
+                    ->color('gray')
+                    ->size('sm'),
+            )
+            ->fullWidth()
+            ->key('invalid-reset-link-actions');
+    }
+
+    private function hasValidResetLink(): bool
+    {
+        if (blank($this->token) || ! filter_var($this->email, FILTER_VALIDATE_EMAIL)) {
+            return false;
+        }
+
+        $user = User::query()->where('email', $this->email)->first();
+
+        if (! $user?->isActiveAdminAccount() || ! $user->canAccessPanel(filament()->getCurrentOrDefaultPanel())) {
+            return false;
+        }
+
+        return Password::broker(filament()->getAuthPasswordBroker())->tokenExists($user, $this->token);
     }
 
     private function getInvalidLinkNotification(): Notification

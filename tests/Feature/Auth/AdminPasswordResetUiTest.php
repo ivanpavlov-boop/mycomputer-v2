@@ -14,6 +14,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Password;
+use Illuminate\Support\Facades\URL;
 use Livewire\Livewire;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
@@ -52,7 +53,169 @@ class AdminPasswordResetUiTest extends TestCase
             ->assertSee('Нова парола')
             ->assertSee('Потвърдете новата парола')
             ->assertSee('Запази новата парола')
-            ->assertSee('Назад към вход');
+            ->assertSee('Назад към вход')
+            ->assertSee('id="form"', false)
+            ->assertDontSee('Невалиден или изтекъл линк');
+
+        $this->assertTrue(Password::broker(filament()->getAuthPasswordBroker())->tokenExists($admin, $token));
+    }
+
+    public function test_valid_reset_link_keeps_the_form_visible_and_remains_usable_until_submission(): void
+    {
+        $admin = $this->admin(User::ROLE_SUPER_ADMIN, 'valid-reset-link@example.test', [
+            'password' => Hash::make('Oldpass1!23'),
+        ]);
+        $otherAdmin = $this->admin(User::ROLE_PRODUCT_EDITOR, 'unchanged-reset-link@example.test', [
+            'password' => Hash::make('Otherpass1!23'),
+        ]);
+        $token = Password::createToken($admin);
+        $resetUrl = filament()->getPanel('admin')->getResetPasswordUrl($token, $admin);
+
+        $this->get($resetUrl)
+            ->assertOk()
+            ->assertSee('Нова парола')
+            ->assertSee('Потвърдете новата парола')
+            ->assertSee('Запази новата парола')
+            ->assertSee('id="form"', false)
+            ->assertDontSee('Невалиден или изтекъл линк');
+
+        $this->assertTrue(Password::broker(filament()->getAuthPasswordBroker())->tokenExists($admin, $token));
+
+        Livewire::test(ResetAdminPassword::class, [
+            'email' => $admin->email,
+            'token' => $token,
+        ])
+            ->fillForm([
+                'password' => 'Newpass1!23',
+                'passwordConfirmation' => 'Newpass1!23',
+            ])
+            ->call('resetPassword')
+            ->assertRedirect(route('filament.admin.auth.login'));
+
+        $admin->refresh();
+        $otherAdmin->refresh();
+
+        $this->assertTrue(Hash::check('Newpass1!23', $admin->password));
+        $this->assertSame(User::ROLE_SUPER_ADMIN, $admin->role);
+        $this->assertTrue($admin->is_active);
+        $this->assertFalse($admin->trashed());
+        $this->assertFalse(Password::broker(filament()->getAuthPasswordBroker())->tokenExists($admin, $token));
+        $this->assertTrue(Hash::check('Otherpass1!23', $otherAdmin->password));
+        $this->assertSame(User::ROLE_PRODUCT_EDITOR, $otherAdmin->role);
+    }
+
+    public function test_invalid_and_missing_reset_links_render_only_the_neutral_recovery_state(): void
+    {
+        $admin = $this->admin(User::ROLE_PRODUCT_EDITOR, 'invalid-page-reset@example.test', [
+            'password' => Hash::make('Oldpass1!23'),
+        ]);
+
+        $this->assertInvalidResetPage(
+            filament()->getPanel('admin')->getResetPasswordUrl('synthetic-invalid-token', $admin),
+        );
+        $this->assertInvalidResetPage(
+            URL::signedRoute('filament.admin.auth.password-reset.reset', ['email' => $admin->email]),
+        );
+        $this->assertInvalidResetPage(
+            URL::signedRoute('filament.admin.auth.password-reset.reset', [
+                'email' => 'not-an-email',
+                'token' => 'synthetic-invalid-token',
+            ]),
+        );
+
+        $this->assertTrue(Hash::check('Oldpass1!23', $admin->refresh()->password));
+        $this->assertDatabaseMissing('password_reset_tokens', ['email' => $admin->email]);
+    }
+
+    public function test_expired_and_superseded_reset_links_render_the_neutral_recovery_state(): void
+    {
+        $admin = $this->admin(User::ROLE_PRODUCT_EDITOR, 'expired-page-reset@example.test', [
+            'password' => Hash::make('Oldpass1!23'),
+        ]);
+        $expiredToken = $this->expiredTokenFor($admin);
+
+        $this->assertInvalidResetPage(
+            filament()->getPanel('admin')->getResetPasswordUrl($expiredToken, $admin),
+        );
+
+        $olderToken = Password::createToken($admin);
+        $latestToken = Password::createToken($admin);
+
+        $this->assertInvalidResetPage(
+            filament()->getPanel('admin')->getResetPasswordUrl($olderToken, $admin),
+        );
+
+        $this->get(filament()->getPanel('admin')->getResetPasswordUrl($latestToken, $admin))
+            ->assertOk()
+            ->assertSee('Нова парола')
+            ->assertSee('Запази новата парола')
+            ->assertDontSee('Невалиден или изтекъл линк');
+
+        $this->assertTrue(Hash::check('Oldpass1!23', $admin->refresh()->password));
+        $this->assertTrue(Password::broker(filament()->getAuthPasswordBroker())->tokenExists($admin, $latestToken));
+    }
+
+    public function test_used_reset_link_renders_the_neutral_recovery_state_without_reset_form(): void
+    {
+        $admin = $this->admin(User::ROLE_PRODUCT_EDITOR, 'used-page-reset@example.test', [
+            'password' => Hash::make('Oldpass1!23'),
+        ]);
+        $token = Password::createToken($admin);
+        $resetUrl = filament()->getPanel('admin')->getResetPasswordUrl($token, $admin);
+
+        Livewire::test(ResetAdminPassword::class, [
+            'email' => $admin->email,
+            'token' => $token,
+        ])
+            ->fillForm([
+                'password' => 'Newpass1!23',
+                'passwordConfirmation' => 'Newpass1!23',
+            ])
+            ->call('resetPassword')
+            ->assertRedirect(route('filament.admin.auth.login'));
+
+        $this->assertInvalidResetPage($resetUrl);
+        $this->assertTrue(Hash::check('Newpass1!23', $admin->refresh()->password));
+    }
+
+    public function test_ineligible_accounts_with_issued_tokens_render_the_neutral_recovery_state(): void
+    {
+        $inactive = $this->admin(User::ROLE_PRODUCT_EDITOR, 'inactive-page-reset@example.test', [
+            'password' => Hash::make('Inactive1!23'),
+        ]);
+        $inactiveToken = Password::createToken($inactive);
+        $inactive->update(['is_active' => false]);
+
+        $deleted = $this->admin(User::ROLE_PRODUCT_EDITOR, 'deleted-page-reset@example.test', [
+            'password' => Hash::make('Deleted1!23'),
+        ]);
+        $deletedToken = Password::createToken($deleted);
+        $deleted->delete();
+
+        $nonAdmin = User::factory()->create([
+            'email' => 'non-admin-page-reset@example.test',
+            'is_active' => true,
+            'role' => null,
+            'password' => Hash::make('Customer1!23'),
+        ]);
+        $nonAdminToken = Password::createToken($nonAdmin);
+
+        $lostAccess = $this->admin(User::ROLE_PRODUCT_EDITOR, 'lost-access-page-reset@example.test', [
+            'password' => Hash::make('Access1!234'),
+        ]);
+        $lostAccessToken = Password::createToken($lostAccess);
+        $lostAccess->syncRoles([]);
+        $lostAccess->update(['role' => null]);
+
+        $this->assertInvalidResetPage(filament()->getPanel('admin')->getResetPasswordUrl($inactiveToken, $inactive));
+        $this->assertInvalidResetPage(filament()->getPanel('admin')->getResetPasswordUrl($deletedToken, $deleted));
+        $this->assertInvalidResetPage(filament()->getPanel('admin')->getResetPasswordUrl($nonAdminToken, $nonAdmin));
+        $this->assertInvalidResetPage(filament()->getPanel('admin')->getResetPasswordUrl($lostAccessToken, $lostAccess));
+
+        $this->assertTrue(Hash::check('Inactive1!23', $inactive->refresh()->password));
+        $this->assertTrue(Hash::check('Deleted1!23', User::withTrashed()->findOrFail($deleted->id)->password));
+        $this->assertTrue(Hash::check('Customer1!23', $nonAdmin->refresh()->password));
+        $this->assertTrue(Hash::check('Access1!234', $lostAccess->refresh()->password));
     }
 
     public function test_active_super_admin_receives_a_filament_reset_link_and_neutral_ui_response(): void
@@ -293,6 +456,24 @@ class AdminPasswordResetUiTest extends TestCase
             ->assertNotified($this->invalidLinkNotification());
 
         $this->assertTrue(Hash::check('Oldpass1!23', $customer->refresh()->password));
+    }
+
+    private function assertInvalidResetPage(string $resetUrl): void
+    {
+        $this->get($resetUrl)
+            ->assertOk()
+            ->assertSee('Невалиден или изтекъл линк')
+            ->assertSee('Линкът за възстановяване е невалиден, изтекъл или вече е използван. Заявете нов линк.')
+            ->assertSee('Заяви нов линк')
+            ->assertSee('Назад към вход')
+            ->assertSee(filament()->getRequestPasswordResetUrl(), false)
+            ->assertSee(filament()->getLoginUrl(), false)
+            ->assertDontSee('Нова парола')
+            ->assertDontSee('Потвърдете новата парола')
+            ->assertDontSee('Запази новата парола')
+            ->assertDontSee('id="form"', false)
+            ->assertDontSee('type="password"', false)
+            ->assertDontSee('wire:submit', false);
     }
 
     private function neutralRequestNotification(): FilamentNotification
