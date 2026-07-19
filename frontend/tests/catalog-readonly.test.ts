@@ -60,9 +60,13 @@ describe('read-only public catalog foundation', () => {
     const app = source('app/app.vue')
 
     expect(isReadOnlyStorefrontPath('/catalog')).toBe(true)
+    expect(isReadOnlyStorefrontPath('/en/catalog')).toBe(true)
     expect(isReadOnlyStorefrontPath('/categories')).toBe(true)
+    expect(isReadOnlyStorefrontPath('/en/categories')).toBe(true)
     expect(isReadOnlyStorefrontPath('/c/iphone')).toBe(true)
+    expect(isReadOnlyStorefrontPath('/en/c/iphone')).toBe(true)
     expect(isReadOnlyStorefrontPath('/p/sample-product')).toBe(true)
+    expect(isReadOnlyStorefrontPath('/en/p/sample-product')).toBe(true)
     expect(isReadOnlyStorefrontPath('/assistant')).toBe(false)
     expect(isReadOnlyStorefrontPath('/')).toBe(false)
     expect(app).toContain('AiChatWidget v-if="showAiChatWidget"')

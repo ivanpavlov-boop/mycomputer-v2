@@ -62,6 +62,26 @@ Catalog Sync changes should verify:
 - server-side validation rejects unsafe selected rows
 - read-only diagnostics remain read-only
 
+## Multilingual Foundation Checks
+
+The BG-default/EN-secondary foundation must keep locale resolution and public
+catalog rendering read-only. Run the focused checks after locale, API-resource,
+or Nuxt i18n changes:
+
+```powershell
+.\.tools\php\php.exe artisan test tests/Feature/Localization/ApiLocaleMiddlewareTest.php
+.\.tools\php\php.exe artisan test tests/Feature/MultilingualFoundationTest.php
+cd frontend
+cmd /c npm run test -- --run
+cmd /c npm run build
+cd ..
+```
+
+Coverage must confirm the API locale priority (`X-Locale`, then
+`Accept-Language`, then validated `?locale=`, then Bulgarian), safe fallback
+for unsupported values, no catalog/staging writes, locale-aware public links,
+and `noindex` English pages until English content has been reviewed.
+
 ## Local Supplier Source Reconciliation Tests
 
 Phase 9C.6.5C.3A and C.3A.1 tests use synthetic local XML fixtures only. They

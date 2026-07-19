@@ -24,37 +24,74 @@ class Locales
 
     public static function default(): string
     {
-        return self::normalize(config('locales.default', 'bg'));
+        return self::supportedLocaleFromTag(config('locales.default', 'bg'))
+            ?? self::firstSupportedLocale()
+            ?? 'bg';
     }
 
     public static function fallback(): string
     {
-        return self::normalize(config('locales.fallback', self::default()));
+        return self::supportedLocaleFromTag(config('locales.fallback', self::default()))
+            ?? self::default();
     }
 
     public static function normalize(?string $locale): string
     {
-        $locale = strtolower((string) ($locale ?: self::default()));
-        $locale = str_replace('_', '-', $locale);
-        $locale = explode('-', $locale)[0] ?: self::default();
-
-        return self::isSupported($locale) ? $locale : self::fallback();
+        return self::supportedLocaleFromTag($locale) ?? self::fallback();
     }
 
     public static function isSupported(?string $locale): bool
     {
-        return in_array(strtolower((string) $locale), self::codes(), true);
+        return in_array(strtolower(trim((string) $locale)), self::codes(), true);
     }
 
     public static function fromRequest(Request $request): string
     {
-        $explicit = $request->query('locale') ?: $request->header('X-Locale');
+        return self::normalize($request->getLocale() ?: app()->getLocale());
+    }
 
-        if (filled($explicit)) {
-            return self::normalize((string) $explicit);
+    public static function resolveApiRequest(Request $request): string
+    {
+        if ($request->hasHeader('X-Locale')) {
+            return self::supportedLocaleFromTag($request->header('X-Locale')) ?? self::fallback();
         }
 
-        return self::normalize(app()->getLocale());
+        if ($request->hasHeader('Accept-Language')) {
+            foreach ($request->getLanguages() as $language) {
+                $locale = self::supportedLocaleFromTag($language);
+
+                if ($locale !== null) {
+                    return $locale;
+                }
+            }
+        }
+
+        // Keep the existing, validated API query option as a backwards-compatible fallback.
+        if ($request->query->has('locale') && self::isSupported($request->query('locale'))) {
+            return strtolower(trim((string) $request->query('locale')));
+        }
+
+        return self::default();
+    }
+
+    private static function supportedLocaleFromTag(?string $locale): ?string
+    {
+        $locale = strtolower(trim((string) $locale));
+
+        if (! preg_match('/^[a-z]{2}(?:[-_][a-z]{2})?$/', $locale)) {
+            return null;
+        }
+
+        $primaryLocale = explode('-', str_replace('_', '-', $locale))[0];
+
+        return self::isSupported($primaryLocale) ? $primaryLocale : null;
+    }
+
+    private static function firstSupportedLocale(): ?string
+    {
+        $locale = array_key_first(self::supported());
+
+        return is_string($locale) ? $locale : null;
     }
 
     public static function urlPrefix(string $locale): ?string

@@ -9,23 +9,23 @@
     <div v-else>
       <LayoutBreadcrumbs :items="[
         { label: product.category?.name || 'Категория', to: product.category ? `/c/${product.category.slug}` : undefined },
-        { label: product.name },
+        { label: product.localized?.name || product.name },
       ]" />
 
       <section class="container-page grid gap-8 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
-        <ProductGallery :images="product.images || []" :product-name="product.name" />
+        <ProductGallery :images="product.images || []" :product-name="product.localized?.name || product.name" />
 
         <div class="space-y-5">
           <div>
             <div class="flex flex-wrap items-center gap-2 text-sm text-slate-500">
-              <NuxtLink v-if="product.category" :to="`/c/${product.category.slug}`" class="font-medium text-brand-700 hover:text-brand-800">
-                {{ product.category.name }}
+              <NuxtLink v-if="product.category" :to="localePath(`/c/${product.category.slug}`)" class="font-medium text-brand-700 hover:text-brand-800">
+                {{ product.category.localized?.name || product.category.name }}
               </NuxtLink>
               <span v-if="product.category && product.brand" aria-hidden="true">·</span>
               <span v-if="product.brand" class="font-medium">{{ product.brand.name }}</span>
             </div>
 
-            <h1 class="mt-2 text-3xl font-bold tracking-normal text-slate-950">{{ product.name }}</h1>
+            <h1 class="mt-2 text-3xl font-bold tracking-normal text-slate-950">{{ product.localized?.name || product.name }}</h1>
 
             <div class="mt-3 flex flex-wrap gap-3 text-sm text-slate-500">
               <span>SKU: {{ product.sku }}</span>
@@ -53,12 +53,12 @@
             <p v-if="product.category">Категория: {{ product.category.name }}</p>
           </section>
 
-          <p v-if="product.short_description" class="text-slate-700">{{ product.short_description }}</p>
+          <p v-if="product.localized?.short_description || product.short_description" class="text-slate-700">{{ product.localized?.short_description || product.short_description }}</p>
         </div>
       </section>
 
       <section class="container-page mt-10">
-        <ProductTabs :description="product.description" :attributes="product.attributes || []" />
+        <ProductTabs :description="product.localized?.description || product.description" :attributes="product.attributes || []" />
       </section>
 
       <ProductRelatedProducts :products="product.related_products || []" />
@@ -74,12 +74,14 @@ import { resourceData } from '~/utils/apiCollections'
 const route = useRoute()
 const products = useProducts()
 const seo = useSeo()
+const localePath = useLocalePath()
+const { locale } = useI18n()
 
 const slug = computed(() => String(route.params.slug || ''))
 const { data, error, pending } = await useAsyncData(
-  `product-${slug.value}`,
+  () => `product-${locale.value}-${slug.value}`,
   () => products.detail(slug.value),
-  { watch: [slug] },
+  { watch: [slug, locale] },
 )
 const product = computed<ProductDetail | null>(() => resourceData<ProductDetail>(data.value))
 

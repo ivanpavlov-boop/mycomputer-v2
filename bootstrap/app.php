@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Middleware\ResolveApiLocale;
 use App\Support\Api\ErrorResponse;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Auth\AuthenticationException;
@@ -18,6 +19,8 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        $middleware->appendToGroup('api', ResolveApiLocale::class);
+
         $middleware->trustProxies(
             at: '*',
             headers: Request::HEADER_X_FORWARDED_FOR

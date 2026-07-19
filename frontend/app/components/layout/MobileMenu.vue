@@ -5,6 +5,7 @@
       <button class="rounded-md p-2 hover:bg-slate-100" @click="ui.mobileMenuOpen = false">✕</button>
     </div>
     <SearchBar class="mt-4" />
+    <LayoutLanguageSwitcher class="mt-4" />
     <nav class="mt-5 grid gap-3 text-sm font-medium">
       <NuxtLink to="/search" @click="ui.mobileMenuOpen = false">Продукти</NuxtLink>
       <NuxtLink v-if="!isReadOnlyStorefrontRoute" to="/compare" @click="ui.mobileMenuOpen = false">Сравнение</NuxtLink>

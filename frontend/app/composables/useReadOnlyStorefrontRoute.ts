@@ -1,4 +1,8 @@
+import { stripStorefrontLocalePrefix } from '../utils/locales'
+
 export function isReadOnlyStorefrontPath(path: string) {
+  path = stripStorefrontLocalePrefix(path)
+
   return (
     path === '/catalog'
     || path === '/categories'

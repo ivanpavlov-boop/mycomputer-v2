@@ -32,12 +32,12 @@ describe('category detail page', () => {
   it('renders category title product cards pagination and Bulgarian empty state', () => {
     const page = source('app/pages/c/[slug].vue')
 
-    expect(page).toContain('{{ category.name }}')
+    expect(page).toContain('{{ category.localized?.name || category.name }}')
     expect(page).toContain('ProductGrid v-if="products.length"')
     expect(page).toContain('Pagination :meta="productsMeta"')
     expect(page).toContain('Няма активни продукти в тази категория.')
     expect(page).toContain('Всички категории')
-    expect(page).toContain('to="/categories"')
+    expect(page).toContain('localePath(\'/categories\')')
   })
 
   it('normalizes category sort search and pagination query values safely', () => {
@@ -56,7 +56,7 @@ describe('category detail page', () => {
     const productCard = source('app/components/catalog/ProductCard.vue')
     const page = source('app/pages/c/[slug].vue')
 
-    expect(productCard).toContain(':to="`/p/${product.slug}`"')
+    expect(productCard).toContain(':to="localePath(`/p/${product.slug}`)"')
     expect(productCard).toContain('Виж продукта')
     expect(page).not.toContain('useCartStore')
     expect(page).not.toContain('checkout')
