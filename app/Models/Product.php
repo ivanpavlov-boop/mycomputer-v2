@@ -200,13 +200,19 @@ class Product extends Model
 
     public function isPubliclyVisible(): bool
     {
+        $hasActiveCategory = $this->relationLoaded('category')
+            ? ($category = $this->getRelation('category')) !== null
+                && ! $category->trashed()
+                && (bool) $category->is_active
+            : $this->category()->where('is_active', true)->exists();
+
         return ! $this->trashed()
             && (bool) $this->active
             && $this->published_at !== null
             && $this->workflow_status === self::WORKFLOW_PUBLISHED
             && $this->product_status === 'active'
             && filled($this->slug)
-            && $this->category()->where('is_active', true)->exists();
+            && $hasActiveCategory;
     }
 
     public function storefrontUrl(): ?string

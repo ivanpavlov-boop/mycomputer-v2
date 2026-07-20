@@ -2,20 +2,21 @@
 
 namespace App\Filament\Resources\Products\Tables;
 
+use App\Filament\Resources\Products\ProductResource;
 use App\Models\AvailabilityStatus;
 use App\Models\Product;
 use App\Services\Products\ProductSpecificationQualityResult;
 use App\Services\Products\ProductSpecificationQualityService;
-use Filament\Actions\Action;
+use Filament\Actions\ActionGroup;
 use Filament\Actions\BulkAction;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
-use Filament\Actions\EditAction;
 use Filament\Actions\ForceDeleteAction;
 use Filament\Actions\ForceDeleteBulkAction;
 use Filament\Actions\RestoreAction;
 use Filament\Actions\RestoreBulkAction;
 use Filament\Forms\Components\Select;
+use Filament\Support\Enums\FontFamily;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\ImageColumn;
@@ -31,32 +32,99 @@ class ProductsTable
     public static function configure(Table $table): Table
     {
         return $table
-            ->modifyQueryUsing(fn (Builder $query): Builder => $query->with('thumbnailImage')->withCount('activeQualityFlagAssignments'))
+            ->modifyQueryUsing(fn (Builder $query): Builder => $query
+                ->with([
+                    'availabilityStatus',
+                    'brand',
+                    'category',
+                    'supplier',
+                    'thumbnailImage',
+                ])
+                ->withCount('activeQualityFlagAssignments'))
             ->defaultSort('created_at', 'desc')
             ->defaultSortOptionLabel('Най-нови първо')
+            ->recordUrl(fn (Product $record): ?string => ProductResource::canEdit($record)
+                ? ProductResource::getUrl('edit', ['record' => $record])
+                : null)
             ->columns([
                 ImageColumn::make('thumbnail')
                     ->label('Снимка')
                     ->state(fn (Product $record): ?string => $record->thumbnailUrl())
                     ->defaultImageUrl(self::placeholderImageUrl())
-                    ->size(56)
+                    ->imageSize(42)
                     ->square()
-                    ->url(fn (Product $record): ?string => $record->thumbnailUrl())
-                    ->openUrlInNewTab()
                     ->toggleable(),
-                TextColumn::make('sku')->label('SKU')->searchable()->sortable(),
-                TextColumn::make('name')->label('Име')->searchable()->sortable()->limit(45),
+                TextColumn::make('sku')
+                    ->label('SKU')
+                    ->searchable()
+                    ->sortable()
+                    ->copyable()
+                    ->copyableState(fn (?string $state): ?string => $state)
+                    ->copyMessage('SKU е копиран')
+                    ->copyMessageDuration(1500)
+                    ->fontFamily(FontFamily::Mono)
+                    ->toggleable(),
+                TextColumn::make('name')
+                    ->label('Име на продукта')
+                    ->searchable()
+                    ->sortable()
+                    ->lineClamp(2)
+                    ->tooltip(fn (Product $record): string => $record->name)
+                    ->grow()
+                    ->toggleable(),
+                TextColumn::make('category.name')
+                    ->label('Категория')
+                    ->placeholder('—')
+                    ->sortable()
+                    ->toggleable(),
+                TextColumn::make('brand.name')
+                    ->label('Марка')
+                    ->placeholder('—')
+                    ->sortable()
+                    ->toggleable(),
+                TextColumn::make('price')
+                    ->label('Цена')
+                    ->money(Product::CATALOG_CURRENCY)
+                    ->sortable()
+                    ->alignEnd()
+                    ->toggleable(),
+                TextColumn::make('supplier.company_name')
+                    ->label('Вносител')
+                    ->placeholder('—')
+                    ->searchable()
+                    ->sortable()
+                    ->toggleable(),
                 TextColumn::make('workflow_status')
-                    ->label('Работен статус')
-                    ->badge()
-                    ->formatStateUsing(fn (?string $state): string => Product::workflowStatusLabel($state))
-                    ->color(fn (?string $state): string => Product::workflowStatusColor($state))
-                    ->sortable(),
+                    ->label('Статус')
+                    ->state(fn (): string => '●')
+                    ->color(fn (Product $record): string => Product::workflowStatusColor($record->workflow_status))
+                    ->tooltip(fn (Product $record): string => Product::workflowStatusLabel($record->workflow_status))
+                    ->extraAttributes(fn (Product $record): array => [
+                        'aria-label' => Product::workflowStatusLabel($record->workflow_status),
+                        'role' => 'img',
+                    ])
+                    ->alignCenter()
+                    ->size('xs')
+                    ->sortable()
+                    ->toggleable(),
+                TextColumn::make('availabilityStatus.name')
+                    ->label('Наличност')
+                    ->formatStateUsing(fn (?string $state, Product $record): string => self::availabilityWithQuantity($record, $state))
+                    ->sortable()
+                    ->toggleable(),
+                TextColumn::make('storefront')
+                    ->label('Виж в сайта')
+                    ->state(fn (Product $record): string => $record->storefrontUrl() === null ? '—' : 'Виж в сайта')
+                    ->url(fn (Product $record): ?string => $record->storefrontUrl())
+                    ->openUrlInNewTab()
+                    ->disabledClick(fn (Product $record): bool => $record->storefrontUrl() === null)
+                    ->alignCenter()
+                    ->toggleable(),
                 TextColumn::make('active_quality_flag_assignments_count')
                     ->label('Флагове за качество')
                     ->badge()
                     ->color(fn (int $state): string => $state > 0 ? 'warning' : 'gray')
-                    ->toggleable(),
+                    ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('specification_quality')
                     ->label('Характеристики')
                     ->state(fn (Product $record): string => self::specificationQuality($record)->statusLabel())
@@ -64,30 +132,51 @@ class ProductsTable
                     ->badge()
                     ->color(fn (Product $record): string => self::specificationQuality($record)->statusColor())
                     ->tooltip(fn (Product $record): string => self::specificationQualityTooltip($record))
-                    ->toggleable(),
-                TextColumn::make('category.name')->label('Категория')->sortable()->toggleable(),
-                TextColumn::make('brand.name')->label('Бранд')->sortable()->toggleable(),
-                TextColumn::make('price')->label('Цена')->money(Product::CATALOG_CURRENCY)->sortable(),
-                TextColumn::make('promo_price')->label('Промо цена')->money(Product::CATALOG_CURRENCY)->sortable()->toggleable(),
-                TextColumn::make('quantity')->label('Количество')->sortable(),
-                TextColumn::make('reserved_quantity')->label('Резервирано количество')->sortable()->toggleable(isToggledHiddenByDefault: true),
-                TextColumn::make('availabilityStatus.name')
-                    ->label('Наличност')
-                    ->formatStateUsing(fn (?string $state): string => self::availabilityLabel($state))
-                    ->badge()
-                    ->sortable(),
+                    ->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('promo_price')
+                    ->label('Промо цена')
+                    ->money(Product::CATALOG_CURRENCY)
+                    ->sortable()
+                    ->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('quantity')
+                    ->label('Количество')
+                    ->sortable()
+                    ->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('reserved_quantity')
+                    ->label('Резервирано количество')
+                    ->sortable()
+                    ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('stock_status')
                     ->label('Статус на наличност')
                     ->formatStateUsing(fn (?string $state): string => self::stockStatusOptions()[$state] ?? 'Неизвестен')
                     ->badge()
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
-                IconColumn::make('manual_override')->label('Ръчна наличност')->boolean()->toggleable(),
-                IconColumn::make('active')->label('Активен')->boolean(),
-                IconColumn::make('featured')->label('Препоръчан')->boolean(),
-                IconColumn::make('new_product')->label('Нов продукт')->boolean()->toggleable(),
-                IconColumn::make('bestseller')->label('Бестселър')->boolean()->toggleable(),
-                TextColumn::make('updated_at')->label('Обновен на')->dateTime()->sortable()->toggleable(isToggledHiddenByDefault: true),
+                IconColumn::make('manual_override')
+                    ->label('Ръчна наличност')
+                    ->boolean()
+                    ->toggleable(isToggledHiddenByDefault: true),
+                IconColumn::make('active')
+                    ->label('Активен')
+                    ->boolean()
+                    ->toggleable(isToggledHiddenByDefault: true),
+                IconColumn::make('featured')
+                    ->label('Препоръчан')
+                    ->boolean()
+                    ->toggleable(isToggledHiddenByDefault: true),
+                IconColumn::make('new_product')
+                    ->label('Нов продукт')
+                    ->boolean()
+                    ->toggleable(isToggledHiddenByDefault: true),
+                IconColumn::make('bestseller')
+                    ->label('Бестселър')
+                    ->boolean()
+                    ->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('updated_at')
+                    ->label('Обновен на')
+                    ->dateTime()
+                    ->sortable()
+                    ->toggleable(isToggledHiddenByDefault: true),
             ])
             ->filters([
                 SelectFilter::make('availability_status_id')->relationship('availabilityStatus', 'name')->label('Наличност')->searchable()->preload(),
@@ -98,7 +187,8 @@ class ProductsTable
                     ->label('Статус на наличност')
                     ->options(self::stockStatusOptions()),
                 SelectFilter::make('category')->label('Категория')->relationship('category', 'name')->searchable()->preload(),
-                SelectFilter::make('brand')->label('Бранд')->relationship('brand', 'name')->searchable()->preload(),
+                SelectFilter::make('brand')->label('Марка')->relationship('brand', 'name')->searchable()->preload(),
+                SelectFilter::make('supplier')->label('Вносител')->relationship('supplier', 'company_name')->searchable()->preload(),
                 TernaryFilter::make('active')->label('Активен'),
                 TernaryFilter::make('featured')->label('Препоръчан'),
                 TernaryFilter::make('new_product')->label('Нов продукт'),
@@ -106,15 +196,12 @@ class ProductsTable
                 TrashedFilter::make(),
             ])
             ->recordActions([
-                EditAction::make()->label('Редакция'),
-                Action::make('viewStorefront')
-                    ->label('Виж в сайта')
-                    ->icon(Heroicon::OutlinedArrowTopRightOnSquare)
-                    ->url(fn (Product $record): ?string => $record->storefrontUrl())
-                    ->openUrlInNewTab()
-                    ->visible(fn (Product $record): bool => $record->storefrontUrl() !== null),
-                RestoreAction::make()->label('Възстановяване'),
-                ForceDeleteAction::make()->label('Изтрий завинаги'),
+                ActionGroup::make([
+                    RestoreAction::make()->label('Възстановяване'),
+                    ForceDeleteAction::make()->label('Изтрий завинаги'),
+                ])
+                    ->icon(Heroicon::EllipsisVertical)
+                    ->tooltip('Допълнителни действия'),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
@@ -155,7 +242,7 @@ class ProductsTable
     protected static function placeholderImageUrl(): string
     {
         return 'data:image/svg+xml;utf8,'.rawurlencode(
-            '<svg xmlns="http://www.w3.org/2000/svg" width="56" height="56" viewBox="0 0 56 56"><rect width="56" height="56" rx="6" fill="#f3f4f6"/><path d="M17 37h22l-7-9-5 6-3-4-7 7Z" fill="#9ca3af"/><circle cx="21" cy="21" r="4" fill="#d1d5db"/></svg>'
+            '<svg xmlns="http://www.w3.org/2000/svg" width="42" height="42" viewBox="0 0 42 42"><rect width="42" height="42" rx="6" fill="#f3f4f6"/><path d="M12 29h18l-6-8-4 5-3-3-5 6Z" fill="#9ca3af"/><circle cx="16" cy="16" r="3" fill="#d1d5db"/></svg>'
         );
     }
 
@@ -174,6 +261,15 @@ class ProductsTable
         }
 
         return 'Липсват: '.$missing;
+    }
+
+    protected static function availabilityWithQuantity(Product $record, ?string $state): string
+    {
+        $availability = filled($state)
+            ? self::availabilityLabel($state)
+            : self::stockStatusOptions()[$record->stock_status] ?? 'Неизвестен';
+
+        return $availability.' · '.(int) $record->quantity;
     }
 
     /**

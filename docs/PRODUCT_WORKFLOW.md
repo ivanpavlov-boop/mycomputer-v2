@@ -130,6 +130,14 @@ The Product edit page and Product table also expose `Виж в сайта` only 
 
 Submit for review, Request changes, Approve, and Hide remain on the edit page. Hide refreshes the record and form, removes the storefront actions immediately, and preserves publication history. This phase does not provide draft preview, admin bypass links, or public access to unpublished products.
 
+### Compact Product Table
+
+The default Product table is optimized for high-volume administration. Its visible columns are: image, copyable SKU, product name, category, brand, price, supplier, a color-coded workflow-status dot with a Bulgarian tooltip, availability with quantity, and `Виж в сайта`.
+
+Authorized administrators open the existing Product edit page by selecting a normal row. Copying SKU uses Filament's native copy interaction and does not navigate away. `Виж в сайта` is a dedicated new-tab link only for products that pass `Product::isPubliclyVisible()`; non-public products display `—` and have no storefront URL.
+
+Quality flags, specification quality, promotional and inventory details, manual override, boolean merchandising flags, and update timestamp remain available through the column manager but are hidden by default. Existing filters and bulk actions are unchanged. Restore and permanent deletion stay available to authorized users in the compact row action group. The table eagerly loads its displayed relationships; `Product::isPubliclyVisible()` retains the same public-visibility rule and uses an already-loaded category when available.
+
 ## Maintenance Exception
 
 The existing allowlisted `catalog:review-auto-created-products` remediation command remains an explicit maintenance exception. Its mutation now uses the same transaction, stale-state check, row lock, and visibility coupling as the workflow service. A `draft` target uses `product_status=draft`; a `pending_review` target uses `product_status=hidden`. Both targets remain inactive and non-public.

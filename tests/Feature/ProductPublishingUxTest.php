@@ -167,7 +167,7 @@ class ProductPublishingUxTest extends TestCase
             ->assertActionHidden('viewStorefront');
     }
 
-    public function test_product_table_storefront_action_is_visible_only_for_public_products(): void
+    public function test_product_table_storefront_column_is_available_only_for_public_products(): void
     {
         $this->actingAsRole(User::ROLE_SUPER_ADMIN);
 
@@ -177,20 +177,30 @@ class ProductPublishingUxTest extends TestCase
         $deleted->delete();
 
         $table = Livewire::test(ListProducts::class)
-            ->assertTableActionVisible('edit', $public)
-            ->assertTableActionVisible('viewStorefront', $public)
-            ->assertTableActionHasUrl('viewStorefront', $public->storefrontUrl(), $public)
-            ->assertTableActionShouldOpenUrlInNewTab('viewStorefront', $public);
+            ->assertTableColumnStateSet('storefront', 'Виж в сайта', $public);
+
+        $storefrontColumn = $table->instance()->getTable()->getColumn('storefront');
+        $storefrontColumn->record($public);
+
+        $this->assertSame($public->storefrontUrl(), $storefrontColumn->getUrl());
+        $this->assertTrue($storefrontColumn->shouldOpenUrlInNewTab());
+        $this->assertFalse($storefrontColumn->isClickDisabled());
 
         foreach ($nonPublic as $product) {
-            $table->assertTableActionHidden('viewStorefront', $product);
+            $table->assertTableColumnStateSet('storefront', '—', $product);
         }
 
-        Livewire::test(ListProducts::class)
+        $deletedTable = Livewire::test(ListProducts::class)
             ->filterTable('trashed', false)
-            ->assertTableActionHidden('viewStorefront', $deleted)
+            ->assertTableColumnStateSet('storefront', '—', $deleted)
             ->assertTableActionVisible('restore', $deleted)
             ->assertTableActionVisible('forceDelete', $deleted);
+
+        $deletedStorefrontColumn = $deletedTable->instance()->getTable()->getColumn('storefront');
+        $deletedStorefrontColumn->record($deleted);
+
+        $this->assertNull($deletedStorefrontColumn->getUrl());
+        $this->assertTrue($deletedStorefrontColumn->isClickDisabled());
     }
 
     public function test_hide_stays_on_edit_page_and_removes_storefront_actions_without_erasing_history(): void
@@ -220,7 +230,7 @@ class ProductPublishingUxTest extends TestCase
         $this->assertNull($product->storefrontUrl());
 
         Livewire::test(ListProducts::class)
-            ->assertTableActionHidden('viewStorefront', $product);
+            ->assertTableColumnStateSet('storefront', '—', $product);
 
         $this->getJson('/api/v1/products/'.$product->slug)->assertNotFound();
     }
