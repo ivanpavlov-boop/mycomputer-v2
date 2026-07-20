@@ -12,6 +12,7 @@ use App\Models\User;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Filament\Support\Enums\FontFamily;
 use Filament\Support\Enums\TextSize;
+use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Livewire\Livewire;
@@ -118,7 +119,7 @@ class ProductTableUxTest extends TestCase
             $this->assertSame('●', $statusColumn->getState());
             $this->assertSame(Product::workflowStatusColor($workflowStatus), $statusColumn->getColor($statusColumn->getState()));
             $this->assertSame(Product::workflowStatusLabel($workflowStatus), $statusColumn->getTooltip());
-            $this->assertSame(TextSize::Small, $statusColumn->getSize($statusColumn->getState()));
+            $this->assertSame(TextSize::Large, $statusColumn->getSize($statusColumn->getState()));
         }
     }
 
@@ -163,6 +164,7 @@ class ProductTableUxTest extends TestCase
             ->getTable();
 
         $nameColumn = $table->getColumn('name');
+        $withSupplier->load('supplier');
         $nameColumn->record($withSupplier);
 
         $this->assertSame('420px', $nameColumn->getWidth());
@@ -171,11 +173,34 @@ class ProductTableUxTest extends TestCase
         $this->assertTrue($nameColumn->canWrap());
         $this->assertSame(2, $nameColumn->getLineClamp());
         $this->assertSame($withSupplier->name, $nameColumn->getTooltip());
-        $this->assertSame($supplier->company_name, $nameColumn->getDescriptionBelow());
+        $description = $nameColumn->getDescriptionBelow();
+
+        $this->assertInstanceOf(Htmlable::class, $description);
+        $this->assertSame(
+            '<span style="font-size: 12px; line-height: 16px; font-weight: 400; color: #1e3a8a;">'.$supplier->company_name.'</span>',
+            $description->toHtml()
+        );
 
         $nameColumn->record($withoutSupplier);
 
         $this->assertNull($nameColumn->getDescriptionBelow());
+
+        $blankSupplier = Supplier::factory()->create(['company_name' => '   ']);
+        $withBlankSupplier = Product::factory()->create(['supplier_id' => $blankSupplier->id]);
+        $withBlankSupplier->load('supplier');
+        $nameColumn->record($withBlankSupplier);
+
+        $this->assertNull($nameColumn->getDescriptionBelow());
+
+        $unsafeSupplier = Supplier::factory()->create(['company_name' => 'ALSO <Test>']);
+        $withUnsafeSupplier = Product::factory()->create(['supplier_id' => $unsafeSupplier->id]);
+        $withUnsafeSupplier->load('supplier');
+        $nameColumn->record($withUnsafeSupplier);
+        $unsafeDescription = $nameColumn->getDescriptionBelow();
+
+        $this->assertInstanceOf(Htmlable::class, $unsafeDescription);
+        $this->assertStringContainsString('ALSO &lt;Test&gt;', $unsafeDescription->toHtml());
+        $this->assertStringNotContainsString('ALSO <Test>', $unsafeDescription->toHtml());
 
         $supplierColumn = $table->getColumn('supplier.company_name');
         $this->assertSame('—', $supplierColumn->getPlaceholder());
@@ -191,11 +216,15 @@ class ProductTableUxTest extends TestCase
 
         $withSupplier->refresh();
         $withoutSupplier->refresh();
+        $withBlankSupplier->refresh();
+        $withUnsafeSupplier->refresh();
 
         $this->assertSame($supplier->id, $withSupplier->supplier_id);
         $this->assertNull($withoutSupplier->supplier_id);
         $this->assertSame(12, $withSupplier->quantity);
         $this->assertSame(3, $withoutSupplier->quantity);
+        $this->assertSame($blankSupplier->id, $withBlankSupplier->supplier_id);
+        $this->assertSame($unsafeSupplier->id, $withUnsafeSupplier->supplier_id);
     }
 
     public function test_table_uses_existing_edit_urls_and_storefront_links_stay_limited_to_public_products(): void

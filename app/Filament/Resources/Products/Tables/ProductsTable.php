@@ -17,6 +17,7 @@ use Filament\Actions\RestoreAction;
 use Filament\Actions\RestoreBulkAction;
 use Filament\Forms\Components\Select;
 use Filament\Support\Enums\FontFamily;
+use Filament\Support\Enums\TextSize;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\ImageColumn;
@@ -25,7 +26,9 @@ use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Filters\TernaryFilter;
 use Filament\Tables\Filters\TrashedFilter;
 use Filament\Tables\Table;
+use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\HtmlString;
 
 class ProductsTable
 {
@@ -73,7 +76,7 @@ class ProductsTable
                     ->wrap()
                     ->lineClamp(2)
                     ->tooltip(fn (Product $record): string => $record->name)
-                    ->description(fn (Product $record): ?string => $record->supplier?->company_name)
+                    ->description(fn (Product $record): ?Htmlable => self::supplierDescription($record))
                     ->grow(false)
                     ->toggleable(),
                 TextColumn::make('category.name')
@@ -102,7 +105,7 @@ class ProductsTable
                         'role' => 'img',
                     ])
                     ->alignCenter()
-                    ->size('sm')
+                    ->size(TextSize::Large)
                     ->sortable()
                     ->toggleable(),
                 TextColumn::make('availabilityStatus.name')
@@ -247,6 +250,19 @@ class ProductsTable
     {
         return 'data:image/svg+xml;utf8,'.rawurlencode(
             '<svg xmlns="http://www.w3.org/2000/svg" width="52" height="52" viewBox="0 0 52 52"><rect width="52" height="52" rx="6" fill="#f3f4f6"/><path d="M15 36h22l-7-10-5 6-4-4-6 8Z" fill="#9ca3af"/><circle cx="20" cy="20" r="4" fill="#d1d5db"/></svg>'
+        );
+    }
+
+    protected static function supplierDescription(Product $record): ?Htmlable
+    {
+        $companyName = $record->supplier?->company_name;
+
+        if (blank($companyName)) {
+            return null;
+        }
+
+        return new HtmlString(
+            '<span style="font-size: 12px; line-height: 16px; font-weight: 400; color: #1e3a8a;">'.e($companyName).'</span>'
         );
     }
 
