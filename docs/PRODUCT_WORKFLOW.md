@@ -132,7 +132,9 @@ Submit for review, Request changes, Approve, and Hide remain on the edit page. H
 
 ### Compact Product Table
 
-The default Product table is optimized for high-volume administration. Its visible columns are: image, copyable SKU, product name, category, brand, price, supplier, a color-coded workflow-status dot with a Bulgarian tooltip, availability with quantity, and `Виж в сайта`.
+The default Product table is optimized for high-volume administration. Its nine visible columns are: image, copyable SKU, product name, category, brand, price, a color-coded workflow-status dot with a Bulgarian tooltip, availability with quantity, and `Виж в сайта`.
+
+The Product name column is bounded to 420 px, wraps to at most two visible lines, and retains the complete name in its tooltip. The primary supplier company name appears as its muted description when assigned. `Вносител` remains a separate searchable, sortable, read-only column in the column chooser, hidden by default. Thumbnails are square 52 px images, and the status dot uses a larger compact size while retaining its tooltip and accessible Bulgarian label.
 
 Authorized administrators open the existing Product edit page by selecting a normal row. Copying SKU uses Filament's native copy interaction and does not navigate away. `Виж в сайта` is a dedicated new-tab link only for products that pass `Product::isPubliclyVisible()`; non-public products display `—` and have no storefront URL.
 

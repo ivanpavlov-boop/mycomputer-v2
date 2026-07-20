@@ -51,7 +51,7 @@ class ProductsTable
                     ->label('Снимка')
                     ->state(fn (Product $record): ?string => $record->thumbnailUrl())
                     ->defaultImageUrl(self::placeholderImageUrl())
-                    ->imageSize(42)
+                    ->imageSize(52)
                     ->square()
                     ->toggleable(),
                 TextColumn::make('sku')
@@ -68,9 +68,13 @@ class ProductsTable
                     ->label('Име на продукта')
                     ->searchable()
                     ->sortable()
+                    ->width(420)
+                    ->extraCellAttributes(['style' => 'width: 420px; max-width: 420px;'])
+                    ->wrap()
                     ->lineClamp(2)
                     ->tooltip(fn (Product $record): string => $record->name)
-                    ->grow()
+                    ->description(fn (Product $record): ?string => $record->supplier?->company_name)
+                    ->grow(false)
                     ->toggleable(),
                 TextColumn::make('category.name')
                     ->label('Категория')
@@ -88,12 +92,6 @@ class ProductsTable
                     ->sortable()
                     ->alignEnd()
                     ->toggleable(),
-                TextColumn::make('supplier.company_name')
-                    ->label('Вносител')
-                    ->placeholder('—')
-                    ->searchable()
-                    ->sortable()
-                    ->toggleable(),
                 TextColumn::make('workflow_status')
                     ->label('Статус')
                     ->state(fn (): string => '●')
@@ -104,7 +102,7 @@ class ProductsTable
                         'role' => 'img',
                     ])
                     ->alignCenter()
-                    ->size('xs')
+                    ->size('sm')
                     ->sortable()
                     ->toggleable(),
                 TextColumn::make('availabilityStatus.name')
@@ -120,6 +118,12 @@ class ProductsTable
                     ->disabledClick(fn (Product $record): bool => $record->storefrontUrl() === null)
                     ->alignCenter()
                     ->toggleable(),
+                TextColumn::make('supplier.company_name')
+                    ->label('Вносител')
+                    ->placeholder('—')
+                    ->searchable()
+                    ->sortable()
+                    ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('active_quality_flag_assignments_count')
                     ->label('Флагове за качество')
                     ->badge()
@@ -242,7 +246,7 @@ class ProductsTable
     protected static function placeholderImageUrl(): string
     {
         return 'data:image/svg+xml;utf8,'.rawurlencode(
-            '<svg xmlns="http://www.w3.org/2000/svg" width="42" height="42" viewBox="0 0 42 42"><rect width="42" height="42" rx="6" fill="#f3f4f6"/><path d="M12 29h18l-6-8-4 5-3-3-5 6Z" fill="#9ca3af"/><circle cx="16" cy="16" r="3" fill="#d1d5db"/></svg>'
+            '<svg xmlns="http://www.w3.org/2000/svg" width="52" height="52" viewBox="0 0 52 52"><rect width="52" height="52" rx="6" fill="#f3f4f6"/><path d="M15 36h22l-7-10-5 6-4-4-6 8Z" fill="#9ca3af"/><circle cx="20" cy="20" r="4" fill="#d1d5db"/></svg>'
         );
     }
 
