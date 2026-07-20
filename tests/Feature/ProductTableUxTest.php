@@ -11,6 +11,7 @@ use App\Models\Supplier;
 use App\Models\User;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Filament\Support\Enums\FontFamily;
+use Filament\Support\Enums\TextSize;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Livewire\Livewire;
@@ -40,13 +41,13 @@ class ProductTableUxTest extends TestCase
             'category.name',
             'brand.name',
             'price',
-            'supplier.company_name',
             'workflow_status',
             'availabilityStatus.name',
             'storefront',
-        ], array_slice(array_keys($table->getColumns()), 0, 10));
+        ], array_slice(array_keys($table->getColumns()), 0, 9));
 
         foreach ([
+            'supplier.company_name',
             'active_quality_flag_assignments_count',
             'specification_quality',
             'promo_price',
@@ -117,10 +118,11 @@ class ProductTableUxTest extends TestCase
             $this->assertSame('●', $statusColumn->getState());
             $this->assertSame(Product::workflowStatusColor($workflowStatus), $statusColumn->getColor($statusColumn->getState()));
             $this->assertSame(Product::workflowStatusLabel($workflowStatus), $statusColumn->getTooltip());
+            $this->assertSame(TextSize::Small, $statusColumn->getSize($statusColumn->getState()));
         }
     }
 
-    public function test_supplier_and_availability_context_are_read_only_and_filterable(): void
+    public function test_product_name_is_bounded_and_displays_the_primary_supplier_without_mutating_context(): void
     {
         $this->actingAsSuperAdmin();
 
@@ -149,20 +151,43 @@ class ProductTableUxTest extends TestCase
             'quantity' => 3,
         ]);
 
-        Livewire::test(ListProducts::class)
+        $table = Livewire::test(ListProducts::class)
             ->assertTableFilterExists('supplier')
             ->assertTableColumnStateSet('supplier.company_name', 'Компактен вносител', $withSupplier)
             ->assertTableColumnFormattedStateSet('availabilityStatus.name', 'В наличност · 12', $withSupplier)
             ->assertTableColumnFormattedStateSet('availabilityStatus.name', 'Ограничена наличност · 3', $withoutSupplier)
             ->filterTable('supplier', $supplier)
             ->assertCanSeeTableRecords([$withSupplier])
-            ->assertCanNotSeeTableRecords([$withoutSupplier]);
-
-        $this->assertSame('—', Livewire::test(ListProducts::class)
+            ->assertCanNotSeeTableRecords([$withoutSupplier])
             ->instance()
-            ->getTable()
-            ->getColumn('supplier.company_name')
-            ->getPlaceholder());
+            ->getTable();
+
+        $nameColumn = $table->getColumn('name');
+        $nameColumn->record($withSupplier);
+
+        $this->assertSame('420px', $nameColumn->getWidth());
+        $this->assertSame(['style' => 'width: 420px; max-width: 420px;'], $nameColumn->getExtraCellAttributes());
+        $this->assertFalse($nameColumn->canGrow());
+        $this->assertTrue($nameColumn->canWrap());
+        $this->assertSame(2, $nameColumn->getLineClamp());
+        $this->assertSame($withSupplier->name, $nameColumn->getTooltip());
+        $this->assertSame($supplier->company_name, $nameColumn->getDescriptionBelow());
+
+        $nameColumn->record($withoutSupplier);
+
+        $this->assertNull($nameColumn->getDescriptionBelow());
+
+        $supplierColumn = $table->getColumn('supplier.company_name');
+        $this->assertSame('—', $supplierColumn->getPlaceholder());
+        $this->assertTrue($supplierColumn->isToggleable());
+        $this->assertTrue($supplierColumn->isToggledHiddenByDefault());
+
+        $thumbnailColumn = $table->getColumn('thumbnail');
+        $thumbnailColumn->record($withSupplier);
+        $this->assertSame('52px', $thumbnailColumn->getImageHeight());
+        $this->assertSame('52px', $thumbnailColumn->getImageWidth());
+        $this->assertTrue($thumbnailColumn->isSquare());
+        $this->assertNull($thumbnailColumn->getUrl());
 
         $withSupplier->refresh();
         $withoutSupplier->refresh();
