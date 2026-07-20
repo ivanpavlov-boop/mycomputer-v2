@@ -269,17 +269,23 @@ class ProductSpecificationQualityTest extends TestCase
         $this->assertSame($before, $this->databaseCounts());
     }
 
-    public function test_product_admin_shows_specification_quality_badge_and_warning_panel(): void
+    public function test_product_admin_keeps_specification_quality_available_and_shows_warning_panel(): void
     {
         $this->actingAsSuperAdmin();
 
         [$product] = $this->productWithRequiredAttributes(['RAM']);
 
-        Livewire::test(ListProducts::class)
+        $table = Livewire::test(ListProducts::class)
             ->assertCanSeeTableRecords([$product])
-            ->assertSee('Характеристики')
-            ->assertSee('Липсват важни характеристики')
-            ->assertSee('0/1 (0%)');
+            ->assertTableColumnStateSet('specification_quality', 'Липсват важни характеристики', $product)
+            ->assertTableColumnHasDescription('specification_quality', '0/1 (0%)', $product)
+            ->instance()
+            ->getTable();
+
+        $qualityColumn = $table->getColumn('specification_quality');
+
+        $this->assertTrue($qualityColumn->isToggleable());
+        $this->assertTrue($qualityColumn->isToggledHiddenByDefault());
 
         $this->get(ProductResource::getUrl('edit', ['record' => $product]))
             ->assertOk()
