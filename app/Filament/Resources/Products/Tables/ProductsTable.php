@@ -6,6 +6,7 @@ use App\Models\AvailabilityStatus;
 use App\Models\Product;
 use App\Services\Products\ProductSpecificationQualityResult;
 use App\Services\Products\ProductSpecificationQualityService;
+use Filament\Actions\Action;
 use Filament\Actions\BulkAction;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
@@ -15,6 +16,7 @@ use Filament\Actions\ForceDeleteBulkAction;
 use Filament\Actions\RestoreAction;
 use Filament\Actions\RestoreBulkAction;
 use Filament\Forms\Components\Select;
+use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\ImageColumn;
 use Filament\Tables\Columns\TextColumn;
@@ -105,6 +107,12 @@ class ProductsTable
             ])
             ->recordActions([
                 EditAction::make()->label('Редакция'),
+                Action::make('viewStorefront')
+                    ->label('Виж в сайта')
+                    ->icon(Heroicon::OutlinedArrowTopRightOnSquare)
+                    ->url(fn (Product $record): ?string => $record->storefrontUrl())
+                    ->openUrlInNewTab()
+                    ->visible(fn (Product $record): bool => $record->storefrontUrl() !== null),
                 RestoreAction::make()->label('Възстановяване'),
                 ForceDeleteAction::make()->label('Изтрий завинаги'),
             ])

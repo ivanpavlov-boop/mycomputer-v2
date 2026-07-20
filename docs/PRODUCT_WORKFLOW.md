@@ -122,6 +122,14 @@ Product collections, direct details, category and brand listings, related and ac
 
 Soft-deleted products cannot transition or appear publicly. Restoring a formerly published product moves it to the safe `approved` and hidden state while retaining prior publication metadata; restore never republishes automatically.
 
+## Filament Publishing UX
+
+After a successful explicit Publish transition, Filament redirects the administrator to the Product list and keeps a Bulgarian success notification available across the redirect. The notification includes a `Виж в сайта` action that opens the primary Bulgarian `/p/{slug}` storefront page in a new tab.
+
+The Product edit page and Product table also expose `Виж в сайта` only when `Product::isPubliclyVisible()` passes. The storefront URL is generated from the configured application origin, so a future domain change does not require a code change. Unpublished, hidden, invalid-category, or soft-deleted products never receive a storefront action.
+
+Submit for review, Request changes, Approve, and Hide remain on the edit page. Hide refreshes the record and form, removes the storefront actions immediately, and preserves publication history. This phase does not provide draft preview, admin bypass links, or public access to unpublished products.
+
 ## Maintenance Exception
 
 The existing allowlisted `catalog:review-auto-created-products` remediation command remains an explicit maintenance exception. Its mutation now uses the same transaction, stale-state check, row lock, and visibility coupling as the workflow service. A `draft` target uses `product_status=draft`; a `pending_review` target uses `product_status=hidden`. Both targets remain inactive and non-public.
@@ -137,3 +145,5 @@ This workflow hardening does not change supplier import or Catalog Sync behavior
 - supplier data cannot overwrite managed names, slugs, descriptions, SEO, images, categories, attributes, or localized content.
 
 No migration or production data backfill is part of this workflow hardening.
+
+The publishing UX described above does not alter supplier import or Catalog Sync behavior.
