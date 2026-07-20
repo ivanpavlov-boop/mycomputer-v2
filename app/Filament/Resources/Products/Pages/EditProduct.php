@@ -14,6 +14,7 @@ use Filament\Actions\RestoreAction;
 use Filament\Forms\Components\Textarea;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\EditRecord;
+use Filament\Support\Icons\Heroicon;
 use Illuminate\Auth\Access\AuthorizationException;
 
 class EditProduct extends EditRecord
@@ -28,6 +29,12 @@ class EditProduct extends EditRecord
     protected function getHeaderActions(): array
     {
         return [
+            Action::make('viewStorefront')
+                ->label('Виж в сайта')
+                ->icon(Heroicon::OutlinedArrowTopRightOnSquare)
+                ->url(fn (): ?string => $this->record->storefrontUrl())
+                ->openUrlInNewTab()
+                ->visible(fn (): bool => $this->record->storefrontUrl() !== null),
             Action::make('submitForReview')
                 ->label('Изпрати за преглед')
                 ->color('warning')
@@ -69,7 +76,7 @@ class EditProduct extends EditRecord
                 ->modalHeading('Публикуване на продукт')
                 ->modalDescription('След потвърждение продуктът ще стане публично видим, ако покрива техническите изисквания.')
                 ->modalSubmitActionLabel('Публикувай')
-                ->action(fn (): null => $this->transitionWorkflow(ProductWorkflowService::ACTION_PUBLISH)),
+                ->action(fn (): null => $this->publishProduct()),
             Action::make('hide')
                 ->label('Скрий')
                 ->color('danger')
@@ -105,6 +112,37 @@ class EditProduct extends EditRecord
         return app(ProductWorkflowService::class)->can($this->record, $action, auth()->user());
     }
 
+    protected function publishProduct(): null
+    {
+        $this->record = app(ProductWorkflowService::class)->publish(
+            $this->record,
+            $this->workflowActor(),
+        );
+
+        $this->fillForm();
+
+        $storefrontUrl = $this->record->storefrontUrl();
+        $notification = Notification::make()
+            ->title('Продуктът е публикуван успешно')
+            ->body(Product::workflowStatusLabel($this->record->workflow_status))
+            ->success();
+
+        if ($storefrontUrl !== null) {
+            $notification->actions([
+                Action::make('viewStorefront')
+                    ->label('Виж в сайта')
+                    ->url($storefrontUrl)
+                    ->openUrlInNewTab(),
+            ]);
+        }
+
+        $notification->send();
+
+        $this->redirect(ProductResource::getUrl('index'));
+
+        return null;
+    }
+
     protected function transitionWorkflow(string $action, ?string $notes = null): null
     {
         $this->record = app(ProductWorkflowService::class)->transition(
@@ -121,7 +159,6 @@ class EditProduct extends EditRecord
                 ProductWorkflowService::ACTION_SUBMIT_FOR_REVIEW => 'Продуктът е изпратен за преглед',
                 ProductWorkflowService::ACTION_REQUEST_CHANGES => 'Продуктът е върнат за корекции',
                 ProductWorkflowService::ACTION_APPROVE => 'Продуктът е одобрен, но остава скрит',
-                ProductWorkflowService::ACTION_PUBLISH => 'Продуктът е публикуван',
                 ProductWorkflowService::ACTION_HIDE => 'Продуктът е скрит',
                 default => 'Работният статус е обновен',
             })

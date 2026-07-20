@@ -209,6 +209,15 @@ class Product extends Model
             && $this->category()->where('is_active', true)->exists();
     }
 
+    public function storefrontUrl(): ?string
+    {
+        if (! $this->isPubliclyVisible()) {
+            return null;
+        }
+
+        return rtrim((string) config('app.url'), '/').'/p/'.rawurlencode((string) $this->slug);
+    }
+
     public function shouldApplyPricingEngine(): bool
     {
         return $this->source === self::SOURCE_SUPPLIER_IMPORT || $this->apply_pricing_rules;
