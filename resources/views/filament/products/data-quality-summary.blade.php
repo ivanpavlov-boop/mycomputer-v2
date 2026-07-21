@@ -28,6 +28,31 @@
         </div>
     </div>
 
+    <div data-testid="product-category-brand-quality">
+        <div style="font-size: 0.875rem; font-weight: 600;">Категория и марка</div>
+        <div style="margin-top: 0.5rem; display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+            <x-filament::badge :color="$summary->categoryBrandQuality->stateColor">
+                {{ $summary->categoryBrandQuality->stateLabel }}
+            </x-filament::badge>
+        </div>
+        <div style="margin-top: 0.65rem; display: grid; grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); gap: 0.75rem;">
+            <div style="font-size: 0.875rem;">
+                <span style="font-weight: 600;">Категория:</span>
+                {{ $summary->categoryBrandQuality->categoryDisplayLabel }}
+                @if ($summary->categoryBrandQuality->categoryWarning() !== null)
+                    <x-filament::badge color="warning">{{ $summary->categoryBrandQuality->categoryWarning() }}</x-filament::badge>
+                @endif
+            </div>
+            <div style="font-size: 0.875rem;">
+                <span style="font-weight: 600;">Марка:</span>
+                {{ $summary->categoryBrandQuality->brandDisplayLabel }}
+                @if ($summary->categoryBrandQuality->brandWarning() !== null)
+                    <x-filament::badge color="warning">{{ $summary->categoryBrandQuality->brandWarning() }}</x-filament::badge>
+                @endif
+            </div>
+        </div>
+    </div>
+
     <div>
         <div style="font-size: 0.875rem; font-weight: 600;">Открити проблеми</div>
 

@@ -36,6 +36,9 @@ Manual selected UPDATE price/stock sync is implemented behind `CATALOG_SYNC_UPDA
 - Unified Product edit quality summary combining existing scanner issues,
   category specification quality and active manual flags without blocking or
   mutating Product workflow.
+- Read-only Category and Brand quality triage in the Product Data Quality Queue,
+  with combined assignment states, searchable catalog filters, overview counts
+  and manual correction through the existing Product edit form.
 - Product Attributes core foundation for internal catalog specifications.
 - Product Attributes admin usability and controlled starter attribute structure.
 - Category Attribute Sets for controlled existing category-to-attribute assignments.
@@ -97,6 +100,10 @@ Manual selected UPDATE price/stock sync is implemented behind `CATALOG_SYNC_UPDA
 - Product edit shows one read-only, warning-only quality summary. It does not
   block save, review, approval or publishing; assign flags; perform automatic
   remediation; mutate Products or suppliers; or change Catalog Sync behavior.
+- Category and Brand quality remains read-only during queue listing, filtering,
+  counting and summary rendering. Inactive assignments are warnings; no inline
+  or bulk assignment, supplier-derived suggestion, automatic categorization,
+  Brand detection, flag resolution, workflow gate or visibility change exists.
 - Product attributes are catalog-owned internal definitions. Category Attribute Sets can assign existing attributes to existing categories, admins can manually maintain individual product values from Product edit pages, Product Specification Data Quality reports missing important category specs without mutating data, the legacy reconciliation command can copy safe values into existing category-assigned targets one explicit product at a time, reconciled legacy values are marked read-only in admin while staying visible, the CPU template command can explicitly prepare CPU attributes/options/category assignments without product values, the category template coverage audit can report direct/inherited/missing template coverage without an apply mode, supplier category mappings can prepare pending-review taxonomy records without applying them to products, multi-supplier discovery can report staging/category/identifier overlap data without any apply mode, supplier import capability audit can report feed/driver/schedule readiness without fetching feeds, dispatching jobs, or exposing secrets, supplier configuration cleanup can disable only unsafe supplier schedules by explicit apply, the next supplier staging import preview can parse local XML/CSV/JSON samples without writes or remote feed access, the controlled ASBIS staging import can write only ASBIS `supplier_products` rows after explicit dry-run-first confirmation, and the ASBIS dual-feed preview can join local ProductList/PriceAvail files without writes or remote feed access. Supplier attribute mapping and frontend filters are not enabled yet.
 
 ## Next Supplier Sequence
@@ -209,19 +216,18 @@ operational decision.
 6. Phase 9C.6.6 Multi-Supplier Category Mapping Review.
 7. Phase 9C.6.7 Multi-Supplier Identifier Overlap Review.
 8. Phase 9C.7 Supplier Attribute Mapping Foundation.
-9. Product Data Quality 2B category and brand quality workflow.
-10. Product Data Quality 2C image and alt-text quality.
-11. Product Data Quality 2D SEO and description quality.
-12. Product Data Quality 2E category-template and specification completion.
-13. Storefront specification display and later attribute filters.
-14. Product attribute filter design after controlled data quality.
-15. Rollback tooling based on `catalog_sync_batches` and `catalog_sync_logs`.
-16. Keep feature flags locked down before broader sync work.
-17. Conflict/manual mapping workflow.
-18. Sync All later.
-19. Automatic sync later.
-20. Nuxt i18n route integration and localized sitemap expansion.
-21. Data enrichment workflow refinements after queue usage is observed.
+9. Product Data Quality 2C image and alt-text quality.
+10. Product Data Quality 2D SEO and description quality.
+11. Product Data Quality 2E category-template and specification completion.
+12. Storefront specification display and later attribute filters.
+13. Product attribute filter design after controlled data quality.
+14. Rollback tooling based on `catalog_sync_batches` and `catalog_sync_logs`.
+15. Keep feature flags locked down before broader sync work.
+16. Conflict/manual mapping workflow.
+17. Sync All later.
+18. Automatic sync later.
+19. Nuxt i18n route integration and localized sitemap expansion.
+20. Data enrichment workflow refinements after queue usage is observed.
 
 ## Phase 8 Initial UPDATE Scope
 

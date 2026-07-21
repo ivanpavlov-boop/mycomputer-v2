@@ -13,6 +13,7 @@ use App\Models\ProductQualityFlag;
 use App\Models\ProductQualityFlagAssignment;
 use App\Models\SupplierProduct;
 use App\Models\User;
+use App\Services\Products\ProductCategoryBrandQualityResult;
 use App\Services\Products\ProductDataQualityScanner;
 use App\Services\Products\ProductDataQualitySummaryResult;
 use App\Services\Products\ProductDataQualitySummaryService;
@@ -53,6 +54,17 @@ class ProductDataQualitySummaryTest extends TestCase
             warningIssueCount: 0,
             recommendationIssueCount: 0,
             specificationResult: $specification,
+            categoryBrandQuality: new ProductCategoryBrandQualityResult(
+                state: ProductCategoryBrandQualityResult::STATE_COMPLETE,
+                categoryLabel: 'Категория',
+                categoryPath: 'Категория',
+                brandLabel: 'Марка',
+                categoryInactive: false,
+                categoryArchived: false,
+                brandInactive: false,
+                brandArchived: false,
+                warnings: [],
+            ),
             manualFlags: [],
             activeManualQualityFlagLabels: [],
             totalActionableIssueCount: 0,

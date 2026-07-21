@@ -31,6 +31,7 @@ Phase 8 manual selected UPDATE price/stock sync has been implemented behind a fe
 | Phase 8.6A | Multilingual foundation | Complete |
 | Phase 9A | Product data quality and enrichment queue | Complete |
 | Product Data Quality 2A | Unified Product edit quality summary | Complete locally; read-only warning presentation combining scanner issues, specification quality and active manual flags. |
+| Product Data Quality 2B | Category and brand quality workflow | Complete locally; read-only queue triage, filters, counts and Product edit summary state with manual remediation through the existing form. |
 | Phase 9C.1 | Product attributes core foundation | Complete |
 | Phase 9C.2 | Product attributes admin usability and starter structure | Complete |
 | Phase 9C.3 | Category attribute sets | Complete |
@@ -123,10 +124,26 @@ or permit supplier data to overwrite catalog-owned content.
 
 Likely follow-up phases remain separately scoped and unimplemented:
 
-- 2B - category and brand quality workflow.
 - 2C - image and alt-text quality.
 - 2D - SEO and description quality.
 - 2E - category-template and specification completion.
+
+## Product Data Quality 2B Scope
+
+The Product Data Quality Queue now presents the assigned catalog Category,
+Category parent path when available, assigned Brand and one deterministic
+combined state: complete, missing Category, missing Brand or missing both.
+The queue adds one non-overlapping state filter, searchable specific Category
+and Brand filters, and read-only overview counts based on the existing queue
+eligibility scope. Assigned inactive or soft-deleted Category and Brand records
+remain visible as warnings using their existing domain state.
+
+The unified Product edit quality summary presents the same Category and Brand
+state. Correction remains an explicit manual edit through the existing Product
+form and its existing validation and authorization. There is no inline or bulk
+assignment, automatic categorization, automatic Brand detection, supplier-data
+suggestion, automatic remediation, flag resolution, Product mutation during
+evaluation, workflow gate, visibility change or Catalog Sync behavior change.
 
 ## Phase 9C.6.5A and 9C.6.5B Implemented Scope
 
