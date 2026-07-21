@@ -17,6 +17,7 @@ use App\Services\Products\ProductCategoryBrandQualityResult;
 use App\Services\Products\ProductDataQualityScanner;
 use App\Services\Products\ProductDataQualitySummaryResult;
 use App\Services\Products\ProductDataQualitySummaryService;
+use App\Services\Products\ProductImageQualityResult;
 use App\Services\Products\ProductSpecificationQualityResult;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -64,6 +65,17 @@ class ProductDataQualitySummaryTest extends TestCase
                 brandInactive: false,
                 brandArchived: false,
                 warnings: [],
+            ),
+            imageQuality: new ProductImageQualityResult(
+                state: ProductImageQualityResult::STATE_COMPLETE,
+                totalImageCount: 1,
+                eligibleImageCount: 1,
+                primaryImageCount: 1,
+                imagesWithAltText: 1,
+                imagesMissingAltText: 0,
+                issues: [],
+                nextSteps: [],
+                altTextSamples: ['Продуктова снимка'],
             ),
             manualFlags: [],
             activeManualQualityFlagLabels: [],

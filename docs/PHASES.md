@@ -32,6 +32,7 @@ Phase 8 manual selected UPDATE price/stock sync has been implemented behind a fe
 | Phase 9A | Product data quality and enrichment queue | Complete |
 | Product Data Quality 2A | Unified Product edit quality summary | Complete locally; read-only warning presentation combining scanner issues, specification quality and active manual flags. |
 | Product Data Quality 2B | Category and brand quality workflow | Complete locally; read-only queue triage, filters, counts and Product edit summary state with manual remediation through the existing form. |
+| Product Data Quality 2C | Image and ALT-text quality workflow | Complete locally; read-only image metadata states, queue triage, counts and Product edit summary with manual remediation through existing image controls. |
 | Phase 9C.1 | Product attributes core foundation | Complete |
 | Phase 9C.2 | Product attributes admin usability and starter structure | Complete |
 | Phase 9C.3 | Category attribute sets | Complete |
@@ -124,7 +125,6 @@ or permit supplier data to overwrite catalog-owned content.
 
 Likely follow-up phases remain separately scoped and unimplemented:
 
-- 2C - image and alt-text quality.
 - 2D - SEO and description quality.
 - 2E - category-template and specification completion.
 
@@ -144,6 +144,25 @@ form and its existing validation and authorization. There is no inline or bulk
 assignment, automatic categorization, automatic Brand detection, supplier-data
 suggestion, automatic remediation, flag resolution, Product mutation during
 evaluation, workflow gate, visibility change or Catalog Sync behavior change.
+
+## Product Data Quality 2C Scope
+
+The Product Data Quality Queue and unified Product edit quality summary now
+present one deterministic image metadata state: no images, multiple primary
+images, missing primary image, all ALT text missing, some ALT text missing or
+complete. State priority follows that order, and the queue exposes image count,
+primary-image status, ALT coverage, one exact state filter and bounded read-only
+counts within the existing queue eligibility scope. Soft-deleted image rows are
+excluded by the existing Product image relation.
+
+ALT quality in this phase means only whether the existing plain-text metadata
+is present; it does not claim semantic accuracy. Correction remains manual
+through the existing Product image repeater and its current upload, deletion,
+ordering, primary toggle, ALT field, validation and authorization behavior.
+Evaluation performs no database, filesystem or network mutation. There is no
+AI, OCR, image recognition, automatic ALT generation, automatic primary-image
+selection, supplier image import, remote image check, workflow gate, public
+visibility change or Catalog Sync behavior change.
 
 ## Phase 9C.6.5A and 9C.6.5B Implemented Scope
 

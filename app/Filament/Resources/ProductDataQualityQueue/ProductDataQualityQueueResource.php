@@ -10,6 +10,8 @@ use App\Models\User;
 use App\Services\Products\ProductCategoryBrandQualityResult;
 use App\Services\Products\ProductCategoryBrandQualityService;
 use App\Services\Products\ProductDataQualityScanner;
+use App\Services\Products\ProductImageQualityResult;
+use App\Services\Products\ProductImageQualityService;
 use BackedEnum;
 use Filament\Actions\Action;
 use Filament\Resources\Resource;
@@ -22,6 +24,7 @@ use Filament\Tables\Filters\TernaryFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Str;
 use UnitEnum;
 
 class ProductDataQualityQueueResource extends Resource
@@ -47,6 +50,7 @@ class ProductDataQualityQueueResource extends Resource
     {
         $scanner = app(ProductDataQualityScanner::class);
         $categoryBrandQuality = app(ProductCategoryBrandQualityService::class);
+        $imageQuality = app(ProductImageQualityService::class);
 
         return $table
             ->modifyQueryUsing(fn (Builder $query): Builder => $scanner
@@ -68,15 +72,29 @@ class ProductDataQualityQueueResource extends Resource
             ->columns([
                 ImageColumn::make('thumbnail')
                     ->label('Снимка')
-                    ->state(fn (Product $record): ?string => $record->thumbnailUrl())
+                    ->state(fn (Product $record): ?string => self::safeQueueThumbnailUrl($record))
                     ->defaultImageUrl(self::placeholderImageUrl())
                     ->size(48)
                     ->square(),
-                TextColumn::make('image_status')
+                TextColumn::make('image_count')
+                    ->label('Брой снимки')
+                    ->state(fn (Product $record): string => $imageQuality->evaluate($record)->imageCountLabel)
+                    ->toggleable(),
+                TextColumn::make('primary_image_status')
                     ->label('Статус на снимка')
-                    ->state(fn (Product $record): string => $record->thumbnailUrl() ? 'Има снимка' : 'Липсва снимка')
+                    ->state(fn (Product $record): string => 'Основна снимка: '.$imageQuality->evaluate($record)->primaryStatusLabel)
                     ->badge()
-                    ->color(fn (string $state): string => $state === 'Липсва снимка' ? 'warning' : 'success'),
+                    ->color(fn (Product $record): string => $imageQuality->evaluate($record)->primaryStatusColor)
+                    ->toggleable(),
+                TextColumn::make('image_alt_coverage')
+                    ->label('ALT покритие')
+                    ->state(fn (Product $record): string => $imageQuality->evaluate($record)->altCoverageLabel)
+                    ->toggleable(),
+                TextColumn::make('image_quality')
+                    ->label('Качество на снимките')
+                    ->state(fn (Product $record): string => $imageQuality->evaluate($record)->stateLabel)
+                    ->badge()
+                    ->color(fn (Product $record): string => $imageQuality->evaluate($record)->stateColor),
                 TextColumn::make('name')
                     ->label('Продукт')
                     ->description(fn (Product $record): string => sprintf(
@@ -181,6 +199,11 @@ class ProductDataQualityQueueResource extends Resource
                     ->placeholder('Всички')
                     ->options(ProductCategoryBrandQualityResult::options())
                     ->query(fn (Builder $query, array $data): Builder => $categoryBrandQuality->applyStateQuery($query, $data['value'] ?? null)),
+                SelectFilter::make('image_quality_state')
+                    ->label('Състояние на снимките')
+                    ->placeholder('Всички')
+                    ->options(ProductImageQualityResult::options())
+                    ->query(fn (Builder $query, array $data): Builder => $imageQuality->applyStateQuery($query, $data['value'] ?? null)),
                 SelectFilter::make('quality_flag')
                     ->label('Флаг за качество')
                     ->options(fn (): array => ProductQualityFlag::query()->active()->ordered()->pluck('label_bg', 'id')->all())
@@ -366,6 +389,17 @@ class ProductDataQualityQueueResource extends Resource
         return 'data:image/svg+xml;utf8,'.rawurlencode(
             '<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48"><rect width="48" height="48" rx="6" fill="#f3f4f6"/><path d="M14 32h20l-6-8-5 6-3-4-6 6Z" fill="#9ca3af"/><circle cx="18" cy="18" r="4" fill="#d1d5db"/><text x="24" y="43" text-anchor="middle" font-family="Arial" font-size="6" fill="#6b7280">no image</text></svg>'
         );
+    }
+
+    protected static function safeQueueThumbnailUrl(Product $product): ?string
+    {
+        $path = $product->thumbnailImage?->path;
+
+        if (blank($path) || Str::startsWith($path, ['http://', 'https://', 'data:'])) {
+            return null;
+        }
+
+        return $product->thumbnailUrl();
     }
 
     protected static function isPubliclyVisible(Product $product): bool
