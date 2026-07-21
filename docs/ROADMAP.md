@@ -214,6 +214,14 @@ the deterministic read-only closeout after the freeze. No automatic unfreeze
 is implemented, and APCOM remains frozen pending a separately approved
 operational decision.
 
+Product Data Quality 2E is complete locally. Category-template coverage,
+Product specification quality, queue filters/counts, Category admin coverage
+and the Product edit summary now share one read-only inheritance and validation
+path. The phase adds no automatic remediation, inline assignment, workflow
+gate, Product or supplier mutation, migration, public-visibility change or
+Catalog Sync behavior change. Storefront specification presentation and later
+attribute filtering remain separate future work.
+
 ## Next
 
 1. Keep Phase 7.5 documentation lock current.
@@ -231,16 +239,15 @@ operational decision.
 6. Phase 9C.6.6 Multi-Supplier Category Mapping Review.
 7. Phase 9C.6.7 Multi-Supplier Identifier Overlap Review.
 8. Phase 9C.7 Supplier Attribute Mapping Foundation.
-9. Product Data Quality 2E category-template and specification completion.
-10. Storefront specification display and later attribute filters.
-11. Product attribute filter design after controlled data quality.
-12. Rollback tooling based on `catalog_sync_batches` and `catalog_sync_logs`.
-13. Keep feature flags locked down before broader sync work.
-14. Conflict/manual mapping workflow.
-15. Sync All later.
-16. Automatic sync later.
-17. Nuxt i18n route integration and localized sitemap expansion.
-18. Data enrichment workflow refinements after queue usage is observed.
+9. Storefront specification display and later attribute filters.
+10. Product attribute filter design after controlled data quality.
+11. Rollback tooling based on `catalog_sync_batches` and `catalog_sync_logs`.
+12. Keep feature flags locked down before broader sync work.
+13. Conflict/manual mapping workflow.
+14. Sync All later.
+15. Automatic sync later.
+16. Nuxt i18n route integration and localized sitemap expansion.
+17. Data enrichment workflow refinements after queue usage is observed.
 
 ## Phase 8 Initial UPDATE Scope
 

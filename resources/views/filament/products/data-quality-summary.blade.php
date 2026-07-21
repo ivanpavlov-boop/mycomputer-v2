@@ -140,15 +140,46 @@
                 <x-filament::badge :color="$summary->specificationResult->statusColor()">
                     {{ $summary->specificationResult->statusLabel() }}
                 </x-filament::badge>
-                <span style="font-size: 0.875rem;">{{ $summary->specificationResult->scoreLabel() }}</span>
             </div>
 
-            @if ($summary->specificationResult->missingAttributeLabels() !== [])
+            <div style="margin-top: 0.65rem; display: grid; gap: 0.35rem; font-size: 0.875rem;">
+                <div>
+                    <span style="font-weight: 600;">Шаблон:</span>
+                    {{ $summary->specificationResult->templateSourceLabel() }}
+                </div>
+                @if ($summary->specificationResult->reasonLabel() !== null)
+                    <div style="color: rgb(107 114 128);">{{ $summary->specificationResult->reasonLabel() }}</div>
+                @endif
+                <div><span style="font-weight: 600;">Задължителни:</span> {{ $summary->specificationResult->requiredScoreLabel() }}</div>
+                <div><span style="font-weight: 600;">Препоръчителни:</span> {{ $summary->specificationResult->recommendedScoreLabel() }}</div>
+                <div><span style="font-weight: 600;">Общо:</span> {{ $summary->specificationResult->compactScoreLabel() }}</div>
+            </div>
+
+            @if ($summary->specificationResult->missingRequiredAttributeLabels() !== [])
                 <div
                     style="margin-top: 0.5rem; font-size: 0.8rem; color: rgb(107 114 128);"
-                    title="{{ implode(', ', $summary->specificationResult->missingAttributeLabels()) }}"
+                    title="{{ implode(', ', $summary->specificationResult->missingRequiredAttributeLabels()) }}"
                 >
-                    Липсват: {{ $summary->specificationResult->missingAttributeSummary() }}
+                    Липсващи задължителни: {{ implode(', ', $summary->specificationResult->missingRequiredAttributeLabels()) }}
+                </div>
+            @endif
+
+            @if ($summary->specificationResult->missingRecommendedAttributeLabels() !== [])
+                <div
+                    style="margin-top: 0.5rem; font-size: 0.8rem; color: rgb(107 114 128);"
+                    title="{{ implode(', ', $summary->specificationResult->missingRecommendedAttributeLabels()) }}"
+                >
+                    Липсващи препоръчителни: {{ implode(', ', $summary->specificationResult->missingRecommendedAttributeLabels()) }}
+                </div>
+            @endif
+
+            @if ($summary->specificationResult->invalidRequiredAttributeLabels() !== [] || $summary->specificationResult->invalidRecommendedAttributeLabels() !== [])
+                <div style="margin-top: 0.5rem; font-size: 0.8rem; color: rgb(180 83 9);">
+                    Невалидни стойности:
+                    {{ implode(', ', array_merge(
+                        $summary->specificationResult->invalidRequiredAttributeLabels(),
+                        $summary->specificationResult->invalidRecommendedAttributeLabels(),
+                    )) }}
                 </div>
             @endif
         </div>

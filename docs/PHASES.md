@@ -34,6 +34,7 @@ Phase 8 manual selected UPDATE price/stock sync has been implemented behind a fe
 | Product Data Quality 2B | Category and brand quality workflow | Complete locally; read-only queue triage, filters, counts and Product edit summary state with manual remediation through the existing form. |
 | Product Data Quality 2C | Image and ALT-text quality workflow | Complete locally; read-only image metadata states, queue triage, counts and Product edit summary with manual remediation through existing image controls. |
 | Product Data Quality 2D | SEO and description quality workflow | Complete locally; read-only SEO, Bulgarian description and English-localization completeness states, queue triage, counts and Product edit summary with manual remediation through existing fields. |
+| Product Data Quality 2E | Category-template and specification completion | Complete locally; shared read-only template inheritance resolution, exact specification completion states, queue/category triage and Product edit summary with manual remediation through existing editors. |
 | Phase 9C.1 | Product attributes core foundation | Complete |
 | Phase 9C.2 | Product attributes admin usability and starter structure | Complete |
 | Phase 9C.3 | Category attribute sets | Complete |
@@ -124,9 +125,8 @@ assign or resolve flags, remediate data, or write Product, supplier, image,
 category, attribute or specification records. It does not change Catalog Sync
 or permit supplier data to overwrite catalog-owned content.
 
-Likely follow-up phases remain separately scoped and unimplemented:
-
-- 2E - category-template and specification completion.
+Later enrichment and storefront work remains separately scoped and
+unimplemented.
 
 ## Product Data Quality 2B Scope
 
@@ -192,6 +192,33 @@ descriptions, translate text, detect language, assign or resolve quality flags,
 block Product saves or workflow transitions, or alter public visibility, public
 SEO, supplier imports or Catalog Sync. Semantic language correctness and
 editorial translation quality remain manual multilingual-content concerns.
+
+## Product Data Quality 2E Scope
+
+Category-template coverage and Product specification completion now use one
+shared, read-only resolver for direct, inherited and missing templates. Child
+category assignments take precedence over duplicate ancestor assignments. The
+existing `ProductSpecificationQualityService` remains authoritative for value
+validation and now reports separate required, recommended and total scores,
+missing and invalid values, and the four exact states `missing_required`,
+`needs_data`, `no_category_template` and `good`.
+
+The Product Data Quality Queue exposes compact template-source and completion
+columns, one exact specification-state filter, tooltips for missing or invalid
+values, and bounded state counts within the existing queue scope. Category
+administration exposes template coverage and assignment counts and links to the
+existing Category Product Attribute editor. The Product edit summary presents
+the same source, scores and issue details. No inline or bulk assignment, value
+editor or automatic category/template inference was added.
+
+All evaluation and navigation in this phase is advisory and read-only.
+Correction remains a deliberate action through the existing Product
+specification and Category Product Attribute editors under their existing
+authorization. Evaluation does not create, update, delete, attach or detach
+Products, categories, templates, attributes, values, quality flags or supplier
+records. It does not block Product saves or workflow transitions, change public
+visibility, import images, overwrite category or attribute ownership, or alter
+supplier import or Catalog Sync behavior.
 
 ## Phase 9C.6.5A and 9C.6.5B Implemented Scope
 

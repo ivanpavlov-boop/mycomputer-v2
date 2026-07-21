@@ -52,7 +52,7 @@ final class ProductDataQualitySummaryService
             'category.parent',
             'brand',
             'activeQualityFlagAssignments.flag',
-            'attributeValues.value',
+            'attributes',
         ]);
 
         $coreIssues = collect($this->scanner->detectedIssues($product, self::CORE_ISSUE_CODES))
@@ -68,9 +68,9 @@ final class ProductDataQualitySummaryService
             ->values()
             ->all();
 
-        $specificationResult = $this->specificationQuality->evaluate($product);
-        $specificationLevel = $this->specificationLevel($specificationResult);
         $categoryBrandResult = $this->categoryBrandQuality->evaluate($product);
+        $specificationResult = $this->specificationQuality->evaluate($product);
+        $specificationLevel = $this->specificationLevel($specificationResult, $categoryBrandResult);
         $imageResult = $this->imageQuality->evaluate($product);
         $seoDescriptionResult = $this->seoDescriptionQuality->evaluate($product);
         $manualFlags = $product->activeQualityFlagAssignments
@@ -142,8 +142,14 @@ final class ProductDataQualitySummaryService
         };
     }
 
-    private function specificationLevel(ProductSpecificationQualityResult $result): ?string
-    {
+    private function specificationLevel(
+        ProductSpecificationQualityResult $result,
+        ProductCategoryBrandQualityResult $categoryBrandResult,
+    ): ?string {
+        if ($categoryBrandResult->isCategoryMissing()) {
+            return null;
+        }
+
         return match ($result->status) {
             ProductSpecificationQualityResult::STATUS_MISSING_REQUIRED => 'critical',
             ProductSpecificationQualityResult::STATUS_NEEDS_DATA,
@@ -216,11 +222,23 @@ final class ProductDataQualitySummaryService
             default => 'Прегледайте продуктовите данни',
         })->filter();
 
-        if ($specificationResult->status !== ProductSpecificationQualityResult::STATUS_GOOD) {
+        if (
+            ! $categoryBrandResult->isCategoryMissing()
+            && $specificationResult->status !== ProductSpecificationQualityResult::STATUS_GOOD
+        ) {
             $steps->push(match ($specificationResult->status) {
-                ProductSpecificationQualityResult::STATUS_NO_CATEGORY_TEMPLATE => 'Прегледайте шаблона за характеристики на категорията',
-                default => 'Попълнете важните характеристики',
+                ProductSpecificationQualityResult::STATUS_NO_CATEGORY_TEMPLATE => 'Създайте или наследете шаблон за категорията',
+                ProductSpecificationQualityResult::STATUS_MISSING_REQUIRED => 'Попълнете задължителните характеристики',
+                ProductSpecificationQualityResult::STATUS_NEEDS_DATA => 'Допълнете препоръчителните характеристики',
+                default => 'Прегледайте характеристиките',
             });
+        }
+
+        if (
+            $specificationResult->invalidRequiredAttributeLabels() !== []
+            || $specificationResult->invalidRecommendedAttributeLabels() !== []
+        ) {
+            $steps->push('Коригирайте невалидните стойности на характеристиките');
         }
 
         if ($categoryBrandResult->categoryWarning() !== null) {
