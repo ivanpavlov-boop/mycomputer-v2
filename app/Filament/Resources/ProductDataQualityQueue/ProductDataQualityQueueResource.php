@@ -12,6 +12,8 @@ use App\Services\Products\ProductCategoryBrandQualityService;
 use App\Services\Products\ProductDataQualityScanner;
 use App\Services\Products\ProductImageQualityResult;
 use App\Services\Products\ProductImageQualityService;
+use App\Services\Products\ProductSeoDescriptionQualityResult;
+use App\Services\Products\ProductSeoDescriptionQualityService;
 use BackedEnum;
 use Filament\Actions\Action;
 use Filament\Resources\Resource;
@@ -51,6 +53,7 @@ class ProductDataQualityQueueResource extends Resource
         $scanner = app(ProductDataQualityScanner::class);
         $categoryBrandQuality = app(ProductCategoryBrandQualityService::class);
         $imageQuality = app(ProductImageQualityService::class);
+        $seoDescriptionQuality = app(ProductSeoDescriptionQualityService::class);
 
         return $table
             ->modifyQueryUsing(fn (Builder $query): Builder => $scanner
@@ -95,6 +98,33 @@ class ProductDataQualityQueueResource extends Resource
                     ->state(fn (Product $record): string => $imageQuality->evaluate($record)->stateLabel)
                     ->badge()
                     ->color(fn (Product $record): string => $imageQuality->evaluate($record)->stateColor),
+                TextColumn::make('seo_completeness')
+                    ->label('SEO')
+                    ->state(fn (Product $record): string => $seoDescriptionQuality->evaluate($record)->seoScoreLabel)
+                    ->tooltip(fn (Product $record): ?string => self::compactTooltip(
+                        $seoDescriptionQuality->evaluate($record)->issues,
+                        ['missing_seo_title', 'missing_seo_description'],
+                    ))
+                    ->toggleable(),
+                TextColumn::make('description_completeness')
+                    ->label('Описания')
+                    ->state(fn (Product $record): string => $seoDescriptionQuality->evaluate($record)->descriptionScoreLabel)
+                    ->tooltip(fn (Product $record): ?string => self::compactTooltip(
+                        $seoDescriptionQuality->evaluate($record)->issues,
+                        ['missing_short_description', 'missing_full_description', 'weak_description'],
+                    ))
+                    ->toggleable(),
+                TextColumn::make('english_localization_completeness')
+                    ->label('EN локализация')
+                    ->state(fn (Product $record): string => $seoDescriptionQuality->evaluate($record)->englishScoreLabel)
+                    ->tooltip(fn (Product $record): ?string => collect($seoDescriptionQuality->evaluate($record)->missingEnglishFieldLabels)
+                        ->implode(' · ') ?: null)
+                    ->toggleable(),
+                TextColumn::make('seo_description_quality')
+                    ->label('SEO и съдържание')
+                    ->state(fn (Product $record): string => $seoDescriptionQuality->evaluate($record)->stateLabel)
+                    ->badge()
+                    ->color(fn (Product $record): string => $seoDescriptionQuality->evaluate($record)->stateColor),
                 TextColumn::make('name')
                     ->label('Продукт')
                     ->description(fn (Product $record): string => sprintf(
@@ -204,6 +234,11 @@ class ProductDataQualityQueueResource extends Resource
                     ->placeholder('Всички')
                     ->options(ProductImageQualityResult::options())
                     ->query(fn (Builder $query, array $data): Builder => $imageQuality->applyStateQuery($query, $data['value'] ?? null)),
+                SelectFilter::make('seo_description_quality_state')
+                    ->label('Състояние на SEO и съдържанието')
+                    ->placeholder('Всички')
+                    ->options(ProductSeoDescriptionQualityResult::options())
+                    ->query(fn (Builder $query, array $data): Builder => $seoDescriptionQuality->applyStateQuery($query, $data['value'] ?? null)),
                 SelectFilter::make('quality_flag')
                     ->label('Флаг за качество')
                     ->options(fn (): array => ProductQualityFlag::query()->active()->ordered()->pluck('label_bg', 'id')->all())
@@ -455,5 +490,17 @@ class ProductDataQualityQueueResource extends Resource
         return collect($scanner->detectedIssues($product))
             ->map(fn (array $issue): string => $labels[$issue['code']] ?? $issue['label'])
             ->all();
+    }
+
+    /**
+     * @param  array<int, array{code: string, label: string, level: string, color: string}>  $issues
+     * @param  array<int, string>  $codes
+     */
+    protected static function compactTooltip(array $issues, array $codes): ?string
+    {
+        return collect($issues)
+            ->whereIn('code', $codes)
+            ->pluck('label')
+            ->implode(' · ') ?: null;
     }
 }

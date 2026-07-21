@@ -41,6 +41,7 @@ final class ProductDataQualitySummaryService
         private readonly ProductSpecificationQualityService $specificationQuality,
         private readonly ProductCategoryBrandQualityService $categoryBrandQuality,
         private readonly ProductImageQualityService $imageQuality,
+        private readonly ProductSeoDescriptionQualityService $seoDescriptionQuality,
     ) {}
 
     public function summarize(Product $product): ProductDataQualitySummaryResult
@@ -71,6 +72,7 @@ final class ProductDataQualitySummaryService
         $specificationLevel = $this->specificationLevel($specificationResult);
         $categoryBrandResult = $this->categoryBrandQuality->evaluate($product);
         $imageResult = $this->imageQuality->evaluate($product);
+        $seoDescriptionResult = $this->seoDescriptionQuality->evaluate($product);
         $manualFlags = $product->activeQualityFlagAssignments
             ->filter(fn ($assignment): bool => (bool) $assignment->flag?->is_active)
             ->map(function ($assignment): array {
@@ -118,10 +120,11 @@ final class ProductDataQualitySummaryService
             specificationResult: $specificationResult,
             categoryBrandQuality: $categoryBrandResult,
             imageQuality: $imageResult,
+            seoDescriptionQuality: $seoDescriptionResult,
             manualFlags: $manualFlags,
             activeManualQualityFlagLabels: collect($manualFlags)->pluck('label')->all(),
             totalActionableIssueCount: $totalCount,
-            nextSteps: $this->nextSteps($coreIssues, $specificationResult, $categoryBrandResult, $imageResult, $manualFlags),
+            nextSteps: $this->nextSteps($coreIssues, $specificationResult, $categoryBrandResult, $imageResult, $seoDescriptionResult, $manualFlags),
         );
     }
 
@@ -199,18 +202,19 @@ final class ProductDataQualitySummaryService
         ProductSpecificationQualityResult $specificationResult,
         ProductCategoryBrandQualityResult $categoryBrandResult,
         ProductImageQualityResult $imageResult,
+        ProductSeoDescriptionQualityResult $seoDescriptionResult,
         array $manualFlags,
     ): array {
         $steps = collect($coreIssues)->map(fn (array $issue): string => match ($issue['code']) {
             ProductDataQualityScanner::ISSUE_MISSING_CATEGORY => 'Задайте категория',
             ProductDataQualityScanner::ISSUE_MISSING_BRAND => 'Задайте марка',
             ProductDataQualityScanner::ISSUE_MISSING_IMAGE => 'Добавете продуктова снимка',
-            ProductDataQualityScanner::ISSUE_MISSING_SEO => 'Попълнете SEO заглавие и описание',
-            ProductDataQualityScanner::ISSUE_WEAK_DESCRIPTION => 'Допълнете краткото и пълното описание',
+            ProductDataQualityScanner::ISSUE_MISSING_SEO,
+            ProductDataQualityScanner::ISSUE_WEAK_DESCRIPTION,
+            ProductDataQualityScanner::ISSUE_MISSING_EN_TRANSLATION => '',
             ProductDataQualityScanner::ISSUE_MISSING_EAN => 'Добавете EAN, когато е приложимо',
-            ProductDataQualityScanner::ISSUE_MISSING_EN_TRANSLATION => 'Добавете английска локализация',
             default => 'Прегледайте продуктовите данни',
-        });
+        })->filter();
 
         if ($specificationResult->status !== ProductSpecificationQualityResult::STATUS_GOOD) {
             $steps->push(match ($specificationResult->status) {
@@ -228,6 +232,7 @@ final class ProductDataQualitySummaryService
         }
 
         $steps->push(...$imageResult->nextSteps);
+        $steps->push(...$seoDescriptionResult->nextSteps);
 
         if ($manualFlags !== []) {
             $steps->push('Прегледайте активните флагове за качество');

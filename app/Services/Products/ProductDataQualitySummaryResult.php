@@ -29,6 +29,7 @@ final class ProductDataQualitySummaryResult
         public readonly ProductSpecificationQualityResult $specificationResult,
         public readonly ProductCategoryBrandQualityResult $categoryBrandQuality,
         public readonly ProductImageQualityResult $imageQuality,
+        public readonly ProductSeoDescriptionQualityResult $seoDescriptionQuality,
         public readonly array $manualFlags,
         public readonly array $activeManualQualityFlagLabels,
         public readonly int $totalActionableIssueCount,

@@ -78,6 +78,28 @@
         </div>
     </div>
 
+    <div data-testid="product-seo-description-quality">
+        <div style="font-size: 0.875rem; font-weight: 600;">SEO, описания и английска локализация</div>
+        <div style="margin-top: 0.5rem; display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+            <x-filament::badge :color="$summary->seoDescriptionQuality->stateColor">
+                {{ $summary->seoDescriptionQuality->stateLabel }}
+            </x-filament::badge>
+        </div>
+        <div style="margin-top: 0.65rem; display: grid; grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr)); gap: 0.75rem; font-size: 0.875rem;">
+            <div><span style="font-weight: 600;">SEO:</span> {{ $summary->seoDescriptionQuality->seoScoreLabel }}</div>
+            <div><span style="font-weight: 600;">Описания:</span> {{ $summary->seoDescriptionQuality->descriptionScoreLabel }}</div>
+            <div><span style="font-weight: 600;">EN локализация:</span> {{ $summary->seoDescriptionQuality->englishScoreLabel }}</div>
+        </div>
+        @if ($summary->seoDescriptionQuality->issueLabels() !== [])
+            <div
+                style="margin-top: 0.5rem; font-size: 0.8rem; color: rgb(107 114 128);"
+                title="{{ implode(' · ', $summary->seoDescriptionQuality->issueLabels()) }}"
+            >
+                Липсва или се нуждае от преглед: {{ implode(', ', $summary->seoDescriptionQuality->issueLabels()) }}
+            </div>
+        @endif
+    </div>
+
     <div>
         <div style="font-size: 0.875rem; font-weight: 600;">Открити проблеми</div>
 
