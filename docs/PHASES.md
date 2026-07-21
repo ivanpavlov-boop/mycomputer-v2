@@ -33,6 +33,7 @@ Phase 8 manual selected UPDATE price/stock sync has been implemented behind a fe
 | Product Data Quality 2A | Unified Product edit quality summary | Complete locally; read-only warning presentation combining scanner issues, specification quality and active manual flags. |
 | Product Data Quality 2B | Category and brand quality workflow | Complete locally; read-only queue triage, filters, counts and Product edit summary state with manual remediation through the existing form. |
 | Product Data Quality 2C | Image and ALT-text quality workflow | Complete locally; read-only image metadata states, queue triage, counts and Product edit summary with manual remediation through existing image controls. |
+| Product Data Quality 2D | SEO and description quality workflow | Complete locally; read-only SEO, Bulgarian description and English-localization completeness states, queue triage, counts and Product edit summary with manual remediation through existing fields. |
 | Phase 9C.1 | Product attributes core foundation | Complete |
 | Phase 9C.2 | Product attributes admin usability and starter structure | Complete |
 | Phase 9C.3 | Category attribute sets | Complete |
@@ -125,7 +126,6 @@ or permit supplier data to overwrite catalog-owned content.
 
 Likely follow-up phases remain separately scoped and unimplemented:
 
-- 2D - SEO and description quality.
 - 2E - category-template and specification completion.
 
 ## Product Data Quality 2B Scope
@@ -163,6 +163,35 @@ Evaluation performs no database, filesystem or network mutation. There is no
 AI, OCR, image recognition, automatic ALT generation, automatic primary-image
 selection, supplier image import, remote image check, workflow gate, public
 visibility change or Catalog Sync behavior change.
+
+## Product Data Quality 2D Scope
+
+The Product Data Quality Queue and unified Product edit quality summary now
+present one deterministic SEO and content state: both Bulgarian descriptions
+missing, full description missing, short description missing, both SEO fields
+missing, one SEO field missing, weak description, incomplete English
+localization or complete. State priority follows that order. The queue exposes
+compact SEO `2/2`, Bulgarian-description `2/2` and English-localization `3/3`
+scores, one exact combined state filter and bounded read-only counts within the
+existing queue eligibility scope.
+
+The English denominator reuses the existing scanner contract: English name,
+full description and SEO title. English short description and SEO description
+remain available optional form fields and are not silently made required. The
+existing `missing_seo`, `weak_description` and `missing_en_translation` scanner
+issues remain authoritative for unified issue totals, so detailed field-level
+presentation does not double-count them. The established weak-description
+thresholds remain unchanged.
+
+Correction remains manual through the existing Product SEO, Bulgarian rich-text
+description and English localization fields under their current validation and
+authorization. Evaluation normalizes whitespace and empty rich-editor wrappers
+in memory only. It does not rewrite stored HTML or localization JSON, mutate
+Products, call external services, use supplier content, generate SEO or
+descriptions, translate text, detect language, assign or resolve quality flags,
+block Product saves or workflow transitions, or alter public visibility, public
+SEO, supplier imports or Catalog Sync. Semantic language correctness and
+editorial translation quality remain manual multilingual-content concerns.
 
 ## Phase 9C.6.5A and 9C.6.5B Implemented Scope
 

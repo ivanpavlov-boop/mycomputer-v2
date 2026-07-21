@@ -111,6 +111,14 @@ Manual selected UPDATE price/stock sync is implemented behind `CATALOG_SYNC_UPDA
   not semantic image validation, and the workflow performs no file check,
   remote request, supplier-image use, automatic ALT generation, automatic
   primary selection, image mutation, workflow gate or visibility change.
+- Product SEO and description quality evaluates deterministic field
+  completeness plus the existing weak-description scanner rule. The queue and
+  Product edit summary show SEO, Bulgarian-description and English-localization
+  scores without rewriting rich HTML or localization JSON. There is no
+  automatic copywriting, SEO generation, translation, language detection,
+  AI/NLP analysis, supplier-content use, inline or bulk content mutation,
+  workflow gate, public-visibility change, public-SEO change or Catalog Sync
+  change. Semantic language correctness remains a manual editorial concern.
 - Product attributes are catalog-owned internal definitions. Category Attribute Sets can assign existing attributes to existing categories, admins can manually maintain individual product values from Product edit pages, Product Specification Data Quality reports missing important category specs without mutating data, the legacy reconciliation command can copy safe values into existing category-assigned targets one explicit product at a time, reconciled legacy values are marked read-only in admin while staying visible, the CPU template command can explicitly prepare CPU attributes/options/category assignments without product values, the category template coverage audit can report direct/inherited/missing template coverage without an apply mode, supplier category mappings can prepare pending-review taxonomy records without applying them to products, multi-supplier discovery can report staging/category/identifier overlap data without any apply mode, supplier import capability audit can report feed/driver/schedule readiness without fetching feeds, dispatching jobs, or exposing secrets, supplier configuration cleanup can disable only unsafe supplier schedules by explicit apply, the next supplier staging import preview can parse local XML/CSV/JSON samples without writes or remote feed access, the controlled ASBIS staging import can write only ASBIS `supplier_products` rows after explicit dry-run-first confirmation, and the ASBIS dual-feed preview can join local ProductList/PriceAvail files without writes or remote feed access. Supplier attribute mapping and frontend filters are not enabled yet.
 
 ## Next Supplier Sequence
@@ -223,17 +231,16 @@ operational decision.
 6. Phase 9C.6.6 Multi-Supplier Category Mapping Review.
 7. Phase 9C.6.7 Multi-Supplier Identifier Overlap Review.
 8. Phase 9C.7 Supplier Attribute Mapping Foundation.
-9. Product Data Quality 2D SEO and description quality.
-10. Product Data Quality 2E category-template and specification completion.
-11. Storefront specification display and later attribute filters.
-12. Product attribute filter design after controlled data quality.
-13. Rollback tooling based on `catalog_sync_batches` and `catalog_sync_logs`.
-14. Keep feature flags locked down before broader sync work.
-15. Conflict/manual mapping workflow.
-16. Sync All later.
-17. Automatic sync later.
-18. Nuxt i18n route integration and localized sitemap expansion.
-19. Data enrichment workflow refinements after queue usage is observed.
+9. Product Data Quality 2E category-template and specification completion.
+10. Storefront specification display and later attribute filters.
+11. Product attribute filter design after controlled data quality.
+12. Rollback tooling based on `catalog_sync_batches` and `catalog_sync_logs`.
+13. Keep feature flags locked down before broader sync work.
+14. Conflict/manual mapping workflow.
+15. Sync All later.
+16. Automatic sync later.
+17. Nuxt i18n route integration and localized sitemap expansion.
+18. Data enrichment workflow refinements after queue usage is observed.
 
 ## Phase 8 Initial UPDATE Scope
 

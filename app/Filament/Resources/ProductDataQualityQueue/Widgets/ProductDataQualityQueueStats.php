@@ -10,6 +10,8 @@ use App\Services\Products\ProductCategoryBrandQualityService;
 use App\Services\Products\ProductDataQualityScanner;
 use App\Services\Products\ProductImageQualityResult;
 use App\Services\Products\ProductImageQualityService;
+use App\Services\Products\ProductSeoDescriptionQualityResult;
+use App\Services\Products\ProductSeoDescriptionQualityService;
 use Filament\Widgets\StatsOverviewWidget;
 use Filament\Widgets\StatsOverviewWidget\Stat;
 
@@ -23,6 +25,9 @@ class ProductDataQualityQueueStats extends StatsOverviewWidget
         $imageQuality = app(ProductImageQualityService::class);
         $imageCounts = $imageQuality->countsFor($scanner->applyQueueScope(Product::query()));
         $missingAltCount = $imageQuality->countWithMissingAltFor($scanner->applyQueueScope(Product::query()));
+        $seoDescriptionQuality = app(ProductSeoDescriptionQualityService::class);
+        $queueScope = fn () => $scanner->applyQueueScope(Product::query());
+        $seoDescriptionCounts = $seoDescriptionQuality->countsFor($queueScope());
 
         return [
             Stat::make('Продукти за преглед', $scanner->applyQueueScope(Product::query())->count()),
@@ -35,9 +40,11 @@ class ProductDataQualityQueueStats extends StatsOverviewWidget
             Stat::make('Липсва основна снимка', $imageCounts[ProductImageQualityResult::STATE_MISSING_PRIMARY]),
             Stat::make('Липсва ALT текст', $missingAltCount),
             Stat::make('Снимките са подготвени', $imageCounts[ProductImageQualityResult::STATE_COMPLETE]),
-            Stat::make('Липсва SEO', $scanner->applyIssueQuery(Product::query(), ProductDataQualityScanner::ISSUE_MISSING_SEO)->count()),
-            Stat::make('Липсва EN превод', $scanner->applyIssueQuery(Product::query(), ProductDataQualityScanner::ISSUE_MISSING_EN_TRANSLATION)->count()),
-            Stat::make('Слаби описания', $scanner->applyIssueQuery(Product::query(), ProductDataQualityScanner::ISSUE_WEAK_DESCRIPTION)->count()),
+            Stat::make('Липсва SEO', $seoDescriptionQuality->countWithMissingSeoFor($queueScope())),
+            Stat::make('Липсват описания', $seoDescriptionQuality->countWithMissingDescriptionsFor($queueScope())),
+            Stat::make('Слабо описание', $seoDescriptionQuality->countWithWeakDescriptionFor($queueScope())),
+            Stat::make('Липсва EN локализация', $seoDescriptionQuality->countWithMissingEnglishFor($queueScope())),
+            Stat::make('Съдържанието е попълнено', $seoDescriptionCounts[ProductSeoDescriptionQualityResult::STATE_COMPLETE]),
             Stat::make('Активни флагове', ProductQualityFlagAssignment::query()->active()->count()),
             Stat::make('Висока важност', ProductQualityFlagAssignment::query()
                 ->active()

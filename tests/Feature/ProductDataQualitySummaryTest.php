@@ -18,6 +18,7 @@ use App\Services\Products\ProductDataQualityScanner;
 use App\Services\Products\ProductDataQualitySummaryResult;
 use App\Services\Products\ProductDataQualitySummaryService;
 use App\Services\Products\ProductImageQualityResult;
+use App\Services\Products\ProductSeoDescriptionQualityResult;
 use App\Services\Products\ProductSpecificationQualityResult;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -76,6 +77,27 @@ class ProductDataQualitySummaryTest extends TestCase
                 issues: [],
                 nextSteps: [],
                 altTextSamples: ['Продуктова снимка'],
+            ),
+            seoDescriptionQuality: new ProductSeoDescriptionQualityResult(
+                state: ProductSeoDescriptionQualityResult::STATE_COMPLETE,
+                seoTitlePresent: true,
+                seoDescriptionPresent: true,
+                seoCompletedCount: 2,
+                seoExpectedCount: 2,
+                shortDescriptionPresent: true,
+                fullDescriptionPresent: true,
+                descriptionCompletedCount: 2,
+                descriptionExpectedCount: 2,
+                weakDescription: false,
+                englishCompletedCount: 3,
+                englishExpectedCount: 3,
+                missingEnglishFieldLabels: [],
+                issues: [],
+                nextSteps: [],
+                seoTitleLength: 10,
+                seoDescriptionLength: 20,
+                shortDescriptionLength: 30,
+                fullDescriptionLength: 80,
             ),
             manualFlags: [],
             activeManualQualityFlagLabels: [],
