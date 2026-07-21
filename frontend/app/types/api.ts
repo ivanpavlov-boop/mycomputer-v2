@@ -94,6 +94,20 @@ export interface ProductCard {
   primary_image?: ProductImage | null
 }
 
+export interface ProductSpecificationItem {
+  key: string
+  label: string
+  display_value: string
+  position: number
+}
+
+export interface ProductSpecificationGroup {
+  key: string
+  label: string
+  position: number
+  items: ProductSpecificationItem[]
+}
+
 export interface ProductDetail extends ProductCard {
   description?: string | null
   weight?: string | number | null
@@ -107,6 +121,7 @@ export interface ProductDetail extends ProductCard {
       value: { value: string; slug?: string | null }
     }>
   }>
+  specification_groups: ProductSpecificationGroup[]
   related_products: ProductCard[]
   accessory_products: ProductCard[]
   rating_distribution?: Record<number, number>

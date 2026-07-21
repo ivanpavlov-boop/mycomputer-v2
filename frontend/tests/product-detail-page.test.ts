@@ -43,6 +43,8 @@ describe('product detail page', () => {
     expect(page).toContain('ProductStockBadge')
     expect(page).toContain('ProductAvailabilityInfo')
     expect(page).toContain('ProductTabs')
+    expect(page).toContain(':specification-groups="product.specification_groups || []"')
+    expect(page).not.toContain(':attributes="product.attributes || []"')
     expect(page).toContain('ProductRelatedProducts')
     expect(page).toContain('ProductAccessoryProducts')
     expect(page).toContain('SKU: {{ product.sku }}')

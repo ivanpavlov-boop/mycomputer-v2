@@ -37,6 +37,7 @@ class PublicApiV1Test extends TestCase
                     'brand',
                     'images',
                     'attributes',
+                    'specification_groups',
                     'related_products',
                     'accessory_products',
                     'seo',
