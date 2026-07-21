@@ -31,19 +31,43 @@
       </div>
 
       <UiLoadingState v-if="pending" />
-      <UiErrorState
-        v-else-if="error"
-        title="Не успяхме да заредим каталога"
-        text="Моля, опитайте отново след малко."
-      />
-      <template v-else>
-        <CatalogProductGrid v-if="products.length" :products="products" />
-        <UiEmptyState
-          v-else
-          title="Няма активни продукти за показване."
-          text="Променете търсенето или опитайте отново по-късно."
+      <div v-else-if="error">
+        <UiErrorState
+          title="Не успяхме да заредим каталога"
+          text="Моля, опитайте отново след малко."
         />
-        <CatalogPagination :meta="catalogMeta" @change="setPage" />
+        <UiBaseButton v-if="hasAttributeRouteFilters" variant="secondary" class="mt-4" @click="clearAllAttributeFilters">
+          Изчисти филтрите по характеристики
+        </UiBaseButton>
+      </div>
+      <template v-else>
+        <div :class="attributeFilters.length ? 'lg:grid lg:grid-cols-[280px_minmax(0,1fr)] lg:gap-6' : ''">
+          <CatalogAttributeFilterPanel
+            :filters="attributeFilters"
+            :selection="attributeSelections"
+            :active-count="activeAttributeFilterCount"
+            @change="setAttributeFilter"
+            @clear-all="clearAllAttributeFilters"
+          />
+          <section class="min-w-0">
+            <CatalogActiveAttributeFilters
+              :filters="activeAttributeFilters"
+              @remove="removeActiveAttributeFilter"
+              @clear-all="clearAllAttributeFilters"
+            />
+            <CatalogProductGrid v-if="products.length" :products="products" />
+            <div v-else class="space-y-4">
+              <UiEmptyState
+                title="Няма активни продукти за показване."
+                text="Променете търсенето или премахнете част от филтрите."
+              />
+              <UiBaseButton v-if="hasAttributeRouteFilters" variant="secondary" @click="clearAllAttributeFilters">
+                Изчисти филтрите по характеристики
+              </UiBaseButton>
+            </div>
+            <CatalogPagination :meta="catalogMeta" @change="setPage" />
+          </section>
+        </div>
       </template>
     </main>
   </div>
@@ -51,7 +75,15 @@
 
 <script setup lang="ts">
 import type { ProductCard } from '~/types/api'
+import type { AttributeFilterSelection } from '~/utils/attributeFilters'
 import { paginatedResource } from '~/utils/apiCollections'
+import {
+  attributeFilterApiQuery,
+  clearAttributeFilters,
+  hasAttributeFilters,
+  parseAttributeFilterQuery,
+  replaceAttributeFilter,
+} from '~/utils/attributeFilters'
 import { normalizeCatalogSort } from '~/utils/catalogSorts'
 import { positiveInteger, queryString, routeQueryValue } from '~/utils/routeQuery'
 
@@ -77,6 +109,8 @@ const forwardedQueryKeys = [
 const activeSearch = computed(() => queryString(route.query.search) || queryString(route.query.q))
 const hasSearch = computed(() => Boolean(activeSearch.value))
 const searchTerm = ref(activeSearch.value)
+const attributeSelections = computed(() => parseAttributeFilterQuery(route.query))
+const hasAttributeRouteFilters = computed(() => hasAttributeFilters(route.query))
 
 const sort = computed({
   get: () => normalizeCatalogSort(route.query.sort),
@@ -84,7 +118,7 @@ const sort = computed({
 })
 
 const catalogQuery = computed(() => {
-  const query: Record<string, string | number> = {
+  const query: Record<string, string | number | string[]> = {
     per_page: positiveInteger(route.query.per_page, 24),
   }
 
@@ -107,6 +141,8 @@ const catalogQuery = computed(() => {
     }
   }
 
+  Object.assign(query, attributeFilterApiQuery(route.query))
+
   return query
 })
 
@@ -121,6 +157,12 @@ const { data: productsResponse, error, pending } = await useAsyncData(
 
 const products = computed<ProductCard[]>(() => productsResponse.value?.data ?? [])
 const catalogMeta = computed(() => productsResponse.value?.meta)
+const attributeFilters = computed(() => productsResponse.value?.filters ?? [])
+const activeAttributeFilters = computed(() => productsResponse.value?.active_filters ?? [])
+const activeAttributeFilterCount = computed(() => activeAttributeFilters.value.reduce(
+  (count, filter) => count + (filter.values?.length || 1),
+  0,
+))
 
 watch(activeSearch, (value) => {
   searchTerm.value = value
@@ -154,6 +196,26 @@ function clearSearch() {
 
 function setPage(page: number) {
   updateQuery({ page: page > 1 ? page : undefined })
+}
+
+function setAttributeFilter(key: string, selection: AttributeFilterSelection) {
+  router.push({ query: replaceAttributeFilter(route.query, key, selection) })
+}
+
+function removeActiveAttributeFilter(key: string, value?: string) {
+  const selected = attributeSelections.value[key]
+
+  if (value && selected?.values) {
+    setAttributeFilter(key, { values: selected.values.filter((item) => item !== value) })
+
+    return
+  }
+
+  setAttributeFilter(key, {})
+}
+
+function clearAllAttributeFilters() {
+  router.push({ query: clearAttributeFilters(route.query) })
 }
 
 seo.page('Каталог', 'Активни продукти в публичния каталог на COMPUTER2U.', '/catalog')

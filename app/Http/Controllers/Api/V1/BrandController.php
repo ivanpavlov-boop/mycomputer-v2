@@ -8,7 +8,9 @@ use App\Http\Requests\Api\V1\ProductIndexRequest;
 use App\Http\Resources\BrandResource;
 use App\Http\Resources\ProductCardResource;
 use App\Models\Brand;
+use App\Services\Products\PublicProductAttributeFilterService;
 use App\Support\Api\ProductQueryFilters;
+use App\Support\Localization\Locales;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
 class BrandController extends Controller
@@ -32,14 +34,25 @@ class BrandController extends Controller
         );
     }
 
-    public function products(string $slug, ProductIndexRequest $request, ProductQueryFilters $filters): AnonymousResourceCollection
-    {
+    public function products(
+        string $slug,
+        ProductIndexRequest $request,
+        ProductQueryFilters $filters,
+        PublicProductAttributeFilterService $attributeFilters,
+    ): AnonymousResourceCollection {
         $brand = Brand::query()->where('slug', $slug)->where('is_active', true)->firstOrFail();
+        $validated = $request->validated();
+        $selectedAttributes = $validated['attribute_filters'] ?? [];
+        $locale = Locales::resolveApiRequest($request);
         $query = $filters->publicQuery()->where('brand_id', $brand->id);
-        $query = $filters->apply($query, $request->validated());
+        $query = $filters->apply($query, $validated);
+        $filterMetadata = $attributeFilters->describe($query, $selectedAttributes, $locale);
+        $attributeFilters->apply($query, $selectedAttributes, $locale);
+        $paginator = $filters
+            ->sort($query, $validated['sort'] ?? null)
+            ->paginate($filters->perPage($validated))
+            ->appends($request->query());
 
-        return ProductCardResource::collection(
-            $filters->sort($query, $request->validated('sort'))->paginate($filters->perPage($request->validated())),
-        );
+        return ProductCardResource::collection($paginator)->additional($filterMetadata);
     }
 }
