@@ -12,6 +12,8 @@ use App\Services\Products\ProductImageQualityResult;
 use App\Services\Products\ProductImageQualityService;
 use App\Services\Products\ProductSeoDescriptionQualityResult;
 use App\Services\Products\ProductSeoDescriptionQualityService;
+use App\Services\Products\ProductSpecificationQualityResult;
+use App\Services\Products\ProductSpecificationQualityService;
 use Filament\Widgets\StatsOverviewWidget;
 use Filament\Widgets\StatsOverviewWidget\Stat;
 
@@ -28,6 +30,7 @@ class ProductDataQualityQueueStats extends StatsOverviewWidget
         $seoDescriptionQuality = app(ProductSeoDescriptionQualityService::class);
         $queueScope = fn () => $scanner->applyQueueScope(Product::query());
         $seoDescriptionCounts = $seoDescriptionQuality->countsFor($queueScope());
+        $specificationCounts = app(ProductSpecificationQualityService::class)->countsFor($queueScope());
 
         return [
             Stat::make('Продукти за преглед', $scanner->applyQueueScope(Product::query())->count()),
@@ -45,6 +48,10 @@ class ProductDataQualityQueueStats extends StatsOverviewWidget
             Stat::make('Слабо описание', $seoDescriptionQuality->countWithWeakDescriptionFor($queueScope())),
             Stat::make('Липсва EN локализация', $seoDescriptionQuality->countWithMissingEnglishFor($queueScope())),
             Stat::make('Съдържанието е попълнено', $seoDescriptionCounts[ProductSeoDescriptionQualityResult::STATE_COMPLETE]),
+            Stat::make('Липсват задължителни характеристики', $specificationCounts[ProductSpecificationQualityResult::STATUS_MISSING_REQUIRED]),
+            Stat::make('Непълни препоръчителни характеристики', $specificationCounts[ProductSpecificationQualityResult::STATUS_NEEDS_DATA]),
+            Stat::make('Няма шаблон за категорията', $specificationCounts[ProductSpecificationQualityResult::STATUS_NO_CATEGORY_TEMPLATE]),
+            Stat::make('Характеристиките са попълнени', $specificationCounts[ProductSpecificationQualityResult::STATUS_GOOD]),
             Stat::make('Активни флагове', ProductQualityFlagAssignment::query()->active()->count()),
             Stat::make('Висока важност', ProductQualityFlagAssignment::query()
                 ->active()

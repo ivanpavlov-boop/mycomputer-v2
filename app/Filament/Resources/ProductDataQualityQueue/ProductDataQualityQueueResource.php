@@ -14,6 +14,8 @@ use App\Services\Products\ProductImageQualityResult;
 use App\Services\Products\ProductImageQualityService;
 use App\Services\Products\ProductSeoDescriptionQualityResult;
 use App\Services\Products\ProductSeoDescriptionQualityService;
+use App\Services\Products\ProductSpecificationQualityResult;
+use App\Services\Products\ProductSpecificationQualityService;
 use BackedEnum;
 use Filament\Actions\Action;
 use Filament\Resources\Resource;
@@ -54,6 +56,7 @@ class ProductDataQualityQueueResource extends Resource
         $categoryBrandQuality = app(ProductCategoryBrandQualityService::class);
         $imageQuality = app(ProductImageQualityService::class);
         $seoDescriptionQuality = app(ProductSeoDescriptionQualityService::class);
+        $specificationQuality = app(ProductSpecificationQualityService::class);
 
         return $table
             ->modifyQueryUsing(fn (Builder $query): Builder => $scanner
@@ -194,6 +197,31 @@ class ProductDataQualityQueueResource extends Resource
                     ->state(fn (Product $record): string => $categoryBrandQuality->evaluate($record)->stateLabel)
                     ->badge()
                     ->color(fn (Product $record): string => $categoryBrandQuality->evaluate($record)->stateColor),
+                TextColumn::make('specification_template_source')
+                    ->label('Шаблон характеристики')
+                    ->state(fn (Product $record): string => 'Шаблон: '.$specificationQuality->evaluate($record)->templateSourceLabel())
+                    ->tooltip(fn (Product $record): ?string => $specificationQuality->evaluate($record)->templateCoverage?->hierarchyLabel() ?: null)
+                    ->toggleable(),
+                TextColumn::make('required_specification_completion')
+                    ->label('Задължителни характеристики')
+                    ->state(fn (Product $record): string => 'Задължителни: '.$specificationQuality->evaluate($record)->requiredScoreLabel())
+                    ->toggleable(),
+                TextColumn::make('recommended_specification_completion')
+                    ->label('Препоръчителни характеристики')
+                    ->state(fn (Product $record): string => 'Препоръчителни: '.$specificationQuality->evaluate($record)->recommendedScoreLabel())
+                    ->toggleable(),
+                TextColumn::make('total_specification_completion')
+                    ->label('Общо характеристики')
+                    ->state(fn (Product $record): string => 'Общо: '.$specificationQuality->evaluate($record)->compactScoreLabel())
+                    ->toggleable(),
+                TextColumn::make('specification_completion_quality')
+                    ->label('Състояние характеристики')
+                    ->state(fn (Product $record): string => $specificationQuality->evaluate($record)->statusLabel())
+                    ->badge()
+                    ->color(fn (Product $record): string => $specificationQuality->evaluate($record)->statusColor())
+                    ->tooltip(fn (Product $record): ?string => self::specificationTooltip(
+                        $specificationQuality->evaluate($record),
+                    )),
                 TextColumn::make('active_quality_flag_assignments_count')
                     ->label('Брой флагове')
                     ->badge()
@@ -239,6 +267,11 @@ class ProductDataQualityQueueResource extends Resource
                     ->placeholder('Всички')
                     ->options(ProductSeoDescriptionQualityResult::options())
                     ->query(fn (Builder $query, array $data): Builder => $seoDescriptionQuality->applyStateQuery($query, $data['value'] ?? null)),
+                SelectFilter::make('specification_quality_state')
+                    ->label('Състояние на характеристиките')
+                    ->placeholder('Всички')
+                    ->options(ProductSpecificationQualityResult::options())
+                    ->query(fn (Builder $query, array $data): Builder => $specificationQuality->applyStateQuery($query, $data['value'] ?? null)),
                 SelectFilter::make('quality_flag')
                     ->label('Флаг за качество')
                     ->options(fn (): array => ProductQualityFlag::query()->active()->ordered()->pluck('label_bg', 'id')->all())
@@ -502,5 +535,24 @@ class ProductDataQualityQueueResource extends Resource
             ->whereIn('code', $codes)
             ->pluck('label')
             ->implode(' · ') ?: null;
+    }
+
+    protected static function specificationTooltip(ProductSpecificationQualityResult $result): ?string
+    {
+        return collect([
+            $result->missingRequiredAttributeLabels() !== []
+                ? 'Липсващи задължителни: '.implode(', ', $result->missingRequiredAttributeLabels())
+                : null,
+            $result->missingRecommendedAttributeLabels() !== []
+                ? 'Липсващи препоръчителни: '.implode(', ', $result->missingRecommendedAttributeLabels())
+                : null,
+            $result->invalidRequiredAttributeLabels() !== []
+                ? 'Невалидни задължителни: '.implode(', ', $result->invalidRequiredAttributeLabels())
+                : null,
+            $result->invalidRecommendedAttributeLabels() !== []
+                ? 'Невалидни препоръчителни: '.implode(', ', $result->invalidRecommendedAttributeLabels())
+                : null,
+            $result->reasonLabel(),
+        ])->filter()->implode(' · ') ?: null;
     }
 }

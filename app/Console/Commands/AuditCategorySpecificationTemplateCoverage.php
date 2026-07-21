@@ -3,7 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Models\Category;
-use App\Models\CategoryProductAttribute;
+use App\Services\Products\CategorySpecificationTemplateResolver;
 use Illuminate\Console\Command;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
@@ -17,6 +17,12 @@ class AuditCategorySpecificationTemplateCoverage extends Command
         {--include-empty : Include categories with no products}';
 
     protected $description = 'Read-only audit of category specification template coverage.';
+
+    public function __construct(
+        private readonly CategorySpecificationTemplateResolver $templateResolver,
+    ) {
+        parent::__construct();
+    }
 
     public function handle(): int
     {
@@ -57,31 +63,10 @@ class AuditCategorySpecificationTemplateCoverage extends Command
             ->orderBy('id')
             ->get();
 
-        $categoryIds = $categories->pluck('id')->map(fn (mixed $id): int => (int) $id)->all();
-        $assignmentsByCategory = CategoryProductAttribute::query()
-            ->with('attribute')
-            ->whereIn('category_id', $categoryIds)
-            ->whereHas('attribute', fn ($query) => $query->where('is_active', true))
-            ->orderBy('sort_order')
-            ->orderBy('id')
-            ->get()
-            ->groupBy(fn (CategoryProductAttribute $assignment): int => (int) $assignment->category_id);
-
-        $categoryById = $categories->keyBy(fn (Category $category): int => (int) $category->id);
-
         return $categories
             ->filter(fn (Category $category): bool => (bool) $this->option('include-empty') || (int) $category->products_count > 0)
-            ->map(function (Category $category) use ($assignmentsByCategory, $categoryById): array {
-                $directAttributeIds = $this->attributeIds($assignmentsByCategory->get((int) $category->id, collect()));
-                $ancestorAttributeIds = $this->ancestorAttributeIds($category, $assignmentsByCategory, $categoryById);
-                $inheritedAttributeIds = $ancestorAttributeIds
-                    ->reject(fn (int $attributeId): bool => $directAttributeIds->contains($attributeId))
-                    ->values();
-                $effectiveAttributeIds = $directAttributeIds
-                    ->merge($inheritedAttributeIds)
-                    ->unique()
-                    ->values();
-                $status = $this->coverageStatus($directAttributeIds->count(), $inheritedAttributeIds->count());
+            ->map(function (Category $category): array {
+                $template = $this->templateResolver->resolve($category);
                 $family = $this->suggestFamily($category);
 
                 return [
@@ -90,71 +75,15 @@ class AuditCategorySpecificationTemplateCoverage extends Command
                     'category_slug' => (string) $category->slug,
                     'parent_category' => $category->parent?->name,
                     'products_count' => (int) $category->products_count,
-                    'direct_category_product_attributes_count' => $directAttributeIds->count(),
-                    'inherited_category_product_attributes_count' => $inheritedAttributeIds->count(),
-                    'total_effective_expected_attributes_count' => $effectiveAttributeIds->count(),
-                    'coverage_status' => $status,
+                    'direct_category_product_attributes_count' => $template->directAttributeCount(),
+                    'inherited_category_product_attributes_count' => $template->inheritedAttributeCount(),
+                    'total_effective_expected_attributes_count' => $template->effectiveAttributeCount(),
+                    'coverage_status' => $template->status,
                     'suggested_product_family' => $family,
-                    'suggested_next_action' => $this->suggestAction($status, $family),
+                    'suggested_next_action' => $this->suggestAction($template->status, $family),
                 ];
             })
             ->values();
-    }
-
-    /**
-     * @param  Collection<int, CategoryProductAttribute>  $assignments
-     * @return Collection<int, int>
-     */
-    private function attributeIds(Collection $assignments): Collection
-    {
-        return $assignments
-            ->pluck('product_attribute_id')
-            ->filter()
-            ->map(fn (mixed $id): int => (int) $id)
-            ->unique()
-            ->values();
-    }
-
-    /**
-     * @param  Collection<int, Collection<int, CategoryProductAttribute>>  $assignmentsByCategory
-     * @param  Collection<int, Category>  $categoryById
-     * @return Collection<int, int>
-     */
-    private function ancestorAttributeIds(Category $category, Collection $assignmentsByCategory, Collection $categoryById): Collection
-    {
-        $attributeIds = collect();
-        $visited = [];
-        $parentId = $category->parent_id;
-        $guard = 0;
-
-        while ($parentId !== null && $guard < 20) {
-            $parentId = (int) $parentId;
-
-            if (isset($visited[$parentId])) {
-                break;
-            }
-
-            $visited[$parentId] = true;
-            $attributeIds = $attributeIds->merge($this->attributeIds($assignmentsByCategory->get($parentId, collect())));
-            $parent = $categoryById->get($parentId);
-            $parentId = $parent?->parent_id;
-            $guard++;
-        }
-
-        return $attributeIds->unique()->values();
-    }
-
-    private function coverageStatus(int $directCount, int $inheritedCount): string
-    {
-        if ($directCount > 0) {
-            return 'direct_template';
-        }
-
-        if ($inheritedCount > 0) {
-            return 'inherited_template';
-        }
-
-        return 'no_template';
     }
 
     private function suggestAction(string $coverageStatus, string $family): string

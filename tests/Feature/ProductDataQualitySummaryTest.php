@@ -170,7 +170,7 @@ class ProductDataQualitySummaryTest extends TestCase
         $this->assertSame('warning', collect($result->coreIssues)->firstWhere('code', ProductDataQualityScanner::ISSUE_WEAK_DESCRIPTION)['level']);
         $this->assertSame(2, $result->warningIssueCount);
         $this->assertContains('Допълнете краткото и пълното описание', $result->nextSteps);
-        $this->assertContains('Попълнете важните характеристики', $result->nextSteps);
+        $this->assertContains('Допълнете препоръчителните характеристики', $result->nextSteps);
     }
 
     public function test_missing_required_specifications_are_critical(): void
@@ -270,9 +270,9 @@ class ProductDataQualitySummaryTest extends TestCase
             ->assertSee('Обобщение на липсващи или непълни данни')
             ->assertSee('Критични липси')
             ->assertSee('Липсват важни характеристики')
-            ->assertSee('0/1 (0%)')
+            ->assertSee('0/1 · 0%')
             ->assertSee('Няма активни флагове')
-            ->assertSee('Попълнете важните характеристики');
+            ->assertSee('Попълнете задължителните характеристики');
 
         $this->assertArrayNotHasKey('product_data_quality_summary', $component->get('data'));
 
