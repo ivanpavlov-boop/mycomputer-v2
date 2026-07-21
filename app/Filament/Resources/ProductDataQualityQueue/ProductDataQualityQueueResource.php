@@ -328,16 +328,7 @@ class ProductDataQualityQueueResource extends Resource
      */
     protected static function issueOptions(): array
     {
-        return [
-            ProductDataQualityScanner::ISSUE_MISSING_IMAGE => 'Липсва снимка',
-            ProductDataQualityScanner::ISSUE_MISSING_CATEGORY => 'Липсва категория',
-            ProductDataQualityScanner::ISSUE_MISSING_BRAND => 'Липсва бранд',
-            ProductDataQualityScanner::ISSUE_MISSING_SEO => 'Липсва SEO',
-            ProductDataQualityScanner::ISSUE_MISSING_EN_TRANSLATION => 'Липсва EN превод',
-            ProductDataQualityScanner::ISSUE_WEAK_DESCRIPTION => 'Слабо описание',
-            ProductDataQualityScanner::ISSUE_MISSING_ATTRIBUTES => 'Липсват атрибути',
-            ProductDataQualityScanner::ISSUE_MISSING_EAN => 'Липсва EAN',
-        ];
+        return ProductDataQualityScanner::issueOptions();
     }
 
     /**
