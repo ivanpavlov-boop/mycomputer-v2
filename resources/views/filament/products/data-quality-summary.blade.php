@@ -53,6 +53,31 @@
         </div>
     </div>
 
+    <div data-testid="product-image-quality">
+        <div style="font-size: 0.875rem; font-weight: 600;">Снимки и ALT текст</div>
+        <div style="margin-top: 0.5rem; display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+            <x-filament::badge :color="$summary->imageQuality->stateColor">
+                {{ $summary->imageQuality->stateLabel }}
+            </x-filament::badge>
+        </div>
+        <div style="margin-top: 0.65rem; display: grid; grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr)); gap: 0.75rem; font-size: 0.875rem;">
+            <div><span style="font-weight: 600;">Снимки:</span> {{ $summary->imageQuality->eligibleImageCount }}</div>
+            <div>
+                <span style="font-weight: 600;">Основна снимка:</span>
+                <x-filament::badge :color="$summary->imageQuality->primaryStatusColor">
+                    {{ $summary->imageQuality->primaryStatusLabel }}
+                </x-filament::badge>
+            </div>
+            <div
+                @if ($summary->imageQuality->altTextSamples !== [])
+                    title="{{ implode(' | ', $summary->imageQuality->altTextSamples) }}"
+                @endif
+            >
+                <span style="font-weight: 600;">ALT текст:</span> {{ $summary->imageQuality->altCoverageLabel }}
+            </div>
+        </div>
+    </div>
+
     <div>
         <div style="font-size: 0.875rem; font-weight: 600;">Открити проблеми</div>
 

@@ -40,6 +40,7 @@ final class ProductDataQualitySummaryService
         private readonly ProductDataQualityScanner $scanner,
         private readonly ProductSpecificationQualityService $specificationQuality,
         private readonly ProductCategoryBrandQualityService $categoryBrandQuality,
+        private readonly ProductImageQualityService $imageQuality,
     ) {}
 
     public function summarize(Product $product): ProductDataQualitySummaryResult
@@ -69,6 +70,7 @@ final class ProductDataQualitySummaryService
         $specificationResult = $this->specificationQuality->evaluate($product);
         $specificationLevel = $this->specificationLevel($specificationResult);
         $categoryBrandResult = $this->categoryBrandQuality->evaluate($product);
+        $imageResult = $this->imageQuality->evaluate($product);
         $manualFlags = $product->activeQualityFlagAssignments
             ->filter(fn ($assignment): bool => (bool) $assignment->flag?->is_active)
             ->map(function ($assignment): array {
@@ -93,6 +95,9 @@ final class ProductDataQualitySummaryService
         $levels = collect($coreIssues)->pluck('level')
             ->when($specificationLevel !== null, fn ($levels) => $levels->push($specificationLevel))
             ->merge(array_fill(0, count($categoryBrandResult->warnings), 'warning'))
+            ->merge(collect($imageResult->issues)
+                ->reject(fn (array $issue): bool => $issue['code'] === ProductImageQualityResult::STATE_NO_IMAGES)
+                ->pluck('level'))
             ->merge(collect($manualFlags)->pluck('level'));
 
         $criticalCount = $levels->filter(fn (string $level): bool => $level === 'critical')->count();
@@ -112,10 +117,11 @@ final class ProductDataQualitySummaryService
             recommendationIssueCount: $recommendationCount,
             specificationResult: $specificationResult,
             categoryBrandQuality: $categoryBrandResult,
+            imageQuality: $imageResult,
             manualFlags: $manualFlags,
             activeManualQualityFlagLabels: collect($manualFlags)->pluck('label')->all(),
             totalActionableIssueCount: $totalCount,
-            nextSteps: $this->nextSteps($coreIssues, $specificationResult, $categoryBrandResult, $manualFlags),
+            nextSteps: $this->nextSteps($coreIssues, $specificationResult, $categoryBrandResult, $imageResult, $manualFlags),
         );
     }
 
@@ -192,6 +198,7 @@ final class ProductDataQualitySummaryService
         array $coreIssues,
         ProductSpecificationQualityResult $specificationResult,
         ProductCategoryBrandQualityResult $categoryBrandResult,
+        ProductImageQualityResult $imageResult,
         array $manualFlags,
     ): array {
         $steps = collect($coreIssues)->map(fn (array $issue): string => match ($issue['code']) {
@@ -219,6 +226,8 @@ final class ProductDataQualitySummaryService
         if ($categoryBrandResult->brandWarning() !== null) {
             $steps->push('Прегледайте състоянието на зададената марка');
         }
+
+        $steps->push(...$imageResult->nextSteps);
 
         if ($manualFlags !== []) {
             $steps->push('Прегледайте активните флагове за качество');
