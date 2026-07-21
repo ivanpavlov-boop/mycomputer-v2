@@ -34,25 +34,30 @@ class ProductDataQualityScanner
     public static function issueOptions(): array
     {
         return [
-            self::ISSUE_MISSING_IMAGE => 'Missing image',
-            self::ISSUE_MISSING_CATEGORY => 'Missing category',
-            self::ISSUE_MISSING_BRAND => 'Missing brand',
-            self::ISSUE_MISSING_SEO => 'Missing SEO',
-            self::ISSUE_MISSING_EN_TRANSLATION => 'Missing EN translation',
-            self::ISSUE_WEAK_DESCRIPTION => 'Weak description',
-            self::ISSUE_MISSING_ATTRIBUTES => 'Missing attributes',
-            self::ISSUE_MISSING_EAN => 'Missing EAN',
+            self::ISSUE_MISSING_IMAGE => 'Липсва снимка',
+            self::ISSUE_MISSING_CATEGORY => 'Липсва категория',
+            self::ISSUE_MISSING_BRAND => 'Липсва бранд',
+            self::ISSUE_MISSING_SEO => 'Липсва SEO',
+            self::ISSUE_MISSING_EN_TRANSLATION => 'Липсва EN превод',
+            self::ISSUE_WEAK_DESCRIPTION => 'Слабо описание',
+            self::ISSUE_MISSING_ATTRIBUTES => 'Липсват атрибути',
+            self::ISSUE_MISSING_EAN => 'Липсва EAN',
         ];
     }
 
     /**
+     * @param  array<int, string>|null  $issueCodes
      * @return array<int, array{code: string, label: string, severity: string}>
      */
-    public function detectedIssues(Product $product): array
+    public function detectedIssues(Product $product, ?array $issueCodes = null): array
     {
         $issues = [];
 
-        foreach (self::issueOptions() as $code => $label) {
+        $options = self::issueOptions();
+
+        foreach ($issueCodes ?? array_keys($options) as $code) {
+            $label = $options[$code] ?? $code;
+
             if ($this->productHasIssue($product, $code)) {
                 $issues[] = [
                     'code' => $code,
@@ -169,6 +174,7 @@ class ProductDataQualityScanner
         return match ($issue) {
             self::ISSUE_MISSING_IMAGE,
             self::ISSUE_MISSING_CATEGORY,
+            self::ISSUE_MISSING_BRAND,
             self::ISSUE_MISSING_SEO => 'high',
             self::ISSUE_WEAK_DESCRIPTION,
             self::ISSUE_MISSING_ATTRIBUTES,

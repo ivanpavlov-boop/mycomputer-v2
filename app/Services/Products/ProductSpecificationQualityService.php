@@ -196,6 +196,12 @@ class ProductSpecificationQualityService
      */
     private function valuesForProduct(Product $product, array $attributeIds): Collection
     {
+        if ($product->relationLoaded('attributeValues')) {
+            return $product->attributeValues
+                ->whereIn('product_attribute_id', array_map('intval', $attributeIds))
+                ->keyBy(fn (ProductAttributeValue $value): int => (int) $value->product_attribute_id);
+        }
+
         return $product
             ->attributeValues()
             ->with('value')

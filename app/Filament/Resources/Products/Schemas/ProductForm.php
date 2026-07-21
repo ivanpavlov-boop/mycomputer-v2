@@ -5,6 +5,7 @@ namespace App\Filament\Resources\Products\Schemas;
 use App\Models\Product;
 use App\Models\ProductQualityFlag;
 use App\Models\ProductQualityFlagAssignment;
+use App\Services\Products\ProductDataQualitySummaryService;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\KeyValue;
@@ -18,6 +19,7 @@ use Filament\Infolists\Components\TextEntry;
 use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Utilities\Set;
+use Filament\Schemas\Components\View;
 use Filament\Schemas\Schema;
 use Illuminate\Support\Str;
 
@@ -85,6 +87,16 @@ class ProductForm
                             ->columnSpanFull(),
                     ])
                     ->disabled(fn (): bool => ! (bool) auth()->user()?->canEditProductContent()),
+                Section::make('Качество на продуктовите данни')
+                    ->description('Обобщение на липсващи или непълни данни. Предупрежденията не блокират записа или работния процес.')
+                    ->schema([
+                        View::make('filament.products.data-quality-summary')
+                            ->viewData(fn (?Product $record): array => [
+                                'summary' => app(ProductDataQualitySummaryService::class)->summarize($record),
+                            ])
+                            ->columnSpanFull(),
+                    ])
+                    ->visible(fn (?Product $record): bool => (bool) $record?->exists),
                 Section::make('Работен процес на продукта')
                     ->description('Ръчно създадените продукти започват като чернова. Използвайте действията в страницата за редакция за изпращане, одобрение и публикуване.')
                     ->schema([
