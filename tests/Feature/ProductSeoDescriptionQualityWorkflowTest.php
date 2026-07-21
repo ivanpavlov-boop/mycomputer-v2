@@ -83,6 +83,99 @@ class ProductSeoDescriptionQualityWorkflowTest extends TestCase
         $this->assertSame('   ', $fullMissing->fresh()->description);
     }
 
+    public function test_utf8_empty_rich_text_is_portable_across_query_filters_and_statistics(): void
+    {
+        $this->actingAsRole(User::ROLE_CATALOG_MANAGER);
+        $literalNbsp = $this->qualityProduct([
+            'ean' => null,
+            'short_description' => "\u{00A0}",
+            'description' => "\u{00A0}",
+        ]);
+        $htmlEntities = $this->qualityProduct([
+            'ean' => null,
+            'short_description' => '&nbsp;',
+            'description' => '<p>&#160;</p>',
+        ]);
+        $emptyWrappers = $this->qualityProduct([
+            'ean' => null,
+            'short_description' => '<p></p>',
+            'description' => '<div><br></div>',
+        ]);
+        $zeroWidth = $this->qualityProduct([
+            'ean' => null,
+            'short_description' => "\u{200B}",
+            'description' => "<p>\u{200B}</p>",
+        ]);
+        $meaningful = $this->qualityProduct([
+            'ean' => null,
+            'short_description' => '<p>Смислено кратко описание с достатъчно съдържание</p>',
+            'description' => '<div>'.str_repeat('Смислено подробно българско описание. ', 3).'</div>',
+        ]);
+        $products = collect([$literalNbsp, $htmlEntities, $emptyWrappers, $zeroWidth, $meaningful]);
+        $before = $products->mapWithKeys(fn (Product $product): array => [
+            $product->id => $product->fresh()->getAttributes(),
+        ])->all();
+        $service = app(ProductSeoDescriptionQualityService::class);
+        $emptyIds = [$literalNbsp->id, $htmlEntities->id, $emptyWrappers->id, $zeroWidth->id];
+
+        foreach ([$literalNbsp, $htmlEntities, $emptyWrappers, $zeroWidth] as $product) {
+            $this->assertSame(
+                ProductSeoDescriptionQualityResult::STATE_MISSING_DESCRIPTIONS,
+                $service->evaluate($product)->state,
+            );
+        }
+
+        $this->assertSame(ProductSeoDescriptionQualityResult::STATE_COMPLETE, $service->evaluate($meaningful)->state);
+        $this->assertSame(
+            $emptyIds,
+            $service->applyStateQuery(
+                Product::query()->whereKey($products->pluck('id')),
+                ProductSeoDescriptionQualityResult::STATE_MISSING_DESCRIPTIONS,
+            )->orderBy('id')->pluck('id')->all(),
+        );
+        $this->assertSame(
+            4,
+            $service->countWithMissingDescriptionsFor(Product::query()->whereKey($products->pluck('id'))),
+        );
+
+        $sql = $service->applyStateQuery(
+            Product::query(),
+            ProductSeoDescriptionQualityResult::STATE_MISSING_DESCRIPTIONS,
+        )->toSql();
+
+        if (DB::connection()->getDriverName() === 'mysql') {
+            $this->assertStringContainsString('CONVERT(0xC2A0 USING utf8mb4)', $sql);
+            $this->assertStringContainsString('CONVERT(0xE2808B USING utf8mb4)', $sql);
+            $this->assertStringNotContainsString('CHAR(160)', $sql);
+            $this->assertStringNotContainsString('CHAR(8203)', $sql);
+        } else {
+            $this->assertStringContainsString('CHAR(160)', $sql);
+            $this->assertStringContainsString('CHAR(8203)', $sql);
+        }
+
+        Livewire::test(ListProductDataQualityQueue::class)
+            ->filterTable('seo_description_quality_state', ProductSeoDescriptionQualityResult::STATE_MISSING_DESCRIPTIONS)
+            ->assertCanSeeTableRecords([$literalNbsp, $htmlEntities, $emptyWrappers, $zeroWidth])
+            ->assertCanNotSeeTableRecords([$meaningful]);
+        Livewire::test(ProductDataQualityQueueStats::class)
+            ->assertSee('Липсват описания');
+
+        $this->assertSame("\u{00A0}", $literalNbsp->fresh()->short_description);
+        $this->assertSame("\u{00A0}", $literalNbsp->fresh()->description);
+        $this->assertSame('&nbsp;', $htmlEntities->fresh()->short_description);
+        $this->assertSame('<p>&#160;</p>', $htmlEntities->fresh()->description);
+        $this->assertSame('<p></p>', $emptyWrappers->fresh()->short_description);
+        $this->assertSame('<div><br></div>', $emptyWrappers->fresh()->description);
+        $this->assertSame("\u{200B}", $zeroWidth->fresh()->short_description);
+        $this->assertSame("<p>\u{200B}</p>", $zeroWidth->fresh()->description);
+        $this->assertSame(
+            $before,
+            $products->mapWithKeys(fn (Product $product): array => [
+                $product->id => $product->fresh()->getAttributes(),
+            ])->all(),
+        );
+    }
+
     public function test_seo_states_distinguish_both_missing_from_one_missing(): void
     {
         $bothMissing = $this->qualityProduct(['meta_title' => ' ', 'meta_description' => null]);
@@ -206,7 +299,7 @@ class ProductSeoDescriptionQualityWorkflowTest extends TestCase
         $missingFull = $this->qualityProduct(['ean' => null, 'description' => ' ']);
         $missingShort = $this->qualityProduct(['ean' => null, 'short_description' => '<p></p>']);
         $missingSeo = $this->qualityProduct(['ean' => null, 'meta_title' => ' ', 'meta_description' => null]);
-        $incompleteSeo = $this->qualityProduct(['ean' => null, 'meta_description' => ' ']);
+        $incompleteSeo = $this->qualityProduct(['ean' => null, 'meta_description' => null]);
         $weak = $this->qualityProduct(['ean' => null, 'short_description' => 'Кратко']);
         $missingEnglish = $this->qualityProduct(['ean' => null, 'name_translations' => ['en' => ' ']]);
         $complete = $this->qualityProduct(['ean' => null]);
@@ -234,8 +327,8 @@ class ProductSeoDescriptionQualityWorkflowTest extends TestCase
 
         Livewire::test(ListProductDataQualityQueue::class)
             ->filterTable('issue_type', ProductDataQualityScanner::ISSUE_MISSING_SEO)
-            ->assertCanSeeTableRecords([$missingDescriptions, $missingSeo])
-            ->assertCanNotSeeTableRecords([$incompleteSeo]);
+            ->assertCanSeeTableRecords([$missingDescriptions, $missingSeo, $incompleteSeo])
+            ->assertCanNotSeeTableRecords([$missingFull, $missingShort, $weak, $missingEnglish, $complete]);
     }
 
     public function test_statistics_use_the_existing_queue_scope_and_bounded_state_queries(): void
@@ -376,6 +469,14 @@ class ProductSeoDescriptionQualityWorkflowTest extends TestCase
      */
     private function assertSeoFilterShows(string $state, Product $visible, array $records): void
     {
+        $recordIds = collect($records)->pluck('id');
+        $matchingIds = app(ProductSeoDescriptionQualityService::class)
+            ->applyStateQuery(Product::query()->whereKey($recordIds), $state)
+            ->pluck('id')
+            ->all();
+
+        $this->assertSame([$visible->id], $matchingIds, "Unexpected direct SQL result for state [{$state}].");
+
         Livewire::test(ListProductDataQualityQueue::class)
             ->filterTable('seo_description_quality_state', $state)
             ->assertCanSeeTableRecords([$visible])

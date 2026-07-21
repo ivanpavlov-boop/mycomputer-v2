@@ -381,10 +381,30 @@ final class ProductSeoDescriptionQualityService
             $expression = "REPLACE({$expression}, '{$token}', '')";
         }
 
-        foreach ([9, 10, 13, 160] as $character) {
+        foreach ([9, 10, 13] as $character) {
             $expression = "REPLACE({$expression}, CHAR({$character}), '')";
         }
 
+        foreach ([
+            ['hex' => 'C2A0', 'codepoint' => 160],
+            ['hex' => 'E2808B', 'codepoint' => 8203],
+        ] as $character) {
+            $unicodeCharacter = $this->unicodeCharacterSql(
+                $query,
+                $character['hex'],
+                $character['codepoint'],
+            );
+            $expression = "REPLACE({$expression}, {$unicodeCharacter}, '')";
+        }
+
         return "TRIM({$expression})";
+    }
+
+    private function unicodeCharacterSql(Builder $query, string $utf8Hex, int $codepoint): string
+    {
+        return match ($query->getQuery()->getConnection()->getDriverName()) {
+            'mysql', 'mariadb' => "CONVERT(0x{$utf8Hex} USING utf8mb4)",
+            default => "CHAR({$codepoint})",
+        };
     }
 }
