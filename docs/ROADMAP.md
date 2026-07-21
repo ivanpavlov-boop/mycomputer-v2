@@ -119,7 +119,7 @@ Manual selected UPDATE price/stock sync is implemented behind `CATALOG_SYNC_UPDA
   AI/NLP analysis, supplier-content use, inline or bulk content mutation,
   workflow gate, public-visibility change, public-SEO change or Catalog Sync
   change. Semantic language correctness remains a manual editorial concern.
-- Product attributes are catalog-owned internal definitions. Category Attribute Sets can assign existing attributes to existing categories, admins can manually maintain individual product values from Product edit pages, Product Specification Data Quality reports missing important category specs without mutating data, the legacy reconciliation command can copy safe values into existing category-assigned targets one explicit product at a time, reconciled legacy values are marked read-only in admin while staying visible, the CPU template command can explicitly prepare CPU attributes/options/category assignments without product values, the category template coverage audit can report direct/inherited/missing template coverage without an apply mode, supplier category mappings can prepare pending-review taxonomy records without applying them to products, multi-supplier discovery can report staging/category/identifier overlap data without any apply mode, supplier import capability audit can report feed/driver/schedule readiness without fetching feeds, dispatching jobs, or exposing secrets, supplier configuration cleanup can disable only unsafe supplier schedules by explicit apply, the next supplier staging import preview can parse local XML/CSV/JSON samples without writes or remote feed access, the controlled ASBIS staging import can write only ASBIS `supplier_products` rows after explicit dry-run-first confirmation, and the ASBIS dual-feed preview can join local ProductList/PriceAvail files without writes or remote feed access. Supplier attribute mapping and frontend filters are not enabled yet.
+- Product attributes are catalog-owned internal definitions. Category Attribute Sets can assign existing attributes to existing categories, admins can manually maintain individual product values from Product edit pages, Product Specification Data Quality reports missing important category specs without mutating data, the legacy reconciliation command can copy safe values into existing category-assigned targets one explicit product at a time, reconciled legacy values are marked read-only in admin while staying visible, the CPU template command can explicitly prepare CPU attributes/options/category assignments without product values, the category template coverage audit can report direct/inherited/missing template coverage without an apply mode, supplier category mappings can prepare pending-review taxonomy records without applying them to products, multi-supplier discovery can report staging/category/identifier overlap data without any apply mode, supplier import capability audit can report feed/driver/schedule readiness without fetching feeds, dispatching jobs, or exposing secrets, supplier configuration cleanup can disable only unsafe supplier schedules by explicit apply, the next supplier staging import preview can parse local XML/CSV/JSON samples without writes or remote feed access, the controlled ASBIS staging import can write only ASBIS `supplier_products` rows after explicit dry-run-first confirmation, and the ASBIS dual-feed preview can join local ProductList/PriceAvail files without writes or remote feed access. Phase 9C.10 exposes only approved catalog-owned values as read-only storefront filters; supplier attribute mapping remains disabled.
 
 ## Next Supplier Sequence
 
@@ -233,7 +233,26 @@ not used, and legacy `products.specifications` is not newly exposed.
 The presentation remains read-only and does not mutate Products, Categories,
 templates, attributes, values or `supplier_products`. It changes no Product
 Workflow, public-visibility, supplier import or Catalog Sync behavior. Phase
-9C.10 frontend attribute filters remains separate and unimplemented.
+9C.9 final manual staging verification with a populated published Product remains
+pending and is not claimed complete.
+
+Phase 9C.10 Frontend Attribute Filters is complete locally. Existing Product and
+Category Product listing responses now include useful filter metadata for active,
+visible and explicitly filterable select, multiselect, boolean and numeric catalog
+attributes from effective direct or inherited Category templates. Options and
+ranges come only from publicly visible Products with manual catalog-owned values;
+supplier data and internal quality/template metadata remain isolated.
+
+The typed URL contract uses stable attribute codes and option slugs, OR semantics
+within one attribute, AND semantics across attributes, and inclusive numeric
+bounds. Nuxt keeps the URL as the SSR-safe source of truth and provides responsive
+desktop/mobile controls, removable Bulgarian chips, pagination reset and safe
+empty/error recovery. Existing Category, Brand, price, availability, search,
+sorting and pagination behavior remains in place. Per-option counts are omitted
+until accurate self-excluding counts can be provided without an unbounded query
+design. No Product, Category, template, attribute, value or supplier record is
+mutated, and no sitemap/feed, Product Workflow, public-visibility, supplier import
+or Catalog Sync behavior changes.
 
 ## Next
 
@@ -252,7 +271,7 @@ Workflow, public-visibility, supplier import or Catalog Sync behavior. Phase
 6. Phase 9C.6.6 Multi-Supplier Category Mapping Review.
 7. Phase 9C.6.7 Multi-Supplier Identifier Overlap Review.
 8. Phase 9C.7 Supplier Attribute Mapping Foundation.
-9. Phase 9C.10 Product attribute filter design after controlled data quality.
+9. Review filtered-URL indexing policy separately; Phase 9C.10 does not change it.
 10. Keep storefront specifications catalog-owned and read-only.
 11. Rollback tooling based on `catalog_sync_batches` and `catalog_sync_logs`.
 12. Keep feature flags locked down before broader sync work.

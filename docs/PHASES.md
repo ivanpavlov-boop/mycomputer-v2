@@ -243,7 +243,43 @@ semantic definition-list presentation is Bulgarian-first, responsive,
 accessible and uses normal Vue escaping. This phase creates no Product,
 attribute, value or Category-template writes, changes no Product Workflow or
 public visibility rule, and changes no Catalog Sync behavior. Phase 9C.10
-frontend attribute filters remains separate and unimplemented.
+frontend attribute filters remains separate. Final manual Phase 9C.9 staging
+verification with a published Product that has a populated effective Category
+template is still pending and is not completed by Phase 9C.10.
+
+## Phase 9C.10 Scope
+
+The existing public Product and Category Product listings now expose optional,
+read-only attribute filter metadata derived only from publicly visible Products,
+manual catalog-owned Product attribute values and each Product's effective
+direct or inherited Category template. An attribute must be active, visible and
+explicitly filterable on both its definition and effective Category assignment.
+The initial supported types are select, multiselect, boolean, number and decimal;
+free text, JSON and other unbounded or unsupported types are omitted.
+
+The stable query contract uses catalog attribute codes and option slugs:
+`attribute_filters[ram][]=16-gb`, `attribute_filters[wifi][]=yes` and
+`attribute_filters[weight][min]=1`. Multiple values for one attribute use OR;
+different attributes use AND; numeric bounds are inclusive. Unknown attributes,
+options, operators, malformed structures and inverted numeric ranges are rejected
+without accepting arbitrary columns, operators or JSON paths. Selection and
+metadata generation preserve the existing Category, Brand, price, availability,
+search, sorting, pagination and public-visibility behavior.
+
+Nuxt reads selected filters from the URL during SSR, sends them in the existing
+listing request, and preserves them across reload, sorting, pagination and browser
+navigation. Desktop and mobile controls, removable Bulgarian chips, group/all
+clearing and empty/error recovery use the existing responsive storefront. Filter
+changes reset only pagination. Filter labels and values use normal escaped Vue
+interpolation. Per-option counts are intentionally omitted in this phase because
+accurate self-excluding counts were not required for the bounded implementation;
+the UI displays counts only when a future API supplies accurate values.
+
+Filter evaluation performs no writes and creates no persistent facet cache. It
+does not use supplier attributes, `supplier_products`, source payloads, internal
+quality/template metadata or supplier metadata. It does not mutate Products,
+Categories, templates, attributes or values, change Product Workflow, public
+visibility, sitemap/feed/canonical policy, supplier import or Catalog Sync.
 
 ## Phase 9C.6.5A and 9C.6.5B Implemented Scope
 
@@ -281,7 +317,7 @@ No supplier #2 has been selected, profiled, or imported under these phases.
 - Maintain product workflow and quality flags as admin/content controls, not supplier sync expansion.
 - Add multilingual docs/config/schema without changing catalog sync execution behavior.
 - Use the Product Data Quality Queue for read-only enrichment triage; corrections still happen through existing product edit workflows.
-- Maintain Product Attributes as an internal catalog-owned foundation; supplier attribute mapping and frontend filters require later explicit phases.
+- Maintain Product Attributes as an internal catalog-owned foundation. Phase 9C.10 permits only read-only storefront filters over approved catalog-owned values; supplier attribute mapping still requires a later explicit phase.
 - Maintain Category Attribute Sets as controlled category-to-attribute assignment rules; they must not populate product values or expose storefront filters by themselves.
 - Manage individual product attribute values manually from Product edit pages without auto-filling existing products or syncing supplier XML attributes.
 - Use category-assigned attributes as ready Product edit specification fields while keeping empty fields non-mutating and required flags visual only.

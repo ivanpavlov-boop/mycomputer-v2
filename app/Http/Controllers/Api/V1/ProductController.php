@@ -7,18 +7,30 @@ use App\Http\Requests\Api\V1\ProductIndexRequest;
 use App\Http\Resources\ProductCardResource;
 use App\Http\Resources\ProductDetailResource;
 use App\Models\Product;
+use App\Services\Products\PublicProductAttributeFilterService;
 use App\Support\Api\ProductQueryFilters;
+use App\Support\Localization\Locales;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
 class ProductController extends Controller
 {
-    public function index(ProductIndexRequest $request, ProductQueryFilters $filters): AnonymousResourceCollection
-    {
-        $query = $filters->apply($filters->publicQuery(), $request->validated());
+    public function index(
+        ProductIndexRequest $request,
+        ProductQueryFilters $filters,
+        PublicProductAttributeFilterService $attributeFilters,
+    ): AnonymousResourceCollection {
+        $validated = $request->validated();
+        $selectedAttributes = $validated['attribute_filters'] ?? [];
+        $locale = Locales::resolveApiRequest($request);
+        $query = $filters->apply($filters->publicQuery(), $validated);
+        $filterMetadata = $attributeFilters->describe($query, $selectedAttributes, $locale);
+        $attributeFilters->apply($query, $selectedAttributes, $locale);
+        $paginator = $filters
+            ->sort($query, $validated['sort'] ?? null)
+            ->paginate($filters->perPage($validated))
+            ->appends($request->query());
 
-        return ProductCardResource::collection(
-            $filters->sort($query, $request->validated('sort'))->paginate($filters->perPage($request->validated())),
-        );
+        return ProductCardResource::collection($paginator)->additional($filterMetadata);
     }
 
     public function show(string $slug): ProductDetailResource

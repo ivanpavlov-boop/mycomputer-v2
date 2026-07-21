@@ -7,6 +7,36 @@ export interface ApiCollection<T> {
     per_page: number
     total: number
   }
+  filters?: PublicProductAttributeFilter[]
+  active_filters?: PublicProductActiveAttributeFilter[]
+}
+
+export interface PublicProductAttributeOption {
+  key: string
+  label: string
+  count?: number
+}
+
+export interface PublicProductAttributeFilter {
+  key: string
+  label: string
+  type: 'select' | 'multiselect' | 'boolean' | 'number_range'
+  position: number
+  options?: PublicProductAttributeOption[]
+  unit?: string | null
+  min?: number
+  max?: number
+  step?: number
+}
+
+export interface PublicProductActiveAttributeFilter {
+  key: string
+  label: string
+  type: 'select' | 'multiselect' | 'boolean' | 'number_range'
+  values?: PublicProductAttributeOption[]
+  unit?: string | null
+  min?: number | null
+  max?: number | null
 }
 
 export interface Category {

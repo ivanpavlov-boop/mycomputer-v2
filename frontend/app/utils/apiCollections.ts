@@ -1,7 +1,11 @@
+import type { PublicProductActiveAttributeFilter, PublicProductAttributeFilter } from '../types/api'
+
 export interface ApiDataCollection<T> {
   data?: T[] | null
   links?: Record<string, unknown> | unknown[] | null
   meta?: ApiCollectionMeta | null
+  filters?: PublicProductAttributeFilter[] | null
+  active_filters?: PublicProductActiveAttributeFilter[] | null
 }
 
 export interface ApiDataResource<T> {
@@ -20,6 +24,8 @@ export interface NormalizedApiCollection<T> {
   data: T[]
   links: Record<string, unknown>
   meta?: ApiCollectionMeta
+  filters: PublicProductAttributeFilter[]
+  active_filters: PublicProductActiveAttributeFilter[]
 }
 
 export function collectionData<T>(response: ApiDataCollection<T> | T[] | null | undefined): T[] {
@@ -31,6 +37,8 @@ export function resourceCollection<T>(response: ApiDataCollection<T> | T[] | nul
     return {
       data: response,
       links: {},
+      filters: [],
+      active_filters: [],
     }
   }
 
@@ -42,6 +50,8 @@ export function resourceCollection<T>(response: ApiDataCollection<T> | T[] | nul
     data: Array.isArray(response.data) ? response.data : [],
     links: plainObject(response.links) ? response.links : {},
     meta: plainObject(response.meta) ? normalizeMeta(response.meta) : undefined,
+    filters: Array.isArray(response.filters) ? response.filters : [],
+    active_filters: Array.isArray(response.active_filters) ? response.active_filters : [],
   }
 }
 
@@ -65,6 +75,8 @@ function emptyCollection<T>(): NormalizedApiCollection<T> {
   return {
     data: [],
     links: {},
+    filters: [],
+    active_filters: [],
   }
 }
 
