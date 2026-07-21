@@ -219,8 +219,21 @@ Product specification quality, queue filters/counts, Category admin coverage
 and the Product edit summary now share one read-only inheritance and validation
 path. The phase adds no automatic remediation, inline assignment, workflow
 gate, Product or supplier mutation, migration, public-visibility change or
-Catalog Sync behavior change. Storefront specification presentation and later
-attribute filtering remain separate future work.
+Catalog Sync behavior change.
+
+Phase 9C.9 Storefront Specification Display is complete locally. The public
+Product detail response and Nuxt Characteristics tab now present only valid,
+non-empty, catalog-owned values from the effective direct or inherited Category
+template. Group and item ordering is deterministic; labels are Bulgarian-first;
+boolean, numeric, select, multiselect and unit-bearing values are formatted for
+customers. Empty Characteristics tabs are hidden. Internal quality/template,
+workflow, audit and supplier metadata is not public, supplier-derived values are
+not used, and legacy `products.specifications` is not newly exposed.
+
+The presentation remains read-only and does not mutate Products, Categories,
+templates, attributes, values or `supplier_products`. It changes no Product
+Workflow, public-visibility, supplier import or Catalog Sync behavior. Phase
+9C.10 frontend attribute filters remains separate and unimplemented.
 
 ## Next
 
@@ -239,8 +252,8 @@ attribute filtering remain separate future work.
 6. Phase 9C.6.6 Multi-Supplier Category Mapping Review.
 7. Phase 9C.6.7 Multi-Supplier Identifier Overlap Review.
 8. Phase 9C.7 Supplier Attribute Mapping Foundation.
-9. Storefront specification display and later attribute filters.
-10. Product attribute filter design after controlled data quality.
+9. Phase 9C.10 Product attribute filter design after controlled data quality.
+10. Keep storefront specifications catalog-owned and read-only.
 11. Rollback tooling based on `catalog_sync_batches` and `catalog_sync_logs`.
 12. Keep feature flags locked down before broader sync work.
 13. Conflict/manual mapping workflow.

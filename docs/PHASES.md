@@ -51,6 +51,7 @@ Phase 8 manual selected UPDATE price/stock sync has been implemented behind a fe
 | Phase 9C.5.4 | Category specification template coverage plan | Complete |
 | Phase 9C.5.5 | Internal taxonomy and supplier category mapping foundation | Complete |
 | Phase 9C.5.6 | Supplier category mapping review workflow | Complete |
+| Phase 9C.9 | Storefront specification display | Complete locally; read-only Product detail presentation of valid catalog-owned values from the effective Category template. |
 | Phase 9C.6 | Multi-supplier import discovery foundation | Complete |
 | Phase 9C.6.1 | Supplier Import Capability Audit | Complete |
 | Phase 9C.6.2 | Supplier Configuration Safety Cleanup | Complete |
@@ -107,7 +108,6 @@ Phase 8 manual selected UPDATE price/stock sync has been implemented behind a fe
 | Phase 9C.6.7 | Multi-Supplier Identifier Overlap Review | Review exact and possible overlaps before future offer grouping. |
 | Phase 9C.7 | Supplier Attribute Mapping Foundation | Preview/planning foundation only until a later explicit approval/write phase. |
 | Phase 9C.8 | Product specification data quality polish | Improve admin ergonomics after real queue usage. |
-| Phase 9C.9 | Storefront specification display | Display catalog-owned specs only after controlled data quality. |
 | Phase 9C.10 | Frontend attribute filters | Only after controlled data quality and approved product values. |
 | Phase 9 | Rollback support | Required before broad writes. |
 | Phase 10 | Manual Sync All eligible CREATE | Later, after stronger audit controls. |
@@ -219,6 +219,31 @@ Products, categories, templates, attributes, values, quality flags or supplier
 records. It does not block Product saves or workflow transitions, change public
 visibility, import images, overwrite category or attribute ownership, or alter
 supplier import or Catalog Sync behavior.
+
+## Phase 9C.9 Scope
+
+The public Product detail API now presents grouped specifications from
+catalog-owned `product_attribute_values` only. It reuses the shared effective
+Category-template resolver and established Product specification value
+validation semantics, including direct/inherited template precedence and
+duplicate resolution. Only active, visible, valid and non-empty manual catalog
+values are displayed. Missing, malformed, out-of-template, inactive,
+supplier-derived and legacy reference-only values are omitted.
+
+The Product detail response exposes deterministic customer-facing groups and
+items with localized labels and formatted text, numeric, boolean, select,
+multiselect, JSON-backed and unit-bearing values. It does not expose internal
+quality states, required/recommended flags, template source, supplier metadata,
+workflow data, audit data or raw option IDs. Legacy `products.specifications`
+remains unchanged and is not added to the public Product detail contract.
+
+Nuxt uses the existing Product detail request and Description/Characteristics
+tabs. Characteristics is hidden when no displayable values exist. The new
+semantic definition-list presentation is Bulgarian-first, responsive,
+accessible and uses normal Vue escaping. This phase creates no Product,
+attribute, value or Category-template writes, changes no Product Workflow or
+public visibility rule, and changes no Catalog Sync behavior. Phase 9C.10
+frontend attribute filters remains separate and unimplemented.
 
 ## Phase 9C.6.5A and 9C.6.5B Implemented Scope
 

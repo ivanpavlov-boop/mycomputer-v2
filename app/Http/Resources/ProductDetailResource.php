@@ -4,6 +4,7 @@ namespace App\Http\Resources;
 
 use App\Models\Product;
 use App\Services\Availability\AvailabilityStatusService;
+use App\Services\Products\PublicProductSpecificationService;
 use App\Services\Reviews\ReviewStatsService;
 use App\Support\Localization\Locales;
 use App\Support\Seo\HreflangLinks;
@@ -17,6 +18,7 @@ class ProductDetailResource extends JsonResource
         $reviewSummary = app(ReviewStatsService::class)->summary($this->resource);
         $availability = app(AvailabilityStatusService::class);
         $locale = Locales::fromRequest($request);
+        $specificationGroups = app(PublicProductSpecificationService::class)->groups($this->resource, $locale);
 
         return [
             'id' => $this->id,
@@ -60,7 +62,8 @@ class ProductDetailResource extends JsonResource
             'brand' => BrandResource::make($this->whenLoaded('brand')),
             'category' => CategoryResource::make($this->whenLoaded('category')),
             'images' => ProductImageResource::collection($this->whenLoaded('images')),
-            'attributes' => $this->groupedAttributes(),
+            'attributes' => $this->legacyAttributeGroups($specificationGroups),
+            'specification_groups' => $specificationGroups,
             'related_products' => ProductCardResource::collection($this->whenLoaded('relatedProducts')),
             'accessory_products' => ProductCardResource::collection($this->whenLoaded('accessoryProducts')),
             'seo' => [
@@ -110,20 +113,34 @@ class ProductDetailResource extends JsonResource
         ];
     }
 
-    private function groupedAttributes(): array
+    /**
+     * Keep the existing detail-only attributes field as a safe compatibility
+     * projection while specification_groups becomes the public presentation contract.
+     *
+     * @param  array<int, array<string, mixed>>  $groups
+     * @return array<int, array<string, mixed>>
+     */
+    private function legacyAttributeGroups(array $groups): array
     {
-        if (! $this->relationLoaded('attributes')) {
-            return [];
-        }
-
-        return $this->attributes
-            ->groupBy(fn ($assignment) => $assignment->attribute?->group?->slug ?? 'general')
-            ->map(fn ($assignments) => [
+        return collect($groups)
+            ->map(fn (array $group): array => [
                 'group' => [
-                    'name' => $assignments->first()?->attribute?->group?->name ?? 'General',
-                    'slug' => $assignments->first()?->attribute?->group?->slug ?? 'general',
+                    'name' => $group['label'],
+                    'slug' => $group['key'],
                 ],
-                'attributes' => ProductAttributeResource::collection($assignments)->resolve(),
+                'attributes' => collect($group['items'])
+                    ->map(fn (array $item): array => [
+                        'attribute' => [
+                            'name' => $item['label'],
+                            'slug' => $item['key'],
+                            'unit' => null,
+                        ],
+                        'value' => [
+                            'value' => $item['display_value'],
+                        ],
+                    ])
+                    ->values()
+                    ->all(),
             ])
             ->values()
             ->all();

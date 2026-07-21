@@ -28,13 +28,10 @@ class ProductController extends Controller
             ->where('slug', $slug)
             ->with([
                 'brand',
-                'category',
+                'category.parent',
                 'images',
                 'availabilityStatus',
-                'attributes.attribute.group',
-                'attributes.value',
-                'attributes.canonicalAttribute',
-                'attributes.canonicalAttributeValue',
+                'attributeValues.attribute.group',
                 'relatedProducts' => fn ($query) => $query->published()->with(['brand', 'category', 'images', 'availabilityStatus']),
                 'accessoryProducts' => fn ($query) => $query->published()->with(['brand', 'category', 'images', 'availabilityStatus']),
             ])

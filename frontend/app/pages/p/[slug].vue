@@ -58,7 +58,10 @@
       </section>
 
       <section class="container-page mt-10">
-        <ProductTabs :description="product.localized?.description || product.description" :attributes="product.attributes || []" />
+        <ProductTabs
+          :description="product.localized?.description || product.description"
+          :specification-groups="product.specification_groups || []"
+        />
       </section>
 
       <ProductRelatedProducts :products="product.related_products || []" />
