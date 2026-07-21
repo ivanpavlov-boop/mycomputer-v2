@@ -7,6 +7,8 @@ use App\Filament\Resources\Products\ProductResource;
 use App\Models\Product;
 use App\Models\ProductQualityFlag;
 use App\Models\User;
+use App\Services\Products\ProductCategoryBrandQualityResult;
+use App\Services\Products\ProductCategoryBrandQualityService;
 use App\Services\Products\ProductDataQualityScanner;
 use BackedEnum;
 use Filament\Actions\Action;
@@ -44,11 +46,22 @@ class ProductDataQualityQueueResource extends Resource
     public static function table(Table $table): Table
     {
         $scanner = app(ProductDataQualityScanner::class);
+        $categoryBrandQuality = app(ProductCategoryBrandQualityService::class);
 
         return $table
             ->modifyQueryUsing(fn (Builder $query): Builder => $scanner
                 ->applyQueueScope($query)
-                ->with(['thumbnailImage', 'category', 'brand', 'assignedTo', 'images', 'attributes', 'activeQualityFlagAssignments.flag'])
+                ->with([
+                    'thumbnailImage',
+                    'category' => fn ($query) => $query
+                        ->withTrashed()
+                        ->with(['parent' => fn ($query) => $query->withTrashed()]),
+                    'brand' => fn ($query) => $query->withTrashed(),
+                    'assignedTo',
+                    'images',
+                    'attributes',
+                    'activeQualityFlagAssignments.flag',
+                ])
                 ->withCount('activeQualityFlagAssignments'))
             ->defaultSort('created_at', 'desc')
             ->defaultSortOptionLabel('Най-нови първо')
@@ -102,8 +115,37 @@ class ProductDataQualityQueueResource extends Resource
                 TextColumn::make('stock_status')->label('Статус на наличност')->badge()->sortable()->toggleable(),
                 TextColumn::make('price')->label('Цена')->money(Product::CATALOG_CURRENCY)->sortable(),
                 TextColumn::make('quantity')->label('Количество')->sortable(),
-                TextColumn::make('category.name')->label('Категория')->sortable()->toggleable(),
-                TextColumn::make('brand.name')->label('Бранд')->sortable()->toggleable(),
+                TextColumn::make('category.name')
+                    ->label('Категория')
+                    ->state(fn (Product $record): string => $categoryBrandQuality->evaluate($record)->categoryDisplayLabel)
+                    ->badge(fn (Product $record): bool => $categoryBrandQuality->evaluate($record)->isCategoryMissing())
+                    ->color(fn (Product $record): string => match (true) {
+                        $categoryBrandQuality->evaluate($record)->isCategoryMissing() => 'danger',
+                        $categoryBrandQuality->evaluate($record)->categoryWarning() !== null => 'warning',
+                        default => 'gray',
+                    })
+                    ->description(fn (Product $record): ?string => $categoryBrandQuality->evaluate($record)->categoryWarning())
+                    ->tooltip(fn (Product $record): string => $categoryBrandQuality->evaluate($record)->categoryDisplayLabel)
+                    ->sortable()
+                    ->toggleable(),
+                TextColumn::make('brand.name')
+                    ->label('Марка')
+                    ->state(fn (Product $record): string => $categoryBrandQuality->evaluate($record)->brandDisplayLabel)
+                    ->badge(fn (Product $record): bool => $categoryBrandQuality->evaluate($record)->isBrandMissing())
+                    ->color(fn (Product $record): string => match (true) {
+                        $categoryBrandQuality->evaluate($record)->isBrandMissing() => 'danger',
+                        $categoryBrandQuality->evaluate($record)->brandWarning() !== null => 'warning',
+                        default => 'gray',
+                    })
+                    ->description(fn (Product $record): ?string => $categoryBrandQuality->evaluate($record)->brandWarning())
+                    ->tooltip(fn (Product $record): string => $categoryBrandQuality->evaluate($record)->brandDisplayLabel)
+                    ->sortable()
+                    ->toggleable(),
+                TextColumn::make('category_brand_quality')
+                    ->label('Категория / марка')
+                    ->state(fn (Product $record): string => $categoryBrandQuality->evaluate($record)->stateLabel)
+                    ->badge()
+                    ->color(fn (Product $record): string => $categoryBrandQuality->evaluate($record)->stateColor),
                 TextColumn::make('active_quality_flag_assignments_count')
                     ->label('Брой флагове')
                     ->badge()
@@ -134,6 +176,11 @@ class ProductDataQualityQueueResource extends Resource
                     ->label('Тип проблем')
                     ->options(self::issueOptions())
                     ->query(fn (Builder $query, array $data): Builder => $scanner->applyIssueQuery($query, $data['value'] ?? null)),
+                SelectFilter::make('category_brand_state')
+                    ->label('Състояние категория / марка')
+                    ->placeholder('Всички')
+                    ->options(ProductCategoryBrandQualityResult::options())
+                    ->query(fn (Builder $query, array $data): Builder => $categoryBrandQuality->applyStateQuery($query, $data['value'] ?? null)),
                 SelectFilter::make('quality_flag')
                     ->label('Флаг за качество')
                     ->options(fn (): array => ProductQualityFlag::query()->active()->ordered()->pluck('label_bg', 'id')->all())
@@ -178,8 +225,14 @@ class ProductDataQualityQueueResource extends Resource
                 SelectFilter::make('stock_status')
                     ->label('Статус на наличност')
                     ->options(Product::stockStatusOptions()),
-                SelectFilter::make('category')->label('Категория')->relationship('category', 'name')->searchable()->preload(),
-                SelectFilter::make('brand')->label('Бранд')->relationship('brand', 'name')->searchable()->preload(),
+                SelectFilter::make('category')
+                    ->label('Конкретна категория')
+                    ->relationship('category', 'name', fn (Builder $query): Builder => $query->withTrashed())
+                    ->searchable(),
+                SelectFilter::make('brand')
+                    ->label('Конкретна марка')
+                    ->relationship('brand', 'name', fn (Builder $query): Builder => $query->withTrashed())
+                    ->searchable(),
                 SelectFilter::make('assigned_to')->label('Отговорник')->relationship('assignedTo', 'name')->searchable()->preload(),
                 SelectFilter::make('responsible_role')
                     ->label('Отговорна роля')
@@ -221,28 +274,25 @@ class ProductDataQualityQueueResource extends Resource
                             ->whereNotNull('meta_title_translations->en')
                             ->where('meta_title_translations->en', '!=', ''),
                     ),
-                TernaryFilter::make('missing_category')
-                    ->label('Липсва категория')
-                    ->queries(
-                        true: fn (Builder $query): Builder => $scanner->applyIssueQuery($query, ProductDataQualityScanner::ISSUE_MISSING_CATEGORY),
-                        false: fn (Builder $query): Builder => $query->whereNotNull('category_id'),
-                    ),
             ])
             ->recordActions([
                 Action::make('editProduct')
                     ->label('Редакция на продукт')
                     ->icon(Heroicon::OutlinedPencilSquare)
-                    ->url(fn (Product $record): string => ProductResource::getUrl('edit', ['record' => $record])),
+                    ->url(fn (Product $record): string => ProductResource::getUrl('edit', ['record' => $record]))
+                    ->visible(fn (Product $record): bool => ProductResource::canEdit($record)),
                 Action::make('openProduct')
                     ->label('Отвори в нов таб')
                     ->icon(Heroicon::OutlinedArrowTopRightOnSquare)
                     ->url(fn (Product $record): string => ProductResource::getUrl('edit', ['record' => $record]))
+                    ->visible(fn (Product $record): bool => ProductResource::canEdit($record))
                     ->openUrlInNewTab(),
                 Action::make('reviewFlags')
                     ->label('Преглед на флагове')
                     ->icon(Heroicon::OutlinedFlag)
                     ->url(fn (Product $record): string => ProductResource::getUrl('edit', ['record' => $record]))
-                    ->visible(fn (Product $record): bool => (int) ($record->active_quality_flag_assignments_count ?? 0) > 0),
+                    ->visible(fn (Product $record): bool => ProductResource::canEdit($record)
+                        && (int) ($record->active_quality_flag_assignments_count ?? 0) > 0),
             ])
             ->emptyStateHeading('Няма продукти за преглед')
             ->emptyStateDescription('Когато продукт има липсваща информация или активен флаг за качество, ще се появи тук за ръчна проверка.')

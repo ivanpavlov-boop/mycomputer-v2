@@ -39,6 +39,7 @@ final class ProductDataQualitySummaryService
     public function __construct(
         private readonly ProductDataQualityScanner $scanner,
         private readonly ProductSpecificationQualityService $specificationQuality,
+        private readonly ProductCategoryBrandQualityService $categoryBrandQuality,
     ) {}
 
     public function summarize(Product $product): ProductDataQualitySummaryResult
@@ -67,6 +68,7 @@ final class ProductDataQualitySummaryService
 
         $specificationResult = $this->specificationQuality->evaluate($product);
         $specificationLevel = $this->specificationLevel($specificationResult);
+        $categoryBrandResult = $this->categoryBrandQuality->evaluate($product);
         $manualFlags = $product->activeQualityFlagAssignments
             ->filter(fn ($assignment): bool => (bool) $assignment->flag?->is_active)
             ->map(function ($assignment): array {
@@ -90,6 +92,7 @@ final class ProductDataQualitySummaryService
 
         $levels = collect($coreIssues)->pluck('level')
             ->when($specificationLevel !== null, fn ($levels) => $levels->push($specificationLevel))
+            ->merge(array_fill(0, count($categoryBrandResult->warnings), 'warning'))
             ->merge(collect($manualFlags)->pluck('level'));
 
         $criticalCount = $levels->filter(fn (string $level): bool => $level === 'critical')->count();
@@ -108,10 +111,11 @@ final class ProductDataQualitySummaryService
             warningIssueCount: $warningCount,
             recommendationIssueCount: $recommendationCount,
             specificationResult: $specificationResult,
+            categoryBrandQuality: $categoryBrandResult,
             manualFlags: $manualFlags,
             activeManualQualityFlagLabels: collect($manualFlags)->pluck('label')->all(),
             totalActionableIssueCount: $totalCount,
-            nextSteps: $this->nextSteps($coreIssues, $specificationResult, $manualFlags),
+            nextSteps: $this->nextSteps($coreIssues, $specificationResult, $categoryBrandResult, $manualFlags),
         );
     }
 
@@ -187,6 +191,7 @@ final class ProductDataQualitySummaryService
     private function nextSteps(
         array $coreIssues,
         ProductSpecificationQualityResult $specificationResult,
+        ProductCategoryBrandQualityResult $categoryBrandResult,
         array $manualFlags,
     ): array {
         $steps = collect($coreIssues)->map(fn (array $issue): string => match ($issue['code']) {
@@ -205,6 +210,14 @@ final class ProductDataQualitySummaryService
                 ProductSpecificationQualityResult::STATUS_NO_CATEGORY_TEMPLATE => 'Прегледайте шаблона за характеристики на категорията',
                 default => 'Попълнете важните характеристики',
             });
+        }
+
+        if ($categoryBrandResult->categoryWarning() !== null) {
+            $steps->push('Прегледайте състоянието на зададената категория');
+        }
+
+        if ($categoryBrandResult->brandWarning() !== null) {
+            $steps->push('Прегледайте състоянието на зададената марка');
         }
 
         if ($manualFlags !== []) {
