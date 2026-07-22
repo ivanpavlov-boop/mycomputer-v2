@@ -54,6 +54,7 @@ Phase 8 manual selected UPDATE price/stock sync has been implemented behind a fe
 | Phase 9C.9 | Storefront specification display | Complete locally; read-only Product detail presentation of valid catalog-owned values from the effective Category template. |
 | Phase 9C.10 | Frontend attribute filters | Complete locally; read-only catalog-owned attribute filters with stable URL semantics. |
 | Phase 9C.10.1 | Configurable filter controls and range slider UX | Complete locally; per-Category controls plus scoped public price sliders without filtering-semantic changes. |
+| Phase 9C.10.2 | Preserve attribute filter facets during active price filtering | Complete locally; independent result, attribute-facet and price-facet scopes keep useful filters stable. |
 | Phase 9C.6 | Multi-supplier import discovery foundation | Complete |
 | Phase 9C.6.1 | Supplier Import Capability Audit | Complete |
 | Phase 9C.6.2 | Supplier Configuration Safety Cleanup | Complete |
@@ -311,6 +312,25 @@ supplier or `supplier_products` mutation. It adds no supplier-derived controls,
 persistent facet cache or dependency, and changes no Product Workflow, public
 visibility, sitemap/feed policy, supplier import or Catalog Sync behavior.
 Phase 9C.9 final manual staging verification remains pending.
+
+## Phase 9C.10.2 Scope
+
+Phase 9C.10.2 corrects the confirmed staging regression where applying
+`price_min` or `price_max` narrowed the Product results correctly but also
+collapsed otherwise useful attribute filter groups. Product, Category Product
+and Brand Product listings now use three explicit independent query scopes:
+the result scope applies all active filters, the attribute-facet scope excludes
+price bounds and active attribute selections, and the price-facet scope excludes
+only its own price bounds while retaining active attribute selections.
+
+Useful-filter eligibility remains unchanged and is evaluated against the
+unpriced attribute discovery scope. No per-option counts, persistent facet
+cache, search index or new API/URL contract was added. The hotfix performs no
+Product or supplier mutation, uses no supplier-derived values, and changes no
+Product Workflow, public visibility, supplier import or Catalog Sync behavior.
+Phase 9C.10.1 remains pending final staging completion until this hotfix is
+merged, deployed and manually verified. Phase 9C.9 manual staging verification
+remains separately pending.
 
 ## Phase 9C.6.5A and 9C.6.5B Implemented Scope
 
