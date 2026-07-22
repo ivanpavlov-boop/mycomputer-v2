@@ -274,6 +274,20 @@ changes no Product Workflow, public visibility, sitemap/feed, supplier import
 or Catalog Sync behavior. Phase 9C.9 final manual staging verification remains
 pending.
 
+Phase 9C.10.2 Preserve Attribute Filter Facets During Active Price Filtering is
+complete locally. It fixes the confirmed staging regression by separating the
+Product result, attribute-facet discovery and price-facet discovery scopes.
+Price bounds continue to narrow Product results, but no longer collapse useful
+attribute groups or options; active attribute filters still constrain Product
+results and price bounds without narrowing attribute discovery metadata.
+
+The API and URL contracts remain unchanged. The hotfix adds no option counts,
+cache, search indexing, Product or supplier mutation, supplier-derived filters,
+Product Workflow change, public-visibility change or Catalog Sync behavior
+change. Phase 9C.10.1 remains pending final staging completion until this
+hotfix is merged, deployed and manually verified. Phase 9C.9 final manual
+staging verification remains separately pending.
+
 ## Next
 
 1. Keep Phase 7.5 documentation lock current.

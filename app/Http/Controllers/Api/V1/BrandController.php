@@ -48,9 +48,12 @@ class BrandController extends Controller
         $selectedAttributes = $validated['attribute_filters'] ?? [];
         $locale = Locales::resolveApiRequest($request);
         $scope = $filters->publicQuery()->where('brand_id', $brand->id);
-        $query = $filters->apply(clone $scope, $validated);
-        $filterMetadata = $attributeFilters->describe($query, $selectedAttributes, $locale);
+        $attributeFacetInput = Arr::except($validated, ['price_min', 'price_max', 'attribute_filters']);
+        $attributeFacetScope = $filters->apply(clone $scope, $attributeFacetInput);
+        $filterMetadata = $attributeFilters->describe($attributeFacetScope, $selectedAttributes, $locale);
+        $query = $filters->apply(clone $scope, $attributeFacetInput);
         $attributeFilters->apply($query, $selectedAttributes, $locale);
+        $filters->apply($query, Arr::only($validated, ['price_min', 'price_max']));
         $priceScope = $filters->apply(clone $scope, Arr::except($validated, ['price_min', 'price_max']));
         $attributeFilters->apply($priceScope, $selectedAttributes, $locale);
         $filterMetadata += $priceFilters->describe($priceScope, $validated['price_min'] ?? null, $validated['price_max'] ?? null);
