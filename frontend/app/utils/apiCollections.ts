@@ -1,4 +1,4 @@
-import type { PublicProductActiveAttributeFilter, PublicProductAttributeFilter } from '../types/api'
+import type { PublicProductActiveAttributeFilter, PublicProductAttributeFilter, PublicProductPriceFilter } from '../types/api'
 
 export interface ApiDataCollection<T> {
   data?: T[] | null
@@ -6,6 +6,7 @@ export interface ApiDataCollection<T> {
   meta?: ApiCollectionMeta | null
   filters?: PublicProductAttributeFilter[] | null
   active_filters?: PublicProductActiveAttributeFilter[] | null
+  price_filter?: PublicProductPriceFilter | null
 }
 
 export interface ApiDataResource<T> {
@@ -26,6 +27,7 @@ export interface NormalizedApiCollection<T> {
   meta?: ApiCollectionMeta
   filters: PublicProductAttributeFilter[]
   active_filters: PublicProductActiveAttributeFilter[]
+  price_filter: PublicProductPriceFilter | null
 }
 
 export function collectionData<T>(response: ApiDataCollection<T> | T[] | null | undefined): T[] {
@@ -39,6 +41,7 @@ export function resourceCollection<T>(response: ApiDataCollection<T> | T[] | nul
       links: {},
       filters: [],
       active_filters: [],
+      price_filter: null,
     }
   }
 
@@ -52,6 +55,7 @@ export function resourceCollection<T>(response: ApiDataCollection<T> | T[] | nul
     meta: plainObject(response.meta) ? normalizeMeta(response.meta) : undefined,
     filters: Array.isArray(response.filters) ? response.filters : [],
     active_filters: Array.isArray(response.active_filters) ? response.active_filters : [],
+    price_filter: plainObject(response.price_filter) ? response.price_filter as unknown as PublicProductPriceFilter : null,
   }
 }
 
@@ -77,6 +81,7 @@ function emptyCollection<T>(): NormalizedApiCollection<T> {
     links: {},
     filters: [],
     active_filters: [],
+    price_filter: null,
   }
 }
 

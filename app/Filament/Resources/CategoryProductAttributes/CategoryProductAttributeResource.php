@@ -2,11 +2,13 @@
 
 namespace App\Filament\Resources\CategoryProductAttributes;
 
+use App\Enums\CategoryAttributeFilterControl;
 use App\Filament\Concerns\RequiresFilamentPermission;
 use App\Filament\Resources\CategoryProductAttributes\Pages\CreateCategoryProductAttribute;
 use App\Filament\Resources\CategoryProductAttributes\Pages\EditCategoryProductAttribute;
 use App\Filament\Resources\CategoryProductAttributes\Pages\ListCategoryProductAttributes;
 use App\Models\CategoryProductAttribute;
+use App\Models\ProductAttribute;
 use BackedEnum;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
@@ -17,6 +19,7 @@ use Filament\Forms\Components\Toggle;
 use Filament\Resources\Resource;
 use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Section;
+use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\IconColumn;
@@ -70,6 +73,7 @@ class CategoryProductAttributeResource extends Resource
                             ->relationship('attribute', 'name')
                             ->searchable()
                             ->preload()
+                            ->live()
                             ->required(),
                         TextInput::make('sort_order')
                             ->label('Ред на сортиране')
@@ -83,7 +87,7 @@ class CategoryProductAttributeResource extends Resource
                             ->default(false),
                         Toggle::make('is_filterable')
                             ->label('Филтър')
-                            ->helperText('Може да се използва по-късно във филтри за тази категория.')
+                            ->helperText('Разрешава характеристиката като публичен филтър за тази категория.')
                             ->default(false),
                         Toggle::make('is_visible_on_product')
                             ->label('Видима в продукта')
@@ -94,6 +98,17 @@ class CategoryProductAttributeResource extends Resource
                             ->helperText('Може да се използва по-късно в сравнение на продукти.')
                             ->default(false),
                     ]),
+                    Select::make('filter_control_type')
+                        ->label('Тип на публичния филтър')
+                        ->options(fn (Get $get): array => CategoryAttributeFilterControl::optionsForAttributeType(
+                            ProductAttribute::query()
+                                ->withTrashed()
+                                ->whereKey($get('product_attribute_id'))
+                                ->value('type'),
+                        ))
+                        ->default(CategoryAttributeFilterControl::Auto->value)
+                        ->required()
+                        ->helperText('Определя как характеристиката се показва като филтър само за тази категория. Директното правило на дъщерна категория има предимство пред наследеното.'),
                 ]),
         ]);
     }
@@ -108,6 +123,9 @@ class CategoryProductAttributeResource extends Resource
                 TextColumn::make('attribute.name')->label('Характеристика')->searchable()->sortable(),
                 IconColumn::make('is_required')->label('Задължителна')->boolean(),
                 IconColumn::make('is_filterable')->label('Филтър')->boolean(),
+                TextColumn::make('filter_control_type')
+                    ->label('Тип филтър')
+                    ->formatStateUsing(fn (CategoryProductAttribute $record): string => $record->filterControlDisplayLabel()),
                 IconColumn::make('is_visible_on_product')->label('Видима')->boolean(),
                 IconColumn::make('is_comparable')->label('Сравнима')->boolean(),
                 TextColumn::make('sort_order')->label('Подредба')->sortable(),
@@ -117,6 +135,7 @@ class CategoryProductAttributeResource extends Resource
                 SelectFilter::make('attribute')->label('Характеристика')->relationship('attribute', 'name')->searchable()->preload(),
                 TernaryFilter::make('is_required')->label('Задължителна'),
                 TernaryFilter::make('is_filterable')->label('Филтър'),
+                SelectFilter::make('filter_control_type')->label('Тип филтър')->options(CategoryAttributeFilterControl::options()),
                 TernaryFilter::make('is_visible_on_product')->label('Видима'),
                 TernaryFilter::make('is_comparable')->label('Сравнима'),
             ])

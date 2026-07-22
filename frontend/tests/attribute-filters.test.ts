@@ -9,6 +9,11 @@ import {
   parseAttributeFilterQuery,
   replaceAttributeFilter,
 } from '../app/utils/attributeFilters'
+import {
+  clearPriceFilters,
+  parsePriceFilterQuery,
+  replacePriceFilters,
+} from '../app/utils/priceFilters'
 
 const frontendRoot = resolve(__dirname, '..')
 
@@ -106,6 +111,7 @@ describe('storefront attribute filters', () => {
         key: 'ram',
         label: 'Оперативна памет',
         type: 'select',
+        control: 'options',
         position: 10,
         options: [{ key: '16-gb', label: '16 GB' }, { key: '32-gb', label: '32 GB' }],
       }],
@@ -115,18 +121,57 @@ describe('storefront attribute filters', () => {
         type: 'select',
         values: [{ key: '16-gb', label: '16 GB' }],
       }],
+      price_filter: {
+        key: 'price',
+        label: 'Цена',
+        control: 'range_slider',
+        currency: 'EUR',
+        min: 100,
+        max: 500,
+        step: 0.01,
+      },
     })
 
     expect(response.data).toHaveLength(1)
     expect(response.filters[0]?.key).toBe('ram')
     expect(response.active_filters[0]?.values?.[0]?.label).toBe('16 GB')
+    expect(response.price_filter?.control).toBe('range_slider')
+  })
+
+  it('updates and clears price only while preserving category search sort and attribute state', () => {
+    const current = {
+      category: 'laptops',
+      search: 'business',
+      sort: 'price_asc',
+      page: '4',
+      'attribute_filters[ram][]': '16-gb',
+      price_min: '100',
+      price_max: '900',
+    }
+
+    expect(parsePriceFilterQuery(current)).toEqual({ min: '100', max: '900' })
+    expect(replacePriceFilters(current, { min: '250', max: '750' })).toMatchObject({
+      category: 'laptops',
+      search: 'business',
+      sort: 'price_asc',
+      'attribute_filters[ram][]': '16-gb',
+      price_min: '250',
+      price_max: '750',
+    })
+    expect(replacePriceFilters(current, { min: '250', max: '750' })).not.toHaveProperty('page')
+    expect(clearPriceFilters(current)).toEqual({
+      category: 'laptops',
+      search: 'business',
+      sort: 'price_asc',
+      'attribute_filters[ram][]': '16-gb',
+    })
   })
 
   it('renders accessible desktop and mobile filter controls with Bulgarian labels', () => {
     const panel = source('app/components/catalog/AttributeFilterPanel.vue')
     const groups = source('app/components/catalog/AttributeFilterGroups.vue')
 
-    expect(panel).toContain('aria-label="Филтри по характеристики"')
+    expect(panel).toContain('aria-label="Филтри за каталога"')
     expect(panel).toContain('aria-haspopup="dialog"')
     expect(panel).toContain('role="dialog"')
     expect(panel).toContain('aria-modal="true"')
@@ -138,7 +183,9 @@ describe('storefront attribute filters', () => {
     expect(groups).toContain('<fieldset')
     expect(groups).toContain('<legend')
     expect(groups).toContain('type="checkbox"')
+    expect(groups).toContain('type="radio"')
     expect(groups).toContain('type="number"')
+    expect(groups).toContain("resolvedControl(filter) === 'range_slider'")
     expect(groups).toContain('Минимална стойност')
     expect(groups).toContain('Максимална стойност')
   })
@@ -171,6 +218,9 @@ describe('storefront attribute filters', () => {
     expect(page).toContain('replaceAttributeFilter(route.query, key, selection)')
     expect(page).toContain('clearAttributeFilters(route.query)')
     expect(page).toContain('CatalogAttributeFilterPanel')
+    expect(page).toContain('CatalogActivePriceFilter')
+    expect(page).toContain('replacePriceFilters(route.query, selection)')
+    expect(page).toContain('clearPriceFilters(route.query)')
     expect(page).toContain('CatalogActiveAttributeFilters')
     expect(page).toContain('CatalogProductGrid v-if="products.length"')
     expect(page).toContain('CatalogPagination :meta="catalogMeta"')
@@ -184,6 +234,8 @@ describe('storefront attribute filters', () => {
     expect(page).toContain('categories.products(slug.value, categoryProductQuery.value)')
     expect(page).toContain('attributeFilterApiQuery(route.query)')
     expect(page).toContain('CatalogAttributeFilterPanel')
+    expect(page).toContain("for (const key of ['price_min', 'price_max'] as const)")
+    expect(page).toContain('CatalogActivePriceFilter')
     expect(page).toContain('CatalogActiveAttributeFilters')
     expect(page).toContain('ProductGrid v-if="products.length"')
     expect(page).toContain('Pagination :meta="productsMeta"')
@@ -195,6 +247,9 @@ describe('storefront attribute filters', () => {
       source('app/components/catalog/AttributeFilterGroups.vue'),
       source('app/components/catalog/AttributeFilterPanel.vue'),
       source('app/components/catalog/ActiveAttributeFilters.vue'),
+      source('app/components/catalog/DualRangeSlider.vue'),
+      source('app/components/catalog/PriceFilterControl.vue'),
+      source('app/components/catalog/ActivePriceFilter.vue'),
       source('app/pages/catalog.vue'),
       source('app/pages/c/[slug].vue'),
     ].join('\n')
@@ -213,6 +268,8 @@ describe('storefront attribute filters', () => {
 
     expect(types).toContain('export interface PublicProductAttributeFilter')
     expect(types).toContain("type: 'select' | 'multiselect' | 'boolean' | 'number_range'")
+    expect(types).toContain("control: 'options' | 'yes_no' | 'range_slider' | 'min_max'")
+    expect(types).toContain('export interface PublicProductPriceFilter')
     expect(types).toContain('active_filters?: PublicProductActiveAttributeFilter[]')
     expect(types).not.toContain('template_source:')
     expect(types).not.toContain('missing_required:')

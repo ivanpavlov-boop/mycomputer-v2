@@ -52,6 +52,8 @@ Phase 8 manual selected UPDATE price/stock sync has been implemented behind a fe
 | Phase 9C.5.5 | Internal taxonomy and supplier category mapping foundation | Complete |
 | Phase 9C.5.6 | Supplier category mapping review workflow | Complete |
 | Phase 9C.9 | Storefront specification display | Complete locally; read-only Product detail presentation of valid catalog-owned values from the effective Category template. |
+| Phase 9C.10 | Frontend attribute filters | Complete locally; read-only catalog-owned attribute filters with stable URL semantics. |
+| Phase 9C.10.1 | Configurable filter controls and range slider UX | Complete locally; per-Category controls plus scoped public price sliders without filtering-semantic changes. |
 | Phase 9C.6 | Multi-supplier import discovery foundation | Complete |
 | Phase 9C.6.1 | Supplier Import Capability Audit | Complete |
 | Phase 9C.6.2 | Supplier Configuration Safety Cleanup | Complete |
@@ -108,7 +110,6 @@ Phase 8 manual selected UPDATE price/stock sync has been implemented behind a fe
 | Phase 9C.6.7 | Multi-Supplier Identifier Overlap Review | Review exact and possible overlaps before future offer grouping. |
 | Phase 9C.7 | Supplier Attribute Mapping Foundation | Preview/planning foundation only until a later explicit approval/write phase. |
 | Phase 9C.8 | Product specification data quality polish | Improve admin ergonomics after real queue usage. |
-| Phase 9C.10 | Frontend attribute filters | Only after controlled data quality and approved product values. |
 | Phase 9 | Rollback support | Required before broad writes. |
 | Phase 10 | Manual Sync All eligible CREATE | Later, after stronger audit controls. |
 | Phase 11 | Scheduled preview generation | Preview only before scheduled writes. |
@@ -280,6 +281,36 @@ does not use supplier attributes, `supplier_products`, source payloads, internal
 quality/template metadata or supplier metadata. It does not mutate Products,
 Categories, templates, attributes or values, change Product Workflow, public
 visibility, sitemap/feed/canonical policy, supplier import or Catalog Sync.
+
+## Phase 9C.10.1 Scope
+
+Category-to-Product-Attribute assignments now store one additive
+`filter_control_type` value: `auto`, `options`, `yes_no`, `range_slider` or
+`min_max`. Existing rows default to `auto`, preserving the Phase 9C.10 display:
+select and multiselect use options, boolean uses yes/no, and numeric attributes
+use min/max fields. Compatibility is enforced server-side and unsupported
+attribute types remain unavailable as public filters.
+
+The existing Category template resolver remains authoritative. Direct child
+assignments override inherited controls, while `is_filterable=false` still
+removes a filter. Category-specific listings use their effective assignment.
+For broad catalog scopes, matching controls are retained; a numeric mix of
+`range_slider` and `min_max` deterministically falls back to `min_max`; any
+other incompatible mix is omitted.
+
+The public API preserves semantic `type` values and the existing query keys,
+and adds only the presentation-level `control`. Nuxt renders escaped options,
+accessible yes/no choices, validated min/max inputs and a native dual-handle
+range slider. The public price slider uses the existing inclusive `price_min`
+and `price_max` semantics. Its bounds use only the current public endpoint
+scope, apply all non-price and attribute filters, and exclude only the active
+price limits. Price, attribute-group and price-only clear actions are explicit.
+
+This phase performs no Product, Product Attribute Value, Category template,
+supplier or `supplier_products` mutation. It adds no supplier-derived controls,
+persistent facet cache or dependency, and changes no Product Workflow, public
+visibility, sitemap/feed policy, supplier import or Catalog Sync behavior.
+Phase 9C.9 final manual staging verification remains pending.
 
 ## Phase 9C.6.5A and 9C.6.5B Implemented Scope
 

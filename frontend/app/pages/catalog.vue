@@ -39,17 +39,30 @@
         <UiBaseButton v-if="hasAttributeRouteFilters" variant="secondary" class="mt-4" @click="clearAllAttributeFilters">
           Изчисти филтрите по характеристики
         </UiBaseButton>
+        <UiBaseButton v-if="hasPriceRouteFilters" variant="secondary" class="mt-4 ml-2" @click="clearPriceFilter">
+          Изчисти ценовия филтър
+        </UiBaseButton>
       </div>
       <template v-else>
-        <div :class="attributeFilters.length ? 'lg:grid lg:grid-cols-[280px_minmax(0,1fr)] lg:gap-6' : ''">
+        <div :class="attributeFilters.length || priceFilter ? 'lg:grid lg:grid-cols-[280px_minmax(0,1fr)] lg:gap-6' : ''">
           <CatalogAttributeFilterPanel
             :filters="attributeFilters"
             :selection="attributeSelections"
-            :active-count="activeAttributeFilterCount"
+            :active-count="activeFilterCount"
+            :attribute-active-count="activeAttributeFilterCount"
+            :price-filter="priceFilter"
+            :price-selection="priceSelection"
             @change="setAttributeFilter"
-            @clear-all="clearAllAttributeFilters"
+            @clear-attributes="clearAllAttributeFilters"
+            @price-change="setPriceFilter"
+            @clear-price="clearPriceFilter"
           />
           <section class="min-w-0">
+            <CatalogActivePriceFilter
+              :filter="priceFilter"
+              :selection="priceSelection"
+              @clear="clearPriceFilter"
+            />
             <CatalogActiveAttributeFilters
               :filters="activeAttributeFilters"
               @remove="removeActiveAttributeFilter"
@@ -64,6 +77,9 @@
               <UiBaseButton v-if="hasAttributeRouteFilters" variant="secondary" @click="clearAllAttributeFilters">
                 Изчисти филтрите по характеристики
               </UiBaseButton>
+              <UiBaseButton v-if="hasPriceRouteFilters" variant="secondary" @click="clearPriceFilter">
+                Изчисти ценовия филтър
+              </UiBaseButton>
             </div>
             <CatalogPagination :meta="catalogMeta" @change="setPage" />
           </section>
@@ -76,6 +92,7 @@
 <script setup lang="ts">
 import type { ProductCard } from '~/types/api'
 import type { AttributeFilterSelection } from '~/utils/attributeFilters'
+import type { PriceFilterSelection } from '~/utils/priceFilters'
 import { paginatedResource } from '~/utils/apiCollections'
 import {
   attributeFilterApiQuery,
@@ -84,6 +101,12 @@ import {
   parseAttributeFilterQuery,
   replaceAttributeFilter,
 } from '~/utils/attributeFilters'
+import {
+  clearPriceFilters,
+  hasPriceFilters,
+  parsePriceFilterQuery,
+  replacePriceFilters,
+} from '~/utils/priceFilters'
 import { normalizeCatalogSort } from '~/utils/catalogSorts'
 import { positiveInteger, queryString, routeQueryValue } from '~/utils/routeQuery'
 
@@ -111,6 +134,8 @@ const hasSearch = computed(() => Boolean(activeSearch.value))
 const searchTerm = ref(activeSearch.value)
 const attributeSelections = computed(() => parseAttributeFilterQuery(route.query))
 const hasAttributeRouteFilters = computed(() => hasAttributeFilters(route.query))
+const priceSelection = computed(() => parsePriceFilterQuery(route.query))
+const hasPriceRouteFilters = computed(() => hasPriceFilters(route.query))
 
 const sort = computed({
   get: () => normalizeCatalogSort(route.query.sort),
@@ -159,10 +184,12 @@ const products = computed<ProductCard[]>(() => productsResponse.value?.data ?? [
 const catalogMeta = computed(() => productsResponse.value?.meta)
 const attributeFilters = computed(() => productsResponse.value?.filters ?? [])
 const activeAttributeFilters = computed(() => productsResponse.value?.active_filters ?? [])
+const priceFilter = computed(() => productsResponse.value?.price_filter ?? null)
 const activeAttributeFilterCount = computed(() => activeAttributeFilters.value.reduce(
   (count, filter) => count + (filter.values?.length || 1),
   0,
 ))
+const activeFilterCount = computed(() => activeAttributeFilterCount.value + (hasPriceRouteFilters.value ? 1 : 0))
 
 watch(activeSearch, (value) => {
   searchTerm.value = value
@@ -216,6 +243,14 @@ function removeActiveAttributeFilter(key: string, value?: string) {
 
 function clearAllAttributeFilters() {
   router.push({ query: clearAttributeFilters(route.query) })
+}
+
+function setPriceFilter(selection: PriceFilterSelection) {
+  router.push({ query: replacePriceFilters(route.query, selection) })
+}
+
+function clearPriceFilter() {
+  router.push({ query: clearPriceFilters(route.query) })
 }
 
 seo.page('Каталог', 'Активни продукти в публичния каталог на COMPUTER2U.', '/catalog')
