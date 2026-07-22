@@ -9,9 +9,11 @@ use App\Http\Resources\BrandResource;
 use App\Http\Resources\ProductCardResource;
 use App\Models\Brand;
 use App\Services\Products\PublicProductAttributeFilterService;
+use App\Services\Products\PublicProductPriceFilterService;
 use App\Support\Api\ProductQueryFilters;
 use App\Support\Localization\Locales;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Support\Arr;
 
 class BrandController extends Controller
 {
@@ -39,15 +41,19 @@ class BrandController extends Controller
         ProductIndexRequest $request,
         ProductQueryFilters $filters,
         PublicProductAttributeFilterService $attributeFilters,
+        PublicProductPriceFilterService $priceFilters,
     ): AnonymousResourceCollection {
         $brand = Brand::query()->where('slug', $slug)->where('is_active', true)->firstOrFail();
         $validated = $request->validated();
         $selectedAttributes = $validated['attribute_filters'] ?? [];
         $locale = Locales::resolveApiRequest($request);
-        $query = $filters->publicQuery()->where('brand_id', $brand->id);
-        $query = $filters->apply($query, $validated);
+        $scope = $filters->publicQuery()->where('brand_id', $brand->id);
+        $query = $filters->apply(clone $scope, $validated);
         $filterMetadata = $attributeFilters->describe($query, $selectedAttributes, $locale);
         $attributeFilters->apply($query, $selectedAttributes, $locale);
+        $priceScope = $filters->apply(clone $scope, Arr::except($validated, ['price_min', 'price_max']));
+        $attributeFilters->apply($priceScope, $selectedAttributes, $locale);
+        $filterMetadata += $priceFilters->describe($priceScope, $validated['price_min'] ?? null, $validated['price_max'] ?? null);
         $paginator = $filters
             ->sort($query, $validated['sort'] ?? null)
             ->paginate($filters->perPage($validated))

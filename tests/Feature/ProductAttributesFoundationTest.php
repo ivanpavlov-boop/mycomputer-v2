@@ -54,6 +54,7 @@ class ProductAttributesFoundationTest extends TestCase
             'product_attribute_id',
             'is_required',
             'is_filterable',
+            'filter_control_type',
             'is_visible_on_product',
             'is_comparable',
             'sort_order',

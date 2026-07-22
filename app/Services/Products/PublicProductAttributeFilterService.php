@@ -2,6 +2,7 @@
 
 namespace App\Services\Products;
 
+use App\Enums\CategoryAttributeFilterControl;
 use App\Models\AttributeValue;
 use App\Models\ProductAttribute;
 use App\Models\ProductAttributeValue;
@@ -159,7 +160,7 @@ final class PublicProductAttributeFilterService
     }
 
     /**
-     * @return Collection<int, array{attribute: ProductAttribute, category_ids: array<int, int>, position: int}>
+     * @return Collection<int, array{attribute: ProductAttribute, category_ids: array<int, int>, position: int, control: string}>
      */
     private function definitions(Builder $scope): Collection
     {
@@ -197,10 +198,15 @@ final class PublicProductAttributeFilterService
                     'attribute_id' => (int) $attribute->id,
                     'category_ids' => [],
                     'position' => (int) $assignment->sort_order,
+                    'controls' => [],
                 ]);
+                $resolvedControl = $assignment->resolvedFilterControl();
+
                 $candidate['category_ids'][] = $categoryId;
                 $candidate['category_ids'] = array_values(array_unique($candidate['category_ids']));
                 $candidate['position'] = min($candidate['position'], (int) $assignment->sort_order);
+                $candidate['controls'][] = $resolvedControl?->value ?? 'incompatible';
+                $candidate['controls'] = array_values(array_unique($candidate['controls']));
                 $candidates->put($key, $candidate);
             }
         }
@@ -220,10 +226,17 @@ final class PublicProductAttributeFilterService
                     return null;
                 }
 
+                $control = $this->commonControl($candidate['controls']);
+
+                if ($control === null) {
+                    return null;
+                }
+
                 return [
                     'attribute' => $attribute,
                     'category_ids' => $candidate['category_ids'],
                     'position' => $candidate['position'],
+                    'control' => $control,
                 ];
             })
             ->filter()
@@ -241,7 +254,7 @@ final class PublicProductAttributeFilterService
     }
 
     /**
-     * @param  Collection<int, array{attribute: ProductAttribute, category_ids: array<int, int>, position: int}>  $definitions
+     * @param  Collection<int, array{attribute: ProductAttribute, category_ids: array<int, int>, position: int, control: string}>  $definitions
      * @return Collection<int, ProductAttributeValue>
      */
     private function facetValueRows(Builder $scope, Collection $definitions): Collection
@@ -274,7 +287,7 @@ final class PublicProductAttributeFilterService
     }
 
     /**
-     * @param  array{attribute: ProductAttribute, category_ids: array<int, int>, position: int}  $definition
+     * @param  array{attribute: ProductAttribute, category_ids: array<int, int>, position: int, control: string}  $definition
      * @param  Collection<int, ProductAttributeValue>  $rows
      * @param  Collection<int, AttributeValue>  $options
      * @return array{public: array<string, mixed>|null, internal: array<string, mixed>}|null
@@ -295,12 +308,14 @@ final class PublicProductAttributeFilterService
             'key' => $key,
             'label' => $label,
             'position' => $definition['position'],
+            'control' => $definition['control'],
         ];
         $internalBase = [
             'attribute' => $attribute,
             'category_ids' => $definition['category_ids'],
             'label' => $label,
             'unit' => filled($attribute->unit) ? (string) $attribute->unit : null,
+            'control' => $definition['control'],
         ];
 
         if (in_array($attribute->type, [ProductAttribute::TYPE_SELECT, ProductAttribute::TYPE_MULTISELECT], true)) {
@@ -411,6 +426,33 @@ final class PublicProductAttributeFilterService
                 'options' => [],
             ],
         ];
+    }
+
+    /**
+     * @param  array<int, string>  $controls
+     */
+    private function commonControl(array $controls): ?string
+    {
+        $controls = array_values(array_unique($controls));
+
+        if (in_array('incompatible', $controls, true)) {
+            return null;
+        }
+
+        if (count($controls) === 1) {
+            return $controls[0];
+        }
+
+        sort($controls);
+        $numericControls = [
+            CategoryAttributeFilterControl::MinMax->value,
+            CategoryAttributeFilterControl::RangeSlider->value,
+        ];
+        sort($numericControls);
+
+        return $controls === $numericControls
+            ? CategoryAttributeFilterControl::MinMax->value
+            : null;
     }
 
     /**

@@ -9,6 +9,7 @@ export interface ApiCollection<T> {
   }
   filters?: PublicProductAttributeFilter[]
   active_filters?: PublicProductActiveAttributeFilter[]
+  price_filter?: PublicProductPriceFilter | null
 }
 
 export interface PublicProductAttributeOption {
@@ -21,12 +22,25 @@ export interface PublicProductAttributeFilter {
   key: string
   label: string
   type: 'select' | 'multiselect' | 'boolean' | 'number_range'
+  control: 'options' | 'yes_no' | 'range_slider' | 'min_max'
   position: number
   options?: PublicProductAttributeOption[]
   unit?: string | null
   min?: number
   max?: number
   step?: number
+}
+
+export interface PublicProductPriceFilter {
+  key: 'price'
+  label: string
+  control: 'range_slider'
+  currency: string
+  min: number
+  max: number
+  step: number
+  selected_min?: number | null
+  selected_max?: number | null
 }
 
 export interface PublicProductActiveAttributeFilter {

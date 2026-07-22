@@ -75,9 +75,13 @@ class ProductAttributesAdminUsabilityTest extends TestCase
         $this->assertContains('attribute.name', $categoryAttributeColumns);
         $this->assertContains('is_required', $categoryAttributeColumns);
         $this->assertContains('is_filterable', $categoryAttributeColumns);
+        $this->assertContains('filter_control_type', $categoryAttributeColumns);
         $this->assertContains('is_visible_on_product', $categoryAttributeColumns);
         $this->assertContains('is_comparable', $categoryAttributeColumns);
         $this->assertContains('sort_order', $categoryAttributeColumns);
+
+        $categoryAttributeFilters = array_keys(Livewire::test(ListCategoryProductAttributes::class)->instance()->getTable()->getFilters());
+        $this->assertContains('filter_control_type', $categoryAttributeFilters);
     }
 
     public function test_viewer_auditor_remains_read_only_for_attribute_admin(): void

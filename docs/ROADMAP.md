@@ -254,6 +254,26 @@ design. No Product, Category, template, attribute, value or supplier record is
 mutated, and no sitemap/feed, Product Workflow, public-visibility, supplier import
 or Catalog Sync behavior changes.
 
+Phase 9C.10.1 Configurable Filter Control Types and Range Slider UX is complete
+locally. Each effective Category attribute assignment may now choose `auto`,
+`options`, `yes_no`, `range_slider` or `min_max` within a server-enforced type
+compatibility matrix. `auto` preserves existing controls. Closest-Category
+precedence remains authoritative, and broad catalog scopes use a deterministic
+common-control policy: mixed numeric sliders and fields fall back to `min_max`,
+while incompatible mixes are omitted.
+
+The API keeps the existing semantic filter `type` and URL query contract while
+adding a presentation-only `control`. Nuxt adds native accessible dual-handle
+sliders for configured numeric attributes and public price, plus explicit
+price-only and attribute-only clearing. Price bounds are computed from the
+exact public endpoint scope after all non-price and attribute filters and before
+the selected price limits. The work is read-only apart from explicit Category
+assignment administration and the additive schema field. It creates no Product,
+attribute-value or supplier writes, uses no supplier-derived controls, and
+changes no Product Workflow, public visibility, sitemap/feed, supplier import
+or Catalog Sync behavior. Phase 9C.9 final manual staging verification remains
+pending.
+
 ## Next
 
 1. Keep Phase 7.5 documentation lock current.

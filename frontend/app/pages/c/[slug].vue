@@ -22,6 +22,9 @@
         <UiBaseButton v-if="hasAttributeRouteFilters" variant="secondary" class="mt-4" @click="clearAllAttributeFilters">
           Изчисти филтрите по характеристики
         </UiBaseButton>
+        <UiBaseButton v-if="hasPriceRouteFilters" variant="secondary" class="mt-4 ml-2" @click="clearPriceFilter">
+          Изчисти ценовия филтър
+        </UiBaseButton>
       </div>
 
       <template v-else-if="category">
@@ -46,15 +49,25 @@
           </span>
         </div>
 
-        <div :class="attributeFilters.length ? 'lg:grid lg:grid-cols-[280px_minmax(0,1fr)] lg:gap-6' : ''">
+        <div :class="attributeFilters.length || priceFilter ? 'lg:grid lg:grid-cols-[280px_minmax(0,1fr)] lg:gap-6' : ''">
           <CatalogAttributeFilterPanel
             :filters="attributeFilters"
             :selection="attributeSelections"
-            :active-count="activeAttributeFilterCount"
+            :active-count="activeFilterCount"
+            :attribute-active-count="activeAttributeFilterCount"
+            :price-filter="priceFilter"
+            :price-selection="priceSelection"
             @change="setAttributeFilter"
-            @clear-all="clearAllAttributeFilters"
+            @clear-attributes="clearAllAttributeFilters"
+            @price-change="setPriceFilter"
+            @clear-price="clearPriceFilter"
           />
           <section class="min-w-0">
+            <CatalogActivePriceFilter
+              :filter="priceFilter"
+              :selection="priceSelection"
+              @clear="clearPriceFilter"
+            />
             <CatalogActiveAttributeFilters
               :filters="activeAttributeFilters"
               @remove="removeActiveAttributeFilter"
@@ -70,6 +83,9 @@
               <div class="flex flex-wrap gap-3">
                 <UiBaseButton v-if="hasAttributeRouteFilters" variant="secondary" @click="clearAllAttributeFilters">
                   Изчисти филтрите по характеристики
+                </UiBaseButton>
+                <UiBaseButton v-if="hasPriceRouteFilters" variant="secondary" @click="clearPriceFilter">
+                  Изчисти ценовия филтър
                 </UiBaseButton>
                 <NuxtLink :to="localePath('/categories')" class="inline-flex items-center justify-center rounded-md border border-brand-200 bg-brand-50 px-4 py-2 text-sm font-semibold text-brand-700 transition hover:bg-brand-100">
                   Всички категории
@@ -94,6 +110,7 @@
 <script setup lang="ts">
 import type { ProductCard } from '~/types/api'
 import type { AttributeFilterSelection } from '~/utils/attributeFilters'
+import type { PriceFilterSelection } from '~/utils/priceFilters'
 import { paginatedResource } from '~/utils/apiCollections'
 import {
   attributeFilterApiQuery,
@@ -102,6 +119,12 @@ import {
   parseAttributeFilterQuery,
   replaceAttributeFilter,
 } from '~/utils/attributeFilters'
+import {
+  clearPriceFilters,
+  hasPriceFilters,
+  parsePriceFilterQuery,
+  replacePriceFilters,
+} from '~/utils/priceFilters'
 import { normalizeCatalogSort } from '~/utils/catalogSorts'
 import { positiveInteger, routeQueryValue } from '~/utils/routeQuery'
 
@@ -114,6 +137,8 @@ const { locale } = useI18n()
 const slug = computed(() => String(route.params.slug))
 const attributeSelections = computed(() => parseAttributeFilterQuery(route.query))
 const hasAttributeRouteFilters = computed(() => hasAttributeFilters(route.query))
+const priceSelection = computed(() => parsePriceFilterQuery(route.query))
+const hasPriceRouteFilters = computed(() => hasPriceFilters(route.query))
 const sort = computed({
   get: () => normalizeCatalogSort(route.query.sort),
   set: (value) => updateQuery({ sort: normalizeCatalogSort(value), page: undefined }),
@@ -133,6 +158,14 @@ const categoryProductQuery = computed(() => {
   const search = routeQueryValue(route.query.search) || routeQueryValue(route.query.q)
   if (typeof search === 'string') {
     query.search = search
+  }
+
+  for (const key of ['price_min', 'price_max'] as const) {
+    const value = routeQueryValue(route.query[key])
+
+    if (typeof value === 'string') {
+      query[key] = value
+    }
   }
 
   Object.assign(query, attributeFilterApiQuery(route.query))
@@ -158,10 +191,12 @@ const products = computed<ProductCard[]>(() => normalizedProductsResponse.value.
 const productsMeta = computed(() => normalizedProductsResponse.value.meta)
 const attributeFilters = computed(() => normalizedProductsResponse.value.filters)
 const activeAttributeFilters = computed(() => normalizedProductsResponse.value.active_filters)
+const priceFilter = computed(() => normalizedProductsResponse.value.price_filter)
 const activeAttributeFilterCount = computed(() => activeAttributeFilters.value.reduce(
   (count, filter) => count + (filter.values?.length || 1),
   0,
 ))
+const activeFilterCount = computed(() => activeAttributeFilterCount.value + (hasPriceRouteFilters.value ? 1 : 0))
 
 function updateQuery(next: Record<string, unknown>) {
   const merged = { ...route.query, ...next }
@@ -200,6 +235,14 @@ function removeActiveAttributeFilter(key: string, value?: string) {
 
 function clearAllAttributeFilters() {
   router.push({ query: clearAttributeFilters(route.query) })
+}
+
+function setPriceFilter(selection: PriceFilterSelection) {
+  router.push({ query: replacePriceFilters(route.query, selection) })
+}
+
+function clearPriceFilter() {
+  router.push({ query: clearPriceFilters(route.query) })
 }
 
 watchEffect(() => {
