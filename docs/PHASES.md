@@ -35,6 +35,7 @@ Phase 8 manual selected UPDATE price/stock sync has been implemented behind a fe
 | Product Data Quality 2C | Image and ALT-text quality workflow | Complete locally; read-only image metadata states, queue triage, counts and Product edit summary with manual remediation through existing image controls. |
 | Product Data Quality 2D | SEO and description quality workflow | Complete locally; read-only SEO, Bulgarian description and English-localization completeness states, queue triage, counts and Product edit summary with manual remediation through existing fields. |
 | Product Data Quality 2E | Category-template and specification completion | Complete locally; shared read-only template inheritance resolution, exact specification completion states, queue/category triage and Product edit summary with manual remediation through existing editors. |
+| Commerce Phase 1A | Cart Architecture, Safety and Gap Audit | Complete locally; read-only architecture report, machine-readable gap register and phased remediation plan. No Cart or checkout implementation changed. |
 | Phase 9C.1 | Product attributes core foundation | Complete |
 | Phase 9C.2 | Product attributes admin usability and starter structure | Complete |
 | Phase 9C.3 | Category attribute sets | Complete |
@@ -57,7 +58,7 @@ Phase 8 manual selected UPDATE price/stock sync has been implemented behind a fe
 | Phase 9C.10.2 | Preserve attribute filter facets during active price filtering | Complete locally; independent result, attribute-facet and price-facet scopes keep useful filters stable. |
 | Phase 9C.10.3 | Preserve price facet across active attribute filters | Complete locally; price discovery keeps non-attribute listing context while active attributes continue to constrain Product results. |
 | Phase 9C.10.4 | Fix Category listing component resolution | Complete locally; the Category page uses the registered directory-prefixed Nuxt components without changing listing scope or data behavior. |
-| Phase 9C.11 | Public Category tree and Category governance audit | Complete locally; recursive public hierarchy plus a read-only Filament governance report. Merge, deploy and manual staging verification remain pending. |
+| Phase 9C.11 | Public Category tree and Category governance audit | Merged, deployed and staging verified; recursive Category tree and Category Governance Audit verification passed. |
 | Phase 9C.6 | Multi-supplier import discovery foundation | Complete |
 | Phase 9C.6.1 | Supplier Import Capability Audit | Complete |
 | Phase 9C.6.2 | Supplier Configuration Safety Cleanup | Complete |
@@ -406,9 +407,31 @@ Recommendations are Bulgarian manual guidance only. The audit does not rename,
 translate, move, reorder, activate, deactivate, create, merge, delete or restore
 Categories; assign Products; modify Category templates; persist audit results;
 derive public Categories from suppliers; or mutate Products,
-`supplier_products`, supplier records or Catalog Sync state. Phase 9C.11
-merge, deployment and manual staging verification remain pending. Phase 9C.9
-manual staging verification remains separately pending.
+`supplier_products`, supplier records or Catalog Sync state. Phase 9C.11 is
+merged, deployed and staging verified. Recursive Category tree verification
+and Category Governance Audit verification passed. Phase 9C.9 manual staging
+verification remains separately pending.
+
+## Commerce Phase 1A Scope
+
+Commerce Phase 1A is complete locally as a read-only Cart architecture and
+safety audit. The authoritative report is
+[`CART_ARCHITECTURE_SAFETY_AUDIT.md`](CART_ARCHITECTURE_SAFETY_AUDIT.md), with
+machine-readable open findings in
+[`CART_GAP_REGISTER.json`](CART_GAP_REGISTER.json).
+
+The audit covers Laravel and Nuxt Cart identity, guest and authenticated
+lifecycle, Product eligibility, pricing, stock, bundles, promotions, recovery,
+checkout, orders, payment and shipping boundaries, concurrency, idempotency,
+schema constraints and existing tests. No Cart, checkout, Order, Product,
+payment, shipping, promotion, bundle, frontend or Catalog Sync implementation
+changed.
+
+Commerce Phase 1B must not start until the Phase 1A findings and proposed
+ownership, lifecycle and pricing contracts are reviewed and approved. Commerce
+Phase 1C remains the proposed Cart storefront UX phase, and Commerce Phase 1D
+remains the proposed checkout readiness and release-gate phase. None of Phases
+1B through 1D has started.
 
 ## Phase 9C.6.5A and 9C.6.5B Implemented Scope
 
