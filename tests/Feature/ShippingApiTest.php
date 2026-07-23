@@ -61,7 +61,7 @@ class ShippingApiTest extends TestCase
     {
         $office = $this->prepareCartAndOffice();
 
-        $this->withHeader('X-Cart-Session', 'shipping-cart')
+        $this->withHeader('X-Cart-Session', $this->cartSession('shipping-cart'))
             ->postJson('/api/v1/checkout', $this->checkoutPayload([
                 'shipping_provider' => 'speedy',
                 'shipping_method' => 'office',
@@ -83,7 +83,7 @@ class ShippingApiTest extends TestCase
     {
         $this->prepareCartAndOffice();
 
-        $this->withHeader('X-Cart-Session', 'shipping-cart')
+        $this->withHeader('X-Cart-Session', $this->cartSession('shipping-cart'))
             ->postJson('/api/v1/checkout', $this->checkoutPayload([
                 'shipping_provider' => 'econt',
                 'shipping_method' => 'address',
@@ -130,7 +130,7 @@ class ShippingApiTest extends TestCase
     {
         $this->seed();
         $product = Product::query()->where('sku', 'MC-LAP-001')->firstOrFail();
-        $this->withHeader('X-Cart-Session', 'shipping-cart')
+        $this->withHeader('X-Cart-Session', $this->cartSession('shipping-cart'))
             ->postJson('/api/v1/cart/items', ['product_id' => $product->id, 'quantity' => 1])
             ->assertOk();
 

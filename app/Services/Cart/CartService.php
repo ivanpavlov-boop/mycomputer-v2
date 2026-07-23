@@ -8,23 +8,12 @@ use App\Models\CartItem;
 use App\Models\Product;
 use App\Services\Availability\AvailabilityStatusService;
 use App\Services\Bundles\BundlePricingService;
-use Illuminate\Support\Str;
 
 class CartService
 {
     public const MAX_QUANTITY = 99;
 
     public function __construct(private readonly AvailabilityStatusService $availability) {}
-
-    public function resolve(?string $sessionId = null): Cart
-    {
-        $sessionId = filled($sessionId) ? $sessionId : (string) Str::uuid();
-
-        return Cart::query()->firstOrCreate(
-            ['session_id' => $sessionId],
-            ['status' => 'active', 'expires_at' => now()->addDays(14)],
-        )->load(['items.product.brand', 'items.product.category', 'items.product.images', 'items.product.availabilityStatus', 'bundleItems.bundle.items.product', 'bundleItems.bundle.options.product']);
-    }
 
     public function add(Cart $cart, Product $product, int $quantity): Cart
     {

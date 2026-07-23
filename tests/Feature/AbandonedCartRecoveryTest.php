@@ -172,13 +172,13 @@ class AbandonedCartRecoveryTest extends TestCase
 
     public function test_checkout_after_recovery_marks_cart_recovered_and_tracks_revenue(): void
     {
-        $this->staleCart('checkout-recover-cart', 'recover-checkout@example.com');
+        $this->staleCart($this->cartSession('checkout-recover-cart'), 'recover-checkout@example.com');
         app(EmailMarketingService::class)->detectAbandonedCarts();
         $record = AbandonedCartRecord::query()->firstOrFail();
 
         $this->postJson("/api/v1/cart/recover/{$record->recovery_token}")->assertOk();
 
-        $this->withHeader('X-Cart-Session', 'checkout-recover-cart')
+        $this->withHeader('X-Cart-Session', $this->cartSession('checkout-recover-cart'))
             ->postJson('/api/v1/checkout', $this->checkoutPayload('recover-checkout@example.com'))
             ->assertCreated();
 
@@ -192,28 +192,28 @@ class AbandonedCartRecoveryTest extends TestCase
 
     public function test_cart_email_endpoint_attaches_email_to_cart_and_record(): void
     {
-        $this->staleCart('email-cart');
+        $this->staleCart($this->cartSession('email-cart'));
         app(EmailMarketingService::class)->detectAbandonedCarts();
 
-        $this->withHeader('X-Cart-Session', 'email-cart')
+        $this->withHeader('X-Cart-Session', $this->cartSession('email-cart'))
             ->postJson('/api/v1/cart/email', ['email' => 'captured@example.com'])
             ->assertOk()
-            ->assertJsonPath('data.cart_session_id', 'email-cart');
+            ->assertJsonPath('data.cart_session_id', $this->cartSession('email-cart'));
 
-        $this->assertDatabaseHas('carts', ['session_id' => 'email-cart', 'customer_email' => 'captured@example.com']);
-        $this->assertDatabaseHas('abandoned_cart_records', ['session_id' => 'email-cart', 'email' => 'captured@example.com']);
+        $this->assertDatabaseHas('carts', ['session_id' => $this->cartSession('email-cart'), 'customer_email' => 'captured@example.com']);
+        $this->assertDatabaseHas('abandoned_cart_records', ['session_id' => $this->cartSession('email-cart'), 'email' => 'captured@example.com']);
     }
 
     public function test_authenticated_user_cannot_access_another_users_cart(): void
     {
         $owner = $this->makeUser('cart-owner@example.test');
         $other = $this->makeUser('cart-other@example.test');
-        $this->staleCart('owned-cart', 'owner@example.com', $owner);
+        $this->staleCart($this->cartSession('owned-cart'), 'owner@example.com', $owner);
 
         Sanctum::actingAs($other);
 
         $this
-            ->withHeader('X-Cart-Session', 'owned-cart')
+            ->withHeader('X-Cart-Session', $this->cartSession('owned-cart'))
             ->getJson('/api/v1/cart')
             ->assertForbidden();
     }

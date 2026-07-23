@@ -69,11 +69,11 @@ class ErpIntegrationTest extends TestCase
     {
         $product = Product::query()->where('sku', 'MC-LAP-001')->firstOrFail();
 
-        $this->withHeader('X-Cart-Session', 'erp-order-created')
+        $this->withHeader('X-Cart-Session', $this->cartSession('erp-order-created'))
             ->postJson('/api/v1/cart/items', ['product_id' => $product->id, 'quantity' => 1])
             ->assertOk();
 
-        $this->withHeader('X-Cart-Session', 'erp-order-created')
+        $this->withHeader('X-Cart-Session', $this->cartSession('erp-order-created'))
             ->postJson('/api/v1/checkout', $this->checkoutPayload())
             ->assertCreated();
 

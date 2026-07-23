@@ -8,9 +8,9 @@ use App\Http\Requests\Api\V1\ShippingOfficeIndexRequest;
 use App\Http\Resources\ShippingMethodResource;
 use App\Http\Resources\ShippingOfficeResource;
 use App\Http\Resources\ShippingProviderResource;
-use App\Models\Cart;
 use App\Models\ShippingMethod;
 use App\Models\ShippingProvider;
+use App\Services\Cart\CartContextResolver;
 use App\Services\Cart\CartService;
 use App\Services\Shipping\ShippingOfficeService;
 use App\Services\Shipping\ShippingPriceService;
@@ -38,16 +38,26 @@ class ShippingController extends Controller
         return ShippingOfficeResource::collection($officeService->search($request->validated()));
     }
 
-    public function calculate(ShippingCalculateRequest $request, ShippingPriceService $priceService, CartService $cartService): JsonResponse
-    {
+    public function calculate(
+        ShippingCalculateRequest $request,
+        ShippingPriceService $priceService,
+        CartService $cartService,
+        CartContextResolver $cartContext,
+    ): JsonResponse {
         $data = $request->validated();
         $subtotal = 0.0;
+        $hasSession = filled($request->header('X-Cart-Session'));
 
-        if (filled($data['cart_id'] ?? null)) {
-            $cart = Cart::query()->with('items')->findOrFail($data['cart_id']);
+        if ($hasSession) {
+            $cart = $cartContext->resolve($request);
+            abort_if(
+                filled($data['cart_id'] ?? null) && (int) $data['cart_id'] !== (int) $cart->id,
+                422,
+                'Cart session does not match the requested cart.',
+            );
             $subtotal = $cartService->subtotal($cart);
-        } elseif (filled($request->header('X-Cart-Session'))) {
-            $subtotal = $cartService->subtotal($cartService->resolve($request->header('X-Cart-Session')));
+        } elseif (filled($data['cart_id'] ?? null)) {
+            abort(422, 'Cart session is required for cart-based shipping calculation.');
         }
 
         $shipping = $priceService->calculate(array_merge($data, [

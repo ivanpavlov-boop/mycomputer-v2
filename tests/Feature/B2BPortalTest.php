@@ -88,12 +88,12 @@ class B2BPortalTest extends TestCase
         $user = $this->b2bUser();
         $product = Product::query()->where('active', true)->whereNotNull('published_at')->firstOrFail();
 
-        $this->withHeader('X-Cart-Session', 'b2b-cart')
+        $this->withHeader('X-Cart-Session', $this->cartSession('b2b-cart'))
             ->postJson('/api/v1/cart/items', ['product_id' => $product->id, 'quantity' => 2])
             ->assertOk();
 
         $this->actingAs($user, 'sanctum')
-            ->withHeader('X-Cart-Session', 'b2b-cart')
+            ->withHeader('X-Cart-Session', $this->cartSession('b2b-cart'))
             ->postJson('/api/v1/cart/request-quote', ['notes' => 'Cart quote'])
             ->assertOk()
             ->assertJsonPath('data.status', 'submitted')

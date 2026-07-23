@@ -97,7 +97,7 @@ class ProductBundleTest extends TestCase
     {
         $bundle = $this->fixedBundle();
 
-        $this->withHeader('X-Cart-Session', 'bundle-cart')
+        $this->withHeader('X-Cart-Session', $this->cartSession('bundle-cart'))
             ->postJson('/api/v1/cart/bundles', [
                 'bundle_id' => $bundle->id,
                 'quantity' => 2,
@@ -112,7 +112,7 @@ class ProductBundleTest extends TestCase
     {
         $bundle = $this->configurableBundle();
 
-        $this->withHeader('X-Cart-Session', 'invalid-option-cart')
+        $this->withHeader('X-Cart-Session', $this->cartSession('invalid-option-cart'))
             ->postJson('/api/v1/cart/bundles', [
                 'bundle_id' => $bundle->id,
                 'quantity' => 1,
@@ -127,7 +127,7 @@ class ProductBundleTest extends TestCase
     {
         $bundle = $this->configurableBundle();
 
-        $this->withHeader('X-Cart-Session', 'configurable-cart')
+        $this->withHeader('X-Cart-Session', $this->cartSession('configurable-cart'))
             ->postJson('/api/v1/cart/bundles', [
                 'bundle_id' => $bundle->id,
                 'quantity' => 1,
@@ -143,14 +143,14 @@ class ProductBundleTest extends TestCase
     {
         $bundle = $this->fixedBundle();
 
-        $this->withHeader('X-Cart-Session', 'bundle-checkout')
+        $this->withHeader('X-Cart-Session', $this->cartSession('bundle-checkout'))
             ->postJson('/api/v1/cart/bundles', [
                 'bundle_id' => $bundle->id,
                 'quantity' => 2,
             ])
             ->assertOk();
 
-        $this->withHeader('X-Cart-Session', 'bundle-checkout')
+        $this->withHeader('X-Cart-Session', $this->cartSession('bundle-checkout'))
             ->postJson('/api/v1/checkout', $this->checkoutPayload())
             ->assertCreated()
             ->assertJsonPath('data.bundle_items.0.bundle_name', $bundle->name);
@@ -167,9 +167,9 @@ class ProductBundleTest extends TestCase
     public function test_bundle_promotion_rule_targets_bundle(): void
     {
         $bundle = $this->fixedBundle();
-        $cart = Cart::query()->create(['session_id' => 'bundle-promo', 'status' => 'active']);
+        $cart = Cart::query()->create(['session_id' => $this->cartSession('bundle-promo'), 'status' => 'active']);
 
-        $this->withHeader('X-Cart-Session', 'bundle-promo')
+        $this->withHeader('X-Cart-Session', $this->cartSession('bundle-promo'))
             ->postJson('/api/v1/cart/bundles', [
                 'bundle_id' => $bundle->id,
                 'quantity' => 1,
@@ -195,8 +195,8 @@ class ProductBundleTest extends TestCase
     public function test_bundle_promotion_rule_targets_bundle_type_product_and_brand(): void
     {
         $bundle = $this->fixedBundle();
-        $cart = Cart::query()->create(['session_id' => 'bundle-rules', 'status' => 'active']);
-        $this->withHeader('X-Cart-Session', 'bundle-rules')
+        $cart = Cart::query()->create(['session_id' => $this->cartSession('bundle-rules'), 'status' => 'active']);
+        $this->withHeader('X-Cart-Session', $this->cartSession('bundle-rules'))
             ->postJson('/api/v1/cart/bundles', ['bundle_id' => $bundle->id, 'quantity' => 1])
             ->assertOk();
 
@@ -216,8 +216,8 @@ class ProductBundleTest extends TestCase
     public function test_invalid_bundle_promotion_rule_does_not_apply(): void
     {
         $bundle = $this->fixedBundle();
-        $cart = Cart::query()->create(['session_id' => 'invalid-bundle-rule', 'status' => 'active']);
-        $this->withHeader('X-Cart-Session', 'invalid-bundle-rule')
+        $cart = Cart::query()->create(['session_id' => $this->cartSession('invalid-bundle-rule'), 'status' => 'active']);
+        $this->withHeader('X-Cart-Session', $this->cartSession('invalid-bundle-rule'))
             ->postJson('/api/v1/cart/bundles', ['bundle_id' => $bundle->id, 'quantity' => 1])
             ->assertOk();
 
@@ -231,8 +231,8 @@ class ProductBundleTest extends TestCase
     public function test_non_stackable_bundle_promotions_keep_best_discount(): void
     {
         $bundle = $this->fixedBundle();
-        $cart = Cart::query()->create(['session_id' => 'bundle-stacking', 'status' => 'active']);
-        $this->withHeader('X-Cart-Session', 'bundle-stacking')
+        $cart = Cart::query()->create(['session_id' => $this->cartSession('bundle-stacking'), 'status' => 'active']);
+        $this->withHeader('X-Cart-Session', $this->cartSession('bundle-stacking'))
             ->postJson('/api/v1/cart/bundles', ['bundle_id' => $bundle->id, 'quantity' => 1])
             ->assertOk();
 
@@ -253,12 +253,12 @@ class ProductBundleTest extends TestCase
         $bundle = $this->fixedBundle();
 
         $this->actingAs($user, 'sanctum')
-            ->withHeader('X-Cart-Session', 'bundle-loyalty')
+            ->withHeader('X-Cart-Session', $this->cartSession('bundle-loyalty'))
             ->postJson('/api/v1/cart/bundles', ['bundle_id' => $bundle->id, 'quantity' => 1])
             ->assertOk();
 
         $this->actingAs($user, 'sanctum')
-            ->withHeader('X-Cart-Session', 'bundle-loyalty')
+            ->withHeader('X-Cart-Session', $this->cartSession('bundle-loyalty'))
             ->postJson('/api/v1/checkout', array_merge($this->checkoutPayload(), [
                 'email' => 'bundle-loyalty@example.com',
                 'reward_code' => $voucher->code,
@@ -275,12 +275,12 @@ class ProductBundleTest extends TestCase
         $bundle = $this->fixedBundle();
 
         $this->actingAs($user, 'sanctum')
-            ->withHeader('X-Cart-Session', 'bundle-points')
+            ->withHeader('X-Cart-Session', $this->cartSession('bundle-points'))
             ->postJson('/api/v1/cart/bundles', ['bundle_id' => $bundle->id, 'quantity' => 1])
             ->assertOk();
 
         $this->actingAs($user, 'sanctum')
-            ->withHeader('X-Cart-Session', 'bundle-points')
+            ->withHeader('X-Cart-Session', $this->cartSession('bundle-points'))
             ->postJson('/api/v1/checkout', array_merge($this->checkoutPayload(), ['email' => 'bundle-points@example.com']))
             ->assertCreated();
 
@@ -301,12 +301,12 @@ class ProductBundleTest extends TestCase
         $this->bundlePromotion('Almost free bundle', 'bundle_id', $bundle->id, 160, stackable: true);
 
         $this->actingAs($user, 'sanctum')
-            ->withHeader('X-Cart-Session', 'bundle-negative')
+            ->withHeader('X-Cart-Session', $this->cartSession('bundle-negative'))
             ->postJson('/api/v1/cart/bundles', ['bundle_id' => $bundle->id, 'quantity' => 1])
             ->assertOk();
 
         $this->actingAs($user, 'sanctum')
-            ->withHeader('X-Cart-Session', 'bundle-negative')
+            ->withHeader('X-Cart-Session', $this->cartSession('bundle-negative'))
             ->postJson('/api/v1/checkout', array_merge($this->checkoutPayload(), [
                 'email' => 'bundle-negative@example.com',
                 'reward_code' => $voucher->code,
@@ -319,7 +319,7 @@ class ProductBundleTest extends TestCase
     {
         $bundle = $this->fixedBundle();
 
-        $this->withHeader('X-Cart-Session', 'bundle-analytics')
+        $this->withHeader('X-Cart-Session', $this->cartSession('bundle-analytics'))
             ->postJson('/api/v1/cart/bundles', ['bundle_id' => $bundle->id, 'quantity' => 1])
             ->assertOk();
 
@@ -328,7 +328,7 @@ class ProductBundleTest extends TestCase
         $this->assertSame($bundle->name, $added->payload['bundle_name']);
         $this->assertSame(169, $added->payload['total_price']);
 
-        $this->withHeader('X-Cart-Session', 'bundle-analytics')
+        $this->withHeader('X-Cart-Session', $this->cartSession('bundle-analytics'))
             ->postJson('/api/v1/checkout', array_merge($this->checkoutPayload(), ['email' => 'bundle-analytics@example.com']))
             ->assertCreated();
 
@@ -341,17 +341,17 @@ class ProductBundleTest extends TestCase
     public function test_bundle_cart_item_cannot_be_updated_or_deleted_from_another_session(): void
     {
         $bundle = $this->fixedBundle();
-        $response = $this->withHeader('X-Cart-Session', 'owner-session')
+        $response = $this->withHeader('X-Cart-Session', $this->cartSession('owner-session'))
             ->postJson('/api/v1/cart/bundles', ['bundle_id' => $bundle->id, 'quantity' => 1])
             ->assertOk();
 
         $bundleItemId = $response->json('data.bundle_items.0.id');
 
-        $this->withHeader('X-Cart-Session', 'other-session')
+        $this->withHeader('X-Cart-Session', $this->cartSession('other-session'))
             ->patchJson('/api/v1/cart/bundles/'.$bundleItemId, ['quantity' => 2])
             ->assertNotFound();
 
-        $this->withHeader('X-Cart-Session', 'other-session')
+        $this->withHeader('X-Cart-Session', $this->cartSession('other-session'))
             ->deleteJson('/api/v1/cart/bundles/'.$bundleItemId)
             ->assertNotFound();
     }
@@ -363,11 +363,11 @@ class ProductBundleTest extends TestCase
         $expired = $this->fixedBundle('expired-pack');
         $expired->update(['ends_at' => now()->subMinute()]);
 
-        $this->withHeader('X-Cart-Session', 'inactive-bundle')
+        $this->withHeader('X-Cart-Session', $this->cartSession('inactive-bundle'))
             ->postJson('/api/v1/cart/bundles', ['bundle_id' => $inactive->id, 'quantity' => 1])
             ->assertUnprocessable();
 
-        $this->withHeader('X-Cart-Session', 'expired-bundle')
+        $this->withHeader('X-Cart-Session', $this->cartSession('expired-bundle'))
             ->postJson('/api/v1/cart/bundles', ['bundle_id' => $expired->id, 'quantity' => 1])
             ->assertUnprocessable();
     }

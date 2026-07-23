@@ -109,12 +109,12 @@ class LoyaltyRewardsTest extends TestCase
         $voucher = $this->rewardVoucher(points: 100, discount: 20);
 
         $this->actingAs($user, 'sanctum')
-            ->withHeader('X-Cart-Session', 'loyalty-cart')
+            ->withHeader('X-Cart-Session', $this->cartSession('loyalty-cart'))
             ->postJson('/api/v1/cart/items', ['product_id' => $product->id, 'quantity' => 1])
             ->assertOk();
 
         $this->actingAs($user, 'sanctum')
-            ->withHeader('X-Cart-Session', 'loyalty-cart')
+            ->withHeader('X-Cart-Session', $this->cartSession('loyalty-cart'))
             ->postJson('/api/v1/checkout', array_merge($this->checkoutPayload(), [
                 'email' => 'loyalty@example.com',
                 'reward_code' => $voucher->code,
@@ -221,7 +221,7 @@ class LoyaltyRewardsTest extends TestCase
         $product = Product::query()->where('sku', 'MC-LAP-001')->firstOrFail();
         $product->update(['price' => 100, 'promo_price' => null, 'quantity' => 5]);
 
-        $this->withHeader('X-Cart-Session', 'loyalty-cart')
+        $this->withHeader('X-Cart-Session', $this->cartSession('loyalty-cart'))
             ->postJson('/api/v1/cart/items', ['product_id' => $product->id, 'quantity' => 1])
             ->assertOk();
     }

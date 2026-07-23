@@ -21,7 +21,7 @@ class ShippingCalculateRequest extends FormRequest
             'city' => ['required', 'string', 'max:255'],
             'postcode' => ['nullable', 'string', 'max:50'],
             'address' => ['nullable', 'string', 'max:1000'],
-            'cart_id' => ['nullable', 'integer', 'exists:carts,id'],
+            'cart_id' => ['nullable', 'integer', 'min:1'],
             'cart_items' => ['nullable', 'array'],
         ];
     }

@@ -33,7 +33,7 @@ class PromotionEngineTest extends TestCase
         $promotion = $this->promotion('WELCOME10', 'percentage_discount', 10);
         $promotion->rules()->create(['rule_type' => 'minimum_order_amount', 'operator' => 'gte', 'value' => ['value' => 50]]);
 
-        $this->withHeader('X-Cart-Session', 'coupon-cart')
+        $this->withHeader('X-Cart-Session', $this->cartSession('coupon-cart'))
             ->postJson('/api/v1/cart/coupon', ['code' => 'WELCOME10'])
             ->assertOk()
             ->assertJsonPath('data.coupon_code', 'WELCOME10')
@@ -46,7 +46,7 @@ class PromotionEngineTest extends TestCase
     {
         $this->cart('invalid-coupon-cart');
 
-        $this->withHeader('X-Cart-Session', 'invalid-coupon-cart')
+        $this->withHeader('X-Cart-Session', $this->cartSession('invalid-coupon-cart'))
             ->postJson('/api/v1/cart/coupon', ['code' => 'NOPE'])
             ->assertUnprocessable()
             ->assertJsonPath('error.details.coupon.0', 'Coupon is invalid or cannot be applied to this cart.');
@@ -153,17 +153,17 @@ class PromotionEngineTest extends TestCase
         $this->cart('checkout-promo-cart');
         $this->promotion('SUMMER2026', 'fixed_discount', 25);
 
-        $this->withHeader('X-Cart-Session', 'checkout-promo-cart')
+        $this->withHeader('X-Cart-Session', $this->cartSession('checkout-promo-cart'))
             ->postJson('/api/v1/cart/coupon', ['code' => 'SUMMER2026'])
             ->assertOk();
 
-        $this->withHeader('X-Cart-Session', 'checkout-promo-cart')
+        $this->withHeader('X-Cart-Session', $this->cartSession('checkout-promo-cart'))
             ->postJson('/api/v1/checkout', $this->checkoutPayload())
             ->assertCreated()
             ->assertJsonPath('data.discount_total', '25.00');
 
         $this->assertDatabaseHas('promotion_redemptions', [
-            'session_id' => 'checkout-promo-cart',
+            'session_id' => $this->cartSession('checkout-promo-cart'),
             'discount_amount' => 25,
         ]);
         $this->assertDatabaseHas('marketing_events', ['event_name' => 'promotion_applied']);
@@ -185,7 +185,7 @@ class PromotionEngineTest extends TestCase
     private function cart(string $sessionId, int $quantity = 1, ?User $user = null): Cart
     {
         $cart = Cart::query()->create([
-            'session_id' => $sessionId,
+            'session_id' => $this->cartSession($sessionId),
             'user_id' => $user?->id,
             'customer_email' => $user?->email,
             'status' => 'active',

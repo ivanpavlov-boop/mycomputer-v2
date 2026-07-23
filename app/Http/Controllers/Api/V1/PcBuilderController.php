@@ -10,6 +10,7 @@ use App\Http\Resources\ProductCardResource;
 use App\Models\PcBuild;
 use App\Models\PcBuildItem;
 use App\Models\Product;
+use App\Services\Cart\CartContextResolver;
 use App\Services\Cart\CartService;
 use App\Services\PcBuilder\AiBuildGeneratorService;
 use App\Services\PcBuilder\BuildRecommendationService;
@@ -128,10 +129,14 @@ class PcBuilderController extends Controller
         return response()->json(['data' => $recommendations]);
     }
 
-    public function addToCart(Request $request, PcBuild $build, CartService $cartService): CartResource
-    {
+    public function addToCart(
+        Request $request,
+        PcBuild $build,
+        CartService $cartService,
+        CartContextResolver $cartContext,
+    ): CartResource {
         $this->authorizeBuild($request, $build);
-        $cart = $cartService->resolve($request->header('X-Cart-Session'));
+        $cart = $cartContext->resolve($request);
 
         foreach ($build->items()->with('product')->get() as $item) {
             $cart = $cartService->add($cart, $item->product, $item->quantity);
