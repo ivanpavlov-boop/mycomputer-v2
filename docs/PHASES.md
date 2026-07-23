@@ -55,6 +55,7 @@ Phase 8 manual selected UPDATE price/stock sync has been implemented behind a fe
 | Phase 9C.10 | Frontend attribute filters | Complete locally; read-only catalog-owned attribute filters with stable URL semantics. |
 | Phase 9C.10.1 | Configurable filter controls and range slider UX | Complete locally; per-Category controls plus scoped public price sliders without filtering-semantic changes. |
 | Phase 9C.10.2 | Preserve attribute filter facets during active price filtering | Complete locally; independent result, attribute-facet and price-facet scopes keep useful filters stable. |
+| Phase 9C.10.3 | Preserve price facet across active attribute filters | Complete locally; price discovery keeps non-attribute listing context while active attributes continue to constrain Product results. |
 | Phase 9C.6 | Multi-supplier import discovery foundation | Complete |
 | Phase 9C.6.1 | Supplier Import Capability Audit | Complete |
 | Phase 9C.6.2 | Supplier Configuration Safety Cleanup | Complete |
@@ -304,8 +305,9 @@ and adds only the presentation-level `control`. Nuxt renders escaped options,
 accessible yes/no choices, validated min/max inputs and a native dual-handle
 range slider. The public price slider uses the existing inclusive `price_min`
 and `price_max` semantics. Its bounds use only the current public endpoint
-scope, apply all non-price and attribute filters, and exclude only the active
-price limits. Price, attribute-group and price-only clear actions are explicit.
+non-attribute scope and exclude the active price limits and Phase 9C.10
+`attribute_filters`. Price, attribute-group and price-only clear actions are
+explicit.
 
 This phase performs no Product, Product Attribute Value, Category template,
 supplier or `supplier_products` mutation. It adds no supplier-derived controls,
@@ -320,8 +322,8 @@ Phase 9C.10.2 corrects the confirmed staging regression where applying
 collapsed otherwise useful attribute filter groups. Product, Category Product
 and Brand Product listings now use three explicit independent query scopes:
 the result scope applies all active filters, the attribute-facet scope excludes
-price bounds and active attribute selections, and the price-facet scope excludes
-only its own price bounds while retaining active attribute selections.
+price bounds and active attribute selections, and the price-facet scope remains
+separate from result pagination and sorting.
 
 Useful-filter eligibility remains unchanged and is evaluated against the
 unpriced attribute discovery scope. No per-option counts, persistent facet
@@ -331,6 +333,27 @@ Product Workflow, public visibility, supplier import or Catalog Sync behavior.
 Phase 9C.10.1 remains pending final staging completion until this hotfix is
 merged, deployed and manually verified. Phase 9C.9 manual staging verification
 remains separately pending.
+
+## Phase 9C.10.3 Scope
+
+Phase 9C.10.3 corrects the confirmed staging regression where an active
+`attribute_filters` selection could leave one Product, produce equal price
+bounds and hide the otherwise useful public price slider. Product, Category
+Product and Brand Product listings now calculate price metadata from the
+broader non-attribute discovery scope: active `price_min`, `price_max` and
+`attribute_filters` are excluded, while endpoint hard scope, Category, Brand,
+search, stock, availability and the established non-attribute listing context
+remain authoritative.
+
+The Product result query still applies every active attribute and price filter.
+The attribute-facet behavior from Phase 9C.10.2 is unchanged. Equal-price or
+empty base discovery scopes still return `price_filter=null`; no slider is
+forced where it is not useful. The API and URL contracts are unchanged, and
+the correction adds no cache, Product or supplier mutation, supplier-derived
+metadata, Product Workflow, public-visibility, supplier import or Catalog Sync
+behavior change. Phases 9C.10.1 through 9C.10.3 remain pending final staging
+completion until merged, deployed and manually verified. Phase 9C.9 manual
+staging verification remains separately pending.
 
 ## Phase 9C.6.5A and 9C.6.5B Implemented Scope
 

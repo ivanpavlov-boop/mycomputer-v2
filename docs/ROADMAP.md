@@ -266,8 +266,8 @@ The API keeps the existing semantic filter `type` and URL query contract while
 adding a presentation-only `control`. Nuxt adds native accessible dual-handle
 sliders for configured numeric attributes and public price, plus explicit
 price-only and attribute-only clearing. Price bounds are computed from the
-exact public endpoint scope after all non-price and attribute filters and before
-the selected price limits. The work is read-only apart from explicit Category
+exact public endpoint non-attribute scope before selected attribute and price
+limits. The work is read-only apart from explicit Category
 assignment administration and the additive schema field. It creates no Product,
 attribute-value or supplier writes, uses no supplier-derived controls, and
 changes no Product Workflow, public visibility, sitemap/feed, supplier import
@@ -279,7 +279,7 @@ complete locally. It fixes the confirmed staging regression by separating the
 Product result, attribute-facet discovery and price-facet discovery scopes.
 Price bounds continue to narrow Product results, but no longer collapse useful
 attribute groups or options; active attribute filters still constrain Product
-results and price bounds without narrowing attribute discovery metadata.
+results without narrowing attribute discovery metadata.
 
 The API and URL contracts remain unchanged. The hotfix adds no option counts,
 cache, search indexing, Product or supplier mutation, supplier-derived filters,
@@ -287,6 +287,22 @@ Product Workflow change, public-visibility change or Catalog Sync behavior
 change. Phase 9C.10.1 remains pending final staging completion until this
 hotfix is merged, deployed and manually verified. Phase 9C.9 final manual
 staging verification remains separately pending.
+
+Phase 9C.10.3 Preserve Price Facet Across Active Attribute Filters is complete
+locally. It fixes the confirmed staging regression where a valid attribute
+selection narrowed the price discovery scope to one Product and hid the price
+slider. Product results still apply every active attribute and price filter,
+while price metadata now excludes `price_min`, `price_max` and
+`attribute_filters` and retains Category, Brand, search, availability and all
+other established non-attribute listing context.
+
+Equal-price and empty base scopes continue to hide the price slider. The API,
+URL and frontend contracts remain unchanged. The hotfix adds no cache,
+Product or supplier mutation, supplier-derived filters, Product Workflow,
+public-visibility, supplier import or Catalog Sync behavior change. Phases
+9C.10.1 through 9C.10.3 remain pending final staging completion until merged,
+deployed and manually verified. Phase 9C.9 final manual staging verification
+remains separately pending.
 
 ## Next
 

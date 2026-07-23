@@ -49,7 +49,7 @@ class PublicProductFilterFacetPersistenceTest extends TestCase
         $this->assertTrue($fixture['first']->exists);
     }
 
-    public function test_active_attribute_filters_do_not_narrow_attribute_facets_but_do_narrow_results_and_price_bounds(): void
+    public function test_active_attribute_filters_do_not_narrow_attribute_or_price_facets_but_do_narrow_results(): void
     {
         $this->catalogFixture();
         $query = http_build_query([
@@ -70,7 +70,7 @@ class PublicProductFilterFacetPersistenceTest extends TestCase
             ->assertJsonPath('active_filters.1.key', 'ports')
             ->assertJsonCount(2, 'active_filters.1.values')
             ->assertJsonPath('price_filter.min', 1000)
-            ->assertJsonPath('price_filter.max', 1500)
+            ->assertJsonPath('price_filter.max', 2000)
             ->assertJsonPath('price_filter.selected_min', 900)
             ->assertJsonPath('price_filter.selected_max', 1200);
 

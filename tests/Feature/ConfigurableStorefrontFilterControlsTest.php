@@ -263,7 +263,7 @@ class ConfigurableStorefrontFilterControlsTest extends TestCase
         $this->assertTrue($low->exists);
     }
 
-    public function test_category_brand_and_attribute_scopes_constrain_price_metadata_and_equal_bounds_hide_it(): void
+    public function test_category_and_brand_scopes_constrain_price_metadata_while_attributes_do_not_and_equal_bounds_hide_it(): void
     {
         $category = Category::factory()->create();
         $otherCategory = Category::factory()->create();
@@ -283,11 +283,11 @@ class ConfigurableStorefrontFilterControlsTest extends TestCase
         $this->getJson("/api/v1/categories/{$category->slug}/products?{$attributes}")
             ->assertOk()
             ->assertJsonPath('price_filter.min', 100)
-            ->assertJsonPath('price_filter.max', 200);
+            ->assertJsonPath('price_filter.max', 500);
         $this->getJson("/api/v1/brands/{$brand->slug}/products?{$attributes}")
             ->assertOk()
             ->assertJsonPath('price_filter.min', 100)
-            ->assertJsonPath('price_filter.max', 200);
+            ->assertJsonPath('price_filter.max', 900);
 
         $single = Category::factory()->create();
         $this->product($single, ['price' => 42]);

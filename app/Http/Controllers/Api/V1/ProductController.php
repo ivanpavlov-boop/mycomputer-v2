@@ -32,9 +32,8 @@ class ProductController extends Controller
         $query = $filters->apply(clone $scope, $attributeFacetInput);
         $attributeFilters->apply($query, $selectedAttributes, $locale);
         $filters->apply($query, Arr::only($validated, ['price_min', 'price_max']));
-        $priceScope = $filters->apply(clone $scope, Arr::except($validated, ['price_min', 'price_max']));
-        $attributeFilters->apply($priceScope, $selectedAttributes, $locale);
-        $filterMetadata += $priceFilters->describe($priceScope, $validated['price_min'] ?? null, $validated['price_max'] ?? null);
+        $priceFacetScope = $filters->apply(clone $scope, $attributeFacetInput);
+        $filterMetadata += $priceFilters->describe($priceFacetScope, $validated['price_min'] ?? null, $validated['price_max'] ?? null);
         $paginator = $filters
             ->sort($query, $validated['sort'] ?? null)
             ->paginate($filters->perPage($validated))
