@@ -1,6 +1,6 @@
 <template>
   <div>
-    <Breadcrumbs :items="[{ label: 'Категории' }]" />
+    <LayoutBreadcrumbs :items="[{ label: 'Категории' }]" />
 
     <main class="container-page">
       <div class="mb-6">
@@ -8,10 +8,17 @@
         <p class="mt-2 max-w-2xl text-sm text-slate-600">
           Изберете категория, за да разгледате активните продукти в нея.
         </p>
+        <p v-if="categorySummary.totalCategoryCount" class="mt-3 text-sm font-medium text-slate-700">
+          {{ categorySummary.totalCategoryCount }} активни категории в
+          {{ categorySummary.rootCategoryCount }} основни групи
+          <span v-if="categorySummary.maximumVisibleDepth > 1">
+            · до {{ categorySummary.maximumVisibleDepth }} нива
+          </span>
+        </p>
       </div>
 
-      <LoadingState v-if="pending" />
-      <ErrorState
+      <UiLoadingState v-if="pending" />
+      <UiErrorState
         v-else-if="error"
         title="Категориите не могат да се заредят"
         text="Моля, опитайте отново след малко."
@@ -46,18 +53,13 @@
               </p>
             </div>
 
-            <div v-if="childCategories(category).length" class="rounded-md bg-slate-50 p-3">
+            <div v-if="category.children?.length" class="rounded-md bg-slate-50 p-3">
               <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Подкатегории</p>
-              <div class="mt-2 flex flex-wrap gap-2">
-                <NuxtLink
-                  v-for="child in childCategories(category)"
-                  :key="child.id"
-                  :to="localePath(`/c/${child.slug}`)"
-                  class="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-700 hover:border-brand-200 hover:text-brand-700"
-                >
-                  {{ child.localized?.name || child.name }}
-                </NuxtLink>
-              </div>
+              <CatalogCategoryTree
+                :categories="category.children"
+                :ancestor-ids="[category.id]"
+                class="mt-2"
+              />
             </div>
 
             <div class="mt-auto flex items-center justify-between gap-3 pt-2">
@@ -72,7 +74,7 @@
           </div>
         </article>
       </div>
-      <EmptyState
+      <UiEmptyState
         v-else
         title="Няма активни категории за показване"
         text="Категориите ще се покажат тук, когато са активни и публични."
@@ -84,6 +86,7 @@
 <script setup lang="ts">
 import type { Category } from '~/types/api'
 import { collectionData } from '~/utils/apiCollections'
+import { categoryTreeSummary, normalizeCategoryTree } from '~/utils/categoryTree'
 
 const categoryApi = useCategories()
 const seo = useSeo()
@@ -97,13 +100,12 @@ const { data: categoryResponse, pending, error } = await useAsyncData(
   { watch: [locale] },
 )
 
-const categories = computed<Category[]>(() => collectionData<Category>(categoryResponse.value))
+const categories = computed<Category[]>(() => normalizeCategoryTree(
+  collectionData<Category>(categoryResponse.value),
+))
+const categorySummary = computed(() => categoryTreeSummary(categories.value))
 const storageBase = computed(() => String(config.public.apiBaseUrl).replace(/\/api\/v1\/?$/, ''))
 const failedCategoryImages = ref<Set<string>>(new Set())
-
-function childCategories(category: Category): Category[] {
-  return category.children || []
-}
 
 function categoryImageSrc(path: string): string {
   return path.startsWith('http') ? path : `${storageBase.value}/storage/${path}`
