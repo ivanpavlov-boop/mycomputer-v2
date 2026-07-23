@@ -85,7 +85,8 @@ describe('read-only public catalog foundation', () => {
     expect(categories).toContain('useCategories')
     expect(categories).toContain('categoryApi.navigation()')
     expect(categories).toContain('v-for="category in categories"')
-    expect(categories).toContain('v-for="child in childCategories(category)"')
+    expect(categories).toContain('<CatalogCategoryTree')
+    expect(categories).toContain('normalizeCategoryTree')
 
     expect(catalog).not.toContain('supplier_products')
     expect(categories).not.toContain('supplier_products')

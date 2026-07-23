@@ -57,6 +57,7 @@ Phase 8 manual selected UPDATE price/stock sync has been implemented behind a fe
 | Phase 9C.10.2 | Preserve attribute filter facets during active price filtering | Complete locally; independent result, attribute-facet and price-facet scopes keep useful filters stable. |
 | Phase 9C.10.3 | Preserve price facet across active attribute filters | Complete locally; price discovery keeps non-attribute listing context while active attributes continue to constrain Product results. |
 | Phase 9C.10.4 | Fix Category listing component resolution | Complete locally; the Category page uses the registered directory-prefixed Nuxt components without changing listing scope or data behavior. |
+| Phase 9C.11 | Public Category tree and Category governance audit | Complete locally; recursive public hierarchy plus a read-only Filament governance report. Merge, deploy and manual staging verification remain pending. |
 | Phase 9C.6 | Multi-supplier import discovery foundation | Complete |
 | Phase 9C.6.1 | Supplier Import Capability Audit | Complete |
 | Phase 9C.6.2 | Supplier Configuration Safety Cleanup | Complete |
@@ -331,9 +332,9 @@ unpriced attribute discovery scope. No per-option counts, persistent facet
 cache, search index or new API/URL contract was added. The hotfix performs no
 Product or supplier mutation, uses no supplier-derived values, and changes no
 Product Workflow, public visibility, supplier import or Catalog Sync behavior.
-Phase 9C.10.1 remains pending final staging completion until this hotfix is
-merged, deployed and manually verified. Phase 9C.9 manual staging verification
-remains separately pending.
+Phase 9C.10.1 and its facet-preservation follow-ups have completed staging
+verification. Phase 9C.9 manual staging verification remains separately
+pending.
 
 ## Phase 9C.10.3 Scope
 
@@ -352,9 +353,9 @@ empty base discovery scopes still return `price_filter=null`; no slider is
 forced where it is not useful. The API and URL contracts are unchanged, and
 the correction adds no cache, Product or supplier mutation, supplier-derived
 metadata, Product Workflow, public-visibility, supplier import or Catalog Sync
-behavior change. Phases 9C.10.1 through 9C.10.3 remain pending final staging
-completion until merged, deployed and manually verified. Phase 9C.9 manual
-staging verification remains separately pending.
+behavior change. Phases 9C.10.1 through 9C.10.3 have completed staging
+verification. Phase 9C.9 manual staging verification remains separately
+pending.
 
 ## Phase 9C.10.4 Scope
 
@@ -370,9 +371,44 @@ The correction changes no API, URL, Category query or direct-assignment scope.
 It does not aggregate Products from child Categories, mutate Products or
 Categories, change filter/facet semantics, alter public visibility, add a
 backend or database change, or change supplier import or Catalog Sync behavior.
-Phases 9C.10.1 through 9C.10.4 remain pending final staging completion until
-this frontend correction is merged, deployed and manually verified. Phase
+Phases 9C.10.1 through 9C.10.4 have completed staging verification. Phase
 9C.9 manual staging verification remains separately pending.
+
+## Phase 9C.11 Scope
+
+Phase 9C.11 renders every active Category returned by the established recursive
+navigation endpoint on `/categories`. Root Categories remain the visual groups;
+all valid descendants are presented as nested semantic lists with relative
+`/c/{slug}` links. Root count, total visible Category count and maximum depth
+are calculated from the response. Duplicate or cyclic payload nodes fail
+closed without a hardcoded depth limit.
+
+The existing `/c/{slug}` Product query remains exact to the selected
+`category_id`. Phase 9C.11 does not aggregate descendant Products or change
+Product public visibility.
+
+The Filament Category Governance Audit is read-only and calculates current
+hierarchy, direct Product, published direct Product and published subtree
+coverage in bounded queries. It reports hierarchy, naming, localization,
+ordering and Product-coverage observations with the following stable severity
+mapping:
+
+- `critical`: `cycle`, `orphan_parent`, `duplicate_slug`, `missing_slug`,
+  `missing_name`;
+- `warning`: `unreachable_from_root`, `active_under_inactive_parent`,
+  `active_under_deleted_parent`, `duplicate_normalized_name`,
+  `suspicious_name_punctuation`, `no_published_products_in_subtree`;
+- `info`: `zero_sort_order`, `sibling_sort_order_collision`,
+  `no_direct_products`, `no_published_direct_products`,
+  `missing_explicit_bg_translation`, `possible_latin_only_public_name`.
+
+Recommendations are Bulgarian manual guidance only. The audit does not rename,
+translate, move, reorder, activate, deactivate, create, merge, delete or restore
+Categories; assign Products; modify Category templates; persist audit results;
+derive public Categories from suppliers; or mutate Products,
+`supplier_products`, supplier records or Catalog Sync state. Phase 9C.11
+merge, deployment and manual staging verification remain pending. Phase 9C.9
+manual staging verification remains separately pending.
 
 ## Phase 9C.6.5A and 9C.6.5B Implemented Scope
 

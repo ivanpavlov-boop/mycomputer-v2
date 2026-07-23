@@ -284,9 +284,9 @@ results without narrowing attribute discovery metadata.
 The API and URL contracts remain unchanged. The hotfix adds no option counts,
 cache, search indexing, Product or supplier mutation, supplier-derived filters,
 Product Workflow change, public-visibility change or Catalog Sync behavior
-change. Phase 9C.10.1 remains pending final staging completion until this
-hotfix is merged, deployed and manually verified. Phase 9C.9 final manual
-staging verification remains separately pending.
+change. Phase 9C.10.1 and its facet-preservation follow-ups have completed
+staging verification. Phase 9C.9 final manual staging verification remains
+separately pending.
 
 Phase 9C.10.3 Preserve Price Facet Across Active Attribute Filters is complete
 locally. It fixes the confirmed staging regression where a valid attribute
@@ -300,9 +300,8 @@ Equal-price and empty base scopes continue to hide the price slider. The API,
 URL and frontend contracts remain unchanged. The hotfix adds no cache,
 Product or supplier mutation, supplier-derived filters, Product Workflow,
 public-visibility, supplier import or Catalog Sync behavior change. Phases
-9C.10.1 through 9C.10.3 remain pending final staging completion until merged,
-deployed and manually verified. Phase 9C.9 final manual staging verification
-remains separately pending.
+9C.10.1 through 9C.10.3 have completed staging verification. Phase 9C.9 final
+manual staging verification remains separately pending.
 
 Phase 9C.10.4 Fix Category Listing Component Resolution is complete locally.
 The Category API and pagination payload were correct, but `/c/{slug}` used
@@ -315,9 +314,32 @@ This frontend-only correction changes no Category query or direct-assignment
 scope and does not aggregate child-Category Products. It adds no backend,
 database, Product, Category or supplier mutation and changes no filter/facet,
 public-visibility, supplier import or Catalog Sync behavior. Phases 9C.10.1
-through 9C.10.4 remain pending final staging completion until merged, deployed
-and manually verified. Phase 9C.9 final manual staging verification remains
-separately pending.
+through 9C.10.4 have completed staging verification. Phase 9C.9 final manual
+staging verification remains separately pending.
+
+Phase 9C.11 Public Category Tree and Category Governance Audit is complete
+locally. `/categories` now presents the full active recursive Category response
+as root cards with nested semantic descendant links and calculates its visible
+root, total and depth summary from that response. Duplicate or cyclic payload
+nodes fail closed. The exact `/c/{slug}` Product scope remains unchanged and
+does not aggregate descendant Products.
+
+The new Filament audit reads current database state directly and reports
+hierarchy reachability, path/depth, direct and published Product coverage,
+subtree coverage, deterministic naming/order/localization observations and
+Bulgarian manual recommendations. Critical issues are cycles, missing parents,
+duplicate slugs and missing names/slugs. Warnings cover unreachable or
+parent-status problems, normalized-name duplicates, suspicious punctuation and
+trees without published Products. Ordering, direct coverage and Bulgarian-name
+advisories remain informational.
+
+The audit has no mutation actions, persistent cache or audit storage. It does
+not change Categories, Products, Category templates, `supplier_products`,
+supplier mappings, public visibility, Product Workflow, supplier import or
+Catalog Sync behavior. It does not create supplier-derived Categories or
+perform automatic remediation. Merge, deployment and manual staging
+verification for Phase 9C.11 remain pending. Phase 9C.9 final manual staging
+verification remains separately pending.
 
 ## Next
 
