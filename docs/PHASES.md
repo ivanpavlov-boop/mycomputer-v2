@@ -56,6 +56,7 @@ Phase 8 manual selected UPDATE price/stock sync has been implemented behind a fe
 | Phase 9C.10.1 | Configurable filter controls and range slider UX | Complete locally; per-Category controls plus scoped public price sliders without filtering-semantic changes. |
 | Phase 9C.10.2 | Preserve attribute filter facets during active price filtering | Complete locally; independent result, attribute-facet and price-facet scopes keep useful filters stable. |
 | Phase 9C.10.3 | Preserve price facet across active attribute filters | Complete locally; price discovery keeps non-attribute listing context while active attributes continue to constrain Product results. |
+| Phase 9C.10.4 | Fix Category listing component resolution | Complete locally; the Category page uses the registered directory-prefixed Nuxt components without changing listing scope or data behavior. |
 | Phase 9C.6 | Multi-supplier import discovery foundation | Complete |
 | Phase 9C.6.1 | Supplier Import Capability Audit | Complete |
 | Phase 9C.6.2 | Supplier Configuration Safety Cleanup | Complete |
@@ -354,6 +355,24 @@ metadata, Product Workflow, public-visibility, supplier import or Catalog Sync
 behavior change. Phases 9C.10.1 through 9C.10.3 remain pending final staging
 completion until merged, deployed and manually verified. Phase 9C.9 manual
 staging verification remains separately pending.
+
+## Phase 9C.10.4 Scope
+
+Phase 9C.10.4 corrects the confirmed Category-page frontend rendering defect
+where the API and pagination metadata contained the expected Product, but the
+Product card and shared listing controls were absent. The Category page used
+unresolved short component names; it now uses the directory-prefixed Nuxt
+auto-import names already established by the working general catalog page for
+breadcrumbs, loading and error states, sorting, Product grid, empty state and
+pagination.
+
+The correction changes no API, URL, Category query or direct-assignment scope.
+It does not aggregate Products from child Categories, mutate Products or
+Categories, change filter/facet semantics, alter public visibility, add a
+backend or database change, or change supplier import or Catalog Sync behavior.
+Phases 9C.10.1 through 9C.10.4 remain pending final staging completion until
+this frontend correction is merged, deployed and manually verified. Phase
+9C.9 manual staging verification remains separately pending.
 
 ## Phase 9C.6.5A and 9C.6.5B Implemented Scope
 
