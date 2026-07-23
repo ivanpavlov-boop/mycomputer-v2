@@ -112,7 +112,7 @@ class MarketingPlatformTest extends TestCase
         $product = Product::query()->where('sku', 'MC-LAP-001')->firstOrFail();
 
         $this->withHeaders([
-            'X-Cart-Session' => 'cart-session',
+            'X-Cart-Session' => $this->cartSession('cart-session'),
             'X-Marketing-Session' => 'marketing-session',
         ])->postJson('/api/v1/cart/items', [
             'product_id' => $product->id,

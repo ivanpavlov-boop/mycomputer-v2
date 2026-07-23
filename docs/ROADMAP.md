@@ -35,6 +35,9 @@ Manual selected UPDATE price/stock sync is implemented behind `CATALOG_SYNC_UPDA
 - Product Data Quality Queue for read-only enrichment triage.
 - Commerce Phase 1A Cart Architecture, Safety and Gap Audit, completed locally
   as documentation and documentation-contract tests only.
+- Commerce Phase 1B.1 Unified Cart Identity and Ownership Boundary, completed
+  locally with one request-level UUID/ownership resolver, atomic anonymous-Cart
+  claim, checkout cross-user rejection and session-authorized shipping.
 - Unified Product edit quality summary combining existing scanner issues,
   category specification quality and active manual flags without blocking or
   mutating Product workflow.
@@ -357,6 +360,18 @@ Commerce Phase 1C is proposed for persistent single-source storefront state,
 error/loading UX, currency, multi-tab and browser coverage. Commerce Phase 1D
 is proposed as the checkout, idempotency, payment, shipping, stock and release
 gate. Phases 1B, 1C and 1D have not started.
+
+Commerce Phase 1B is now split into controlled subphases. Phase 1B.1 is
+complete locally. It centralizes request-level Cart session validation,
+ownership enforcement and anonymous-Cart claiming, remediating CART-001 and
+CART-022 locally. CART-017 is only partially remediated for UUID validation;
+dedicated throttling remains open.
+
+CART-003 Cart merge remains open, as do lifecycle, pricing, promotion
+concurrency, recovery and checkout idempotency. Public Cart and checkout pages
+remain disabled. This phase adds no migration, frontend production change,
+Product or supplier mutation, Catalog Sync behavior change, Sync All,
+automatic sync or UPDATE enablement.
 
 ## Next
 

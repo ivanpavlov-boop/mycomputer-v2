@@ -106,7 +106,7 @@ class PcBuilderTest extends TestCase
 
         $this->withHeaders([
             'X-PC-Build-Session' => $this->session,
-            'X-Cart-Session' => 'cart-session',
+            'X-Cart-Session' => $this->cartSession('cart-session'),
         ])
             ->postJson("/api/v1/pc-builder/builds/{$build->id}/add-to-cart")
             ->assertOk()

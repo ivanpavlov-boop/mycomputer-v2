@@ -36,6 +36,7 @@ Phase 8 manual selected UPDATE price/stock sync has been implemented behind a fe
 | Product Data Quality 2D | SEO and description quality workflow | Complete locally; read-only SEO, Bulgarian description and English-localization completeness states, queue triage, counts and Product edit summary with manual remediation through existing fields. |
 | Product Data Quality 2E | Category-template and specification completion | Complete locally; shared read-only template inheritance resolution, exact specification completion states, queue/category triage and Product edit summary with manual remediation through existing editors. |
 | Commerce Phase 1A | Cart Architecture, Safety and Gap Audit | Complete locally; read-only architecture report, machine-readable gap register and phased remediation plan. No Cart or checkout implementation changed. |
+| Commerce Phase 1B.1 | Unified Cart Identity and Ownership Boundary | Complete locally; shared request-level UUID and ownership resolver, atomic anonymous-Cart claim, checkout cross-user rejection and session-authorized shipping subtotal. |
 | Phase 9C.1 | Product attributes core foundation | Complete |
 | Phase 9C.2 | Product attributes admin usability and starter structure | Complete |
 | Phase 9C.3 | Category attribute sets | Complete |
@@ -432,6 +433,27 @@ ownership, lifecycle and pricing contracts are reviewed and approved. Commerce
 Phase 1C remains the proposed Cart storefront UX phase, and Commerce Phase 1D
 remains the proposed checkout readiness and release-gate phase. None of Phases
 1B through 1D has started.
+
+## Commerce Phase 1B.1 Scope
+
+Commerce Phase 1B is split into controlled subphases. Phase 1B.1 is complete
+locally and adds one shared request-level Cart resolver across regular Cart,
+bundle Cart, checkout, shipping, authenticated Cart quote and PC Builder
+add-to-Cart operations.
+
+The resolver enforces canonical lowercase UUID Cart sessions, rejects malformed
+non-empty values before database access, applies one guest/authenticated
+ownership matrix and claims an anonymous Cart under a row lock with a
+post-lock ownership check. Checkout now rejects foreign ownership before any
+checkout side effect. Shipping uses the resolved Cart session as authority and
+treats `cart_id` only as an optional matching assertion.
+
+CART-001 and CART-022 are complete locally. CART-017 is only partially
+remediated for session validation; dedicated throttling remains open. CART-003
+Cart merge, lifecycle/expiry, pricing, promotion concurrency, recovery and
+checkout idempotency remain unchanged and open. Public commerce page routes
+remain disabled. No migration, frontend production, Product, supplier or
+Catalog Sync behavior changed.
 
 ## Phase 9C.6.5A and 9C.6.5B Implemented Scope
 

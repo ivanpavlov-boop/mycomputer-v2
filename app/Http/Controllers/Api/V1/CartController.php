@@ -11,6 +11,7 @@ use App\Http\Resources\CartResource;
 use App\Jobs\AnalyticsEventJob;
 use App\Models\CartItem;
 use App\Models\Product;
+use App\Services\Cart\CartContextResolver;
 use App\Services\Cart\CartService;
 use App\Services\Email\EmailMarketingService;
 use App\Services\Promotions\PromotionEngineService;
@@ -20,6 +21,7 @@ use Illuminate\Support\Facades\Auth;
 class CartController extends Controller
 {
     public function __construct(
+        private readonly CartContextResolver $cartContext,
         private readonly CartService $cartService,
         private readonly EmailMarketingService $emailMarketing,
         private readonly PromotionEngineService $promotions,
@@ -27,12 +29,12 @@ class CartController extends Controller
 
     public function show(Request $request): CartResource
     {
-        return CartResource::make($this->resolveCart($request));
+        return CartResource::make($this->cartContext->resolve($request));
     }
 
     public function store(AddCartItemRequest $request): CartResource
     {
-        $cart = $this->resolveCart($request);
+        $cart = $this->cartContext->resolve($request);
         $product = Product::query()->findOrFail($request->integer('product_id'));
         $quantity = $request->integer('quantity');
         $cart = $this->cartService->add($cart, $product, $quantity);
@@ -50,39 +52,39 @@ class CartController extends Controller
 
     public function update(UpdateCartItemRequest $request, CartItem $item): CartResource
     {
-        $cart = $this->resolveCart($request);
+        $cart = $this->cartContext->resolve($request);
 
         return CartResource::make($this->promotions->applyAutomaticGifts($this->cartService->update($cart, $item, $request->integer('quantity'))));
     }
 
     public function destroy(Request $request, CartItem $item): CartResource
     {
-        $cart = $this->resolveCart($request);
+        $cart = $this->cartContext->resolve($request);
 
         return CartResource::make($this->promotions->applyAutomaticGifts($this->cartService->remove($cart, $item)));
     }
 
     public function clear(Request $request): CartResource
     {
-        $cart = $this->resolveCart($request);
+        $cart = $this->cartContext->resolve($request);
 
         return CartResource::make($this->cartService->clear($cart));
     }
 
     public function applyCoupon(ApplyCouponRequest $request): CartResource
     {
-        return CartResource::make($this->promotions->applyCoupon($this->resolveCart($request), $request->validated('code')));
+        return CartResource::make($this->promotions->applyCoupon($this->cartContext->resolve($request), $request->validated('code')));
     }
 
     public function removeCoupon(Request $request): CartResource
     {
-        return CartResource::make($this->promotions->removeCoupon($this->resolveCart($request)));
+        return CartResource::make($this->promotions->removeCoupon($this->cartContext->resolve($request)));
     }
 
     public function email(CartEmailRequest $request): CartResource
     {
         return CartResource::make(
-            $this->emailMarketing->attachEmailToCart($this->resolveCart($request), $request->validated('email')),
+            $this->emailMarketing->attachEmailToCart($this->cartContext->resolve($request), $request->validated('email')),
         );
     }
 
@@ -96,22 +98,5 @@ class CartController extends Controller
     private function sessionId(Request $request): ?string
     {
         return $request->header('X-Cart-Session');
-    }
-
-    private function resolveCart(Request $request)
-    {
-        $cart = $this->cartService->resolve($this->sessionId($request));
-        $user = Auth::guard('sanctum')->user();
-
-        abort_if($user && $cart->user_id && $cart->user_id !== $user->id, 403, 'Cart belongs to another user.');
-
-        if ($user && ($cart->user_id !== $user->id || $cart->customer_email !== $user->email)) {
-            $cart->update([
-                'user_id' => $user->id,
-                'customer_email' => $cart->customer_email ?: $user->email,
-            ]);
-        }
-
-        return $cart->fresh(['items.product.brand', 'items.product.category', 'items.product.images']);
     }
 }

@@ -168,7 +168,7 @@ class AvailabilityStatusSystemTest extends TestCase
         $this->postJson('/api/v1/cart/items', [
             'product_id' => $product->id,
             'quantity' => 1,
-        ], ['X-Cart-Session' => 'availability-cart'])
+        ], ['X-Cart-Session' => $this->cartSession('availability-cart')])
             ->assertStatus(422);
     }
 
@@ -185,7 +185,7 @@ class AvailabilityStatusSystemTest extends TestCase
         $this->postJson('/api/v1/cart/items', [
             'product_id' => $product->id,
             'quantity' => 1,
-        ], ['X-Cart-Session' => 'preorder-cart'])
+        ], ['X-Cart-Session' => $this->cartSession('preorder-cart')])
             ->assertOk()
             ->assertJsonPath('data.items.0.product.availability.code', 'preorder');
     }

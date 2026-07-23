@@ -777,6 +777,37 @@ Only after 1B, 1C and 1D gates pass should deployment routing expose cart and
 checkout pages. Route enablement, monitoring, support procedures and smoke
 tests require an explicit release phase.
 
+### Commerce Phase 1B.1 - Unified Cart Identity and Ownership Boundary
+
+Commerce Phase 1B is split into controlled subphases. Phase 1B.1 is complete
+locally and introduces one request-level Cart resolver for regular Cart,
+bundle Cart, checkout, Cart quote, shipping and PC Builder add-to-Cart
+operations.
+
+The resolver accepts only canonical lowercase UUID values supplied through
+`X-Cart-Session`. A missing or blank header creates a server-generated
+anonymous Cart. A malformed non-empty value fails with a generic `422` before
+Cart lookup or creation. Guest requests cannot use a user-owned Cart;
+authenticated requests cannot use a Cart owned by another user. An
+authenticated user may claim an anonymous Cart only inside a transaction after
+locking and re-checking the Cart row.
+
+This locally remediates CART-001 and CART-022. Checkout now resolves ownership
+before any checkout mutation or side effect. Shipping resolves Cart subtotal
+only through the shared session boundary; a supplied numeric `cart_id` is only
+a consistency assertion and cannot authorize lookup by itself.
+
+CART-017 is only partially remediated for session format and lookup safety.
+Dedicated Cart and checkout throttling remains open. CART-003 remains open:
+Phase 1B.1 does not merge carts or select among multiple user carts. Cart
+lifecycle, expiry, pricing, promotion concurrency, recovery semantics and
+checkout idempotency remain unchanged and open. Public Cart and checkout pages
+remain disabled pending the later release gates.
+
+This subphase adds no migration, frontend production change, Product or stock
+behavior change, supplier behavior, Catalog Sync behavior, Sync All, automatic
+sync or UPDATE enablement.
+
 ## 30. Release Gates
 
 Commerce Phase 1A is complete only as a local, read-only audit. It authorizes no

@@ -19,7 +19,7 @@ class CartCheckoutApiTest extends TestCase
         $this->seed();
         $product = Product::query()->where('sku', 'MC-LAP-001')->firstOrFail();
 
-        $this->withHeader('X-Cart-Session', 'test-cart')
+        $this->withHeader('X-Cart-Session', $this->cartSession('test-cart'))
             ->postJson('/api/v1/cart/items', ['product_id' => $product->id, 'quantity' => 2])
             ->assertOk()
             ->assertJsonPath('data.items.0.quantity', 2)
@@ -30,7 +30,7 @@ class CartCheckoutApiTest extends TestCase
     {
         $item = $this->cartItem();
 
-        $this->withHeader('X-Cart-Session', 'test-cart')
+        $this->withHeader('X-Cart-Session', $this->cartSession('test-cart'))
             ->patchJson('/api/v1/cart/items/'.$item->id, ['quantity' => 3])
             ->assertOk()
             ->assertJsonPath('data.items.0.quantity', 3);
@@ -40,7 +40,7 @@ class CartCheckoutApiTest extends TestCase
     {
         $item = $this->cartItem();
 
-        $this->withHeader('X-Cart-Session', 'test-cart')
+        $this->withHeader('X-Cart-Session', $this->cartSession('test-cart'))
             ->deleteJson('/api/v1/cart/items/'.$item->id)
             ->assertOk()
             ->assertJsonPath('data.items_count', 0);
@@ -50,7 +50,7 @@ class CartCheckoutApiTest extends TestCase
     {
         $this->cartItem();
 
-        $this->withHeader('X-Cart-Session', 'test-cart')
+        $this->withHeader('X-Cart-Session', $this->cartSession('test-cart'))
             ->deleteJson('/api/v1/cart')
             ->assertOk()
             ->assertJsonPath('data.items_count', 0);
@@ -61,7 +61,7 @@ class CartCheckoutApiTest extends TestCase
         $item = $this->cartItem(quantity: 2);
         $item->product->update(['price' => 100, 'promo_price' => null, 'quantity' => 5]);
 
-        $this->withHeader('X-Cart-Session', 'test-cart')
+        $this->withHeader('X-Cart-Session', $this->cartSession('test-cart'))
             ->postJson('/api/v1/checkout', $this->checkoutPayload())
             ->assertCreated()
             ->assertJsonPath('data.subtotal', '200.00')
@@ -70,7 +70,7 @@ class CartCheckoutApiTest extends TestCase
 
         $this->assertSame(3, $item->product->fresh()->quantity);
         $this->assertSame(1, Order::query()->count());
-        $this->assertSame('converted', Cart::query()->where('session_id', 'test-cart')->firstOrFail()->status);
+        $this->assertSame('converted', Cart::query()->where('session_id', $this->cartSession('test-cart'))->firstOrFail()->status);
     }
 
     public function test_authenticated_checkout_stores_user_id(): void
@@ -79,7 +79,7 @@ class CartCheckoutApiTest extends TestCase
         $user = User::factory()->create(['email' => 'member@example.com']);
 
         $this->actingAs($user, 'sanctum')
-            ->withHeader('X-Cart-Session', 'test-cart')
+            ->withHeader('X-Cart-Session', $this->cartSession('test-cart'))
             ->postJson('/api/v1/checkout', array_merge($this->checkoutPayload(), ['email' => 'member@example.com']))
             ->assertCreated();
 
@@ -94,7 +94,7 @@ class CartCheckoutApiTest extends TestCase
         $item = $this->cartItem();
         $item->product->update(['active' => false]);
 
-        $this->withHeader('X-Cart-Session', 'test-cart')
+        $this->withHeader('X-Cart-Session', $this->cartSession('test-cart'))
             ->postJson('/api/v1/checkout', $this->checkoutPayload())
             ->assertStatus(422);
     }
@@ -104,7 +104,7 @@ class CartCheckoutApiTest extends TestCase
         $item = $this->cartItem(quantity: 4);
         $item->product->update(['quantity' => 1]);
 
-        $this->withHeader('X-Cart-Session', 'test-cart')
+        $this->withHeader('X-Cart-Session', $this->cartSession('test-cart'))
             ->postJson('/api/v1/checkout', $this->checkoutPayload())
             ->assertStatus(422);
     }
@@ -124,11 +124,11 @@ class CartCheckoutApiTest extends TestCase
     {
         $this->seed();
         $product = Product::query()->where('sku', 'MC-LAP-001')->firstOrFail();
-        $this->withHeader('X-Cart-Session', 'test-cart')
+        $this->withHeader('X-Cart-Session', $this->cartSession('test-cart'))
             ->postJson('/api/v1/cart/items', ['product_id' => $product->id, 'quantity' => $quantity])
             ->assertOk();
 
-        return Cart::query()->where('session_id', 'test-cart')->firstOrFail()->items()->firstOrFail();
+        return Cart::query()->where('session_id', $this->cartSession('test-cart'))->firstOrFail()->items()->firstOrFail();
     }
 
     private function checkoutPayload(): array

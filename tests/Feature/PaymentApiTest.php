@@ -66,7 +66,7 @@ class PaymentApiTest extends TestCase
         $this->prepareCart();
         PaymentMethod::query()->where('code', 'card')->update(['status' => 'inactive']);
 
-        $this->withHeader('X-Cart-Session', 'payment-cart')
+        $this->withHeader('X-Cart-Session', $this->cartSession('payment-cart'))
             ->postJson('/api/v1/checkout', $this->payload('card'))
             ->assertNotFound();
     }
@@ -143,7 +143,7 @@ class PaymentApiTest extends TestCase
     {
         $this->prepareCart();
 
-        return $this->withHeader('X-Cart-Session', 'payment-cart')
+        return $this->withHeader('X-Cart-Session', $this->cartSession('payment-cart'))
             ->postJson('/api/v1/checkout', $this->payload($method));
     }
 
@@ -151,10 +151,10 @@ class PaymentApiTest extends TestCase
     {
         $this->seed();
         $product = Product::query()->where('sku', 'MC-LAP-001')->firstOrFail();
-        $this->withHeader('X-Cart-Session', 'payment-cart')
+        $this->withHeader('X-Cart-Session', $this->cartSession('payment-cart'))
             ->postJson('/api/v1/cart/items', ['product_id' => $product->id, 'quantity' => 1])
             ->assertOk();
-        Cart::query()->where('session_id', 'payment-cart')->firstOrFail();
+        Cart::query()->where('session_id', $this->cartSession('payment-cart'))->firstOrFail();
     }
 
     private function payload(string $method): array

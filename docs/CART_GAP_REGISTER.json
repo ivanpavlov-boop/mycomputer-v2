@@ -775,5 +775,28 @@
         "Tampered query parameters cannot alter trusted order status."
       ]
     }
+  ],
+  "remediation_progress": [
+    {
+      "phase": "Commerce Phase 1B.1",
+      "status": "complete_locally",
+      "finding_ids": [
+        "CART-001",
+        "CART-022"
+      ],
+      "partial_finding_ids": [
+        "CART-017"
+      ],
+      "open_finding_ids": [
+        "CART-003"
+      ],
+      "notes": [
+        "One request-level Cart resolver now enforces canonical UUID sessions and a shared guest/authenticated ownership matrix.",
+        "Checkout rejects cross-user and guest access to user-owned Carts before checkout side effects.",
+        "Shipping no longer treats a numeric cart_id as lookup authority; it is only a consistency assertion when a valid Cart session is supplied.",
+        "CART-017 remains open for dedicated Cart and checkout throttling.",
+        "Cart merge, lifecycle, pricing, recovery and checkout idempotency remain unchanged and open."
+      ]
+    }
   ]
 }

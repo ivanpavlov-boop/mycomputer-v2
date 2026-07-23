@@ -135,6 +135,16 @@ final class CartArchitectureAuditDocumentationTest extends TestCase
         }
 
         $this->assertCount(count(array_unique($ids)), $ids);
+
+        $progress = $register['remediation_progress'] ?? [];
+
+        $this->assertCount(1, $progress);
+        $this->assertSame('Commerce Phase 1B.1', $progress[0]['phase'] ?? null);
+        $this->assertSame('complete_locally', $progress[0]['status'] ?? null);
+        $this->assertSame(['CART-001', 'CART-022'], $progress[0]['finding_ids'] ?? null);
+        $this->assertSame(['CART-017'], $progress[0]['partial_finding_ids'] ?? null);
+        $this->assertSame(['CART-003'], $progress[0]['open_finding_ids'] ?? null);
+        $this->assertNotEmpty($progress[0]['notes'] ?? []);
     }
 
     public function test_audit_artifacts_contain_no_environment_or_secret_material(): void
@@ -168,6 +178,7 @@ final class CartArchitectureAuditDocumentationTest extends TestCase
         $this->assertIsString($roadmap);
 
         $this->assertStringContainsString('Commerce Phase 1A', $phases);
+        $this->assertStringContainsString('Commerce Phase 1B.1', $phases);
         foreach (['Commerce Phase 1A', 'Commerce Phase 1B', 'Commerce Phase 1C', 'Commerce Phase 1D'] as $phase) {
             $this->assertStringContainsString($phase, $roadmap);
         }
@@ -186,6 +197,10 @@ final class CartArchitectureAuditDocumentationTest extends TestCase
             );
             $this->assertStringContainsString(
                 'Commerce Phase 1B must not start',
+                $normalizedDocument,
+            );
+            $this->assertStringContainsString(
+                'CART-003',
                 $normalizedDocument,
             );
         }
