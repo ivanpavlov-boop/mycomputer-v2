@@ -1,21 +1,21 @@
 <template>
   <div>
-    <Breadcrumbs :items="[
+    <LayoutBreadcrumbs :items="[
       { label: 'Категории', to: '/categories' },
       { label: category?.name || 'Категория' },
     ]" />
 
     <main class="container-page">
-      <LoadingState v-if="categoryPending || productsPending" />
+      <UiLoadingState v-if="categoryPending || productsPending" />
 
-      <ErrorState
+      <UiErrorState
         v-else-if="categoryError"
         title="Категорията не е намерена"
         text="Разгледайте всички категории или опитайте с друга връзка."
       />
 
       <div v-else-if="productsError">
-        <ErrorState
+        <UiErrorState
           title="Не успяхме да заредим продуктите"
           text="Моля, опитайте отново след малко."
         />
@@ -39,7 +39,7 @@
             <NuxtLink :to="localePath('/categories')" class="inline-flex items-center justify-center rounded-md border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-brand-300 hover:text-brand-700">
               Всички категории
             </NuxtLink>
-            <SortSelect v-model="sort" />
+            <CatalogSortSelect v-model="sort" />
           </div>
         </div>
 
@@ -73,10 +73,10 @@
               @remove="removeActiveAttributeFilter"
               @clear-all="clearAllAttributeFilters"
             />
-            <ProductGrid v-if="products.length" :products="products" />
+            <CatalogProductGrid v-if="products.length" :products="products" />
 
             <div v-else class="space-y-4">
-              <EmptyState
+              <UiEmptyState
                 title="Няма активни продукти в тази категория."
                 text="Премахнете част от филтрите или разгледайте всички категории."
               />
@@ -93,12 +93,12 @@
               </div>
             </div>
 
-            <Pagination :meta="productsMeta" @change="setPage" />
+            <CatalogPagination :meta="productsMeta" @change="setPage" />
           </section>
         </div>
       </template>
 
-      <ErrorState
+      <UiErrorState
         v-else
         title="Категорията не е намерена"
         text="Разгледайте всички категории или опитайте с друга връзка."

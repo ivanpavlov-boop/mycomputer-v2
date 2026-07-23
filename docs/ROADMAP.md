@@ -304,6 +304,21 @@ public-visibility, supplier import or Catalog Sync behavior change. Phases
 deployed and manually verified. Phase 9C.9 final manual staging verification
 remains separately pending.
 
+Phase 9C.10.4 Fix Category Listing Component Resolution is complete locally.
+The Category API and pagination payload were correct, but `/c/{slug}` used
+unresolved short component names and therefore hid the Product card and shared
+listing controls. The page now uses the registered directory-prefixed Nuxt
+components for breadcrumbs, loading/error states, sorting, Product grid, empty
+state and pagination, matching the working general catalog convention.
+
+This frontend-only correction changes no Category query or direct-assignment
+scope and does not aggregate child-Category Products. It adds no backend,
+database, Product, Category or supplier mutation and changes no filter/facet,
+public-visibility, supplier import or Catalog Sync behavior. Phases 9C.10.1
+through 9C.10.4 remain pending final staging completion until merged, deployed
+and manually verified. Phase 9C.9 final manual staging verification remains
+separately pending.
+
 ## Next
 
 1. Keep Phase 7.5 documentation lock current.
