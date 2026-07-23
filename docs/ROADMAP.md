@@ -33,6 +33,8 @@ Manual selected UPDATE price/stock sync is implemented behind `CATALOG_SYNC_UPDA
 - Configurable non-blocking Product Quality Flags.
 - Multilingual foundation for BG primary and EN secondary content.
 - Product Data Quality Queue for read-only enrichment triage.
+- Commerce Phase 1A Cart Architecture, Safety and Gap Audit, completed locally
+  as documentation and documentation-contract tests only.
 - Unified Product edit quality summary combining existing scanner issues,
   category specification quality and active manual flags without blocking or
   mutating Product workflow.
@@ -337,9 +339,24 @@ The audit has no mutation actions, persistent cache or audit storage. It does
 not change Categories, Products, Category templates, `supplier_products`,
 supplier mappings, public visibility, Product Workflow, supplier import or
 Catalog Sync behavior. It does not create supplier-derived Categories or
-perform automatic remediation. Merge, deployment and manual staging
-verification for Phase 9C.11 remain pending. Phase 9C.9 final manual staging
-verification remains separately pending.
+perform automatic remediation. Phase 9C.11 is merged, deployed and staging
+verified. Recursive Category tree verification and Category Governance Audit
+verification passed. Phase 9C.9 final manual staging verification remains
+separately pending.
+
+Commerce Phase 1A Cart Architecture, Safety and Gap Audit is complete locally.
+It records the current Laravel and Nuxt Cart architecture, 26 open findings, an
+endpoint and schema review, the existing test inventory, and proposed scopes
+for Commerce Phases 1B through 1D. It changed no Cart, checkout, Order, Product,
+payment, shipping, promotion, bundle, frontend or Catalog Sync implementation.
+
+Commerce Phase 1B must not start until the Phase 1A findings are reviewed and
+approved. Its proposed scope is backend identity, ownership, lifecycle,
+pricing, eligibility, stock, concurrency, promotions and recovery safety.
+Commerce Phase 1C is proposed for persistent single-source storefront state,
+error/loading UX, currency, multi-tab and browser coverage. Commerce Phase 1D
+is proposed as the checkout, idempotency, payment, shipping, stock and release
+gate. Phases 1B, 1C and 1D have not started.
 
 ## Next
 

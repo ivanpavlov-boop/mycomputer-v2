@@ -1,0 +1,779 @@
+{
+  "phase": "Commerce Phase 1A",
+  "generated_from_commit": "de8e73cd2af31d3816fe5e72dd5c3c82f5277243",
+  "audit_type": "read_only",
+  "findings": [
+    {
+      "id": "CART-001",
+      "area": "identity",
+      "title": "Checkout can claim a cart owned by another user",
+      "severity": "blocker",
+      "confidence": "confirmed",
+      "status": "open",
+      "current_behavior": "Normal cart endpoints reject an authenticated request when the supplied cart belongs to another user, but checkout assigns the resolved cart to the current user without the same rejection.",
+      "risk": "A bearer cart session from another account can cross the ownership boundary and be converted into an order by the wrong authenticated user.",
+      "evidence": [
+        {
+          "path": "app/Http/Controllers/Api/V1/CartController.php",
+          "symbol": "resolveCart"
+        },
+        {
+          "path": "app/Http/Controllers/Api/V1/CheckoutController.php",
+          "symbol": "__invoke"
+        }
+      ],
+      "verification": "Create a cart owned by user A, submit its session header while authenticated as user B, and compare cart GET rejection with checkout behavior.",
+      "recommendation": "Centralize cart identity and ownership resolution and fail closed before checkout performs any mutation.",
+      "target_phase": "Commerce Phase 1B",
+      "acceptance_criteria": [
+        "Checkout rejects a cart owned by another user.",
+        "Cart and checkout endpoints use the same ownership decision.",
+        "Regression tests cover anonymous, same-user and cross-user carts."
+      ]
+    },
+    {
+      "id": "CART-002",
+      "area": "checkout",
+      "title": "Checkout has no idempotency or cart-level serialization",
+      "severity": "blocker",
+      "confidence": "confirmed",
+      "status": "open",
+      "current_behavior": "Checkout creates an order and payment transaction in a database transaction, but accepts no idempotency key and does not lock or atomically transition the cart before order creation.",
+      "risk": "Duplicate submissions or two browser tabs can create duplicate orders and payment attempts when stock is sufficient.",
+      "evidence": [
+        {
+          "path": "app/Services/Orders/CheckoutService.php",
+          "symbol": "checkout"
+        },
+        {
+          "path": "app/Http/Requests/Api/V1/CheckoutRequest.php",
+          "symbol": "rules"
+        },
+        {
+          "path": "database/migrations/2026_06_08_110003_create_orders_table.php",
+          "symbol": "up"
+        }
+      ],
+      "verification": "Send two concurrent valid checkout requests for the same active cart and compare created order and payment transaction counts.",
+      "recommendation": "Define an idempotency contract and atomically lock or transition the cart before creating checkout side effects.",
+      "target_phase": "Commerce Phase 1D",
+      "acceptance_criteria": [
+        "Equivalent concurrent submissions create at most one order.",
+        "Repeated idempotency keys return the original checkout result.",
+        "Cart conversion and order creation are atomic."
+      ]
+    },
+    {
+      "id": "CART-003",
+      "area": "identity",
+      "title": "Guest-to-user transition claims one cart without merging",
+      "severity": "high",
+      "confidence": "confirmed",
+      "status": "open",
+      "current_behavior": "Authentication associates the supplied guest cart with the user. Existing active carts for that user are not discovered or merged, and the schema permits multiple active carts per user.",
+      "risk": "Items, bundles, coupons and gifts can be split across carts or appear lost when users sign in on multiple devices.",
+      "evidence": [
+        {
+          "path": "app/Http/Controllers/Api/V1/CartController.php",
+          "symbol": "resolveCart"
+        },
+        {
+          "path": "database/migrations/2026_06_08_110000_create_carts_table.php",
+          "symbol": "up"
+        }
+      ],
+      "verification": "Create an authenticated-user cart and a separate guest cart, sign in while sending the guest session, then inspect both carts and all related lines.",
+      "recommendation": "Specify and test a deterministic claim-or-merge policy for products, bundles, coupons and gifts.",
+      "target_phase": "Commerce Phase 1B",
+      "acceptance_criteria": [
+        "Guest-to-user transition has one documented outcome.",
+        "Existing user cart contents are not silently orphaned.",
+        "Same-product and multi-device cases are covered."
+      ]
+    },
+    {
+      "id": "CART-004",
+      "area": "frontend_state",
+      "title": "Cart session identity is stored only in runtime state",
+      "severity": "high",
+      "confidence": "confirmed",
+      "status": "open",
+      "current_behavior": "The Nuxt cart API composable stores the cart session identifier in useState and does not persist it in a cookie or browser storage.",
+      "risk": "A hard reload, new tab or browser restart can create a new cart and make the previous guest cart appear lost.",
+      "evidence": [
+        {
+          "path": "frontend/app/composables/useCartApi.ts",
+          "symbol": "useCartApi"
+        }
+      ],
+      "verification": "Add an item, record the session, then test hard reload, a new tab and browser restart while observing the request header and returned cart.",
+      "recommendation": "Adopt one SSR-safe persistent cart-session mechanism with rotation and ownership rules.",
+      "target_phase": "Commerce Phase 1C",
+      "acceptance_criteria": [
+        "Guest cart identity survives the approved persistence lifetime.",
+        "SSR and hydration use the same session value.",
+        "Logout and user switching follow a documented policy."
+      ]
+    },
+    {
+      "id": "CART-005",
+      "area": "frontend_state",
+      "title": "Silent local fallback creates split-brain cart state",
+      "severity": "high",
+      "confidence": "confirmed",
+      "status": "open",
+      "current_behavior": "The Pinia store catches backend failures and writes local in-memory lines while retaining backend cart state. Rendering, count and subtotal can therefore use different sources, and local lines are not submitted to checkout.",
+      "risk": "Customers can see items that cannot be checked out, receive incorrect counts or totals, and lose fallback lines on reload without an error.",
+      "evidence": [
+        {
+          "path": "frontend/app/stores/cart.ts",
+          "symbol": "useCartStore"
+        },
+        {
+          "path": "frontend/app/pages/cart.vue",
+          "symbol": "template"
+        }
+      ],
+      "verification": "Force add, update and remove API failures after a backend cart exists, then compare rendered lines, count, subtotal and checkout payload.",
+      "recommendation": "Use one authoritative cart state and expose recoverable API errors instead of silently creating uncheckoutable lines.",
+      "target_phase": "Commerce Phase 1C",
+      "acceptance_criteria": [
+        "Rendered lines, count, subtotal and checkout use one source.",
+        "Backend failures are visible and retryable.",
+        "No local-only line is presented as checkout-ready."
+      ]
+    },
+    {
+      "id": "CART-006",
+      "area": "pricing",
+      "title": "Cart pricing bypasses the active sale price contract",
+      "severity": "high",
+      "confidence": "confirmed",
+      "status": "open",
+      "current_behavior": "Cart and bundle pricing use promo_price when non-null, while public Product pricing uses effectivePrice and activeSalePrice with regular price and sale date validation.",
+      "risk": "Future or expired promotional values can produce cart and checkout totals that differ from public Product prices.",
+      "evidence": [
+        {
+          "path": "app/Services/Cart/CartService.php",
+          "symbol": "price"
+        },
+        {
+          "path": "app/Services/Bundles/BundlePricingService.php",
+          "symbol": "calculate"
+        },
+        {
+          "path": "app/Models/Product.php",
+          "symbol": "effectivePrice"
+        },
+        {
+          "path": "app/Http/Resources/ProductCardResource.php",
+          "symbol": "toArray"
+        }
+      ],
+      "verification": "Compare Product API, cart and checkout prices for future, active and expired sale windows.",
+      "recommendation": "Define one server-side customer-price contract and reuse it for products, cart lines, bundles and checkout.",
+      "target_phase": "Commerce Phase 1B",
+      "acceptance_criteria": [
+        "Cart and public Product pricing agree for every sale window.",
+        "Expired and future sale values are ignored.",
+        "Bundle and checkout pricing use the same authority."
+      ]
+    },
+    {
+      "id": "CART-007",
+      "area": "pricing",
+      "title": "Cart display can retain stale item prices until checkout",
+      "severity": "high",
+      "confidence": "confirmed",
+      "status": "open",
+      "current_behavior": "Cart show loads stored lines without recalculation, while checkout recalculates prices before creating the order.",
+      "risk": "The amount displayed before checkout can change at submission without a clear customer review step.",
+      "evidence": [
+        {
+          "path": "app/Http/Controllers/Api/V1/CartController.php",
+          "symbol": "show"
+        },
+        {
+          "path": "app/Services/Orders/CheckoutService.php",
+          "symbol": "checkout"
+        }
+      ],
+      "verification": "Add a product, change its authoritative price, fetch the cart, then submit checkout and compare displayed and ordered totals.",
+      "recommendation": "Choose and document a price refresh policy and require explicit review when checkout changes a displayed total.",
+      "target_phase": "Commerce Phase 1B",
+      "acceptance_criteria": [
+        "Cart display follows the documented refresh policy.",
+        "Checkout does not silently change an accepted total.",
+        "Price-change regression tests cover cart and order totals."
+      ]
+    },
+    {
+      "id": "CART-008",
+      "area": "payment",
+      "title": "Payment initiation lacks order ownership and idempotency",
+      "severity": "high",
+      "confidence": "confirmed",
+      "status": "open",
+      "current_behavior": "The payment initiation endpoint accepts an order identifier without authentication or ownership enforcement and creates a new transaction on each request. Transaction identifiers are indexed but not unique.",
+      "risk": "Arbitrary orders can receive duplicate or unauthorized payment attempts.",
+      "evidence": [
+        {
+          "path": "app/Http/Controllers/Api/V1/PaymentController.php",
+          "symbol": "initiate"
+        },
+        {
+          "path": "app/Services/Payments/PaymentService.php",
+          "symbol": "initiate"
+        },
+        {
+          "path": "database/migrations/2026_06_08_130002_create_payment_transactions_table.php",
+          "symbol": "up"
+        }
+      ],
+      "verification": "Call payment initiation repeatedly for the same order from an unrelated client and compare transaction records.",
+      "recommendation": "Gate initiation by an order-scoped authorization or signed capability and enforce payment idempotency.",
+      "target_phase": "Commerce Phase 1D",
+      "acceptance_criteria": [
+        "An unrelated client cannot initiate payment for an order.",
+        "Repeated equivalent requests do not create duplicate transactions.",
+        "Provider transaction identity is uniquely enforced where applicable."
+      ]
+    },
+    {
+      "id": "CART-009",
+      "area": "promotions",
+      "title": "Promotion usage limits are not concurrency-safe",
+      "severity": "high",
+      "confidence": "confirmed",
+      "status": "open",
+      "current_behavior": "Promotion eligibility reads usage and redemption counts before recording usage, and redemption indexes do not enforce one redemption per intended user or session scope.",
+      "risk": "Concurrent checkouts can exceed global or per-customer limits and record duplicate redemptions.",
+      "evidence": [
+        {
+          "path": "app/Services/Promotions/PromotionValidatorService.php",
+          "symbol": "validate"
+        },
+        {
+          "path": "app/Services/Promotions/PromotionEngineService.php",
+          "symbol": "recordRedemptions"
+        },
+        {
+          "path": "database/migrations/2026_06_09_030000_create_promotions_tables.php",
+          "symbol": "up"
+        }
+      ],
+      "verification": "Run concurrent eligible checkouts at the last available global and per-user usage slot and inspect usage and redemption rows.",
+      "recommendation": "Make eligibility consumption atomic with appropriate locking or unique constraints.",
+      "target_phase": "Commerce Phase 1B",
+      "acceptance_criteria": [
+        "Concurrent checkouts cannot exceed configured limits.",
+        "Duplicate redemption identities are rejected atomically.",
+        "Rollback does not consume promotion usage."
+      ]
+    },
+    {
+      "id": "CART-010",
+      "area": "recovery",
+      "title": "Recovery can replace another session cart and is reusable before checkout",
+      "severity": "high",
+      "confidence": "confirmed",
+      "status": "open",
+      "current_behavior": "A valid recovery token may restore into a supplied cart session by clearing and rebuilding its normal item lines. The token remains usable until a later checkout marks the record recovered.",
+      "risk": "Recovery can overwrite a different cart and replay can repeatedly rebuild cart state without a single-use transition.",
+      "evidence": [
+        {
+          "path": "app/Services/Email/EmailMarketingService.php",
+          "symbol": "restoreAbandonedCart"
+        },
+        {
+          "path": "app/Http/Controllers/Api/V1/CartController.php",
+          "symbol": "recover"
+        }
+      ],
+      "verification": "Restore the same record twice and restore it while supplying a populated unrelated cart session; compare lines and record status.",
+      "recommendation": "Define one-time recovery consumption and a non-destructive, ownership-aware restore policy.",
+      "target_phase": "Commerce Phase 1B",
+      "acceptance_criteria": [
+        "Recovery cannot overwrite an unrelated owned cart.",
+        "Token replay follows a documented single-use rule.",
+        "Restore preserves or intentionally merges eligible state."
+      ]
+    },
+    {
+      "id": "CART-011",
+      "area": "lifecycle",
+      "title": "Cart resolution ignores status and expiry",
+      "severity": "medium",
+      "confidence": "confirmed",
+      "status": "open",
+      "current_behavior": "Cart resolution looks up or creates by session identifier but does not reject converted or expired carts and does not renew expires_at. No general cart-expiry cleanup command is scheduled.",
+      "risk": "Converted or expired sessions can be reused and cart retention is not reliably enforced.",
+      "evidence": [
+        {
+          "path": "app/Services/Cart/CartService.php",
+          "symbol": "resolve"
+        },
+        {
+          "path": "routes/console.php",
+          "symbol": "scheduled commands"
+        }
+      ],
+      "verification": "Resolve sessions for converted and past-expiry carts and inspect whether a new active cart is created and expiry is renewed.",
+      "recommendation": "Define active-cart resolution, expiry renewal, conversion rotation and cleanup semantics.",
+      "target_phase": "Commerce Phase 1B",
+      "acceptance_criteria": [
+        "Converted and expired carts cannot be reused as active carts.",
+        "Expiry renewal and cleanup are documented and tested.",
+        "Checkout always rotates to a fresh active cart identity."
+      ]
+    },
+    {
+      "id": "CART-012",
+      "area": "stock",
+      "title": "Regular item quantity is not constrained by stock until checkout",
+      "severity": "medium",
+      "confidence": "confirmed",
+      "status": "open",
+      "current_behavior": "Add and update clamp to the request and service maximum but do not compare requested quantity with stock. Checkout performs the authoritative stock assertion and locked reduction.",
+      "risk": "The cart can present quantities that are not purchasable and fail only at checkout.",
+      "evidence": [
+        {
+          "path": "app/Services/Cart/CartService.php",
+          "symbol": "add"
+        },
+        {
+          "path": "app/Services/Cart/CartService.php",
+          "symbol": "update"
+        },
+        {
+          "path": "app/Services/Orders/StockReservationService.php",
+          "symbol": "assertAvailable"
+        }
+      ],
+      "verification": "Add and update a quantity above available stock, view the cart, then attempt checkout.",
+      "recommendation": "Define early cart feedback while preserving checkout as the final locked stock authority.",
+      "target_phase": "Commerce Phase 1B",
+      "acceptance_criteria": [
+        "Cart responses identify unavailable requested quantities.",
+        "Checkout retains locked final enforcement.",
+        "Backorder and non-stock-tracked products have explicit rules."
+      ]
+    },
+    {
+      "id": "CART-013",
+      "area": "eligibility",
+      "title": "Quantity update and cart view do not revalidate product eligibility",
+      "severity": "medium",
+      "confidence": "confirmed",
+      "status": "open",
+      "current_behavior": "Add validates public visibility and purchase availability, but update, show and recalculation do not remove or flag a product that later becomes hidden, inactive, deleted or purchase-disabled.",
+      "risk": "Stale invalid lines remain apparently purchasable until checkout rejection.",
+      "evidence": [
+        {
+          "path": "app/Services/Cart/CartService.php",
+          "symbol": "add"
+        },
+        {
+          "path": "app/Services/Cart/CartService.php",
+          "symbol": "update"
+        },
+        {
+          "path": "app/Services/Cart/CartService.php",
+          "symbol": "recalculate"
+        }
+      ],
+      "verification": "Add an eligible product, change each visibility and availability state, then exercise show, update, recalculate and checkout.",
+      "recommendation": "Return explicit line eligibility and prevent invalid quantity changes while retaining final checkout validation.",
+      "target_phase": "Commerce Phase 1B",
+      "acceptance_criteria": [
+        "Every stale-product state has a deterministic cart response.",
+        "Invalid lines cannot be silently treated as checkout-ready.",
+        "Soft-deleted products are handled without a server error."
+      ]
+    },
+    {
+      "id": "CART-014",
+      "area": "concurrency",
+      "title": "Concurrent regular-item mutations can race",
+      "severity": "medium",
+      "confidence": "confirmed",
+      "status": "open",
+      "current_behavior": "Add performs a read followed by update or create without a transaction or row lock. The database unique key prevents duplicate product rows but can surface a race exception or lost quantity update.",
+      "risk": "Simultaneous add or update requests can lose quantities, fail unexpectedly or return inconsistent totals.",
+      "evidence": [
+        {
+          "path": "app/Services/Cart/CartService.php",
+          "symbol": "add"
+        },
+        {
+          "path": "database/migrations/2026_06_08_110001_create_cart_items_table.php",
+          "symbol": "up"
+        }
+      ],
+      "verification": "Issue simultaneous adds and updates for the same cart and product under the MySQL CI engine and record final quantity and exceptions.",
+      "recommendation": "Serialize line mutation or use an atomic database operation with deterministic retry handling.",
+      "target_phase": "Commerce Phase 1B",
+      "acceptance_criteria": [
+        "Concurrent add requests produce a deterministic bounded quantity.",
+        "Unique-key races do not become unhandled errors.",
+        "Totals are recalculated from the committed line state."
+      ]
+    },
+    {
+      "id": "CART-015",
+      "area": "promotions",
+      "title": "Paid and gift copies of the same product share an incompatible unique key",
+      "severity": "medium",
+      "confidence": "confirmed",
+      "status": "open",
+      "current_behavior": "Automatic gifts are identified with product_id and is_gift, but cart_items is unique only on cart_id and product_id.",
+      "risk": "A promotion gifting a product already present as a paid line can conflict or overwrite the intended line model.",
+      "evidence": [
+        {
+          "path": "app/Services/Promotions/PromotionEngineService.php",
+          "symbol": "applyAutomaticGifts"
+        },
+        {
+          "path": "database/migrations/2026_06_08_110001_create_cart_items_table.php",
+          "symbol": "up"
+        },
+        {
+          "path": "database/migrations/2026_06_09_030000_create_promotions_tables.php",
+          "symbol": "up"
+        }
+      ],
+      "verification": "Apply an automatic-gift promotion where the gift product is already a paid cart line and inspect line identity and errors.",
+      "recommendation": "Choose a line identity that explicitly supports or intentionally combines paid and gift quantities.",
+      "target_phase": "Commerce Phase 1B",
+      "acceptance_criteria": [
+        "Paid and gift semantics are deterministic for the same product.",
+        "Applying or removing a gift cannot corrupt the paid line.",
+        "Database constraints match the chosen identity."
+      ]
+    },
+    {
+      "id": "CART-016",
+      "area": "transaction_boundary",
+      "title": "Checkout side effects are initiated inside the database transaction",
+      "severity": "medium",
+      "confidence": "likely",
+      "status": "open",
+      "current_behavior": "Shipment and payment provider initiation plus event and job dispatch calls occur inside the checkout transaction. Current provider implementations appear local, but production queue dispatch timing and future provider network behavior were not exercised by this read-only audit.",
+      "risk": "A synchronous provider or queue configuration could hold database locks during external work, and jobs may observe uncommitted data or survive a rollback.",
+      "evidence": [
+        {
+          "path": "app/Services/Orders/CheckoutService.php",
+          "symbol": "checkout"
+        },
+        {
+          "path": "app/Services/Payments/PaymentService.php",
+          "symbol": "initiate"
+        },
+        {
+          "path": "app/Services/Shipping/ShipmentService.php",
+          "symbol": "create"
+        }
+      ],
+      "verification": "Instrument provider calls and queue dispatch under sync and asynchronous queue drivers, force failures before commit, and verify lock duration and persisted side effects.",
+      "recommendation": "Keep the transaction limited to durable state and trigger external side effects after commit with retry-safe identifiers.",
+      "target_phase": "Commerce Phase 1D",
+      "acceptance_criteria": [
+        "No external network call runs while checkout database locks are held.",
+        "Queued work cannot observe rolled-back orders.",
+        "Provider retries are idempotent."
+      ]
+    },
+    {
+      "id": "CART-017",
+      "area": "security",
+      "title": "Cart session header lacks format bounds and broad endpoint throttling",
+      "severity": "medium",
+      "confidence": "confirmed",
+      "status": "open",
+      "current_behavior": "A non-empty client session header is used directly as the lookup key. Cart CRUD, bundle CRUD and checkout routes have API middleware but no dedicated cart rate limiter.",
+      "risk": "Malformed or oversized bearer identifiers and high-rate mutation requests create avoidable database and abuse exposure.",
+      "evidence": [
+        {
+          "path": "app/Services/Cart/CartService.php",
+          "symbol": "resolve"
+        },
+        {
+          "path": "routes/api.php",
+          "symbol": "cart routes"
+        }
+      ],
+      "verification": "Submit empty, malformed and over-column-length session values and inspect route middleware and response behavior under repeated mutation requests.",
+      "recommendation": "Validate a bounded opaque identifier format and apply purpose-specific throttles without weakening legitimate cart usage.",
+      "target_phase": "Commerce Phase 1B",
+      "acceptance_criteria": [
+        "Invalid session identifiers fail without a database error.",
+        "Accepted identifiers have a documented format and entropy.",
+        "Mutation and checkout endpoints have tested abuse limits."
+      ]
+    },
+    {
+      "id": "CART-018",
+      "area": "frontend_ux",
+      "title": "Cart and checkout UI lack consistent failure and pending states",
+      "severity": "medium",
+      "confidence": "confirmed",
+      "status": "open",
+      "current_behavior": "Cart actions do not expose a consistent pending or error state, checkout submission is not guarded against duplicate clicks, empty checkout remains linkable, and some templates use unresolved short component names and a legacy currency label.",
+      "risk": "Customers can repeat actions, navigate to an invalid checkout, or see misleading totals and blank fallback components.",
+      "evidence": [
+        {
+          "path": "frontend/app/pages/cart.vue",
+          "symbol": "template"
+        },
+        {
+          "path": "frontend/app/pages/checkout.vue",
+          "symbol": "template"
+        },
+        {
+          "path": "frontend/app/components/cart/CartItem.vue",
+          "symbol": "template"
+        }
+      ],
+      "verification": "Exercise slow and failed requests, double-click actions, an empty cart, mobile widths and component-resolution warnings in a real browser.",
+      "recommendation": "Add explicit loading, disabled, error, empty and unavailable states after backend contracts are stabilized.",
+      "target_phase": "Commerce Phase 1C",
+      "acceptance_criteria": [
+        "Mutating controls disable while requests are pending.",
+        "Failures are visible and retryable.",
+        "Currency and component resolution match the active storefront."
+      ]
+    },
+    {
+      "id": "CART-019",
+      "area": "analytics",
+      "title": "Fallback analytics may report a cart action that the backend did not accept",
+      "severity": "low",
+      "confidence": "likely",
+      "status": "open",
+      "current_behavior": "Server-side add dispatches an analytics job after a successful write, while the frontend emits add behavior for its local fallback path. The downstream deduplication contract was not identified in this audit.",
+      "risk": "Metrics can include phantom or duplicate add-to-cart events during partial failures.",
+      "evidence": [
+        {
+          "path": "app/Http/Controllers/Api/V1/CartController.php",
+          "symbol": "store"
+        },
+        {
+          "path": "frontend/app/stores/cart.ts",
+          "symbol": "add"
+        }
+      ],
+      "verification": "Capture client and server analytics events for successful, failed and retried adds and compare event identifiers in the configured analytics sink.",
+      "recommendation": "Emit one outcome-based event with a shared deduplication identifier after authoritative cart acceptance.",
+      "target_phase": "Commerce Phase 1C",
+      "acceptance_criteria": [
+        "A successful logical add produces one analytics event.",
+        "A local fallback is not reported as a server-accepted add.",
+        "Retry behavior is explicitly tested."
+      ]
+    },
+    {
+      "id": "CART-020",
+      "area": "customer_data",
+      "title": "Checkout updates customer profile by non-unique email",
+      "severity": "medium",
+      "confidence": "confirmed",
+      "status": "open",
+      "current_behavior": "Checkout uses updateOrCreate keyed by email and writes submitted customer and address fields, while the customers email column is indexed but not unique.",
+      "risk": "Guest checkout can overwrite an existing customer profile, and duplicate customer rows make update selection ambiguous.",
+      "evidence": [
+        {
+          "path": "app/Services/Orders/CheckoutService.php",
+          "symbol": "checkout"
+        },
+        {
+          "path": "database/migrations/2026_06_08_110002_create_customers_table.php",
+          "symbol": "up"
+        }
+      ],
+      "verification": "Create duplicate-email customer rows and submit changed checkout identity data, then inspect which profile is updated.",
+      "recommendation": "Define customer identity, guest snapshot and profile-update ownership separately.",
+      "target_phase": "Commerce Phase 1D",
+      "acceptance_criteria": [
+        "Guest checkout cannot overwrite an unrelated managed profile.",
+        "Customer identity uniqueness is explicit.",
+        "Order address snapshots remain immutable."
+      ]
+    },
+    {
+      "id": "CART-021",
+      "area": "recovery",
+      "title": "Recovery capability is stored in plaintext and placed in the URL path",
+      "severity": "medium",
+      "confidence": "confirmed",
+      "status": "open",
+      "current_behavior": "A high-entropy recovery value is stored directly in abandoned_cart_records and used in a frontend route path.",
+      "risk": "Database readers, browser history, reverse-proxy logs or referrer handling can expose a reusable cart-recovery capability.",
+      "evidence": [
+        {
+          "path": "app/Services/Email/EmailMarketingService.php",
+          "symbol": "recordAbandonedCart"
+        },
+        {
+          "path": "database/migrations/2026_06_09_000000_create_email_marketing_tables.php",
+          "symbol": "up"
+        },
+        {
+          "path": "frontend/app/pages/cart/recover/[token].vue",
+          "symbol": "route token"
+        }
+      ],
+      "verification": "Inspect persisted recovery records and sanitized request-log configuration, then test whether navigation emits a referrer containing the capability.",
+      "recommendation": "Store a hash, consume the capability once and minimize propagation through logs, metadata and referrers.",
+      "target_phase": "Commerce Phase 1B",
+      "acceptance_criteria": [
+        "A database leak does not disclose usable recovery capabilities.",
+        "Recovery capability reuse is prevented.",
+        "Operational logs and page metadata do not contain the capability."
+      ]
+    },
+    {
+      "id": "CART-022",
+      "area": "shipping",
+      "title": "Shipping calculation accepts an unowned cart identifier",
+      "severity": "low",
+      "confidence": "confirmed",
+      "status": "open",
+      "current_behavior": "Shipping calculation may load a cart by request identifier without ownership enforcement and use its subtotal for method pricing.",
+      "risk": "A client can probe shipping threshold results derived from another cart, although the endpoint does not expose cart lines.",
+      "evidence": [
+        {
+          "path": "app/Http/Controllers/Api/V1/ShippingController.php",
+          "symbol": "calculate"
+        },
+        {
+          "path": "app/Http/Requests/Api/V1/ShippingCalculateRequest.php",
+          "symbol": "rules"
+        }
+      ],
+      "verification": "Submit another cart identifier to shipping calculation and compare the result with an unrelated subtotal.",
+      "recommendation": "Resolve shipping context through the same cart ownership boundary as cart and checkout.",
+      "target_phase": "Commerce Phase 1B",
+      "acceptance_criteria": [
+        "Shipping calculation cannot use an unowned cart.",
+        "Guest bearer and authenticated ownership rules are consistent.",
+        "Direct subtotal calculation remains possible only by an explicit safe contract."
+      ]
+    },
+    {
+      "id": "CART-023",
+      "area": "deployment",
+      "title": "Public commerce pages are intentionally disabled at the routing edge",
+      "severity": "info",
+      "confidence": "confirmed",
+      "status": "open",
+      "current_behavior": "Nuxt cart and checkout source pages exist, while deployment routing returns not found for those public paths. Laravel API cart endpoints remain routed.",
+      "risk": "Source-code readiness can be mistaken for released storefront readiness unless the release gate remains explicit.",
+      "evidence": [
+        {
+          "path": "deploy/nginx/mycomputer.conf",
+          "symbol": "disabled commerce locations"
+        },
+        {
+          "path": "frontend/app/pages/cart.vue",
+          "symbol": "page"
+        },
+        {
+          "path": "frontend/app/pages/checkout.vue",
+          "symbol": "page"
+        }
+      ],
+      "verification": "Compare the deployment route map with Nuxt generated routes and Laravel API routes in a disposable environment.",
+      "recommendation": "Keep public commerce routes disabled until the Phase 1B through 1D release gates pass.",
+      "target_phase": "Later",
+      "acceptance_criteria": [
+        "Commerce routes remain disabled before explicit release approval.",
+        "Enabling requires documented backend, frontend and checkout gates.",
+        "API exposure is reviewed independently from page exposure."
+      ]
+    },
+    {
+      "id": "CART-024",
+      "area": "test_coverage",
+      "title": "Browser-level cart lifecycle behavior is unverified",
+      "severity": "info",
+      "confidence": "open_question",
+      "status": "open",
+      "current_behavior": "The repository has backend feature coverage but no identified browser suite proving SSR hydration, hard reload, multi-tab, offline recovery, mobile layout or accessibility for cart and checkout.",
+      "risk": "State and UI defects can pass unit and feature suites while failing in a real browser.",
+      "evidence": [
+        {
+          "path": "frontend/package.json",
+          "symbol": "scripts"
+        },
+        {
+          "path": "tests/Feature/CartCheckoutApiTest.php",
+          "symbol": "backend cart coverage"
+        }
+      ],
+      "verification": "Run or add a real browser matrix for guest and authenticated cart use across SSR load, hydration, reload, new tab, offline recovery, mobile viewport and keyboard navigation.",
+      "recommendation": "Add browser acceptance coverage after identity and frontend state contracts are approved.",
+      "target_phase": "Commerce Phase 1C",
+      "acceptance_criteria": [
+        "A real browser suite covers the approved cart lifecycle.",
+        "SSR and hydration have no state mismatch.",
+        "Mobile and keyboard interaction meet the release checklist."
+      ]
+    },
+    {
+      "id": "CART-025",
+      "area": "recovery",
+      "title": "Abandoned-cart detection and recovery omit bundle state",
+      "severity": "medium",
+      "confidence": "confirmed",
+      "status": "open",
+      "current_behavior": "Detection requires normal cart items, and the abandoned snapshot and restore flow serialize only normal item lines. Bundle-only carts are skipped and bundle, coupon and gift state is not faithfully recovered.",
+      "risk": "Recovery messages and restored carts can lose material purchase selections or omit bundle-only carts entirely.",
+      "evidence": [
+        {
+          "path": "app/Console/Commands/DetectAbandonedCarts.php",
+          "symbol": "handle"
+        },
+        {
+          "path": "app/Services/Email/EmailMarketingService.php",
+          "symbol": "recordAbandonedCart"
+        },
+        {
+          "path": "app/Services/Email/EmailMarketingService.php",
+          "symbol": "restoreAbandonedCart"
+        }
+      ],
+      "verification": "Create bundle-only and mixed carts with coupon and gift state, run detection, inspect snapshots, and restore into a fresh session.",
+      "recommendation": "Define a versioned recovery snapshot that preserves every approved cart line and promotion state.",
+      "target_phase": "Commerce Phase 1B",
+      "acceptance_criteria": [
+        "Bundle-only carts follow the documented abandonment policy.",
+        "Recovery preserves supported bundles, coupons and gifts.",
+        "Snapshot versions are backward compatible or safely rejected."
+      ]
+    },
+    {
+      "id": "CART-026",
+      "area": "frontend_security",
+      "title": "Checkout success navigation places customer data in query parameters",
+      "severity": "medium",
+      "confidence": "confirmed",
+      "status": "open",
+      "current_behavior": "The checkout page builds the success-page URL with order details including customer contact data and totals in query parameters.",
+      "risk": "Sensitive checkout context can be retained in browser history, analytics, logs or referrer data and can be tampered with for display.",
+      "evidence": [
+        {
+          "path": "frontend/app/pages/checkout.vue",
+          "symbol": "submitCheckout"
+        }
+      ],
+      "verification": "Complete checkout in a disposable environment and inspect browser history, success URL, page metadata, analytics payloads and referrer behavior.",
+      "recommendation": "Render success state from a server-authorized order reference rather than customer data in the URL.",
+      "target_phase": "Commerce Phase 1C",
+      "acceptance_criteria": [
+        "Success URLs contain no customer contact data.",
+        "Displayed order details come from an authorized server response.",
+        "Tampered query parameters cannot alter trusted order status."
+      ]
+    }
+  ]
+}
