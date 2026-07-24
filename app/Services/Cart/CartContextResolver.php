@@ -5,7 +5,6 @@ namespace App\Services\Cart;
 use App\Models\Cart;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 class CartContextResolver
@@ -19,55 +18,28 @@ class CartContextResolver
         'bundleItems.bundle.options.product',
     ];
 
+    public function __construct(
+        private readonly CartLifecycleService $lifecycle,
+    ) {}
+
     public function resolve(Request $request): Cart
     {
         $sessionId = $this->sessionId($request);
         $user = Auth::guard('sanctum')->user();
 
-        $cart = Cart::query()->firstOrCreate(
-            ['session_id' => $sessionId],
-            ['status' => 'active', 'expires_at' => now()->addDays(14)],
-        );
-
-        $cart = DB::transaction(function () use ($cart, $user): Cart {
-            $lockedCart = Cart::query()
-                ->whereKey($cart->getKey())
-                ->lockForUpdate()
-                ->firstOrFail();
-
-            if ($user === null) {
-                abort_if($lockedCart->user_id !== null, 403, 'Cart access is not allowed.');
-
-                return $lockedCart;
-            }
-
-            abort_if(
-                $lockedCart->user_id !== null && (int) $lockedCart->user_id !== (int) $user->id,
-                403,
-                'Cart access is not allowed.',
-            );
-
-            if ($lockedCart->user_id === null) {
-                $lockedCart->update([
-                    'user_id' => $user->id,
-                    'customer_email' => $lockedCart->customer_email ?: $user->email,
-                ]);
-            } elseif ($lockedCart->customer_email === null) {
-                $lockedCart->update(['customer_email' => $user->email]);
-            }
-
-            return $lockedCart;
-        });
+        $cart = $user === null
+            ? $this->lifecycle->resolveGuest($sessionId)
+            : $this->lifecycle->resolveAuthenticated($user, $sessionId);
 
         return $cart->load(self::RELATIONS);
     }
 
-    private function sessionId(Request $request): string
+    private function sessionId(Request $request): ?string
     {
         $sessionId = $request->header('X-Cart-Session');
 
         if ($sessionId === null || (is_string($sessionId) && trim($sessionId) === '')) {
-            return (string) Str::uuid();
+            return null;
         }
 
         if (

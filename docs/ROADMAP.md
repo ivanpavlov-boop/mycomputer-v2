@@ -36,8 +36,12 @@ Manual selected UPDATE price/stock sync is implemented behind `CATALOG_SYNC_UPDA
 - Commerce Phase 1A Cart Architecture, Safety and Gap Audit, completed locally
   as documentation and documentation-contract tests only.
 - Commerce Phase 1B.1 Unified Cart Identity and Ownership Boundary, completed
-  locally with one request-level UUID/ownership resolver, atomic anonymous-Cart
-  claim, checkout cross-user rejection and session-authorized shipping.
+  through merge, deployment and staging verification with one request-level
+  UUID/ownership resolver, atomic anonymous-Cart claim, checkout cross-user
+  rejection and session-authorized shipping.
+- Commerce Phase 1B.2 Cart Lifecycle and Guest-to-User Policy, completed
+  locally with deterministic active Cart selection, lazy historical-session
+  rotation, authenticated Cart convergence and dry-run-first stale expiration.
 - Unified Product edit quality summary combining existing scanner issues,
   category specification quality and active manual flags without blocking or
   mutating Product workflow.
@@ -353,22 +357,30 @@ endpoint and schema review, the existing test inventory, and proposed scopes
 for Commerce Phases 1B through 1D. It changed no Cart, checkout, Order, Product,
 payment, shipping, promotion, bundle, frontend or Catalog Sync implementation.
 
-Commerce Phase 1B must not start until the Phase 1A findings are reviewed and
-approved. Its proposed scope is backend identity, ownership, lifecycle,
-pricing, eligibility, stock, concurrency, promotions and recovery safety.
-Commerce Phase 1C is proposed for persistent single-source storefront state,
-error/loading UX, currency, multi-tab and browser coverage. Commerce Phase 1D
+The Phase 1A review gate was satisfied before the controlled Phase 1B
+subphases. Commerce Phase 1C is proposed for persistent single-source storefront
+state, error/loading UX, currency, multi-tab and browser coverage. Commerce Phase 1D
 is proposed as the checkout, idempotency, payment, shipping, stock and release
-gate. Phases 1B, 1C and 1D have not started.
+gate. Phases 1C and 1D have not started.
 
 Commerce Phase 1B is now split into controlled subphases. Phase 1B.1 is
-complete locally. It centralizes request-level Cart session validation,
-ownership enforcement and anonymous-Cart claiming, remediating CART-001 and
-CART-022 locally. CART-017 is only partially remediated for UUID validation;
-dedicated throttling remains open.
+merged, deployed and staging verified. It centralizes request-level Cart
+session validation, ownership enforcement and anonymous-Cart claiming,
+remediating CART-001 and CART-022. CART-017 is only partially remediated for
+UUID validation; dedicated throttling remains open.
 
-CART-003 Cart merge remains open, as do lifecycle, pricing, promotion
-concurrency, recovery and checkout idempotency. Public Cart and checkout pages
+Commerce Phase 1B.2 is complete locally and remediates CART-003 and CART-011.
+It defines eligible active Carts, 14-day expiry with a seven-day renewal
+threshold, lazy rotation for expired/converted/merged sessions, and
+transactional convergence to one active Cart per authenticated user. The
+supplied eligible guest Cart is the login merge target. Paid items and bundles
+retain stored prices; excessive quantity or conflicting coupons return a
+generic `409` with a full rollback.
+
+The manual `carts:expire-stale` command is preview-only unless `--apply` is
+explicitly supplied. It is not scheduled and no Cart records or Cart content are
+deleted. Pricing, stock feedback, promotion concurrency, recovery, checkout
+idempotency and retention cleanup remain open. Public Cart and checkout pages
 remain disabled. This phase adds no migration, frontend production change,
 Product or supplier mutation, Catalog Sync behavior change, Sync All,
 automatic sync or UPDATE enablement.

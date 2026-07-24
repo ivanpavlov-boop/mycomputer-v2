@@ -779,8 +779,9 @@ tests require an explicit release phase.
 
 ### Commerce Phase 1B.1 - Unified Cart Identity and Ownership Boundary
 
-Commerce Phase 1B is split into controlled subphases. Phase 1B.1 is complete
-locally and introduces one request-level Cart resolver for regular Cart,
+Commerce Phase 1B is split into controlled subphases. Phase 1B.1 is merged,
+deployed and staging verified. It introduced one request-level Cart resolver
+for regular Cart,
 bundle Cart, checkout, Cart quote, shipping and PC Builder add-to-Cart
 operations.
 
@@ -798,13 +799,52 @@ only through the shared session boundary; a supplied numeric `cart_id` is only
 a consistency assertion and cannot authorize lookup by itself.
 
 CART-017 is only partially remediated for session format and lookup safety.
-Dedicated Cart and checkout throttling remains open. CART-003 remains open:
-Phase 1B.1 does not merge carts or select among multiple user carts. Cart
-lifecycle, expiry, pricing, promotion concurrency, recovery semantics and
-checkout idempotency remain unchanged and open. Public Cart and checkout pages
-remain disabled pending the later release gates.
+Dedicated Cart and checkout throttling remains open. Phase 1B.1 did not merge
+carts or select among multiple user carts; that separately approved behavior is
+implemented locally in Phase 1B.2. Pricing, promotion concurrency, recovery
+semantics and checkout idempotency remain unchanged and open. Public Cart and
+checkout pages remain disabled pending the later release gates.
 
 This subphase adds no migration, frontend production change, Product or stock
+behavior change, supplier behavior, Catalog Sync behavior, Sync All, automatic
+sync or UPDATE enablement.
+
+### Commerce Phase 1B.2 - Cart Lifecycle and Guest-to-User Policy
+
+Phase 1B.2 is complete locally. An eligible active Cart now means
+`status=active` with `expires_at` either null or later than the current time.
+Lifecycle values are centralized as `active`, `converted`, `expired` and
+`merged`. A successful resolution uses a 14-day sliding lifetime and renews
+only when expiry is null or no more than seven days away.
+
+Guest clients rotate expired, converted or merged anonymous sessions to a new
+UUID. Authenticated clients converge every eligible active Cart they own to one
+canonical Cart inside one transaction. Resolution locks the User first, then
+locks discovered Cart rows in ascending ID order and revalidates ownership and
+lifecycle state. A supplied eligible anonymous or same-user Cart is the target;
+without one, the lowest-ID eligible user Cart is selected.
+
+During login the supplied guest Cart remains canonical. Other eligible user
+Carts merge into it without recalculating stored paid-line or bundle prices.
+Paid quantities are summed with the retained target unit price, while a total
+above 99 fails the entire transaction with a generic `409`. Distinct conflicting
+coupon codes also fail with `409`. Existing gift rows are removed and the
+existing automatic-gift evaluation runs once after the structural merge.
+Bundle rows move without aggregation. Source Cart records remain historical
+with `status=merged`, immediate expiry and no remaining item or bundle rows.
+
+The manual `carts:expire-stale` command is preview-only by default. Its explicit
+`--apply` mode marks only stale active Carts as expired in deterministic chunks.
+It deletes no Cart or Cart content and is not scheduled.
+
+This locally remediates CART-003 and CART-011 while preserving the Phase 1B.1
+ownership and UUID boundaries. The original audit findings remain as historical
+evidence, with additive progress recorded in the gap register. Cart pricing,
+early stock feedback, recovery semantics, line-mutation concurrency, checkout
+idempotency and retention cleanup remain open. Public Cart and checkout pages
+remain disabled.
+
+Phase 1B.2 adds no migration, frontend production change, Product or stock
 behavior change, supplier behavior, Catalog Sync behavior, Sync All, automatic
 sync or UPDATE enablement.
 
@@ -813,7 +853,7 @@ sync or UPDATE enablement.
 Commerce Phase 1A is complete only as a local, read-only audit. It authorizes no
 runtime change.
 
-Before Phase 1B starts:
+Before any subsequent Phase 1B subphase starts:
 
 - this report and the gap register are reviewed and approved;
 - ownership and guest-transition policy decisions are recorded;
