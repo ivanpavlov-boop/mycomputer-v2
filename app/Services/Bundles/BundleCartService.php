@@ -30,13 +30,13 @@ class BundleCartService
             'total_price' => $pricing['unit_price'] * $quantity,
         ]);
 
-        $this->events->log('bundle_added_to_cart', 'internal', [
+        DB::afterCommit(fn () => $this->events->log('bundle_added_to_cart', 'internal', [
             'bundle_id' => $bundle->id,
             'bundle_name' => $bundle->name,
             'quantity' => $quantity,
             'total_price' => $pricing['unit_price'] * $quantity,
             'savings' => $pricing['savings'],
-        ], $cart->user, $cart->session_id);
+        ], $cart->user, $cart->session_id));
 
         return $item->fresh('bundle');
     }

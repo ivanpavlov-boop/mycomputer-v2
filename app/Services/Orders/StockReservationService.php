@@ -21,11 +21,18 @@ class StockReservationService
 
         abort_if($cart->items->isEmpty() && $cart->bundleItems->isEmpty(), 422, 'Cart is empty.');
 
-        foreach ($cart->items as $item) {
+        foreach ($cart->items->groupBy('product_id') as $items) {
+            /** @var CartItem $item */
+            $item = $items->first();
             $product = $item->product;
+            $requiredQuantity = (int) $items->sum('quantity');
             abort_unless($product && $product->isPubliclyVisible(), 422, 'Product is no longer available.');
             abort_unless($this->availability->allowsPurchase($product), 422, 'Product is not available for purchase.');
-            abort_if($this->availability->requiresStock($product) && $product->quantity < $item->quantity, 422, 'Insufficient stock for '.$product->name.'.');
+            abort_if(
+                $this->availability->requiresStock($product) && $product->quantity < $requiredQuantity,
+                422,
+                'Insufficient stock for '.$product->name.'.',
+            );
         }
 
         foreach ($cart->bundleItems as $bundleItem) {

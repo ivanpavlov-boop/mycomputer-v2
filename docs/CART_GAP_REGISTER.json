@@ -398,6 +398,7 @@
       "severity": "medium",
       "confidence": "confirmed",
       "status": "open",
+      "local_remediation_status": "remediated_locally",
       "current_behavior": "Add performs a read followed by update or create without a transaction or row lock. The database unique key prevents duplicate product rows but can surface a race exception or lost quantity update.",
       "risk": "Simultaneous add or update requests can lose quantities, fail unexpectedly or return inconsistent totals.",
       "evidence": [
@@ -426,6 +427,7 @@
       "severity": "medium",
       "confidence": "confirmed",
       "status": "open",
+      "local_remediation_status": "remediated_locally",
       "current_behavior": "Automatic gifts are identified with product_id and is_gift, but cart_items is unique only on cart_id and product_id.",
       "risk": "A promotion gifting a product already present as a paid line can conflict or overwrite the intended line model.",
       "evidence": [
@@ -833,7 +835,7 @@
     },
     {
       "phase": "Commerce Phase 1B.4",
-      "status": "complete_locally",
+      "status": "merged_deployed_staging_verified",
       "finding_ids": [
         "CART-012",
         "CART-013"
@@ -844,7 +846,26 @@
         "Cart responses expose deterministic Product and stock readiness.",
         "Existing invalid lines are flagged but not automatically removed or clamped.",
         "Checkout retains final locked stock enforcement.",
-        "No stock reservation or Cart mutation concurrency redesign was added."
+        "No stock reservation or Cart mutation concurrency redesign was added.",
+        "Phase 1B.4 is merged, deployed and staging verified."
+      ]
+    },
+    {
+      "phase": "Commerce Phase 1B.5",
+      "status": "complete_locally",
+      "finding_ids": [
+        "CART-014",
+        "CART-015"
+      ],
+      "partial_finding_ids": [],
+      "open_finding_ids": [],
+      "notes": [
+        "Same-Cart regular item mutations use a deterministic database lock boundary.",
+        "Concurrent successful adds accumulate without lost updates.",
+        "Paid and gift lines use separate database identity.",
+        "Automatic gifts are aggregated and reconciled idempotently.",
+        "Gift lines do not qualify promotion rules.",
+        "No stock reservation, checkout idempotency or promotion redemption concurrency redesign was added."
       ]
     }
   ]

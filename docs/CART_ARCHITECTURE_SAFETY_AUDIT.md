@@ -874,7 +874,8 @@ checkout idempotency remain open.
 
 ### Commerce Phase 1B.4 - Cart Product Eligibility and Stock Feedback
 
-Phase 1B.4 is complete locally. `Product::isPubliclyVisible()` remains the final
+Phase 1B.4 is merged, deployed and staging verified.
+`Product::isPubliclyVisible()` remains the final
 public-visibility authority. `AvailabilityStatusService::allowsPurchase()`
 remains the purchase-permission authority, and
 `AvailabilityStatusService::requiresStock()` remains the stock-tracking
@@ -907,7 +908,43 @@ CART-022. It adds no stock reservation, mutation-concurrency guarantee,
 idempotency redesign, automatic line deletion, migration, frontend production
 change, public commerce route, Product or supplier mutation, Catalog Sync
 behavior, Sync All, automatic sync or UPDATE enablement. CART-014 and CART-015
-remain open.
+were left for the separately approved Phase 1B.5.
+
+### Commerce Phase 1B.5 - Cart Item Mutation Concurrency and Gift-Line Integrity
+
+Phase 1B.5 is complete locally and remediates CART-014 and CART-015 locally.
+The Cart row is the serialization boundary for regular-line, bundle, coupon,
+pricing and automatic-gift mutations. The lock order is Cart first, then
+existing Cart and bundle rows by ascending ID. Recognized database concurrency
+errors use bounded retries and a safe generic conflict after exhaustion.
+
+The database identity is now `(cart_id, product_id, is_gift)`, permitting at
+most one paid and one aggregated gift line for one Product. The migration
+changes only this unique index and refuses rollback when paid/gift coexistence
+would make the old identity destructive.
+
+Automatic gifts are grouped by Product and summed across applicable actions.
+The stored primary promotion source follows existing priority descending and ID
+ascending order. Reconciliation keeps gifts zero-price, updates only changed
+derived state, removes only stale gift rows and defers `gift_added` until commit
+only for a new row. Direct gift PATCH and DELETE operations return a safe HTTP
+409.
+
+Promotion Product, Category, Brand, quantity-minimum, scoped percentage,
+bundle-discount and buy-X-get-Y inputs include paid rows only. A gift cannot
+qualify itself, recursively grow, or keep its source promotion alive after paid
+eligibility is removed.
+
+Merge removes source gifts and regenerates canonical target gifts. Recovery
+preserves line type, PC Builder applies its regular-item batch under one Cart
+boundary, and checkout keeps distinct paid and zero-price gift Order snapshots.
+Final checkout stock enforcement includes the combined paid and gift demand.
+
+This phase adds no stock reservation, checkout idempotency, promotion
+usage/redemption concurrency redesign, frontend production change, public Cart
+or checkout route, Product mutation during Cart editing, supplier change,
+Catalog Sync behavior, Sync All, automatic sync or UPDATE enablement. CART-009
+remains open.
 
 ## 30. Release Gates
 

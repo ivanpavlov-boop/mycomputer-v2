@@ -14,9 +14,21 @@ class CartPricingRefreshService
         private readonly CartService $carts,
         private readonly BundlePricingService $bundles,
         private readonly PromotionEngineService $promotions,
+        private readonly CartMutationService $mutations,
     ) {}
 
     public function refresh(Cart $cart, bool $refreshAutomaticGifts = true): CartPricingRefreshResult
+    {
+        return $this->mutations->run(
+            $cart,
+            fn (Cart $lockedCart): CartPricingRefreshResult => $this->refreshLocked(
+                $lockedCart,
+                $refreshAutomaticGifts,
+            ),
+        );
+    }
+
+    public function refreshLocked(Cart $cart, bool $refreshAutomaticGifts = true): CartPricingRefreshResult
     {
         $cart = $this->load($cart);
         $subtotalBefore = $this->carts->subtotal($cart);
@@ -105,7 +117,7 @@ class CartPricingRefreshService
         $cart = $this->load($cart->fresh());
 
         if ($refreshAutomaticGifts && $paidPricingChanged) {
-            $cart = $this->load($this->promotions->applyAutomaticGifts($cart));
+            $cart = $this->load($this->promotions->applyAutomaticGiftsLocked($cart));
         }
 
         $giftsAfter = $this->giftState($cart);

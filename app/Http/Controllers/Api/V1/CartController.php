@@ -43,7 +43,6 @@ class CartController extends Controller
         $product = Product::query()->withTrashed()->findOrFail($request->integer('product_id'));
         $quantity = $request->integer('quantity');
         $cart = $this->cartService->add($cart, $product, $quantity);
-        $cart = $this->promotions->applyAutomaticGifts($cart);
 
         AnalyticsEventJob::dispatch('add_to_cart', 'internal', [
             'product_id' => $product->id,
@@ -59,9 +58,7 @@ class CartController extends Controller
     {
         $cart = $this->cartContext->resolve($request);
 
-        $cart = $this->promotions->applyAutomaticGifts(
-            $this->cartService->update($cart, $item, $request->integer('quantity')),
-        );
+        $cart = $this->cartService->update($cart, $item, $request->integer('quantity'));
 
         return CartResource::make($this->ready($cart));
     }
@@ -70,7 +67,7 @@ class CartController extends Controller
     {
         $cart = $this->cartContext->resolve($request);
 
-        $cart = $this->promotions->applyAutomaticGifts($this->cartService->remove($cart, $item));
+        $cart = $this->cartService->remove($cart, $item);
 
         return CartResource::make($this->ready($cart));
     }

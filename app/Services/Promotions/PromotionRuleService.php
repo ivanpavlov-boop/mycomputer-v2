@@ -43,13 +43,17 @@ class PromotionRuleService
 
     private function subtotal(Cart $cart): float
     {
-        return (float) $this->items($cart)->where('is_gift', false)->sum('total_price')
+        return (float) $this->items($cart)->sum('total_price')
             + (float) $this->bundleItems($cart)->sum('total_price');
     }
 
     private function items(Cart $cart)
     {
-        return $cart->relationLoaded('items') ? $cart->items : $cart->items()->with('product')->get();
+        $items = $cart->relationLoaded('items')
+            ? $cart->items
+            : $cart->items()->with('product')->get();
+
+        return $items->filter(fn (CartItem $item): bool => $item->isPaidLine());
     }
 
     private function bundleItems(Cart $cart)

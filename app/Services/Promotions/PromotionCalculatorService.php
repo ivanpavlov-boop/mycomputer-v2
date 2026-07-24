@@ -58,7 +58,9 @@ class PromotionCalculatorService
             return 0.0;
         }
 
-        $items = $cart->items->whereIn('product_id', $productIds);
+        $items = $cart->items
+            ->filter(fn (CartItem $item): bool => $item->isPaidLine())
+            ->whereIn('product_id', $productIds);
         if ($items->pluck('product_id')->unique()->count() < $productIds->unique()->count()) {
             return 0.0;
         }
@@ -78,8 +80,9 @@ class PromotionCalculatorService
         $buyQty = max(1, (int) ($config['buy_quantity'] ?? 1));
         $getQty = max(1, (int) ($config['get_quantity'] ?? 1));
 
-        $buyItem = $cart->items->firstWhere('product_id', $buyProductId);
-        $getItem = $cart->items->firstWhere('product_id', $getProductId);
+        $paidItems = $cart->items->filter(fn (CartItem $item): bool => $item->isPaidLine());
+        $buyItem = $paidItems->firstWhere('product_id', $buyProductId);
+        $getItem = $paidItems->firstWhere('product_id', $getProductId);
         if (! $buyItem || ! $getItem || $buyItem->quantity < $buyQty) {
             return 0.0;
         }

@@ -45,8 +45,12 @@ Manual selected UPDATE price/stock sync is implemented behind `CATALOG_SYNC_UPDA
 - Commerce Phase 1B.3 Authoritative Cart Pricing and Price Refresh, merged,
   deployed and staging verified with request-driven Cart refresh and checkout
   price review.
-- Commerce Phase 1B.4 Cart Product Eligibility and Stock Feedback, completed
-  locally with deterministic readiness and early stock feedback.
+- Commerce Phase 1B.4 Cart Product Eligibility and Stock Feedback, merged,
+  deployed and staging verified with deterministic readiness and early stock
+  feedback.
+- Commerce Phase 1B.5 Cart Item Mutation Concurrency and Gift-Line Integrity,
+  completed locally with same-Cart serialization, separate paid/gift identity
+  and canonical automatic gifts that do not enter paid promotion inputs.
 - Unified Product edit quality summary combining existing scanner issues,
   category specification quality and active manual flags without blocking or
   mutating Product workflow.
@@ -401,7 +405,8 @@ review is required. Currency remains EUR. There is no automatic Cart repricing,
 migration or public commerce route enablement. Recovery, promotion concurrency
 and checkout idempotency remain open.
 
-Commerce Phase 1B.4 is complete locally and remediates CART-012 and CART-013.
+Commerce Phase 1B.4 is merged, deployed and staging verified and remediates
+CART-012 and CART-013.
 One centralized readiness service reuses Product public visibility,
 Availability Status purchase permission and Availability Status stock tracking.
 Stock-tracked add/update operations reject quantities above `Product.quantity`;
@@ -413,8 +418,24 @@ Checkout keeps price-change review first and rejects non-ready Carts before
 Customer, Order, Shipment, Payment, promotion-redemption, stock, event, job or
 email side effects. Final locked checkout stock enforcement remains in place.
 No stock reservation, mutation-concurrency guarantee, migration, frontend
-production change or public commerce route was added. CART-014 and CART-015
-remain open.
+production change or public commerce route was added in Phase 1B.4.
+
+Commerce Phase 1B.5 is complete locally and remediates CART-014 and CART-015
+locally. The Cart row serializes same-Cart mutation; paid and automatic-gift
+copies use separate `(cart_id, product_id, is_gift)` identities. Concurrent
+successful adds accumulate, recognized retry exhaustion returns a safe HTTP
+409, and direct mutation of derived gift rows is rejected.
+
+Automatic gifts are aggregated once per Product, preserve a deterministic
+primary promotion source, remain zero-price, and are not rewritten or logged
+when unchanged. Product, Category, Brand, quantity, scoped discount, bundle
+discount and buy-X-get-Y promotion inputs exclude gifts. Merge, recovery,
+PC Builder and checkout preserve paid/gift separation; checkout keeps final
+stock enforcement for the combined demand.
+
+No stock reservation, checkout idempotency, promotion usage/redemption
+concurrency redesign, frontend production change or public commerce route was
+added. CART-009 remains open. Catalog Sync behavior and flags are unchanged.
 
 ## Next
 
