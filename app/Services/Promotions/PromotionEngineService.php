@@ -7,7 +7,9 @@ use App\Models\Order;
 use App\Models\Product;
 use App\Models\Promotion;
 use App\Models\PromotionRedemption;
+use App\Services\Cart\CartMutationService;
 use App\Services\Marketing\MarketingEventService;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -17,33 +19,46 @@ class PromotionEngineService
         private readonly PromotionValidatorService $validator,
         private readonly PromotionCalculatorService $calculator,
         private readonly MarketingEventService $events,
+        private readonly CartMutationService $mutations,
     ) {}
 
     public function applyCoupon(Cart $cart, string $code): Cart
     {
-        $promotion = Promotion::query()->available()->where('code', strtoupper($code))->with(['rules', 'actions'])->first();
-        $cart->coupon_code = strtoupper($code);
+        return $this->mutations->run($cart, function (Cart $lockedCart) use ($code): Cart {
+            $promotion = Promotion::query()
+                ->available()
+                ->where('code', strtoupper($code))
+                ->with(['rules', 'actions'])
+                ->first();
+            $lockedCart->coupon_code = strtoupper($code);
 
-        if (! $promotion || ! $this->validator->isAvailable($promotion, $cart->loadMissing(['items.product', 'bundleItems.bundle', 'user.loyaltyAccount']))) {
-            throw ValidationException::withMessages(['coupon' => 'Coupon is invalid or cannot be applied to this cart.']);
-        }
+            if (! $promotion || ! $this->validator->isAvailable(
+                $promotion,
+                $lockedCart->loadMissing(['items.product', 'bundleItems.bundle', 'user.loyaltyAccount']),
+            )) {
+                throw ValidationException::withMessages([
+                    'coupon' => 'Coupon is invalid or cannot be applied to this cart.',
+                ]);
+            }
 
-        $cart->update(['coupon_code' => strtoupper($code)]);
+            $lockedCart->update(['coupon_code' => strtoupper($code)]);
 
-        $this->events->log('coupon_used', 'internal', [
-            'promotion_id' => $promotion->id,
-            'code' => $promotion->code,
-        ], $cart->user, $cart->session_id);
+            DB::afterCommit(fn () => $this->events->log('coupon_used', 'internal', [
+                'promotion_id' => $promotion->id,
+                'code' => $promotion->code,
+            ], $lockedCart->user, $lockedCart->session_id));
 
-        return $this->applyAutomaticGifts($cart->fresh(['items.product', 'bundleItems.bundle', 'user.loyaltyAccount']));
+            return $this->applyAutomaticGiftsLocked($lockedCart);
+        });
     }
 
     public function removeCoupon(Cart $cart): Cart
     {
-        $cart->update(['coupon_code' => null]);
-        $cart->items()->where('is_gift', true)->delete();
+        return $this->mutations->run($cart, function (Cart $lockedCart): Cart {
+            $lockedCart->update(['coupon_code' => null]);
 
-        return $cart->fresh(['items.product.brand', 'items.product.category', 'items.product.images', 'bundleItems.bundle']);
+            return $this->applyAutomaticGiftsLocked($lockedCart);
+        });
     }
 
     public function evaluate(Cart $cart, float $shippingPrice = 0): array
@@ -97,7 +112,13 @@ class PromotionEngineService
             ];
             $totalDiscount += $calculated['discount'];
             $shippingDiscount += $calculated['shipping_discount'];
-            $gifts = array_merge($gifts, $calculated['gift_products']);
+            $gifts = array_merge(
+                $gifts,
+                array_map(
+                    fn (array $gift): array => $gift + ['promotion_id' => $promotion->id],
+                    $calculated['gift_products'],
+                ),
+            );
 
             if ($promotion->stop_further_rules) {
                 break;
@@ -119,31 +140,82 @@ class PromotionEngineService
 
     public function applyAutomaticGifts(Cart $cart): Cart
     {
-        $result = $this->evaluate($cart);
-        $giftIds = collect($result['gift_products'])->pluck('product_id')->all();
+        return $this->mutations->run(
+            $cart,
+            fn (Cart $lockedCart): Cart => $this->applyAutomaticGiftsLocked($lockedCart),
+        );
+    }
 
-        $cart->items()->where('is_gift', true)->whereNotIn('product_id', $giftIds ?: [0])->delete();
+    public function applyAutomaticGiftsLocked(Cart $cart): Cart
+    {
+        $cart = $cart->fresh(['items.product', 'bundleItems.bundle', 'user.loyaltyAccount']);
+        $expected = $this->canonicalGifts($this->evaluate($cart)['gift_products']);
+        $existing = $cart->items()
+            ->gifts()
+            ->orderBy('id')
+            ->lockForUpdate()
+            ->get()
+            ->keyBy('product_id');
 
-        foreach ($result['gift_products'] as $gift) {
-            $product = Product::query()->published()->where('active', true)->find($gift['product_id']);
+        $staleGifts = $cart->items()->gifts();
+
+        if ($expected->isNotEmpty()) {
+            $staleGifts->whereNotIn('product_id', $expected->keys());
+        }
+
+        $staleGifts->delete();
+
+        foreach ($expected as $productId => $gift) {
+            $product = Product::query()
+                ->published()
+                ->where('active', true)
+                ->find($productId);
+
             if (! $product) {
+                $existing->get($productId)?->delete();
+
                 continue;
             }
 
-            $cart->items()->updateOrCreate(
-                ['product_id' => $product->id, 'is_gift' => true],
-                [
-                    'quantity' => max(1, (int) $gift['quantity']),
-                    'promotion_id' => $result['applied_promotions'][0]['id'] ?? null,
-                    'unit_price' => 0,
-                    'total_price' => 0,
-                ],
-            );
+            $giftItem = $existing->get($productId);
+            $values = [
+                'quantity' => $gift['quantity'],
+                'promotion_id' => $gift['promotion_id'],
+                'unit_price' => 0,
+                'total_price' => 0,
+            ];
 
-            $this->events->log('gift_added', 'internal', ['product_id' => $product->id], $cart->user, $cart->session_id);
+            if ($giftItem === null) {
+                $cart->items()->create(['product_id' => $productId, 'is_gift' => true] + $values);
+
+                DB::afterCommit(fn () => $this->events->log(
+                    'gift_added',
+                    'internal',
+                    ['product_id' => $productId],
+                    $cart->user,
+                    $cart->session_id,
+                ));
+
+                continue;
+            }
+
+            if (
+                (int) $giftItem->quantity !== $values['quantity']
+                || (int) ($giftItem->promotion_id ?? 0) !== (int) ($values['promotion_id'] ?? 0)
+                || (float) $giftItem->unit_price !== 0.0
+                || (float) $giftItem->total_price !== 0.0
+            ) {
+                $giftItem->update($values);
+            }
         }
 
-        return $cart->fresh(['items.product.brand', 'items.product.category', 'items.product.images', 'bundleItems.bundle', 'user.loyaltyAccount']);
+        return $cart->fresh([
+            'items.product.brand',
+            'items.product.category',
+            'items.product.images',
+            'bundleItems.bundle',
+            'user.loyaltyAccount',
+        ]);
     }
 
     public function recordRedemptions(Cart $cart, Order $order, array $result): void
@@ -162,5 +234,22 @@ class PromotionEngineService
                 $this->events->log('promotion_applied', 'internal', $applied + ['order_id' => $order->id], $cart->user, $cart->session_id);
             }
         });
+    }
+
+    /**
+     * @param  array<int, array{product_id: int, quantity: int, promotion_id?: int|null}>  $gifts
+     * @return Collection<int, array{product_id: int, quantity: int, promotion_id: int|null}>
+     */
+    private function canonicalGifts(array $gifts): Collection
+    {
+        return collect($gifts)
+            ->filter(fn (array $gift): bool => (int) ($gift['product_id'] ?? 0) > 0)
+            ->groupBy(fn (array $gift): int => (int) $gift['product_id'])
+            ->map(fn (Collection $sources, int $productId): array => [
+                'product_id' => $productId,
+                'quantity' => $sources->sum(fn (array $gift): int => max(1, (int) ($gift['quantity'] ?? 1))),
+                'promotion_id' => $sources->first()['promotion_id'] ?? null,
+            ])
+            ->sortKeys();
     }
 }

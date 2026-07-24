@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -39,5 +40,25 @@ class CartItem extends Model
     public function promotion(): BelongsTo
     {
         return $this->belongsTo(Promotion::class);
+    }
+
+    public function scopePaid(Builder $query): Builder
+    {
+        return $query->where('is_gift', false);
+    }
+
+    public function scopeGifts(Builder $query): Builder
+    {
+        return $query->where('is_gift', true);
+    }
+
+    public function isPaidLine(): bool
+    {
+        return ! $this->is_gift;
+    }
+
+    public function isGiftLine(): bool
+    {
+        return $this->is_gift;
     }
 }

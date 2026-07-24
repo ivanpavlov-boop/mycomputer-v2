@@ -11,6 +11,7 @@ use App\Models\CartBundleItem;
 use App\Models\ProductBundle;
 use App\Services\Bundles\BundleCartService;
 use App\Services\Cart\CartContextResolver;
+use App\Services\Cart\CartMutationService;
 use App\Services\Cart\CartPricingRefreshService;
 use App\Services\Cart\CartReadinessService;
 use App\Services\Promotions\PromotionEngineService;
@@ -24,42 +25,68 @@ class CartBundleController extends Controller
         private readonly CartPricingRefreshService $pricing,
         private readonly CartReadinessService $readiness,
         private readonly PromotionEngineService $promotions,
+        private readonly CartMutationService $mutations,
     ) {}
 
     public function store(StoreCartBundleRequest $request): CartResource
     {
         $cart = $this->carts->resolve($request);
         $bundle = ProductBundle::query()->with(['items.product', 'options.product'])->findOrFail($request->integer('bundle_id'));
-        $this->bundles->add($cart, $bundle, $request->validated('selected_items') ?? [], $request->integer('quantity'));
+        $cart = $this->mutations->run($cart, function (Cart $lockedCart) use ($bundle, $request): Cart {
+            $this->bundles->add(
+                $lockedCart,
+                $bundle,
+                $request->validated('selected_items') ?? [],
+                $request->integer('quantity'),
+            );
 
-        return CartResource::make($this->refreshed($cart));
+            return $this->refreshedLocked($lockedCart);
+        });
+
+        return CartResource::make($this->readiness->assess($cart)->cart);
     }
 
     public function update(UpdateCartBundleRequest $request, CartBundleItem $bundle): CartResource
     {
         $cart = $this->carts->resolve($request);
-        abort_unless($bundle->cart_id === $cart->id, 404);
-        $this->bundles->update($bundle, $request->validated('selected_items') ?? [], $request->integer('quantity'));
+        $cart = $this->mutations->run($cart, function (Cart $lockedCart) use ($bundle, $request): Cart {
+            $lockedBundle = $lockedCart->bundleItems()
+                ->whereKey($bundle->getKey())
+                ->lockForUpdate()
+                ->firstOrFail();
+            $this->bundles->update(
+                $lockedBundle,
+                $request->validated('selected_items') ?? [],
+                $request->integer('quantity'),
+            );
 
-        return CartResource::make($this->refreshed($cart));
+            return $this->refreshedLocked($lockedCart);
+        });
+
+        return CartResource::make($this->readiness->assess($cart)->cart);
     }
 
     public function destroy(Request $request, CartBundleItem $bundle): CartResource
     {
         $cart = $this->carts->resolve($request);
-        abort_unless($bundle->cart_id === $cart->id, 404);
-        $this->bundles->remove($bundle);
+        $cart = $this->mutations->run($cart, function (Cart $lockedCart) use ($bundle): Cart {
+            $lockedBundle = $lockedCart->bundleItems()
+                ->whereKey($bundle->getKey())
+                ->lockForUpdate()
+                ->firstOrFail();
+            $this->bundles->remove($lockedBundle);
 
-        return CartResource::make($this->refreshed($cart));
+            return $this->refreshedLocked($lockedCart);
+        });
+
+        return CartResource::make($this->readiness->assess($cart)->cart);
     }
 
-    private function refreshed(Cart $cart): Cart
+    private function refreshedLocked(Cart $cart): Cart
     {
-        $cart = $this->pricing->refresh($cart, refreshAutomaticGifts: false)->cart;
-        $cart = $this->promotions->applyAutomaticGifts($cart);
+        $cart = $this->pricing->refreshLocked($cart, refreshAutomaticGifts: false)->cart;
+        $cart = $this->promotions->applyAutomaticGiftsLocked($cart);
 
-        $cart = $this->pricing->refresh($cart, refreshAutomaticGifts: false)->cart;
-
-        return $this->readiness->assess($cart)->cart;
+        return $this->pricing->refreshLocked($cart, refreshAutomaticGifts: false)->cart;
     }
 }

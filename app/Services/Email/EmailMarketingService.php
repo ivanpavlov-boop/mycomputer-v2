@@ -13,8 +13,11 @@ use App\Models\Product;
 use App\Models\ProductPriceAlert;
 use App\Models\ProductStockAlert;
 use App\Models\User;
+use App\Services\Cart\CartMutationService;
+use App\Services\Cart\CartPricingRefreshService;
 use App\Services\Email\Contracts\EmailProviderInterface;
 use App\Services\Marketing\MarketingEventService;
+use App\Services\Promotions\PromotionEngineService;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\View;
@@ -26,6 +29,7 @@ class EmailMarketingService
     public function __construct(
         private readonly EmailProviderInterface $provider,
         private readonly MarketingEventService $events,
+        private readonly CartMutationService $cartMutations,
     ) {}
 
     public function subscribe(array $data, ?User $user = null): EmailSubscriber
@@ -173,6 +177,8 @@ class EmailMarketingService
                     'name' => $item->product?->name,
                     'sku' => $item->product?->sku,
                     'quantity' => $item->quantity,
+                    'is_gift' => $item->isGiftLine(),
+                    'promotion_id' => $item->promotion_id,
                     'unit_price' => $item->unit_price,
                     'total_price' => $item->total_price,
                 ])->values()->all(),
@@ -305,32 +311,42 @@ class EmailMarketingService
                 ['status' => 'active', 'expires_at' => now()->addDays(14)],
             );
 
-            $cart->update([
-                'user_id' => $record->user_id,
-                'customer_email' => $record->email,
-                'status' => 'active',
-                'expires_at' => now()->addDays(14),
-            ]);
+            return $this->cartMutations->run($cart, function (Cart $lockedCart) use ($record): Cart {
+                $lockedCart->update([
+                    'user_id' => $record->user_id,
+                    'customer_email' => $record->email,
+                    'status' => 'active',
+                    'expires_at' => now()->addDays(14),
+                ]);
 
-            $cart->items()->delete();
+                $lockedCart->items()->delete();
 
-            foreach (($record->cart_snapshot['items'] ?? []) as $item) {
-                $product = Product::query()->find($item['product_id'] ?? null);
-                if (! $product || ! $product->isPubliclyVisible()) {
-                    continue;
+                foreach (($record->cart_snapshot['items'] ?? []) as $item) {
+                    $product = Product::query()->find($item['product_id'] ?? null);
+                    if (! $product || ! $product->isPubliclyVisible()) {
+                        continue;
+                    }
+
+                    $quantity = max(1, min((int) ($item['quantity'] ?? 1), 99));
+                    $isGift = (bool) ($item['is_gift'] ?? false);
+                    $unitPrice = $isGift ? 0 : $product->effectivePrice();
+                    $lockedCart->items()->create([
+                        'product_id' => $product->id,
+                        'quantity' => $quantity,
+                        'is_gift' => $isGift,
+                        'promotion_id' => $isGift ? ($item['promotion_id'] ?? null) : null,
+                        'unit_price' => $unitPrice,
+                        'total_price' => $unitPrice * $quantity,
+                    ]);
                 }
 
-                $quantity = max(1, min((int) ($item['quantity'] ?? 1), 99));
-                $unitPrice = $product->effectivePrice();
-                $cart->items()->create([
-                    'product_id' => $product->id,
-                    'quantity' => $quantity,
-                    'unit_price' => $unitPrice,
-                    'total_price' => $unitPrice * $quantity,
-                ]);
-            }
+                $lockedCart = app(PromotionEngineService::class)
+                    ->applyAutomaticGiftsLocked($lockedCart);
 
-            return $cart->fresh(['items.product.brand', 'items.product.category', 'items.product.images']);
+                return app(CartPricingRefreshService::class)
+                    ->refreshLocked($lockedCart, refreshAutomaticGifts: false)
+                    ->cart;
+            }, requireActive: false);
         });
     }
 

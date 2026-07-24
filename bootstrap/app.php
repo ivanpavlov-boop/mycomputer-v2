@@ -1,5 +1,7 @@
 <?php
 
+use App\Exceptions\CartGiftLineImmutableException;
+use App\Exceptions\CartMutationConflictException;
 use App\Exceptions\CartNotReadyException;
 use App\Exceptions\CartPriceChangedException;
 use App\Exceptions\CartProductUnavailableException;
@@ -80,6 +82,22 @@ return Application::configure(basePath: dirname(__DIR__))
                     $exception->getMessage(),
                     409,
                     $exception->details(),
+                );
+            }
+
+            if ($exception instanceof CartGiftLineImmutableException) {
+                return ErrorResponse::make(
+                    'cart_gift_line_immutable',
+                    $exception->getMessage(),
+                    409,
+                );
+            }
+
+            if ($exception instanceof CartMutationConflictException) {
+                return ErrorResponse::make(
+                    'cart_mutation_conflict',
+                    $exception->getMessage(),
+                    409,
                 );
             }
 

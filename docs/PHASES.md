@@ -39,7 +39,8 @@ Phase 8 manual selected UPDATE price/stock sync has been implemented behind a fe
 | Commerce Phase 1B.1 | Unified Cart Identity and Ownership Boundary | Merged, deployed and staging verified; shared request-level UUID and ownership resolver, atomic anonymous-Cart claim, checkout cross-user rejection and session-authorized shipping subtotal. |
 | Commerce Phase 1B.2 | Cart Lifecycle and Guest-to-User Policy | Merged, deployed and staging verified; deterministic active/expired/converted/merged lifecycle, 14-day expiry renewal, authenticated Cart convergence, conflict-safe guest-to-user merge and dry-run-first stale expiration. |
 | Commerce Phase 1B.3 | Authoritative Cart Pricing and Price Refresh | Merged, deployed and staging verified; Product effective pricing is authoritative for Cart items and bundles, Cart reads refresh stale prices, and checkout commits reviewable Cart changes before a side-effect-free HTTP 409. |
-| Commerce Phase 1B.4 | Cart Product Eligibility and Stock Feedback | Complete locally; centralized Product and bundle readiness, early stock feedback, stale-line visibility and side-effect-free checkout rejection while final locked stock enforcement remains authoritative. |
+| Commerce Phase 1B.4 | Cart Product Eligibility and Stock Feedback | Merged, deployed and staging verified; centralized Product and bundle readiness, early stock feedback, stale-line visibility and side-effect-free checkout rejection while final locked stock enforcement remains authoritative. |
+| Commerce Phase 1B.5 | Cart Item Mutation Concurrency and Gift-Line Integrity | Complete locally; same-Cart writes are serialized, paid and gift lines have separate identities, and automatic gifts are canonical, idempotent and excluded from paid promotion inputs. |
 | Phase 9C.1 | Product attributes core foundation | Complete |
 | Phase 9C.2 | Product attributes admin usability and starter structure | Complete |
 | Phase 9C.3 | Category attribute sets | Complete |
@@ -503,7 +504,8 @@ open.
 
 ## Commerce Phase 1B.4 Scope
 
-Commerce Phase 1B.4 is complete locally. `Product::isPubliclyVisible()` remains
+Commerce Phase 1B.4 is merged, deployed and staging verified.
+`Product::isPubliclyVisible()` remains
 the public-visibility authority, `AvailabilityStatusService::allowsPurchase()`
 remains the purchase-permission authority, and
 `AvailabilityStatusService::requiresStock()` remains the stock-tracking
@@ -532,6 +534,35 @@ This locally remediates CART-012 and CART-013. It adds no stock reservation,
 Cart mutation-concurrency guarantee, idempotency redesign, migration, frontend
 production change, public Cart/checkout route, Product or supplier mutation,
 Catalog Sync behavior, Sync All, automatic sync or UPDATE enablement.
+
+## Commerce Phase 1B.5 Scope
+
+Commerce Phase 1B.5 is complete locally and remediates CART-014 and CART-015
+locally. The Cart row is the same-Cart mutation serialization boundary.
+Transactions lock the Cart first, then existing Cart and bundle rows in
+ascending ID order, and use bounded database retries for recognized concurrency
+failures. Concurrent successful adds accumulate from committed paid-line state;
+an exhausted recognized conflict returns a generic HTTP 409.
+
+Paid lines use `(cart_id, product_id, is_gift=false)` and automatic gifts use
+`(cart_id, product_id, is_gift=true)`. One paid and one aggregated gift row may
+therefore coexist for one Product. Automatic gift quantities are summed by
+Product, the primary `promotion_id` follows priority descending then ID
+ascending, unchanged rows are not rewritten, and `gift_added` is deferred
+until commit only for a newly created gift. Direct gift update or deletion is
+rejected because gift rows are derived state.
+
+Promotion Product, Category, Brand, quantity, scoped percentage, bundle and
+buy-X-get-Y inputs use paid lines only. Gifts cannot qualify or recursively
+keep promotions alive. Cart merge discards derived source gifts and regenerates
+canonical target gifts. Recovery preserves paid/gift identity, PC Builder
+applies its paid batch atomically, and checkout retains separate paid and
+zero-price gift Order snapshots while enforcing their combined stock demand.
+
+No stock reservation, Product stock mutation during Cart editing, checkout
+idempotency, promotion redemption-concurrency redesign, frontend production
+change or public Cart/checkout route was added. CART-009 remains open. Catalog
+Sync behavior and flags are unchanged.
 
 ## Phase 9C.6.5A and 9C.6.5B Implemented Scope
 

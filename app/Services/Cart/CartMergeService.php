@@ -31,7 +31,7 @@ class CartMergeService
         $cartIds = $sources->pluck('id')->prepend($target->getKey())->all();
         $paidItems = CartItem::query()
             ->whereIn('cart_id', $cartIds)
-            ->where('is_gift', false)
+            ->paid()
             ->orderBy('cart_id')
             ->orderBy('id')
             ->get();
@@ -41,7 +41,7 @@ class CartMergeService
 
         CartItem::query()
             ->whereIn('cart_id', $cartIds)
-            ->where('is_gift', true)
+            ->gifts()
             ->delete();
 
         $targetItems = $paidItems

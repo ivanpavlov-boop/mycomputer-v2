@@ -11,14 +11,12 @@ use App\Models\PcBuild;
 use App\Models\PcBuildItem;
 use App\Models\Product;
 use App\Services\Cart\CartContextResolver;
-use App\Services\Cart\CartPricingRefreshService;
 use App\Services\Cart\CartReadinessService;
 use App\Services\Cart\CartService;
 use App\Services\PcBuilder\AiBuildGeneratorService;
 use App\Services\PcBuilder\BuildRecommendationService;
 use App\Services\PcBuilder\CompatibilityService;
 use App\Services\PcBuilder\PcBuilderService;
-use App\Services\Promotions\PromotionEngineService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -138,9 +136,7 @@ class PcBuilderController extends Controller
         PcBuild $build,
         CartService $cartService,
         CartContextResolver $cartContext,
-        CartPricingRefreshService $pricing,
         CartReadinessService $readiness,
-        PromotionEngineService $promotions,
     ): CartResource {
         $this->authorizeBuild($request, $build);
         $cart = $cartContext->resolve($request);
@@ -150,28 +146,12 @@ class PcBuilderController extends Controller
             ->map(fn ($items): int => (int) $items->sum('quantity'))
             ->all();
 
-        foreach ($cart->items->where('is_gift', false) as $cartItem) {
-            if (array_key_exists($cartItem->product_id, $requestedQuantities)) {
-                $requestedQuantities[$cartItem->product_id] += (int) $cartItem->quantity;
-            }
-        }
-
-        $products = $readiness->assertProductQuantities($requestedQuantities);
-        $cart = DB::transaction(function () use ($build, $buildItems, $cart, $cartService, $products) {
-            foreach ($buildItems as $item) {
-                $cart = $cartService->add(
-                    $cart,
-                    $products->get((int) $item->product_id),
-                    (int) $item->quantity,
-                );
-            }
-
+        $cart = DB::transaction(function () use ($build, $cart, $cartService, $requestedQuantities) {
+            $cart = $cartService->addMany($cart, $requestedQuantities);
             $build->update(['status' => 'ordered']);
 
             return $cart;
         });
-
-        $cart = $pricing->refresh($promotions->applyAutomaticGifts($cart))->cart;
 
         return CartResource::make($readiness->assess($cart)->cart);
     }
