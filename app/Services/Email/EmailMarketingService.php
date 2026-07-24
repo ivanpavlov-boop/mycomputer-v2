@@ -321,7 +321,7 @@ class EmailMarketingService
                 }
 
                 $quantity = max(1, min((int) ($item['quantity'] ?? 1), 99));
-                $unitPrice = (float) ($product->promo_price ?? $product->price);
+                $unitPrice = $product->effectivePrice();
                 $cart->items()->create([
                     'product_id' => $product->id,
                     'quantity' => $quantity,

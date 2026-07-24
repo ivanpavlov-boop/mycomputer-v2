@@ -4,12 +4,15 @@ namespace App\Services\Orders;
 
 use App\Enums\CartStatus;
 use App\Events\OrderCreated;
+use App\Exceptions\CartPriceChangedException;
 use App\Jobs\ConversionTrackingJob;
 use App\Models\Cart;
 use App\Models\CartItem;
 use App\Models\Customer;
 use App\Models\Order;
 use App\Services\Bundles\BundleCartService;
+use App\Services\Cart\CartPricingRefreshResult;
+use App\Services\Cart\CartPricingRefreshService;
 use App\Services\Cart\CartService;
 use App\Services\Email\EmailMarketingService;
 use App\Services\Loyalty\LoyaltyService;
@@ -25,6 +28,7 @@ class CheckoutService
 {
     public function __construct(
         private readonly CartService $cartService,
+        private readonly CartPricingRefreshService $cartPricing,
         private readonly OrderNumberService $orderNumberService,
         private readonly StockReservationService $stockReservationService,
         private readonly ShippingPriceService $shippingPriceService,
@@ -38,9 +42,15 @@ class CheckoutService
 
     public function checkout(Cart $cart, array $data): Order
     {
-        return DB::transaction(function () use ($cart, $data): Order {
-            $cart = $this->cartService->recalculate($cart);
-            $cart = $this->promotions->applyAutomaticGifts($cart);
+        $outcome = DB::transaction(function () use ($cart, $data): Order|CartPricingRefreshResult {
+            $cart = Cart::query()->lockForUpdate()->findOrFail($cart->id);
+            $pricing = $this->cartPricing->refresh($cart);
+
+            if ($pricing->requiresReview) {
+                return $pricing;
+            }
+
+            $cart = $pricing->cart;
             $this->stockReservationService->assertAvailable($cart);
 
             $customer = Customer::query()->updateOrCreate(
@@ -134,6 +144,12 @@ class CheckoutService
 
             return $order->load(['items', 'bundleItems', 'shipments.provider', 'shipments.method', 'shipments.office', 'paymentTransactions.method']);
         });
+
+        if ($outcome instanceof CartPricingRefreshResult) {
+            throw new CartPriceChangedException;
+        }
+
+        return $outcome;
     }
 
     private function shippingPayload(array $data): array

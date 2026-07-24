@@ -37,7 +37,8 @@ Phase 8 manual selected UPDATE price/stock sync has been implemented behind a fe
 | Product Data Quality 2E | Category-template and specification completion | Complete locally; shared read-only template inheritance resolution, exact specification completion states, queue/category triage and Product edit summary with manual remediation through existing editors. |
 | Commerce Phase 1A | Cart Architecture, Safety and Gap Audit | Complete locally; read-only architecture report, machine-readable gap register and phased remediation plan. No Cart or checkout implementation changed. |
 | Commerce Phase 1B.1 | Unified Cart Identity and Ownership Boundary | Merged, deployed and staging verified; shared request-level UUID and ownership resolver, atomic anonymous-Cart claim, checkout cross-user rejection and session-authorized shipping subtotal. |
-| Commerce Phase 1B.2 | Cart Lifecycle and Guest-to-User Policy | Complete locally; deterministic active/expired/converted/merged lifecycle, 14-day expiry renewal, authenticated Cart convergence, conflict-safe guest-to-user merge and dry-run-first stale expiration. |
+| Commerce Phase 1B.2 | Cart Lifecycle and Guest-to-User Policy | Merged, deployed and staging verified; deterministic active/expired/converted/merged lifecycle, 14-day expiry renewal, authenticated Cart convergence, conflict-safe guest-to-user merge and dry-run-first stale expiration. |
+| Commerce Phase 1B.3 | Authoritative Cart Pricing and Price Refresh | Complete locally; Product effective pricing is authoritative for Cart items and bundles, Cart reads refresh stale prices, and checkout commits reviewable Cart changes before a side-effect-free HTTP 409. |
 | Phase 9C.1 | Product attributes core foundation | Complete |
 | Phase 9C.2 | Product attributes admin usability and starter structure | Complete |
 | Phase 9C.3 | Category attribute sets | Complete |
@@ -458,7 +459,7 @@ production, Product, supplier or Catalog Sync behavior changed.
 
 ## Commerce Phase 1B.2 Scope
 
-Commerce Phase 1B.2 is complete locally. Eligible active Carts use
+Commerce Phase 1B.2 is merged, deployed and staging verified. Eligible active Carts use
 `status=active` and a null or future expiry. Expired, converted and merged
 sessions rotate lazily without deleting or reactivating historical Carts. The
 sliding lifetime is 14 days and renewal occurs only with seven days or less
@@ -478,6 +479,25 @@ Cart data and is not scheduled. CART-003 and CART-011 are remediated locally.
 Pricing, stock feedback, recovery, checkout idempotency and retention cleanup
 remain open. Public Cart and checkout pages remain disabled. No migration,
 frontend production, Product, stock, supplier or Catalog Sync behavior changed.
+
+## Commerce Phase 1B.3 Scope
+
+Commerce Phase 1B.3 is complete locally. `Product::effectivePrice()` is the
+single customer-price authority for Product API resources, regular Cart lines,
+bundle component snapshots, bundle calculations, shipping Cart subtotals,
+Cart-derived quotes, PC Builder totals, checkout and Order snapshots. Active
+sales are date-aware; future, expired, equal-to-regular and above-regular sale
+prices are ignored. Currency remains EUR.
+
+Cart display performs request-driven price refresh and does not rewrite
+unchanged rows. When checkout discovers a customer-visible price, bundle,
+promotion or automatic-gift change, it commits only the refreshed active Cart
+state and returns HTTP 409 before Customer, Order, Shipment, Payment, stock,
+redemption, event, job or email side effects. A subsequent checkout may proceed
+after review when pricing remains stable. No background repricing, migration or
+public Cart/checkout route enablement was added. CART-006 and CART-007 are
+remediated locally; stock eligibility, recovery, promotion concurrency and
+checkout idempotency remain open.
 
 ## Phase 9C.6.5A and 9C.6.5B Implemented Scope
 

@@ -24,7 +24,7 @@ class PromotionEngineTest extends TestCase
         config()->set('scout.driver', 'database');
         $this->seed();
         $this->product = Product::query()->where('sku', 'MC-LAP-001')->firstOrFail();
-        $this->product->update(['price' => 100, 'promo_price' => null, 'quantity' => 10]);
+        $this->product->update(['price' => 100, 'regular_price' => 100, 'promo_price' => null, 'quantity' => 10]);
     }
 
     public function test_coupon_validation_and_percentage_discount(): void

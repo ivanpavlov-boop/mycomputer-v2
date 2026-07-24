@@ -798,7 +798,7 @@
     },
     {
       "phase": "Commerce Phase 1B.2",
-      "status": "complete_locally",
+      "status": "merged_deployed_staging_verified",
       "finding_ids": [
         "CART-003",
         "CART-011"
@@ -810,7 +810,24 @@
         "Authenticated resolution converges eligible Carts deterministically while preserving the supplied eligible guest Cart as the login target.",
         "Conflicting coupons or combined paid quantities above 99 fail with a generic 409 and full rollback.",
         "The stale-Cart expiration command is dry-run-first, is not scheduled and deletes no Cart data.",
-        "Public commerce routes remain disabled and pricing, stock feedback, recovery and checkout idempotency remain open."
+        "Public commerce routes remain disabled and pricing, stock feedback, recovery and checkout idempotency remain open.",
+        "Phase 1B.2 is merged, deployed and staging verified."
+      ]
+    },
+    {
+      "phase": "Commerce Phase 1B.3",
+      "status": "complete_locally",
+      "finding_ids": [
+        "CART-006",
+        "CART-007"
+      ],
+      "partial_finding_ids": [],
+      "open_finding_ids": [],
+      "notes": [
+        "Product effectivePrice is the customer-price authority.",
+        "Cart display refresh is request-driven.",
+        "Checkout requires review through HTTP 409 when pricing changes.",
+        "No public commerce route enablement."
       ]
     }
   ]

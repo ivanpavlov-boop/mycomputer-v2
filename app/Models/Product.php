@@ -259,7 +259,7 @@ class Product extends Model
 
     public function effectivePrice(): float
     {
-        return $this->activeSalePrice() ?? (float) ($this->regular_price ?? $this->price ?? 0);
+        return $this->activeSalePrice() ?? round((float) ($this->regular_price ?? $this->price ?? 0), 2);
     }
 
     public function toSearchableArray(): array

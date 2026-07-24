@@ -11,6 +11,7 @@ use App\Http\Resources\ShippingProviderResource;
 use App\Models\ShippingMethod;
 use App\Models\ShippingProvider;
 use App\Services\Cart\CartContextResolver;
+use App\Services\Cart\CartPricingRefreshService;
 use App\Services\Cart\CartService;
 use App\Services\Shipping\ShippingOfficeService;
 use App\Services\Shipping\ShippingPriceService;
@@ -43,6 +44,7 @@ class ShippingController extends Controller
         ShippingPriceService $priceService,
         CartService $cartService,
         CartContextResolver $cartContext,
+        CartPricingRefreshService $pricing,
     ): JsonResponse {
         $data = $request->validated();
         $subtotal = 0.0;
@@ -55,7 +57,7 @@ class ShippingController extends Controller
                 422,
                 'Cart session does not match the requested cart.',
             );
-            $subtotal = $cartService->subtotal($cart);
+            $subtotal = $cartService->subtotal($pricing->refresh($cart)->cart);
         } elseif (filled($data['cart_id'] ?? null)) {
             abort(422, 'Cart session is required for cart-based shipping calculation.');
         }

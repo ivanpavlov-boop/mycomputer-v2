@@ -12,6 +12,7 @@ use App\Jobs\AnalyticsEventJob;
 use App\Models\CartItem;
 use App\Models\Product;
 use App\Services\Cart\CartContextResolver;
+use App\Services\Cart\CartPricingRefreshService;
 use App\Services\Cart\CartService;
 use App\Services\Email\EmailMarketingService;
 use App\Services\Promotions\PromotionEngineService;
@@ -23,13 +24,14 @@ class CartController extends Controller
     public function __construct(
         private readonly CartContextResolver $cartContext,
         private readonly CartService $cartService,
+        private readonly CartPricingRefreshService $pricing,
         private readonly EmailMarketingService $emailMarketing,
         private readonly PromotionEngineService $promotions,
     ) {}
 
     public function show(Request $request): CartResource
     {
-        return CartResource::make($this->cartContext->resolve($request));
+        return CartResource::make($this->pricing->refresh($this->cartContext->resolve($request))->cart);
     }
 
     public function store(AddCartItemRequest $request): CartResource
@@ -47,52 +49,67 @@ class CartController extends Controller
             'value' => $this->cartService->price($product) * $quantity,
         ], Auth::guard('sanctum')->id(), $request->header('X-Marketing-Session'));
 
-        return CartResource::make($cart);
+        return CartResource::make($this->pricing->refresh($cart)->cart);
     }
 
     public function update(UpdateCartItemRequest $request, CartItem $item): CartResource
     {
         $cart = $this->cartContext->resolve($request);
 
-        return CartResource::make($this->promotions->applyAutomaticGifts($this->cartService->update($cart, $item, $request->integer('quantity'))));
+        $cart = $this->promotions->applyAutomaticGifts(
+            $this->cartService->update($cart, $item, $request->integer('quantity')),
+        );
+
+        return CartResource::make($this->pricing->refresh($cart)->cart);
     }
 
     public function destroy(Request $request, CartItem $item): CartResource
     {
         $cart = $this->cartContext->resolve($request);
 
-        return CartResource::make($this->promotions->applyAutomaticGifts($this->cartService->remove($cart, $item)));
+        $cart = $this->promotions->applyAutomaticGifts($this->cartService->remove($cart, $item));
+
+        return CartResource::make($this->pricing->refresh($cart)->cart);
     }
 
     public function clear(Request $request): CartResource
     {
         $cart = $this->cartContext->resolve($request);
 
-        return CartResource::make($this->cartService->clear($cart));
+        return CartResource::make($this->pricing->refresh($this->cartService->clear($cart))->cart);
     }
 
     public function applyCoupon(ApplyCouponRequest $request): CartResource
     {
-        return CartResource::make($this->promotions->applyCoupon($this->cartContext->resolve($request), $request->validated('code')));
+        $cart = $this->pricing->refresh($this->cartContext->resolve($request))->cart;
+        $cart = $this->promotions->applyCoupon($cart, $request->validated('code'));
+
+        return CartResource::make($this->pricing->refresh($cart)->cart);
     }
 
     public function removeCoupon(Request $request): CartResource
     {
-        return CartResource::make($this->promotions->removeCoupon($this->cartContext->resolve($request)));
+        $cart = $this->pricing->refresh($this->cartContext->resolve($request))->cart;
+        $cart = $this->promotions->removeCoupon($cart);
+
+        return CartResource::make($this->pricing->refresh($cart)->cart);
     }
 
     public function email(CartEmailRequest $request): CartResource
     {
-        return CartResource::make(
-            $this->emailMarketing->attachEmailToCart($this->cartContext->resolve($request), $request->validated('email')),
+        $cart = $this->emailMarketing->attachEmailToCart(
+            $this->cartContext->resolve($request),
+            $request->validated('email'),
         );
+
+        return CartResource::make($this->pricing->refresh($cart)->cart);
     }
 
     public function recover(Request $request, string $token): CartResource
     {
-        return CartResource::make(
-            $this->emailMarketing->restoreCartFromToken($token, $this->sessionId($request)),
-        );
+        $cart = $this->emailMarketing->restoreCartFromToken($token, $this->sessionId($request));
+
+        return CartResource::make($this->pricing->refresh($cart)->cart);
     }
 
     private function sessionId(Request $request): ?string

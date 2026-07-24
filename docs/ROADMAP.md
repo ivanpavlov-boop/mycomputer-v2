@@ -39,9 +39,11 @@ Manual selected UPDATE price/stock sync is implemented behind `CATALOG_SYNC_UPDA
   through merge, deployment and staging verification with one request-level
   UUID/ownership resolver, atomic anonymous-Cart claim, checkout cross-user
   rejection and session-authorized shipping.
-- Commerce Phase 1B.2 Cart Lifecycle and Guest-to-User Policy, completed
-  locally with deterministic active Cart selection, lazy historical-session
+- Commerce Phase 1B.2 Cart Lifecycle and Guest-to-User Policy, merged, deployed
+  and staging verified with deterministic active Cart selection, lazy historical-session
   rotation, authenticated Cart convergence and dry-run-first stale expiration.
+- Commerce Phase 1B.3 Authoritative Cart Pricing and Price Refresh, completed
+  locally with request-driven Cart refresh and checkout price review.
 - Unified Product edit quality summary combining existing scanner issues,
   category specification quality and active manual flags without blocking or
   mutating Product workflow.
@@ -369,7 +371,8 @@ session validation, ownership enforcement and anonymous-Cart claiming,
 remediating CART-001 and CART-022. CART-017 is only partially remediated for
 UUID validation; dedicated throttling remains open.
 
-Commerce Phase 1B.2 is complete locally and remediates CART-003 and CART-011.
+Commerce Phase 1B.2 is merged, deployed and staging verified and remediates
+CART-003 and CART-011.
 It defines eligible active Carts, 14-day expiry with a seven-day renewal
 threshold, lazy rotation for expired/converted/merged sessions, and
 transactional convergence to one active Cart per authenticated user. The
@@ -384,6 +387,15 @@ idempotency and retention cleanup remain open. Public Cart and checkout pages
 remain disabled. This phase adds no migration, frontend production change,
 Product or supplier mutation, Catalog Sync behavior change, Sync All,
 automatic sync or UPDATE enablement.
+
+Commerce Phase 1B.3 is complete locally and remediates CART-006 and CART-007.
+`Product::effectivePrice()` is authoritative for Product API values, Cart
+items, bundle components, Cart-derived amounts, checkout and Order snapshots.
+Cart reads refresh stale stored prices on demand, and checkout returns a
+side-effect-free HTTP 409 after committing refreshed Cart state when customer
+review is required. Currency remains EUR. There is no automatic Cart repricing,
+migration or public commerce route enablement. Stock eligibility, recovery,
+promotion concurrency and checkout idempotency remain open.
 
 ## Next
 

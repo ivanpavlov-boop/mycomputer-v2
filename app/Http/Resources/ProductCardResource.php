@@ -35,6 +35,7 @@ class ProductCardResource extends JsonResource
             'regular_price' => $this->regular_price ?? $this->price,
             'sale_price' => $this->sale_price ?? $this->promo_price,
             'active_sale_price' => $this->activeSalePrice(),
+            'effective_price' => $this->effectivePrice(),
             'promo_price' => $this->activeSalePrice(),
             'quantity' => $this->quantity,
             'stock_status' => $this->stock_status,

@@ -7,7 +7,6 @@ use App\Models\CartBundleItem;
 use App\Models\CartItem;
 use App\Models\Product;
 use App\Services\Availability\AvailabilityStatusService;
-use App\Services\Bundles\BundlePricingService;
 
 class CartService
 {
@@ -73,31 +72,7 @@ class CartService
 
     public function recalculate(Cart $cart): Cart
     {
-        $cart->items()->with('product')->get()->each(function (CartItem $item): void {
-            if ($item->is_gift) {
-                $item->update(['unit_price' => 0, 'total_price' => 0]);
-
-                return;
-            }
-
-            $unitPrice = $this->price($item->product);
-            $item->update([
-                'unit_price' => $unitPrice,
-                'total_price' => $unitPrice * $item->quantity,
-            ]);
-        });
-
-        $pricing = app(BundlePricingService::class);
-        $cart->bundleItems()->with(['bundle.items.product', 'bundle.options.product'])->get()->each(function (CartBundleItem $item) use ($pricing): void {
-            $bundlePricing = $pricing->calculate($item->bundle, $item->selected_items ?? []);
-            $item->update([
-                'selected_items' => $bundlePricing['selected_items'],
-                'unit_price' => $bundlePricing['unit_price'],
-                'total_price' => $bundlePricing['unit_price'] * $item->quantity,
-            ]);
-        });
-
-        return $cart->fresh(['items.product.brand', 'items.product.category', 'items.product.images', 'items.product.availabilityStatus', 'bundleItems.bundle.items.product', 'bundleItems.bundle.options.product']);
+        return app(CartPricingRefreshService::class)->refresh($cart, refreshAutomaticGifts: false)->cart;
     }
 
     public function subtotal(Cart $cart): float
@@ -105,13 +80,16 @@ class CartService
         $items = $cart->relationLoaded('items') ? $cart->items : $cart->items()->get();
         $bundleItems = $cart->relationLoaded('bundleItems') ? $cart->bundleItems : $cart->bundleItems()->get();
 
-        return (float) $items->sum(fn (CartItem $item): float => (float) $item->total_price)
-            + (float) $bundleItems->sum(fn (CartBundleItem $item): float => (float) $item->total_price);
+        return round(
+            (float) $items->sum(fn (CartItem $item): float => (float) $item->total_price)
+                + (float) $bundleItems->sum(fn (CartBundleItem $item): float => (float) $item->total_price),
+            2,
+        );
     }
 
     public function price(Product $product): float
     {
-        return (float) ($product->promo_price ?? $product->price);
+        return $product->effectivePrice();
     }
 
     private function assertPublicProduct(Product $product): void
