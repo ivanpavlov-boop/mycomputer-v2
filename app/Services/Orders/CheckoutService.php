@@ -4,6 +4,7 @@ namespace App\Services\Orders;
 
 use App\Enums\CartStatus;
 use App\Events\OrderCreated;
+use App\Exceptions\CartNotReadyException;
 use App\Exceptions\CartPriceChangedException;
 use App\Jobs\ConversionTrackingJob;
 use App\Models\Cart;
@@ -13,6 +14,8 @@ use App\Models\Order;
 use App\Services\Bundles\BundleCartService;
 use App\Services\Cart\CartPricingRefreshResult;
 use App\Services\Cart\CartPricingRefreshService;
+use App\Services\Cart\CartReadinessResult;
+use App\Services\Cart\CartReadinessService;
 use App\Services\Cart\CartService;
 use App\Services\Email\EmailMarketingService;
 use App\Services\Loyalty\LoyaltyService;
@@ -29,6 +32,7 @@ class CheckoutService
     public function __construct(
         private readonly CartService $cartService,
         private readonly CartPricingRefreshService $cartPricing,
+        private readonly CartReadinessService $cartReadiness,
         private readonly OrderNumberService $orderNumberService,
         private readonly StockReservationService $stockReservationService,
         private readonly ShippingPriceService $shippingPriceService,
@@ -42,7 +46,7 @@ class CheckoutService
 
     public function checkout(Cart $cart, array $data): Order
     {
-        $outcome = DB::transaction(function () use ($cart, $data): Order|CartPricingRefreshResult {
+        $outcome = DB::transaction(function () use ($cart, $data): Order|CartPricingRefreshResult|CartReadinessResult {
             $cart = Cart::query()->lockForUpdate()->findOrFail($cart->id);
             $pricing = $this->cartPricing->refresh($cart);
 
@@ -51,6 +55,12 @@ class CheckoutService
             }
 
             $cart = $pricing->cart;
+            $readiness = $this->cartReadiness->assess($cart);
+
+            if (! $readiness->canCheckout) {
+                return $readiness;
+            }
+
             $this->stockReservationService->assertAvailable($cart);
 
             $customer = Customer::query()->updateOrCreate(
@@ -147,6 +157,10 @@ class CheckoutService
 
         if ($outcome instanceof CartPricingRefreshResult) {
             throw new CartPriceChangedException;
+        }
+
+        if ($outcome instanceof CartReadinessResult) {
+            throw new CartNotReadyException($outcome);
         }
 
         return $outcome;

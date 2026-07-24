@@ -169,7 +169,9 @@ class AvailabilityStatusSystemTest extends TestCase
             'product_id' => $product->id,
             'quantity' => 1,
         ], ['X-Cart-Session' => $this->cartSession('availability-cart')])
-            ->assertStatus(422);
+            ->assertConflict()
+            ->assertJsonPath('error.code', 'cart_product_unavailable')
+            ->assertJsonPath('error.details.issues.0.code', 'product_purchase_disabled');
     }
 
     public function test_preorder_status_can_checkout_without_stock_reservation(): void

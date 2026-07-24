@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Exceptions\CartNotReadyException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\ShippingCalculateRequest;
 use App\Http\Requests\Api\V1\ShippingOfficeIndexRequest;
@@ -12,6 +13,7 @@ use App\Models\ShippingMethod;
 use App\Models\ShippingProvider;
 use App\Services\Cart\CartContextResolver;
 use App\Services\Cart\CartPricingRefreshService;
+use App\Services\Cart\CartReadinessService;
 use App\Services\Cart\CartService;
 use App\Services\Shipping\ShippingOfficeService;
 use App\Services\Shipping\ShippingPriceService;
@@ -45,6 +47,7 @@ class ShippingController extends Controller
         CartService $cartService,
         CartContextResolver $cartContext,
         CartPricingRefreshService $pricing,
+        CartReadinessService $readiness,
     ): JsonResponse {
         $data = $request->validated();
         $subtotal = 0.0;
@@ -57,7 +60,14 @@ class ShippingController extends Controller
                 422,
                 'Cart session does not match the requested cart.',
             );
-            $subtotal = $cartService->subtotal($pricing->refresh($cart)->cart);
+            $cart = $pricing->refresh($cart)->cart;
+            $cartReadiness = $readiness->assess($cart);
+
+            if (! $cartReadiness->canCheckout) {
+                throw new CartNotReadyException($cartReadiness);
+            }
+
+            $subtotal = $cartService->subtotal($cart);
         } elseif (filled($data['cart_id'] ?? null)) {
             abort(422, 'Cart session is required for cart-based shipping calculation.');
         }

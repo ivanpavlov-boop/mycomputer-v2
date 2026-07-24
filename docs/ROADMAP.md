@@ -42,8 +42,11 @@ Manual selected UPDATE price/stock sync is implemented behind `CATALOG_SYNC_UPDA
 - Commerce Phase 1B.2 Cart Lifecycle and Guest-to-User Policy, merged, deployed
   and staging verified with deterministic active Cart selection, lazy historical-session
   rotation, authenticated Cart convergence and dry-run-first stale expiration.
-- Commerce Phase 1B.3 Authoritative Cart Pricing and Price Refresh, completed
-  locally with request-driven Cart refresh and checkout price review.
+- Commerce Phase 1B.3 Authoritative Cart Pricing and Price Refresh, merged,
+  deployed and staging verified with request-driven Cart refresh and checkout
+  price review.
+- Commerce Phase 1B.4 Cart Product Eligibility and Stock Feedback, completed
+  locally with deterministic readiness and early stock feedback.
 - Unified Product edit quality summary combining existing scanner issues,
   category specification quality and active manual flags without blocking or
   mutating Product workflow.
@@ -388,14 +391,30 @@ remain disabled. This phase adds no migration, frontend production change,
 Product or supplier mutation, Catalog Sync behavior change, Sync All,
 automatic sync or UPDATE enablement.
 
-Commerce Phase 1B.3 is complete locally and remediates CART-006 and CART-007.
+Commerce Phase 1B.3 is merged, deployed and staging verified and remediates
+CART-006 and CART-007.
 `Product::effectivePrice()` is authoritative for Product API values, Cart
 items, bundle components, Cart-derived amounts, checkout and Order snapshots.
 Cart reads refresh stale stored prices on demand, and checkout returns a
 side-effect-free HTTP 409 after committing refreshed Cart state when customer
 review is required. Currency remains EUR. There is no automatic Cart repricing,
-migration or public commerce route enablement. Stock eligibility, recovery,
-promotion concurrency and checkout idempotency remain open.
+migration or public commerce route enablement. Recovery, promotion concurrency
+and checkout idempotency remain open.
+
+Commerce Phase 1B.4 is complete locally and remediates CART-012 and CART-013.
+One centralized readiness service reuses Product public visibility,
+Availability Status purchase permission and Availability Status stock tracking.
+Stock-tracked add/update operations reject quantities above `Product.quantity`;
+purchase-enabled non-stock-tracked Products are not capped by Product quantity.
+Existing stale, invalid or soft-deleted lines remain visible and are flagged
+without deletion, clamping or persisted readiness state.
+
+Checkout keeps price-change review first and rejects non-ready Carts before
+Customer, Order, Shipment, Payment, promotion-redemption, stock, event, job or
+email side effects. Final locked checkout stock enforcement remains in place.
+No stock reservation, mutation-concurrency guarantee, migration, frontend
+production change or public commerce route was added. CART-014 and CART-015
+remain open.
 
 ## Next
 

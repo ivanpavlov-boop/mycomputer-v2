@@ -28,6 +28,9 @@ class CartResource extends JsonResource
             'promotion_discount_total' => $promotionResult['discount_total'],
             'shipping_discount' => $promotionResult['shipping_discount'],
             'gift_products' => $promotionResult['gift_products'],
+            'readiness' => $this->resource->relationLoaded('readiness')
+                ? $this->resource->getRelation('readiness')
+                : null,
             'expires_at' => $this->expires_at,
         ];
     }

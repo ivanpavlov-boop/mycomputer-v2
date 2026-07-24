@@ -275,7 +275,11 @@ class CartOwnershipBoundaryTest extends TestCase
     {
         $this->seed();
 
-        $product = Product::factory()->create();
+        $product = Product::factory()->create([
+            'price' => 600,
+            'regular_price' => 600,
+            'quantity' => 5,
+        ]);
         $cart = $this->cart('shipping-authority');
         $cart->items()->create([
             'product_id' => $product->id,
@@ -339,7 +343,8 @@ class CartOwnershipBoundaryTest extends TestCase
         $this->actingAs($owner, 'sanctum')
             ->withHeader('X-Cart-Session', $cart->session_id)
             ->postJson('/api/v1/shipping/calculate', $this->shippingPayload())
-            ->assertOk();
+            ->assertConflict()
+            ->assertJsonPath('error.code', 'cart_not_ready');
 
         $this->assertEquals($state, $cart->fresh()->getAttributes());
     }

@@ -3,6 +3,7 @@
 namespace App\Services\Cart;
 
 use App\Models\Cart;
+use App\Models\CartBundleItem;
 use App\Models\CartItem;
 use App\Services\Bundles\BundlePricingService;
 use App\Services\Promotions\PromotionEngineService;
@@ -38,6 +39,10 @@ class CartPricingRefreshService
                 continue;
             }
 
+            if ($item->product === null) {
+                continue;
+            }
+
             $unitPrice = $this->carts->price($item->product);
             $totalPrice = round($unitPrice * $item->quantity, 2);
 
@@ -59,6 +64,10 @@ class CartPricingRefreshService
         }
 
         foreach ($cart->bundleItems as $item) {
+            if (! $this->canRepriceBundle($item)) {
+                continue;
+            }
+
             $pricing = $this->bundles->calculate($item->bundle, $item->selected_items ?? []);
             $pricing['selected_items'] = $this->preserveSelectedItemOrder(
                 $item->selected_items ?? [],
@@ -155,6 +164,33 @@ class CartPricingRefreshService
             'discount_total' => $this->cents($result['discount_total']),
             'shipping_discount' => $this->cents($result['shipping_discount']),
         ];
+    }
+
+    private function canRepriceBundle(CartBundleItem $item): bool
+    {
+        if ($item->bundle === null) {
+            return false;
+        }
+
+        $storedProductIds = collect($item->selected_items ?? [])
+            ->pluck('product_id')
+            ->map(fn ($id): int => (int) $id)
+            ->filter()
+            ->unique();
+
+        if ($storedProductIds->isEmpty()) {
+            return true;
+        }
+
+        $availableProductIds = $item->bundle->items
+            ->pluck('product')
+            ->merge($item->bundle->options->pluck('product'))
+            ->filter()
+            ->pluck('id')
+            ->map(fn ($id): int => (int) $id)
+            ->unique();
+
+        return $storedProductIds->diff($availableProductIds)->isEmpty();
     }
 
     private function sameSelectedItems(array $stored, array $expected): bool

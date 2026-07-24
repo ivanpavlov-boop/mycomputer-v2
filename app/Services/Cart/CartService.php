@@ -6,23 +6,21 @@ use App\Models\Cart;
 use App\Models\CartBundleItem;
 use App\Models\CartItem;
 use App\Models\Product;
-use App\Services\Availability\AvailabilityStatusService;
 
 class CartService
 {
     public const MAX_QUANTITY = 99;
 
-    public function __construct(private readonly AvailabilityStatusService $availability) {}
+    public function __construct(private readonly CartReadinessService $readiness) {}
 
     public function add(Cart $cart, Product $product, int $quantity): Cart
     {
-        $this->assertPublicProduct($product);
-        $quantity = min(max($quantity, 1), self::MAX_QUANTITY);
-        $unitPrice = $this->price($product);
         $item = $cart->items()->where('product_id', $product->id)->first();
+        $quantity = ($item?->quantity ?? 0) + $quantity;
+        $this->readiness->assertProductCanBeCartQuantity($product, $quantity);
+        $unitPrice = $this->price($product);
 
         if ($item) {
-            $quantity = min($item->quantity + $quantity, self::MAX_QUANTITY);
             $item->update([
                 'quantity' => $quantity,
                 'unit_price' => $unitPrice,
@@ -43,8 +41,11 @@ class CartService
     public function update(Cart $cart, CartItem $item, int $quantity): Cart
     {
         abort_unless($item->cart_id === $cart->id, 404);
-        $quantity = min(max($quantity, 1), self::MAX_QUANTITY);
-        $unitPrice = $this->price($item->product);
+        $product = $this->readiness->assertProductIdCanBeCartQuantity(
+            (int) $item->product_id,
+            $quantity,
+        );
+        $unitPrice = $this->price($product);
         $item->update([
             'quantity' => $quantity,
             'unit_price' => $unitPrice,
@@ -90,11 +91,5 @@ class CartService
     public function price(Product $product): float
     {
         return $product->effectivePrice();
-    }
-
-    private function assertPublicProduct(Product $product): void
-    {
-        abort_unless($product->isPubliclyVisible(), 422, 'Product is not available.');
-        abort_unless($this->availability->allowsPurchase($product), 422, 'Product is not available for purchase.');
     }
 }

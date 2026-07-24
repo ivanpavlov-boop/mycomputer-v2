@@ -1,6 +1,9 @@
 <?php
 
+use App\Exceptions\CartNotReadyException;
 use App\Exceptions\CartPriceChangedException;
+use App\Exceptions\CartProductUnavailableException;
+use App\Exceptions\CartQuantityUnavailableException;
 use App\Http\Middleware\ResolveApiLocale;
 use App\Support\Api\ErrorResponse;
 use Illuminate\Auth\Access\AuthorizationException;
@@ -51,6 +54,33 @@ return Application::configure(basePath: dirname(__DIR__))
 
             if ($exception instanceof CartPriceChangedException) {
                 return ErrorResponse::make('cart_price_changed', $exception->getMessage(), 409);
+            }
+
+            if ($exception instanceof CartProductUnavailableException) {
+                return ErrorResponse::make(
+                    'cart_product_unavailable',
+                    $exception->getMessage(),
+                    409,
+                    $exception->details(),
+                );
+            }
+
+            if ($exception instanceof CartQuantityUnavailableException) {
+                return ErrorResponse::make(
+                    'cart_quantity_unavailable',
+                    $exception->getMessage(),
+                    409,
+                    $exception->details(),
+                );
+            }
+
+            if ($exception instanceof CartNotReadyException) {
+                return ErrorResponse::make(
+                    'cart_not_ready',
+                    $exception->getMessage(),
+                    409,
+                    $exception->details(),
+                );
             }
 
             $status = $exception instanceof HttpExceptionInterface ? $exception->getStatusCode() : 500;
