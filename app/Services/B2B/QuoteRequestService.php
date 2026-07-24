@@ -2,6 +2,7 @@
 
 namespace App\Services\B2B;
 
+use App\Exceptions\CartNotReadyException;
 use App\Jobs\SyncOrderToErpJob;
 use App\Models\Cart;
 use App\Models\Customer;
@@ -10,6 +11,7 @@ use App\Models\Product;
 use App\Models\QuoteRequest;
 use App\Models\User;
 use App\Services\Cart\CartPricingRefreshService;
+use App\Services\Cart\CartReadinessService;
 use App\Services\Cart\CartService;
 use App\Services\Email\EmailMarketingService;
 use App\Services\Erp\ErpService;
@@ -25,6 +27,7 @@ class QuoteRequestService
         private readonly OrderNumberService $orderNumber,
         private readonly CartService $cartService,
         private readonly CartPricingRefreshService $cartPricing,
+        private readonly CartReadinessService $cartReadiness,
         private readonly B2BCompanyService $companies,
         private readonly ErpService $erp,
         private readonly EmailMarketingService $emailMarketing,
@@ -62,6 +65,11 @@ class QuoteRequestService
     {
         $cart = $this->cartPricing->refresh($cart)->cart;
         abort_unless($cart->user_id === null || (int) $cart->user_id === (int) $user->id, 404);
+        $readiness = $this->cartReadiness->assess($cart);
+
+        if (! $readiness->canCheckout) {
+            throw new CartNotReadyException($readiness);
+        }
 
         $items = $cart->items->map(fn ($item): array => [
             'product_id' => $item->product_id,

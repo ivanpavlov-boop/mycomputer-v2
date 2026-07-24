@@ -101,7 +101,9 @@ class CartCheckoutApiTest extends TestCase
 
         $this->withHeader('X-Cart-Session', $this->cartSession('test-cart'))
             ->postJson('/api/v1/checkout', $this->checkoutPayload())
-            ->assertStatus(422);
+            ->assertConflict()
+            ->assertJsonPath('error.code', 'cart_not_ready')
+            ->assertJsonPath('error.details.readiness.items.0.readiness.issues.0.code', 'product_inactive');
     }
 
     public function test_checkout_fails_with_insufficient_stock(): void
@@ -111,7 +113,9 @@ class CartCheckoutApiTest extends TestCase
 
         $this->withHeader('X-Cart-Session', $this->cartSession('test-cart'))
             ->postJson('/api/v1/checkout', $this->checkoutPayload())
-            ->assertStatus(422);
+            ->assertConflict()
+            ->assertJsonPath('error.code', 'cart_not_ready')
+            ->assertJsonPath('error.details.readiness.items.0.readiness.issues.0.code', 'insufficient_stock');
     }
 
     public function test_order_number_generation_is_unique(): void

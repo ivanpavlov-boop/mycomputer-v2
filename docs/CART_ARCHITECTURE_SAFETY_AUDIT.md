@@ -850,7 +850,8 @@ sync or UPDATE enablement.
 
 ### Commerce Phase 1B.3 - Authoritative Cart Pricing and Price Refresh
 
-Phase 1B.3 is complete locally. `Product::effectivePrice()` is the authoritative
+Phase 1B.3 is merged, deployed and staging verified.
+`Product::effectivePrice()` is the authoritative
 EUR customer price for Product resources, regular Cart lines, bundle component
 snapshots, bundle calculations, Cart-derived shipping and quote amounts,
 checkout and Order snapshots. The existing date-aware sale contract ignores
@@ -868,8 +869,45 @@ This locally remediates CART-006 and CART-007 while preserving CART-001,
 CART-003, CART-011, the UUID-validation part of CART-017 and CART-022. It adds
 no automatic Cart repricing, migration, frontend production change, public
 commerce route, Product or supplier mutation, Catalog Sync behavior, Sync All,
-automatic sync or UPDATE enablement. Stock eligibility, recovery, promotion
-concurrency and checkout idempotency remain open.
+automatic sync or UPDATE enablement. Recovery, promotion concurrency and
+checkout idempotency remain open.
+
+### Commerce Phase 1B.4 - Cart Product Eligibility and Stock Feedback
+
+Phase 1B.4 is complete locally. `Product::isPubliclyVisible()` remains the final
+public-visibility authority. `AvailabilityStatusService::allowsPurchase()`
+remains the purchase-permission authority, and
+`AvailabilityStatusService::requiresStock()` remains the stock-tracking
+authority.
+
+Cart add and quantity-update operations validate the resulting quantity before
+mutation. Stock-tracked Products use `max(0, Product.quantity)` and a maximum
+of 99. Purchase-enabled non-stock-tracked Products, including preorder and
+backorder states, are not capped by `Product.quantity`. `reserved_quantity` is
+not subtracted because the existing final checkout enforcement does not use it
+as available-stock authority.
+
+Cart display now includes deterministic read-only readiness for regular and
+bundle lines plus a Cart-level checkout-ready summary. Existing invalid lines
+are flagged rather than deleted or clamped. Soft-deleted Products remain as
+Cart Item identities with their stored price snapshot; deleted Product content
+is not exposed. Bundle readiness evaluates active dates, option validity,
+component eligibility and component quantity multiplied by Cart quantity.
+
+Checkout preserves the Phase 1B.3 price-review result first, then rejects a
+non-ready Cart before Customer, Order, Shipment, Payment, promotion-redemption,
+stock, event, job or email side effects. Existing locked checkout stock
+validation and reduction remain the final authority. Shipping and Cart-derived
+quotes reject non-ready Carts, while PC Builder validates all components before
+an atomic add.
+
+This locally remediates CART-012 and CART-013 while preserving CART-001,
+CART-003, CART-006, CART-007, CART-011, the UUID-validation part of CART-017 and
+CART-022. It adds no stock reservation, mutation-concurrency guarantee,
+idempotency redesign, automatic line deletion, migration, frontend production
+change, public commerce route, Product or supplier mutation, Catalog Sync
+behavior, Sync All, automatic sync or UPDATE enablement. CART-014 and CART-015
+remain open.
 
 ## 30. Release Gates
 

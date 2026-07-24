@@ -816,7 +816,7 @@
     },
     {
       "phase": "Commerce Phase 1B.3",
-      "status": "complete_locally",
+      "status": "merged_deployed_staging_verified",
       "finding_ids": [
         "CART-006",
         "CART-007"
@@ -827,7 +827,24 @@
         "Product effectivePrice is the customer-price authority.",
         "Cart display refresh is request-driven.",
         "Checkout requires review through HTTP 409 when pricing changes.",
-        "No public commerce route enablement."
+        "No public commerce route enablement.",
+        "Phase 1B.3 is merged, deployed and staging verified."
+      ]
+    },
+    {
+      "phase": "Commerce Phase 1B.4",
+      "status": "complete_locally",
+      "finding_ids": [
+        "CART-012",
+        "CART-013"
+      ],
+      "partial_finding_ids": [],
+      "open_finding_ids": [],
+      "notes": [
+        "Cart responses expose deterministic Product and stock readiness.",
+        "Existing invalid lines are flagged but not automatically removed or clamped.",
+        "Checkout retains final locked stock enforcement.",
+        "No stock reservation or Cart mutation concurrency redesign was added."
       ]
     }
   ]

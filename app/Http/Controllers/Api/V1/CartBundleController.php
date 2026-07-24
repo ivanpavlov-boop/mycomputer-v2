@@ -12,6 +12,7 @@ use App\Models\ProductBundle;
 use App\Services\Bundles\BundleCartService;
 use App\Services\Cart\CartContextResolver;
 use App\Services\Cart\CartPricingRefreshService;
+use App\Services\Cart\CartReadinessService;
 use App\Services\Promotions\PromotionEngineService;
 use Illuminate\Http\Request;
 
@@ -21,6 +22,7 @@ class CartBundleController extends Controller
         private readonly CartContextResolver $carts,
         private readonly BundleCartService $bundles,
         private readonly CartPricingRefreshService $pricing,
+        private readonly CartReadinessService $readiness,
         private readonly PromotionEngineService $promotions,
     ) {}
 
@@ -56,6 +58,8 @@ class CartBundleController extends Controller
         $cart = $this->pricing->refresh($cart, refreshAutomaticGifts: false)->cart;
         $cart = $this->promotions->applyAutomaticGifts($cart);
 
-        return $this->pricing->refresh($cart, refreshAutomaticGifts: false)->cart;
+        $cart = $this->pricing->refresh($cart, refreshAutomaticGifts: false)->cart;
+
+        return $this->readiness->assess($cart)->cart;
     }
 }

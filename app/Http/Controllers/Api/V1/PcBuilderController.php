@@ -12,6 +12,7 @@ use App\Models\PcBuildItem;
 use App\Models\Product;
 use App\Services\Cart\CartContextResolver;
 use App\Services\Cart\CartPricingRefreshService;
+use App\Services\Cart\CartReadinessService;
 use App\Services\Cart\CartService;
 use App\Services\PcBuilder\AiBuildGeneratorService;
 use App\Services\PcBuilder\BuildRecommendationService;
@@ -22,6 +23,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 
 class PcBuilderController extends Controller
 {
@@ -137,18 +139,41 @@ class PcBuilderController extends Controller
         CartService $cartService,
         CartContextResolver $cartContext,
         CartPricingRefreshService $pricing,
+        CartReadinessService $readiness,
         PromotionEngineService $promotions,
     ): CartResource {
         $this->authorizeBuild($request, $build);
         $cart = $cartContext->resolve($request);
+        $buildItems = $build->items()->get();
+        $requestedQuantities = $buildItems
+            ->groupBy('product_id')
+            ->map(fn ($items): int => (int) $items->sum('quantity'))
+            ->all();
 
-        foreach ($build->items()->with('product')->get() as $item) {
-            $cart = $cartService->add($cart, $item->product, $item->quantity);
+        foreach ($cart->items->where('is_gift', false) as $cartItem) {
+            if (array_key_exists($cartItem->product_id, $requestedQuantities)) {
+                $requestedQuantities[$cartItem->product_id] += (int) $cartItem->quantity;
+            }
         }
 
-        $build->update(['status' => 'ordered']);
+        $products = $readiness->assertProductQuantities($requestedQuantities);
+        $cart = DB::transaction(function () use ($build, $buildItems, $cart, $cartService, $products) {
+            foreach ($buildItems as $item) {
+                $cart = $cartService->add(
+                    $cart,
+                    $products->get((int) $item->product_id),
+                    (int) $item->quantity,
+                );
+            }
 
-        return CartResource::make($pricing->refresh($promotions->applyAutomaticGifts($cart))->cart);
+            $build->update(['status' => 'ordered']);
+
+            return $cart;
+        });
+
+        $cart = $pricing->refresh($promotions->applyAutomaticGifts($cart))->cart;
+
+        return CartResource::make($readiness->assess($cart)->cart);
     }
 
     public function aiGenerate(Request $request, AiBuildGeneratorService $generator): PcBuildResource

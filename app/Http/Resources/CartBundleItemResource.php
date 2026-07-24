@@ -10,7 +10,19 @@ class CartBundleItemResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
-        $pricing = $this->bundle ? app(BundlePricingService::class)->calculate($this->bundle, $this->selected_items) : ['original_price' => $this->unit_price, 'savings' => 0];
+        $readiness = $this->resource->relationLoaded('readiness')
+            ? $this->resource->getRelation('readiness')
+            : null;
+        $hasUnsafePricingIssue = collect($readiness['issues'] ?? [])->contains(
+            fn (array $issue): bool => in_array(
+                $issue['code'] ?? null,
+                ['bundle_unavailable', 'bundle_selection_invalid', 'bundle_product_unavailable'],
+                true,
+            ),
+        );
+        $pricing = $this->bundle && ! $hasUnsafePricingIssue
+            ? app(BundlePricingService::class)->calculate($this->bundle, $this->selected_items)
+            : ['original_price' => $this->unit_price, 'savings' => 0];
 
         return [
             'id' => $this->id,
@@ -22,6 +34,7 @@ class CartBundleItemResource extends JsonResource
             'total_price' => $this->total_price,
             'original_price' => $pricing['original_price'],
             'savings' => $pricing['savings'],
+            'readiness' => $readiness,
         ];
     }
 }

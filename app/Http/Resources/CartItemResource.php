@@ -18,6 +18,9 @@ class CartItemResource extends JsonResource
             'unit_price' => $this->unit_price,
             'total_price' => $this->total_price,
             'product' => ProductCardResource::make($this->whenLoaded('product')),
+            'readiness' => $this->resource->relationLoaded('readiness')
+                ? $this->resource->getRelation('readiness')
+                : null,
         ];
     }
 }

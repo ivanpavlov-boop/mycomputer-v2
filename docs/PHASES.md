@@ -38,7 +38,8 @@ Phase 8 manual selected UPDATE price/stock sync has been implemented behind a fe
 | Commerce Phase 1A | Cart Architecture, Safety and Gap Audit | Complete locally; read-only architecture report, machine-readable gap register and phased remediation plan. No Cart or checkout implementation changed. |
 | Commerce Phase 1B.1 | Unified Cart Identity and Ownership Boundary | Merged, deployed and staging verified; shared request-level UUID and ownership resolver, atomic anonymous-Cart claim, checkout cross-user rejection and session-authorized shipping subtotal. |
 | Commerce Phase 1B.2 | Cart Lifecycle and Guest-to-User Policy | Merged, deployed and staging verified; deterministic active/expired/converted/merged lifecycle, 14-day expiry renewal, authenticated Cart convergence, conflict-safe guest-to-user merge and dry-run-first stale expiration. |
-| Commerce Phase 1B.3 | Authoritative Cart Pricing and Price Refresh | Complete locally; Product effective pricing is authoritative for Cart items and bundles, Cart reads refresh stale prices, and checkout commits reviewable Cart changes before a side-effect-free HTTP 409. |
+| Commerce Phase 1B.3 | Authoritative Cart Pricing and Price Refresh | Merged, deployed and staging verified; Product effective pricing is authoritative for Cart items and bundles, Cart reads refresh stale prices, and checkout commits reviewable Cart changes before a side-effect-free HTTP 409. |
+| Commerce Phase 1B.4 | Cart Product Eligibility and Stock Feedback | Complete locally; centralized Product and bundle readiness, early stock feedback, stale-line visibility and side-effect-free checkout rejection while final locked stock enforcement remains authoritative. |
 | Phase 9C.1 | Product attributes core foundation | Complete |
 | Phase 9C.2 | Product attributes admin usability and starter structure | Complete |
 | Phase 9C.3 | Category attribute sets | Complete |
@@ -482,7 +483,8 @@ frontend production, Product, stock, supplier or Catalog Sync behavior changed.
 
 ## Commerce Phase 1B.3 Scope
 
-Commerce Phase 1B.3 is complete locally. `Product::effectivePrice()` is the
+Commerce Phase 1B.3 is merged, deployed and staging verified.
+`Product::effectivePrice()` is the
 single customer-price authority for Product API resources, regular Cart lines,
 bundle component snapshots, bundle calculations, shipping Cart subtotals,
 Cart-derived quotes, PC Builder totals, checkout and Order snapshots. Active
@@ -496,8 +498,40 @@ state and returns HTTP 409 before Customer, Order, Shipment, Payment, stock,
 redemption, event, job or email side effects. A subsequent checkout may proceed
 after review when pricing remains stable. No background repricing, migration or
 public Cart/checkout route enablement was added. CART-006 and CART-007 are
-remediated locally; stock eligibility, recovery, promotion concurrency and
-checkout idempotency remain open.
+remediated. Recovery, promotion concurrency and checkout idempotency remain
+open.
+
+## Commerce Phase 1B.4 Scope
+
+Commerce Phase 1B.4 is complete locally. `Product::isPubliclyVisible()` remains
+the public-visibility authority, `AvailabilityStatusService::allowsPurchase()`
+remains the purchase-permission authority, and
+`AvailabilityStatusService::requiresStock()` remains the stock-tracking
+authority.
+
+Cart add and quantity-update operations now reject unavailable Products and
+reject stock-tracked quantities above `Product.quantity` without partial adds
+or automatic clamping. Purchase-enabled non-stock-tracked states, including
+preorder and backorder, remain limited only by the Cart maximum quantity.
+`reserved_quantity` is not subtracted because existing final checkout
+enforcement uses `Product.quantity`.
+
+Cart responses expose computed Product, stock and bundle readiness. Existing
+invalid lines remain visible and stored; they are not deleted, clamped or
+persisted as readiness data. Soft-deleted Products retain their stored Cart
+line and price snapshot without exposing deleted Product content. Bundle stock
+feedback accounts for component quantity multiplied by Cart bundle quantity.
+
+Checkout preserves price-review precedence, then rejects a non-ready Cart
+before Customer, Order, Shipment, Payment, promotion-redemption, stock, event,
+job or email side effects. Existing locked checkout stock validation and
+reduction remain the final authority. Shipping and Cart-derived quote creation
+also reject non-ready Carts, and PC Builder add-to-Cart validation is atomic.
+
+This locally remediates CART-012 and CART-013. It adds no stock reservation,
+Cart mutation-concurrency guarantee, idempotency redesign, migration, frontend
+production change, public Cart/checkout route, Product or supplier mutation,
+Catalog Sync behavior, Sync All, automatic sync or UPDATE enablement.
 
 ## Phase 9C.6.5A and 9C.6.5B Implemented Scope
 
