@@ -9,6 +9,7 @@ use App\Models\Order;
 use App\Models\Product;
 use App\Models\QuoteRequest;
 use App\Models\User;
+use App\Services\Cart\CartPricingRefreshService;
 use App\Services\Cart\CartService;
 use App\Services\Email\EmailMarketingService;
 use App\Services\Erp\ErpService;
@@ -23,6 +24,7 @@ class QuoteRequestService
         private readonly QuoteNumberService $quoteNumber,
         private readonly OrderNumberService $orderNumber,
         private readonly CartService $cartService,
+        private readonly CartPricingRefreshService $cartPricing,
         private readonly B2BCompanyService $companies,
         private readonly ErpService $erp,
         private readonly EmailMarketingService $emailMarketing,
@@ -58,13 +60,13 @@ class QuoteRequestService
 
     public function createFromCart(User $user, Cart $cart, array $data = []): QuoteRequest
     {
-        $cart = $this->cartService->recalculate($cart);
+        $cart = $this->cartPricing->refresh($cart)->cart;
         abort_unless($cart->user_id === null || (int) $cart->user_id === (int) $user->id, 404);
 
         $items = $cart->items->map(fn ($item): array => [
             'product_id' => $item->product_id,
             'quantity' => $item->quantity,
-            'requested_price' => null,
+            'requested_price' => (float) $item->unit_price,
             'notes' => null,
         ])->values()->all();
 
@@ -90,12 +92,18 @@ class QuoteRequestService
         $product = Product::query()->published()->find($data['product_id'] ?? null);
         abort_unless($product, 422, 'Product is not available.');
 
+        $requestedPrice = isset($data['requested_price'])
+            ? max(0, (float) $data['requested_price'])
+            : null;
+        $quantity = max(1, min((int) ($data['quantity'] ?? 1), 999));
+
         $quote->items()->create([
             'product_id' => $product->id,
             'product_name' => $product->name,
             'sku' => $product->sku,
-            'quantity' => max(1, min((int) ($data['quantity'] ?? 1), 999)),
-            'requested_price' => isset($data['requested_price']) ? max(0, (float) $data['requested_price']) : null,
+            'quantity' => $quantity,
+            'requested_price' => $requestedPrice,
+            'line_total' => $requestedPrice !== null ? round($requestedPrice * $quantity, 2) : null,
             'notes' => Str::limit(strip_tags((string) ($data['notes'] ?? '')), 1000, ''),
         ]);
 
@@ -177,7 +185,7 @@ class QuoteRequestService
     public function convertToOrder(QuoteRequest $quote): Order
     {
         $quote->loadMissing(['items.product', 'user', 'company']);
-        $subtotal = (float) $quote->items->sum(fn ($item): float => (float) ($item->line_total ?? (($item->offered_price ?? $item->requested_price ?? $item->product?->price ?? 0) * $item->quantity)));
+        $subtotal = (float) $quote->items->sum(fn ($item): float => (float) ($item->line_total ?? (($item->offered_price ?? $item->requested_price ?? $item->product?->effectivePrice() ?? 0) * $item->quantity)));
 
         $customer = Customer::query()->updateOrCreate(
             ['email' => $quote->customer_email],
@@ -218,7 +226,7 @@ class QuoteRequestService
         ]);
 
         foreach ($quote->items as $item) {
-            $unitPrice = (float) ($item->offered_price ?? $item->requested_price ?? $item->product?->price ?? 0);
+            $unitPrice = (float) ($item->offered_price ?? $item->requested_price ?? $item->product?->effectivePrice() ?? 0);
             $order->items()->create([
                 'product_id' => $item->product_id,
                 'product_name' => $item->product_name,
@@ -261,8 +269,10 @@ class QuoteRequestService
     private function recalculate(QuoteRequest $quote): void
     {
         $quote->items()->get()->each(function ($item): void {
-            if ($item->offered_price !== null) {
-                $item->update(['line_total' => (float) $item->offered_price * $item->quantity]);
+            $price = $item->offered_price ?? $item->requested_price;
+
+            if ($price !== null) {
+                $item->update(['line_total' => round((float) $price * $item->quantity, 2)]);
             }
         });
 

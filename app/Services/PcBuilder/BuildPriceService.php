@@ -11,7 +11,7 @@ class BuildPriceService
         $total = $build->items()
             ->with('product')
             ->get()
-            ->sum(fn ($item): float => ((float) ($item->product->promo_price ?? $item->product->price)) * $item->quantity);
+            ->sum(fn ($item): float => $item->product->effectivePrice() * $item->quantity);
 
         $build->update(['total_price' => $total]);
 

@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Models\Product;
 use App\Services\Cart\CartService;
 use App\Services\Promotions\PromotionEngineService;
 use Illuminate\Http\Request;
@@ -17,6 +18,7 @@ class CartResource extends JsonResource
             'id' => $this->id,
             'cart_session_id' => $this->session_id,
             'status' => $this->status,
+            'currency' => Product::CATALOG_CURRENCY,
             'coupon_code' => $this->coupon_code,
             'items' => CartItemResource::collection($this->whenLoaded('items')),
             'bundle_items' => CartBundleItemResource::collection($this->whenLoaded('bundleItems')),

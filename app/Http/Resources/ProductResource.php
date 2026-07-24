@@ -43,6 +43,7 @@ class ProductResource extends JsonResource
             'regular_price' => $this->regular_price ?? $this->price,
             'sale_price' => $this->sale_price ?? $this->promo_price,
             'active_sale_price' => $this->activeSalePrice(),
+            'effective_price' => $this->effectivePrice(),
             'promo_price' => $this->activeSalePrice(),
             'sale_price_starts_at' => $this->sale_price_starts_at ?? $this->promo_start,
             'sale_price_ends_at' => $this->sale_price_ends_at ?? $this->promo_end,

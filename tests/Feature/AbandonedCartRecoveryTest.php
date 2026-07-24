@@ -35,7 +35,7 @@ class AbandonedCartRecoveryTest extends TestCase
         config()->set('email-marketing.provider', 'log');
         $this->seed();
         $this->product = Product::query()->where('sku', 'MC-LAP-001')->firstOrFail();
-        $this->product->update(['price' => 100, 'promo_price' => null, 'quantity' => 10]);
+        $this->product->update(['price' => 100, 'regular_price' => 100, 'promo_price' => null, 'quantity' => 10]);
     }
 
     public function test_guest_cart_becomes_abandoned_after_inactivity(): void

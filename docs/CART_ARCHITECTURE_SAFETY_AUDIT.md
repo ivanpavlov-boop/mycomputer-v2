@@ -811,7 +811,7 @@ sync or UPDATE enablement.
 
 ### Commerce Phase 1B.2 - Cart Lifecycle and Guest-to-User Policy
 
-Phase 1B.2 is complete locally. An eligible active Cart now means
+Phase 1B.2 is merged, deployed and staging verified. An eligible active Cart now means
 `status=active` with `expires_at` either null or later than the current time.
 Lifecycle values are centralized as `active`, `converted`, `expired` and
 `merged`. A successful resolution uses a 14-day sliding lifetime and renews
@@ -847,6 +847,29 @@ remain disabled.
 Phase 1B.2 adds no migration, frontend production change, Product or stock
 behavior change, supplier behavior, Catalog Sync behavior, Sync All, automatic
 sync or UPDATE enablement.
+
+### Commerce Phase 1B.3 - Authoritative Cart Pricing and Price Refresh
+
+Phase 1B.3 is complete locally. `Product::effectivePrice()` is the authoritative
+EUR customer price for Product resources, regular Cart lines, bundle component
+snapshots, bundle calculations, Cart-derived shipping and quote amounts,
+checkout and Order snapshots. The existing date-aware sale contract ignores
+future, expired, equal-to-regular and above-regular sale prices.
+
+Cart reads refresh stored item and bundle prices only when cent values or
+semantic component snapshots changed. Automatic gifts are reevaluated once
+when paid pricing changed, not on every unchanged GET. Checkout performs the
+same refresh before any Customer, Order, Shipment, Payment, stock, redemption,
+event, job or email side effect. A customer-visible change commits the active
+Cart for review and returns HTTP 409; a stable retry uses the refreshed Cart
+state for Order snapshots.
+
+This locally remediates CART-006 and CART-007 while preserving CART-001,
+CART-003, CART-011, the UUID-validation part of CART-017 and CART-022. It adds
+no automatic Cart repricing, migration, frontend production change, public
+commerce route, Product or supplier mutation, Catalog Sync behavior, Sync All,
+automatic sync or UPDATE enablement. Stock eligibility, recovery, promotion
+concurrency and checkout idempotency remain open.
 
 ## 30. Release Gates
 

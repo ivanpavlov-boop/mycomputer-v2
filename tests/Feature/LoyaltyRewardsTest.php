@@ -103,7 +103,7 @@ class LoyaltyRewardsTest extends TestCase
 
         $user = User::factory()->create(['email' => 'loyalty@example.com']);
         $product = Product::query()->where('sku', 'MC-LAP-001')->firstOrFail();
-        $product->update(['price' => 100, 'promo_price' => null, 'quantity' => 5]);
+        $product->update(['price' => 100, 'regular_price' => 100, 'promo_price' => null, 'quantity' => 5]);
 
         app(PointsService::class)->earn($user, 500, 'Opening balance.');
         $voucher = $this->rewardVoucher(points: 100, discount: 20);
@@ -219,7 +219,7 @@ class LoyaltyRewardsTest extends TestCase
     private function cartItem(): void
     {
         $product = Product::query()->where('sku', 'MC-LAP-001')->firstOrFail();
-        $product->update(['price' => 100, 'promo_price' => null, 'quantity' => 5]);
+        $product->update(['price' => 100, 'regular_price' => 100, 'promo_price' => null, 'quantity' => 5]);
 
         $this->withHeader('X-Cart-Session', $this->cartSession('loyalty-cart'))
             ->postJson('/api/v1/cart/items', ['product_id' => $product->id, 'quantity' => 1])

@@ -1,5 +1,6 @@
 <?php
 
+use App\Exceptions\CartPriceChangedException;
 use App\Http\Middleware\ResolveApiLocale;
 use App\Support\Api\ErrorResponse;
 use Illuminate\Auth\Access\AuthorizationException;
@@ -46,6 +47,10 @@ return Application::configure(basePath: dirname(__DIR__))
 
             if ($exception instanceof ValidationException) {
                 return ErrorResponse::make('validation_error', 'The given data was invalid.', 422, $exception->errors());
+            }
+
+            if ($exception instanceof CartPriceChangedException) {
+                return ErrorResponse::make('cart_price_changed', $exception->getMessage(), 409);
             }
 
             $status = $exception instanceof HttpExceptionInterface ? $exception->getStatusCode() : 500;

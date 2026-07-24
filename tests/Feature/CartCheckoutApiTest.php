@@ -59,7 +59,12 @@ class CartCheckoutApiTest extends TestCase
     public function test_checkout_success_recalculates_totals_and_reduces_stock(): void
     {
         $item = $this->cartItem(quantity: 2);
-        $item->product->update(['price' => 100, 'promo_price' => null, 'quantity' => 5]);
+        $item->product->update(['price' => 100, 'regular_price' => 100, 'promo_price' => null, 'quantity' => 5]);
+
+        $this->withHeader('X-Cart-Session', $this->cartSession('test-cart'))
+            ->getJson('/api/v1/cart')
+            ->assertOk()
+            ->assertJsonPath('data.subtotal', 200);
 
         $this->withHeader('X-Cart-Session', $this->cartSession('test-cart'))
             ->postJson('/api/v1/checkout', $this->checkoutPayload())

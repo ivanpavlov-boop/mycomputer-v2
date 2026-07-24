@@ -70,7 +70,7 @@ class BundlePricingService
 
     private function line(Product $product, ?string $group, int $quantity, float $adjustment = 0): array
     {
-        $price = (float) ($product->promo_price ?? $product->price);
+        $price = $product->effectivePrice();
 
         return [
             'product_id' => $product->id,

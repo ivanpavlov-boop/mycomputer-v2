@@ -11,11 +11,13 @@ use App\Models\PcBuild;
 use App\Models\PcBuildItem;
 use App\Models\Product;
 use App\Services\Cart\CartContextResolver;
+use App\Services\Cart\CartPricingRefreshService;
 use App\Services\Cart\CartService;
 use App\Services\PcBuilder\AiBuildGeneratorService;
 use App\Services\PcBuilder\BuildRecommendationService;
 use App\Services\PcBuilder\CompatibilityService;
 use App\Services\PcBuilder\PcBuilderService;
+use App\Services\Promotions\PromotionEngineService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -134,6 +136,8 @@ class PcBuilderController extends Controller
         PcBuild $build,
         CartService $cartService,
         CartContextResolver $cartContext,
+        CartPricingRefreshService $pricing,
+        PromotionEngineService $promotions,
     ): CartResource {
         $this->authorizeBuild($request, $build);
         $cart = $cartContext->resolve($request);
@@ -144,7 +148,7 @@ class PcBuilderController extends Controller
 
         $build->update(['status' => 'ordered']);
 
-        return CartResource::make($cart);
+        return CartResource::make($pricing->refresh($promotions->applyAutomaticGifts($cart))->cart);
     }
 
     public function aiGenerate(Request $request, AiBuildGeneratorService $generator): PcBuildResource
