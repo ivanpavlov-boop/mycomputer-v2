@@ -2,6 +2,7 @@
 
 namespace App\Services\Orders;
 
+use App\Enums\CartStatus;
 use App\Events\OrderCreated;
 use App\Jobs\ConversionTrackingJob;
 use App\Models\Cart;
@@ -121,7 +122,7 @@ class CheckoutService
 
             $this->stockReservationService->reduce($cart);
             $this->cartService->clear($cart);
-            $cart->update(['status' => 'converted', 'customer_email' => $data['email']]);
+            $cart->update(['status' => CartStatus::Converted->value, 'customer_email' => $data['email']]);
             if ($reward && $cart->user) {
                 $this->loyalty->vouchers->redeem($cart->user, $reward['voucher'], $order);
             }
