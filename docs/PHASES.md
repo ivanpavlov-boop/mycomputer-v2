@@ -42,7 +42,8 @@ Phase 8 manual selected UPDATE price/stock sync has been implemented behind a fe
 | Commerce Phase 1B.4 | Cart Product Eligibility and Stock Feedback | Merged, deployed and staging verified; centralized Product and bundle readiness, early stock feedback, stale-line visibility and side-effect-free checkout rejection while final locked stock enforcement remains authoritative. |
 | Commerce Phase 1B.5 | Cart Item Mutation Concurrency and Gift-Line Integrity | Merged, deployed and staging verified; same-Cart writes are serialized, paid and gift lines have separate identities, and automatic gifts are canonical, idempotent and excluded from paid promotion inputs. |
 | Commerce Phase 1B.6 | Promotion and Recovery Safety | Merged, deployed and staging verified; Promotion limits are consumed atomically and abandoned-Cart recovery is single-use, ownership-aware and non-destructive. |
-| Commerce Phase 1C.1 | Persistent Cart Identity and Authoritative Frontend State | Complete locally; an SSR-safe UUID cookie persists Cart identity and confirmed backend Cart responses are the sole frontend content authority. |
+| Commerce Phase 1C.1 | Persistent Cart Identity and Authoritative Frontend State | Merged, deployed and staging verified; an SSR-safe UUID cookie persists Cart identity and confirmed backend Cart responses are the sole frontend content authority. |
+| Commerce Phase 1C.2 | Cart UX States and Analytics Consistency | Complete locally; explicit Cart UX states, scoped mutation feedback, actionable readiness and operation-deduplicated analytics use confirmed backend Cart data. |
 | Phase 9C.1 | Product attributes core foundation | Complete |
 | Phase 9C.2 | Product attributes admin usability and starter structure | Complete |
 | Phase 9C.3 | Category attribute sets | Complete |
@@ -611,8 +612,8 @@ or UPDATE enablement.
 
 ## Commerce Phase 1C.1 Scope
 
-Commerce Phase 1C.1 is complete locally and remediates CART-004 and CART-005
-locally. Nuxt persists only the canonical Cart UUID in the request-scoped
+Commerce Phase 1C.1 is merged, deployed and staging verified and remediates
+CART-004 and CART-005. Nuxt persists only the canonical Cart UUID in the request-scoped
 `mc_cart_session` cookie. SSR and hydration initialize from that same cookie,
 and every valid Cart-bearing response persists backend session rotation before
 the response reaches the authoritative Pinia store.
@@ -632,6 +633,40 @@ CART-018 remains partially open for the complete Cart UX matrix, CART-024
 remains open for real-browser acceptance coverage, and CART-026 remains open.
 Public Cart and checkout pages remain disabled. This phase changes no backend
 Cart, checkout, Product, stock, supplier or Catalog Sync behavior.
+
+## Commerce Phase 1C.2 Scope
+
+Commerce Phase 1C.2 is complete locally and remediates CART-018 and CART-019
+locally. Cart page and drawer state now distinguish unresolved, loading,
+confirmed empty, confirmed ready, mutation, failure, readiness-blocked and
+review-required states. Initial failure retries only the idempotent Cart GET.
+Failed mutations preserve the last confirmed Cart and expose one scoped
+Bulgarian error near the affected control, with important conflicts summarized
+at Cart level.
+
+Quantity changes use an explicit draft-and-submit model; the confirmed quantity
+does not change before a backend response. Product, bundle, coupon, remove and
+clear operations use scoped pending keys to prevent duplicate logical requests.
+Coupon apply/remove and bundle controls have distinct pending and error states.
+Gift lines are clearly free, promotional and immutable. Readiness issue codes
+are mapped to actionable Bulgarian copy, including a maximum quantity only when
+the backend explicitly provides it. Price and Promotion changes require review
+and a new explicit checkout attempt.
+
+`useCartAnalytics` is the single frontend Cart analytics boundary. In-memory
+operation identities deduplicate accepted operations, and event payloads are
+derived from confirmed pre/post Cart responses. Failed, stale, superseded and
+auth-transition responses emit no success analytics. Quantity increases reuse
+`add_to_cart` for the confirmed delta; decreases reuse `remove_from_cart`.
+Clear Cart emits no synthetic per-item events, and no new `view_cart` event was
+introduced. `begin_checkout` is emitted only after an explicit ready checkout
+request succeeds. Payloads contain no Cart session, recovery token, Supplier
+data or internal Product cost.
+
+CART-024 remains open for full real-browser lifecycle coverage and CART-026
+remains open for checkout-success URL data safety. Public Cart and checkout
+pages remain disabled. This phase changes no backend Cart, checkout, payment,
+Product, stock, supplier or Catalog Sync behavior.
 
 ## Phase 9C.6.5A and 9C.6.5B Implemented Scope
 

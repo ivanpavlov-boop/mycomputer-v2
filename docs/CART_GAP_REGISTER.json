@@ -893,7 +893,7 @@
     },
     {
       "phase": "Commerce Phase 1C.1",
-      "status": "complete_locally",
+      "status": "merged_deployed_staging_verified",
       "finding_ids": [
         "CART-004",
         "CART-005"
@@ -912,6 +912,27 @@
         "Silent local fallback Cart lines were removed.",
         "Successful analytics now require confirmed backend mutation.",
         "Full Cart UX and browser acceptance coverage remain in later Phase 1C work."
+      ]
+    },
+    {
+      "phase": "Commerce Phase 1C.2",
+      "status": "complete_locally",
+      "finding_ids": [
+        "CART-018",
+        "CART-019"
+      ],
+      "partial_finding_ids": [],
+      "open_finding_ids": [
+        "CART-024",
+        "CART-026"
+      ],
+      "notes": [
+        "Cart loading, empty, ready, mutation, error, readiness and retry states are explicit.",
+        "Failed mutations preserve the last confirmed backend Cart.",
+        "Cart controls prevent duplicate logical submissions.",
+        "Cart analytics emit only after confirmed accepted frontend operations.",
+        "Stale and failed operations emit no success analytics.",
+        "Full real-browser Cart lifecycle coverage remains assigned to CART-024."
       ]
     }
   ]

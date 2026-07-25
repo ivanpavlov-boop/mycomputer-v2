@@ -13,7 +13,8 @@ describe('Cart recovery session rotation', () => {
 
     expect(page).toContain('await cart.recover(token)')
     expect(page).not.toContain('cart.backendCart')
-    expect(store).toContain("return runMutation('recover', () => useCartApi().recover(token))")
+    expect(store).toContain("const accepted = await runMutation('recover', () => useCartApi().recover(token))")
+    expect(store).toContain('return accepted?.cart ?? null')
     expect(api).toContain('recover: (token: string) => cartRequest')
     expect(api).toContain('cartSession.persist(normalized)')
   })

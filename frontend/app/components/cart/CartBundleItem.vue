@@ -11,8 +11,11 @@
           {{ String(line.name || '') }} × {{ Number(line.quantity || 1) }}
         </li>
       </ul>
-      <p v-if="item.readiness && !item.readiness.can_checkout" class="mt-2 text-xs text-amber-700">
-        Комплектът трябва да бъде прегледан преди поръчка.
+      <ul v-if="readinessMessages.length" class="mt-2 space-y-1 text-xs text-amber-700">
+        <li v-for="message in readinessMessages" :key="message">{{ message }}</li>
+      </ul>
+      <p v-if="operationError" class="mt-2 text-xs text-red-700" role="alert">
+        {{ operationError.message }}
       </p>
     </div>
     <div class="text-right">
@@ -20,9 +23,10 @@
       <button
         class="mt-2 text-sm font-semibold text-red-700 disabled:cursor-not-allowed disabled:opacity-50"
         :disabled="pending"
+        :aria-busy="pending"
         @click="remove"
       >
-        Премахни
+        {{ pending ? 'Премахване…' : 'Премахни' }}
       </button>
     </div>
   </div>
@@ -30,11 +34,15 @@
 
 <script setup lang="ts">
 import type { CartBundleItem } from '~/types/api'
+import { cartReadinessMessages } from '~/utils/cartReadiness'
 
 const props = defineProps<{ item: CartBundleItem }>()
 const cart = useCartStore()
 
-const pending = computed(() => cart.isOperationPending(`bundle:remove:${props.item.id}`))
+const operationKey = computed(() => `bundle:remove:${props.item.id}`)
+const pending = computed(() => cart.isOperationPending(operationKey.value))
+const operationError = computed(() => cart.errorFor(operationKey.value))
+const readinessMessages = computed(() => cartReadinessMessages(props.item.readiness))
 const formatPrice = (value: string | number) => `${Number(value).toFixed(2)} ${cart.currency}`
 
 async function remove() {

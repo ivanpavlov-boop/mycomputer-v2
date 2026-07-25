@@ -57,8 +57,11 @@ Manual selected UPDATE price/stock sync is implemented behind `CATALOG_SYNC_UPDA
   atomic Promotion-limit consumption and single-use, ownership-aware,
   non-destructive abandoned-Cart recovery.
 - Commerce Phase 1C.1 Persistent Cart Identity and Authoritative Frontend State,
-  completed locally with an SSR-safe canonical UUID cookie, backend-only Cart
+  merged, deployed and staging verified with an SSR-safe canonical UUID cookie, backend-only Cart
   content state, explicit operation errors and success-only mutation analytics.
+- Commerce Phase 1C.2 Cart UX States and Analytics Consistency, completed
+  locally with explicit Cart states, scoped controls, actionable Bulgarian
+  readiness feedback and deduplicated confirmed-operation analytics.
 - Unified Product edit quality summary combining existing scanner issues,
   category specification quality and active manual flags without blocking or
   mutating Product workflow.
@@ -467,8 +470,8 @@ unchanged. CART-025 remains open: bundle and coupon snapshot fidelity was not
 redesigned. Public Cart and checkout pages remain disabled. No Product,
 supplier or Catalog Sync behavior changed.
 
-Commerce Phase 1C.1 is complete locally and remediates CART-004 and CART-005
-locally. The request-scoped Nuxt cookie `mc_cart_session` contains only the
+Commerce Phase 1C.1 is merged, deployed and staging verified and remediates
+CART-004 and CART-005. The request-scoped Nuxt cookie `mc_cart_session` contains only the
 canonical Cart UUID and supplies one session value to SSR, hydration and client
 requests. Valid backend rotation is persisted before a Cart response reaches
 the store; malformed persisted values are discarded, and only an idempotent
@@ -482,10 +485,25 @@ switching preserve the capability but clear stale rendered content until the
 next authoritative resolution. Add/remove analytics run only after confirmed
 mutations and use backend line prices.
 
-CART-018 and CART-019 remain partially open. CART-024 real-browser acceptance
-and CART-026 checkout-success navigation remain open. Public Cart and checkout
-pages remain disabled, and no backend Cart, Product, stock, supplier or Catalog
-Sync behavior changed.
+Commerce Phase 1C.2 is complete locally and remediates CART-018 and CART-019
+locally. Unresolved, loading, confirmed-empty, ready, mutating, failed,
+readiness-blocked and review-required states are explicit in the Cart page and
+drawer. Failed mutations preserve confirmed contents. Quantity uses an explicit
+draft submit, and Product, bundle, coupon, remove and clear operations prevent
+duplicate logical requests while exposing scoped Bulgarian pending, success
+and error feedback. Gifts remain visibly free and immutable.
+
+One frontend Cart analytics boundary compares confirmed pre/post Cart state,
+deduplicates in-memory operation identities and suppresses failed, stale,
+superseded and auth-transition events. Quantity deltas reuse existing
+`add_to_cart` and `remove_from_cart`; clear emits no synthetic removal cascade,
+and no `view_cart` event was added. `begin_checkout` requires an explicit,
+ready, successful checkout action. Analytics contain no Cart session, recovery
+token, Supplier data or internal cost.
+
+CART-024 real-browser acceptance and CART-026 checkout-success navigation
+remain open. Public Cart and checkout pages remain disabled, and no backend
+Cart, Product, stock, supplier or Catalog Sync behavior changed.
 
 ## Next
 

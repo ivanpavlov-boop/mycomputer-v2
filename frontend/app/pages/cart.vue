@@ -4,36 +4,74 @@
     <div class="container-page">
       <h1 class="text-3xl font-bold">Количка</h1>
 
-      <LoadingState v-if="cart.isInitialLoading" class="mt-6" :count="2" />
+      <div v-if="cart.isUnresolved || cart.isInitialLoading" class="mt-6" role="status">
+        <p class="mb-3 text-sm text-slate-600">Зареждаме количката…</p>
+        <LoadingState :count="2" />
+      </div>
 
       <div v-else-if="!cart.cart" class="mt-6 max-w-2xl space-y-4">
-        <ErrorState :text="cart.error?.message" />
-        <BaseButton variant="secondary" @click="retry">Опитай отново</BaseButton>
+        <ErrorState title="Не успяхме да заредим количката" :text="cart.error?.message" />
+        <BaseButton
+          variant="secondary"
+          :disabled="cart.isOperationPending('sync')"
+          :aria-busy="cart.isOperationPending('sync')"
+          @click="retry"
+        >
+          {{ cart.isOperationPending('sync') ? 'Зареждане…' : 'Опитай отново' }}
+        </BaseButton>
       </div>
 
       <div v-else class="mt-6 grid gap-6 lg:grid-cols-[1fr_320px]">
         <div class="surface p-4">
-          <p v-if="cart.error" class="mb-4 rounded-md bg-red-50 p-3 text-sm text-red-700">
-            {{ cart.error.message }}
-          </p>
           <p
+            v-if="cart.cartLevelError"
+            class="mb-4 rounded-md bg-red-50 p-3 text-sm text-red-700"
+            role="alert"
+          >
+            {{ cart.cartLevelError.message }}
+          </p>
+          <div
             v-if="cart.readiness && !cart.readiness.can_checkout && (cart.items.length || cart.bundleItems.length)"
             class="mb-4 rounded-md bg-amber-50 p-3 text-sm text-amber-800"
           >
-            Част от съдържанието на количката изисква преглед преди поръчка.
-          </p>
+            <p class="font-semibold">Количката съдържа продукти, които трябва да прегледате.</p>
+            <ul class="mt-2 space-y-1">
+              <li v-for="problem in readinessProblems" :key="problem.key">
+                <span class="font-medium">{{ problem.label }}:</span>
+                {{ problem.messages.join(' ') }}
+              </li>
+            </ul>
+          </div>
 
           <CartItem v-for="item in cart.items" :key="item.id" :item="item" />
           <CartBundleItem v-for="item in cart.bundleItems" :key="item.id" :item="item" />
 
-          <EmptyState
-            v-if="!cart.items.length && !cart.bundleItems.length"
-            title="Количката е празна"
-            text="Все още няма добавени продукти."
-          />
+          <div v-if="cart.isConfirmedEmpty">
+            <EmptyState
+              title="Количката е празна"
+              text="Все още няма добавени продукти."
+            />
+            <NuxtLink class="mt-4 inline-flex text-sm font-semibold text-brand-700" to="/catalog">
+              Към каталога
+            </NuxtLink>
+          </div>
+
+          <div v-if="cart.hasConfirmedContent" class="mt-4 border-t border-slate-100 pt-4">
+            <button
+              class="text-sm font-semibold text-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+              :disabled="cart.isOperationPending('clear')"
+              :aria-busy="cart.isOperationPending('clear')"
+              @click="clearCart"
+            >
+              {{ cart.isOperationPending('clear') ? 'Изчистване…' : 'Изчисти количката' }}
+            </button>
+            <p v-if="cart.errorFor('clear')" class="mt-2 text-xs text-red-700" role="alert">
+              {{ cart.errorFor('clear')?.message }}
+            </p>
+          </div>
         </div>
 
-        <aside class="surface h-fit p-5">
+        <aside v-if="cart.hasConfirmedContent" class="surface h-fit p-5">
           <p class="text-lg font-semibold">Обобщение</p>
           <div class="mt-4 flex justify-between">
             <span>Междинна сума</span>
@@ -47,7 +85,7 @@
           <PromotionsCouponInput class="mt-4" />
 
           <NuxtLink
-            v-if="cart.canCheckout"
+            v-if="cart.canCheckout && !cart.isMutating"
             to="/checkout"
             class="mt-5 block rounded-md bg-brand-600 px-4 py-2 text-center text-sm font-semibold text-white"
           >
@@ -60,6 +98,7 @@
           <BaseButton
             class="mt-3 w-full"
             variant="secondary"
+            :disabled="cart.isMutating"
             @click="requestQuote"
           >
             Заяви оферта за количката
@@ -71,6 +110,8 @@
 </template>
 
 <script setup lang="ts">
+import { cartReadinessMessages } from '~/utils/cartReadiness'
+
 const cart = useCartStore()
 const b2b = useB2B()
 const router = useRouter()
@@ -78,8 +119,29 @@ const auth = useAuthStore()
 
 await cart.sync().catch(() => null)
 
-function retry() {
-  cart.sync().catch(() => null)
+const readinessProblems = computed(() => [
+  ...cart.items
+    .filter(item => item.readiness && !item.readiness.can_checkout)
+    .map(item => ({
+      key: `item:${item.id}`,
+      label: item.product.name,
+      messages: cartReadinessMessages(item.readiness),
+    })),
+  ...cart.bundleItems
+    .filter(item => item.readiness && !item.readiness.can_checkout)
+    .map(item => ({
+      key: `bundle:${item.id}`,
+      label: item.bundle_name,
+      messages: cartReadinessMessages(item.readiness),
+    })),
+])
+
+async function retry() {
+  await cart.sync().catch(() => null)
+}
+
+async function clearCart() {
+  await cart.clear().catch(() => null)
 }
 
 async function requestQuote() {
