@@ -12,6 +12,7 @@ class AbandonedCartRecord extends Model
         'emailed_once',
         'emailed_twice',
         'emailed_three_times',
+        'restored',
         'recovered',
         'expired',
         'suppressed',
@@ -33,6 +34,8 @@ class AbandonedCartRecord extends Model
         'second_email_sent_at',
         'third_email_sent_at',
         'emails_sent',
+        'restored_at',
+        'restored_cart_id',
         'recovered_at',
         'recovered_order_id',
         'recovered_revenue',
@@ -49,6 +52,7 @@ class AbandonedCartRecord extends Model
             'first_email_sent_at' => 'datetime',
             'second_email_sent_at' => 'datetime',
             'third_email_sent_at' => 'datetime',
+            'restored_at' => 'datetime',
             'recovered_at' => 'datetime',
             'recovered_revenue' => 'decimal:2',
         ];
@@ -62,6 +66,11 @@ class AbandonedCartRecord extends Model
     public function recoveredOrder(): BelongsTo
     {
         return $this->belongsTo(Order::class, 'recovered_order_id');
+    }
+
+    public function restoredCart(): BelongsTo
+    {
+        return $this->belongsTo(Cart::class, 'restored_cart_id');
     }
 
     public function recoveryUrl(): string

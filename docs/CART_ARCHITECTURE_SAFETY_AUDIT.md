@@ -912,7 +912,8 @@ were left for the separately approved Phase 1B.5.
 
 ### Commerce Phase 1B.5 - Cart Item Mutation Concurrency and Gift-Line Integrity
 
-Phase 1B.5 is complete locally and remediates CART-014 and CART-015 locally.
+Phase 1B.5 is merged, deployed and staging verified and remediates CART-014
+and CART-015.
 The Cart row is the serialization boundary for regular-line, bundle, coupon,
 pricing and automatic-gift mutations. The lock order is Cart first, then
 existing Cart and bundle rows by ascending ID. Recognized database concurrency
@@ -944,7 +945,50 @@ This phase adds no stock reservation, checkout idempotency, promotion
 usage/redemption concurrency redesign, frontend production change, public Cart
 or checkout route, Product mutation during Cart editing, supplier change,
 Catalog Sync behavior, Sync All, automatic sync or UPDATE enablement. CART-009
-remains open.
+remained open after this phase and is remediated locally by Phase 1B.6.
+
+### Commerce Phase 1B.6 - Promotion and Recovery Safety
+
+Phase 1B.6 is complete locally and remediates CART-009 and CART-010 locally.
+Promotion rows are the concurrency boundary for usage consumption. Applied IDs
+are sorted and locked in ascending order. Status, dates, coupon association,
+rules, global usage, per-user usage and canonical Cart-session usage are
+revalidated for every Promotion before the first write. The database enforces
+one non-null Promotion/Order identity, duplicate Order reprocessing is
+idempotent, multi-Promotion consumption is all-or-nothing, and rollback
+restores redemption rows and usage counters together.
+
+Checkout consumes the locked Promotions after the Order and line snapshots are
+created but before shipment provider calls, payment initiation, stock
+reduction, Cart clearing/conversion, reward redemption, jobs, email or
+Order/recovery events. A concurrent eligibility change returns
+`cart_promotion_changed` and rolls back the Customer, Order, Order lines and
+Promotion state. `promotion_applied` is emitted only after commit.
+
+Abandoned-Cart records now distinguish `restored` from `recovered`. Recovery
+locks the record by token and revalidates status and expiry inside one
+transaction. A successful restore writes `restored_at` and a unique
+`restored_cart_id`; replay returns `cart_recovery_consumed`. Unknown, expired
+and suppressed records share a generic unavailable response. The currently
+authenticated Sanctum User is the only ownership authority. The token never
+authenticates a request and the record User is never assigned to an anonymous
+Cart.
+
+A recovery target must be fresh or confirmed active, compatible and completely
+empty. Paid items, gift items, bundles or a coupon make a Cart populated; such
+a Cart is left unchanged and recovery returns a new session. The supported
+paid/gift restore plan is checked before mutation, uses current paid Product
+prices, keeps gifts zero-price, reconciles automatic gifts once and refreshes
+pricing once. Restored records receive no more reminder email. Their
+`restored_cart_id` follows authenticated Cart merge and later checkout changes
+the record to `recovered` with the Order and revenue.
+
+CART-021 remains open because token hashing and recovery URL changes are
+outside this phase. CART-025 remains open because versioned bundle/coupon
+snapshot fidelity was not added. Public Cart and checkout pages remain
+disabled. No Product mutation during recovery, stock reservation, frontend
+production change, supplier behavior, Catalog Sync behavior, Sync All,
+automatic sync or UPDATE enablement was added.
 
 ## 30. Release Gates
 

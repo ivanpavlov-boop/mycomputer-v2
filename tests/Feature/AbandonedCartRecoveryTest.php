@@ -133,10 +133,12 @@ class AbandonedCartRecoveryTest extends TestCase
 
         Cart::query()->where('session_id', 'recover-cart')->firstOrFail()->items()->delete();
 
-        $this->postJson("/api/v1/cart/recover/{$record->recovery_token}")
+        $response = $this->postJson("/api/v1/cart/recover/{$record->recovery_token}")
             ->assertOk()
-            ->assertJsonPath('data.cart_session_id', 'recover-cart')
             ->assertJsonPath('data.items_count', 1);
+
+        $this->assertNotSame('recover-cart', $response->json('data.cart_session_id'));
+        $this->assertSame('restored', $record->fresh()->status);
     }
 
     public function test_expired_recovery_token_fails(): void
@@ -148,14 +150,16 @@ class AbandonedCartRecoveryTest extends TestCase
 
         $this->postJson("/api/v1/cart/recover/{$record->recovery_token}")
             ->assertUnprocessable()
-            ->assertJsonPath('error.details.token.0', 'Recovery link has expired or is invalid.');
+            ->assertJsonPath('error.code', 'cart_recovery_invalid')
+            ->assertJsonPath('error.message', 'Recovery link has expired or is invalid.');
     }
 
     public function test_invalid_recovery_token_fails(): void
     {
         $this->postJson('/api/v1/cart/recover/not-a-real-token')
             ->assertUnprocessable()
-            ->assertJsonPath('error.details.token.0', 'Recovery link has expired or is invalid.');
+            ->assertJsonPath('error.code', 'cart_recovery_invalid')
+            ->assertJsonPath('error.message', 'Recovery link has expired or is invalid.');
     }
 
     public function test_no_email_is_sent_after_recovery(): void
@@ -176,9 +180,11 @@ class AbandonedCartRecoveryTest extends TestCase
         app(EmailMarketingService::class)->detectAbandonedCarts();
         $record = AbandonedCartRecord::query()->firstOrFail();
 
-        $this->postJson("/api/v1/cart/recover/{$record->recovery_token}")->assertOk();
+        $recoverySession = $this->postJson("/api/v1/cart/recover/{$record->recovery_token}")
+            ->assertOk()
+            ->json('data.cart_session_id');
 
-        $this->withHeader('X-Cart-Session', $this->cartSession('checkout-recover-cart'))
+        $this->withHeader('X-Cart-Session', $recoverySession)
             ->postJson('/api/v1/checkout', $this->checkoutPayload('recover-checkout@example.com'))
             ->assertCreated();
 

@@ -40,7 +40,8 @@ Phase 8 manual selected UPDATE price/stock sync has been implemented behind a fe
 | Commerce Phase 1B.2 | Cart Lifecycle and Guest-to-User Policy | Merged, deployed and staging verified; deterministic active/expired/converted/merged lifecycle, 14-day expiry renewal, authenticated Cart convergence, conflict-safe guest-to-user merge and dry-run-first stale expiration. |
 | Commerce Phase 1B.3 | Authoritative Cart Pricing and Price Refresh | Merged, deployed and staging verified; Product effective pricing is authoritative for Cart items and bundles, Cart reads refresh stale prices, and checkout commits reviewable Cart changes before a side-effect-free HTTP 409. |
 | Commerce Phase 1B.4 | Cart Product Eligibility and Stock Feedback | Merged, deployed and staging verified; centralized Product and bundle readiness, early stock feedback, stale-line visibility and side-effect-free checkout rejection while final locked stock enforcement remains authoritative. |
-| Commerce Phase 1B.5 | Cart Item Mutation Concurrency and Gift-Line Integrity | Complete locally; same-Cart writes are serialized, paid and gift lines have separate identities, and automatic gifts are canonical, idempotent and excluded from paid promotion inputs. |
+| Commerce Phase 1B.5 | Cart Item Mutation Concurrency and Gift-Line Integrity | Merged, deployed and staging verified; same-Cart writes are serialized, paid and gift lines have separate identities, and automatic gifts are canonical, idempotent and excluded from paid promotion inputs. |
+| Commerce Phase 1B.6 | Promotion and Recovery Safety | Complete locally; Promotion limits are consumed atomically and abandoned-Cart recovery is single-use, ownership-aware and non-destructive. |
 | Phase 9C.1 | Product attributes core foundation | Complete |
 | Phase 9C.2 | Product attributes admin usability and starter structure | Complete |
 | Phase 9C.3 | Category attribute sets | Complete |
@@ -537,8 +538,8 @@ Catalog Sync behavior, Sync All, automatic sync or UPDATE enablement.
 
 ## Commerce Phase 1B.5 Scope
 
-Commerce Phase 1B.5 is complete locally and remediates CART-014 and CART-015
-locally. The Cart row is the same-Cart mutation serialization boundary.
+Commerce Phase 1B.5 is merged, deployed and staging verified and remediates
+CART-014 and CART-015. The Cart row is the same-Cart mutation serialization boundary.
 Transactions lock the Cart first, then existing Cart and bundle rows in
 ascending ID order, and use bounded database retries for recognized concurrency
 failures. Concurrent successful adds accumulate from committed paid-line state;
@@ -561,8 +562,51 @@ zero-price gift Order snapshots while enforcing their combined stock demand.
 
 No stock reservation, Product stock mutation during Cart editing, checkout
 idempotency, promotion redemption-concurrency redesign, frontend production
-change or public Cart/checkout route was added. CART-009 remains open. Catalog
-Sync behavior and flags are unchanged.
+change or public Cart/checkout route was added. CART-009 remained open after
+this phase and is remediated locally by Phase 1B.6. Catalog Sync behavior and
+flags are unchanged.
+
+## Commerce Phase 1B.6 Scope
+
+Commerce Phase 1B.6 is complete locally and remediates CART-009 and CART-010
+locally. Promotion rows are the atomic usage-limit boundary. Applied Promotion
+IDs are sorted and locked in ascending order, then status, dates, coupon
+association, rules, global usage, per-user usage and canonical Cart-session
+usage are all revalidated before any redemption or counter write. One
+Promotion/Order pair has a database-enforced unique identity. Duplicate Order
+processing is narrowly idempotent, multi-Promotion consumption is all-or-
+nothing, and rollback restores both redemption rows and usage counters.
+
+Checkout consumes Promotions after the Order and its line snapshots exist but
+before shipment providers, payment initiation, stock reduction, Cart clearing,
+reward redemption, jobs, email or Order/recovery events. A stale Promotion
+result returns `cart_promotion_changed` and rolls back the Customer, Order,
+Order lines and all Promotion state. `promotion_applied` is deferred until
+commit.
+
+Abandoned-Cart recovery now distinguishes `restored` from `recovered`. The
+record is locked and revalidated by token inside one transaction. Successful
+restore sets `restored_at` and a unique `restored_cart_id`; replay fails with
+`cart_recovery_consumed`. Current Sanctum authentication remains the only
+authority for Cart ownership, and token possession never assigns the saved
+record User to an anonymous request.
+
+Recovery writes only to a fresh Cart or a confirmed empty, active and
+ownership-compatible Cart. Paid, gift, bundle or coupon content makes a target
+populated; it is left unchanged and a fresh recovery Cart is returned. The
+supported paid/gift snapshot plan is validated before target mutation, paid
+lines use current authoritative Product prices, gifts remain zero-price,
+automatic gifts reconcile once and pricing refreshes once. Restored records
+receive no further reminder email, survive authenticated Cart convergence
+through `restored_cart_id` remapping, and become `recovered` only after a later
+Order.
+
+CART-021 remains open because recovery tokens are still stored in plaintext
+and the recovery URL format is unchanged. CART-025 remains open because no
+versioned bundle/coupon snapshot fidelity was added. Public Cart and checkout
+pages remain disabled. This phase adds no Product or stock mutation during
+recovery, supplier behavior, Catalog Sync behavior, Sync All, automatic sync
+or UPDATE enablement.
 
 ## Phase 9C.6.5A and 9C.6.5B Implemented Scope
 

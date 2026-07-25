@@ -21,6 +21,7 @@ use App\Services\Email\EmailMarketingService;
 use App\Services\Loyalty\LoyaltyService;
 use App\Services\Payments\PaymentService;
 use App\Services\Promotions\PromotionEngineService;
+use App\Services\Promotions\PromotionRedemptionService;
 use App\Services\Shipping\ShipmentService;
 use App\Services\Shipping\ShippingPriceService;
 use Illuminate\Support\Facades\DB;
@@ -41,6 +42,7 @@ class CheckoutService
         private readonly EmailMarketingService $emailMarketing,
         private readonly LoyaltyService $loyalty,
         private readonly PromotionEngineService $promotions,
+        private readonly PromotionRedemptionService $promotionRedemptions,
         private readonly BundleCartService $bundleCart,
     ) {}
 
@@ -63,19 +65,6 @@ class CheckoutService
 
             $this->stockReservationService->assertAvailable($cart);
 
-            $customer = Customer::query()->updateOrCreate(
-                ['email' => $data['email']],
-                [
-                    'first_name' => $data['first_name'],
-                    'last_name' => $data['last_name'],
-                    'phone' => $data['phone'],
-                    'company_name' => $data['company_name'] ?? null,
-                    'vat_number' => $data['vat_number'] ?? null,
-                    'billing_address' => $data['billing_address'],
-                    'shipping_address' => $data['shipping_address'],
-                ],
-            );
-
             $subtotal = $this->cartService->subtotal($cart);
             $shipping = $this->shippingPriceService->calculate($this->shippingPayload($data), $subtotal);
             $shippingPrice = (float) $shipping['price'];
@@ -97,6 +86,19 @@ class CheckoutService
             }
 
             $discountTotal = min($discountTotal, $subtotal + $shippingPrice);
+
+            $customer = Customer::query()->updateOrCreate(
+                ['email' => $data['email']],
+                [
+                    'first_name' => $data['first_name'],
+                    'last_name' => $data['last_name'],
+                    'phone' => $data['phone'],
+                    'company_name' => $data['company_name'] ?? null,
+                    'vat_number' => $data['vat_number'] ?? null,
+                    'billing_address' => $data['billing_address'],
+                    'shipping_address' => $data['shipping_address'],
+                ],
+            );
 
             $order = Order::query()->create([
                 'order_number' => $this->orderNumberService->generate(),
@@ -130,6 +132,7 @@ class CheckoutService
                 'total_price' => $item->total_price,
             ]));
             $this->bundleCart->convertToOrder($cart, $order);
+            $this->promotionRedemptions->consume($cart, $order, $promotionResult);
 
             $this->shipmentService->create($order, array_merge($this->shippingPayload($data), [
                 'shipping_provider_id' => $shipping['shipping_provider_id'],
@@ -146,14 +149,13 @@ class CheckoutService
             if ($reward && $cart->user) {
                 $this->loyalty->vouchers->redeem($cart->user, $reward['voucher'], $order);
             }
-            $this->promotions->recordRedemptions($cart, $order, $promotionResult);
             ConversionTrackingJob::dispatch($order->id);
             $this->emailMarketing->order($order, 'order_created');
             $this->emailMarketing->markCartRecovered($cart, $order);
             OrderCreated::dispatch($order->id);
 
             return $order->load(['items', 'bundleItems', 'shipments.provider', 'shipments.method', 'shipments.office', 'paymentTransactions.method']);
-        });
+        }, 3);
 
         if ($outcome instanceof CartPricingRefreshResult) {
             throw new CartPriceChangedException;

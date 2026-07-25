@@ -4,6 +4,7 @@ namespace App\Services\Cart;
 
 use App\Enums\CartStatus;
 use App\Exceptions\CartMergeConflictException;
+use App\Models\AbandonedCartRecord;
 use App\Models\Cart;
 use App\Models\CartItem;
 use App\Models\User;
@@ -38,6 +39,16 @@ class CartMergeService
 
         $this->assertMergeableQuantities($paidItems);
         $couponCode = $this->mergedCouponCode($target, $sources);
+        $restoredRecords = AbandonedCartRecord::query()
+            ->whereIn('restored_cart_id', $cartIds)
+            ->where('status', 'restored')
+            ->orderBy('id')
+            ->lockForUpdate()
+            ->get();
+
+        if ($restoredRecords->count() > 1) {
+            throw new CartMergeConflictException;
+        }
 
         CartItem::query()
             ->whereIn('cart_id', $cartIds)
@@ -90,6 +101,15 @@ class CartMergeService
                 'status' => CartStatus::Merged->value,
                 'expires_at' => now(),
             ]);
+        }
+
+        $restoredRecord = $restoredRecords->first();
+
+        if (
+            $restoredRecord !== null
+            && (int) $restoredRecord->restored_cart_id !== (int) $target->getKey()
+        ) {
+            $restoredRecord->update(['restored_cart_id' => $target->getKey()]);
         }
 
         $target->unsetRelation('user');

@@ -2,6 +2,11 @@
 
 namespace App\Services\Email;
 
+use App\Enums\CartStatus;
+use App\Exceptions\CartRecoveryConsumedException;
+use App\Exceptions\CartRecoveryForbiddenException;
+use App\Exceptions\CartRecoveryInvalidException;
+use App\Exceptions\CartRecoveryRequiresReviewException;
 use App\Jobs\SendEmailJob;
 use App\Models\AbandonedCartRecord;
 use App\Models\Cart;
@@ -12,9 +17,11 @@ use App\Models\Order;
 use App\Models\Product;
 use App\Models\ProductPriceAlert;
 use App\Models\ProductStockAlert;
+use App\Models\Promotion;
 use App\Models\User;
-use App\Services\Cart\CartMutationService;
+use App\Services\Cart\CartLifecycleService;
 use App\Services\Cart\CartPricingRefreshService;
+use App\Services\Cart\CartService;
 use App\Services\Email\Contracts\EmailProviderInterface;
 use App\Services\Marketing\MarketingEventService;
 use App\Services\Promotions\PromotionEngineService;
@@ -22,14 +29,14 @@ use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\Str;
-use Illuminate\Validation\ValidationException;
 
 class EmailMarketingService
 {
     public function __construct(
         private readonly EmailProviderInterface $provider,
         private readonly MarketingEventService $events,
-        private readonly CartMutationService $cartMutations,
+        private readonly PromotionEngineService $promotions,
+        private readonly CartPricingRefreshService $cartPricing,
     ) {}
 
     public function subscribe(array $data, ?User $user = null): EmailSubscriber
@@ -148,7 +155,14 @@ class EmailMarketingService
     {
         $cart->loadMissing(['items.product', 'user']);
 
-        if ($cart->status !== 'active' || $cart->items->isEmpty()) {
+        if (
+            $cart->status !== CartStatus::Active->value
+            || $cart->items->isEmpty()
+            || AbandonedCartRecord::query()
+                ->where('restored_cart_id', $cart->getKey())
+                ->where('status', 'restored')
+                ->exists()
+        ) {
             return null;
         }
 
@@ -158,7 +172,7 @@ class EmailMarketingService
         $record = AbandonedCartRecord::query()
             ->where('session_id', $cart->session_id)
             ->whereNull('recovered_at')
-            ->whereNotIn('status', ['recovered', 'expired'])
+            ->whereNotIn('status', ['restored', 'recovered', 'expired'])
             ->first();
 
         $record ??= new AbandonedCartRecord([
@@ -258,7 +272,7 @@ class EmailMarketingService
         $this->expireOldAbandonedCarts();
 
         AbandonedCartRecord::query()
-            ->whereNotIn('status', ['recovered', 'expired', 'suppressed'])
+            ->whereNotIn('status', ['restored', 'recovered', 'expired', 'suppressed'])
             ->whereNotNull('email')
             ->whereNull('recovered_at')
             ->where('emails_sent', '<', 3)
@@ -285,76 +299,105 @@ class EmailMarketingService
         AbandonedCartRecord::query()
             ->where('session_id', $cart->session_id)
             ->whereNull('recovered_at')
-            ->whereNotIn('status', ['recovered', 'expired'])
+            ->whereNotIn('status', ['restored', 'recovered', 'expired'])
             ->update(['email' => strtolower($email)]);
 
         return $cart->fresh(['items.product.brand', 'items.product.category', 'items.product.images']);
     }
 
-    public function restoreCartFromToken(string $token, ?string $sessionId = null): Cart
+    public function restoreCartFromToken(string $token, ?string $sessionId = null, ?User $actor = null): Cart
     {
-        $record = AbandonedCartRecord::query()
-            ->where('recovery_token', $token)
-            ->first();
+        return DB::transaction(function () use ($actor, $sessionId, $token): Cart {
+            $record = AbandonedCartRecord::query()
+                ->where('recovery_token', $token)
+                ->lockForUpdate()
+                ->first();
 
-        if (! $record || $record->status === 'expired' || $record->recovery_token_expires_at?->isPast()) {
-            throw ValidationException::withMessages(['token' => 'Recovery link has expired or is invalid.']);
-        }
+            if ($record === null) {
+                throw new CartRecoveryInvalidException;
+            }
 
-        if (in_array($record->status, ['suppressed', 'recovered'], true)) {
-            throw ValidationException::withMessages(['token' => 'Recovery link is no longer available.']);
-        }
+            if (in_array($record->status, ['restored', 'recovered'], true)) {
+                throw new CartRecoveryConsumedException;
+            }
 
-        return DB::transaction(function () use ($record, $sessionId): Cart {
-            $cart = Cart::query()->firstOrCreate(
-                ['session_id' => $sessionId ?: $record->session_id ?: (string) Str::uuid()],
-                ['status' => 'active', 'expires_at' => now()->addDays(14)],
-            );
+            if (
+                in_array($record->status, ['expired', 'suppressed'], true)
+                || $record->recovery_token_expires_at?->isPast()
+            ) {
+                throw new CartRecoveryInvalidException;
+            }
 
-            return $this->cartMutations->run($cart, function (Cart $lockedCart) use ($record): Cart {
-                $lockedCart->update([
-                    'user_id' => $record->user_id,
-                    'customer_email' => $record->email,
-                    'status' => 'active',
-                    'expires_at' => now()->addDays(14),
+            if (
+                $record->user_id !== null
+                && $actor !== null
+                && (int) $record->user_id !== (int) $actor->getKey()
+            ) {
+                throw new CartRecoveryForbiddenException;
+            }
+
+            $restorePlan = $this->buildRestorePlan($record);
+            $cart = $this->recoveryTarget($sessionId, $actor);
+
+            if ($actor !== null && $cart->user_id === null) {
+                $cart->update([
+                    'user_id' => $actor->getKey(),
+                    'customer_email' => filled($cart->customer_email)
+                        ? $cart->customer_email
+                        : $actor->email,
                 ]);
+            }
 
-                $lockedCart->items()->delete();
+            foreach ($restorePlan as $line) {
+                $cart->items()->create($line);
+            }
 
-                foreach (($record->cart_snapshot['items'] ?? []) as $item) {
-                    $product = Product::query()->find($item['product_id'] ?? null);
-                    if (! $product || ! $product->isPubliclyVisible()) {
-                        continue;
-                    }
+            $cart = $this->promotions->applyAutomaticGiftsLocked($cart);
+            $cart = $this->cartPricing
+                ->refreshLocked($cart, refreshAutomaticGifts: false)
+                ->cart;
 
-                    $quantity = max(1, min((int) ($item['quantity'] ?? 1), 99));
-                    $isGift = (bool) ($item['is_gift'] ?? false);
-                    $unitPrice = $isGift ? 0 : $product->effectivePrice();
-                    $lockedCart->items()->create([
-                        'product_id' => $product->id,
-                        'quantity' => $quantity,
-                        'is_gift' => $isGift,
-                        'promotion_id' => $isGift ? ($item['promotion_id'] ?? null) : null,
-                        'unit_price' => $unitPrice,
-                        'total_price' => $unitPrice * $quantity,
-                    ]);
-                }
+            $record->update([
+                'status' => 'restored',
+                'restored_at' => now(),
+                'restored_cart_id' => $cart->getKey(),
+            ]);
 
-                $lockedCart = app(PromotionEngineService::class)
-                    ->applyAutomaticGiftsLocked($lockedCart);
+            $recordId = (int) $record->getKey();
+            DB::afterCommit(fn () => $this->events->log(
+                'abandoned_cart_restored',
+                'internal',
+                ['abandoned_cart_record_id' => $recordId],
+            ));
 
-                return app(CartPricingRefreshService::class)
-                    ->refreshLocked($lockedCart, refreshAutomaticGifts: false)
-                    ->cart;
-            }, requireActive: false);
-        });
+            return $cart;
+        }, 3);
     }
 
     public function markCartRecovered(Cart $cart, Order $order): void
     {
-        AbandonedCartRecord::query()
-            ->where('session_id', $cart->session_id)
+        $records = AbandonedCartRecord::query()
             ->whereNull('recovered_at')
+            ->whereNotIn('status', ['recovered', 'expired', 'suppressed'])
+            ->where(function ($query) use ($cart): void {
+                $query
+                    ->where('restored_cart_id', $cart->getKey())
+                    ->orWhere(function ($query) use ($cart): void {
+                        $query
+                            ->whereNull('restored_cart_id')
+                            ->where('session_id', $cart->session_id);
+                    });
+            })
+            ->orderBy('id')
+            ->lockForUpdate()
+            ->get();
+
+        if ($records->isEmpty()) {
+            return;
+        }
+
+        AbandonedCartRecord::query()
+            ->whereKey($records->modelKeys())
             ->update([
                 'status' => 'recovered',
                 'recovered_at' => now(),
@@ -362,10 +405,12 @@ class EmailMarketingService
                 'recovered_revenue' => $order->grand_total,
             ]);
 
-        $this->events->log('abandoned_cart_recovered', 'internal', [
-            'order_id' => $order->id,
-            'grand_total' => $order->grand_total,
-        ]);
+        $orderId = (int) $order->getKey();
+        $grandTotal = (float) $order->grand_total;
+        DB::afterCommit(fn () => $this->events->log('abandoned_cart_recovered', 'internal', [
+            'order_id' => $orderId,
+            'grand_total' => $grandTotal,
+        ]));
     }
 
     public function suppress(AbandonedCartRecord $record): void
@@ -426,7 +471,7 @@ class EmailMarketingService
 
     private function canSendAbandonedCartEmail(AbandonedCartRecord $record): bool
     {
-        if ($record->recovered_at || ! $record->email || in_array($record->status, ['recovered', 'expired', 'suppressed'], true)) {
+        if ($record->recovered_at || ! $record->email || in_array($record->status, ['restored', 'recovered', 'expired', 'suppressed'], true)) {
             return false;
         }
 
@@ -468,7 +513,7 @@ class EmailMarketingService
     private function expireOldAbandonedCarts(): void
     {
         AbandonedCartRecord::query()
-            ->whereNotIn('status', ['recovered', 'expired'])
+            ->whereNotIn('status', ['restored', 'recovered', 'expired', 'suppressed'])
             ->whereNotNull('recovery_token_expires_at')
             ->where('recovery_token_expires_at', '<=', now())
             ->update(['status' => 'expired']);
@@ -506,5 +551,137 @@ class EmailMarketingService
         } while (AbandonedCartRecord::query()->where('recovery_token', $token)->exists());
 
         return $token;
+    }
+
+    /**
+     * @return array<int, array{
+     *     product_id: int,
+     *     quantity: int,
+     *     is_gift: bool,
+     *     promotion_id: int|null,
+     *     unit_price: float,
+     *     total_price: float
+     * }>
+     */
+    private function buildRestorePlan(AbandonedCartRecord $record): array
+    {
+        $items = data_get($record->cart_snapshot, 'items', []);
+
+        if (! is_array($items)) {
+            throw new CartRecoveryRequiresReviewException;
+        }
+
+        $identities = [];
+        $plan = [];
+
+        foreach ($items as $item) {
+            if (! is_array($item) || (int) ($item['product_id'] ?? 0) < 1) {
+                throw new CartRecoveryRequiresReviewException;
+            }
+
+            $productId = (int) $item['product_id'];
+            $isGift = (bool) ($item['is_gift'] ?? false);
+            $identity = $productId.':'.(int) $isGift;
+
+            if (isset($identities[$identity])) {
+                throw new CartRecoveryRequiresReviewException;
+            }
+
+            $identities[$identity] = true;
+            $product = Product::query()->find($productId);
+
+            if ($product === null || ! $product->isPubliclyVisible()) {
+                continue;
+            }
+
+            $quantity = max(1, min(
+                (int) ($item['quantity'] ?? 1),
+                CartService::MAX_QUANTITY,
+            ));
+            $promotionId = $isGift ? (int) ($item['promotion_id'] ?? 0) : 0;
+
+            if ($promotionId > 0 && ! Promotion::query()->whereKey($promotionId)->exists()) {
+                $promotionId = 0;
+            }
+
+            $unitPrice = $isGift ? 0.0 : $product->effectivePrice();
+            $plan[] = [
+                'product_id' => $productId,
+                'quantity' => $quantity,
+                'is_gift' => $isGift,
+                'promotion_id' => $promotionId > 0 ? $promotionId : null,
+                'unit_price' => $unitPrice,
+                'total_price' => $unitPrice * $quantity,
+            ];
+        }
+
+        return $plan;
+    }
+
+    private function recoveryTarget(?string $sessionId, ?User $actor): Cart
+    {
+        if ($sessionId === null) {
+            return $this->createRecoveryCart((string) Str::uuid(), $actor);
+        }
+
+        $cart = Cart::query()
+            ->where('session_id', $sessionId)
+            ->lockForUpdate()
+            ->first();
+
+        if ($cart === null) {
+            $cart = Cart::query()->firstOrCreate(
+                ['session_id' => $sessionId],
+                [
+                    'user_id' => $actor?->getKey(),
+                    'customer_email' => $actor?->email,
+                    'status' => CartStatus::Active->value,
+                    'expires_at' => now()->addDays(CartLifecycleService::LIFETIME_DAYS),
+                ],
+            );
+            $cart = Cart::query()->whereKey($cart->getKey())->lockForUpdate()->firstOrFail();
+        }
+
+        $this->assertRecoveryTargetOwnership($cart, $actor);
+
+        if ($this->isActiveRecoveryTarget($cart) && $this->isEmptyRecoveryTarget($cart)) {
+            return $cart;
+        }
+
+        return $this->createRecoveryCart((string) Str::uuid(), $actor);
+    }
+
+    private function createRecoveryCart(string $sessionId, ?User $actor): Cart
+    {
+        return Cart::query()->create([
+            'session_id' => $sessionId,
+            'user_id' => $actor?->getKey(),
+            'customer_email' => $actor?->email,
+            'status' => CartStatus::Active->value,
+            'expires_at' => now()->addDays(CartLifecycleService::LIFETIME_DAYS),
+        ]);
+    }
+
+    private function assertRecoveryTargetOwnership(Cart $cart, ?User $actor): void
+    {
+        if (
+            $cart->user_id !== null
+            && ($actor === null || (int) $cart->user_id !== (int) $actor->getKey())
+        ) {
+            throw new CartRecoveryForbiddenException;
+        }
+    }
+
+    private function isActiveRecoveryTarget(Cart $cart): bool
+    {
+        return $cart->status === CartStatus::Active->value
+            && ($cart->expires_at === null || $cart->expires_at->isFuture());
+    }
+
+    private function isEmptyRecoveryTarget(Cart $cart): bool
+    {
+        return blank($cart->coupon_code)
+            && ! $cart->items()->exists()
+            && ! $cart->bundleItems()->exists();
     }
 }

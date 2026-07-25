@@ -50,6 +50,19 @@ jobs:
           QUEUE_CONNECTION: sync
           SCOUT_DRIVER: database
 
+      - name: Prepare test database
+        run: php artisan migrate --force
+        env:
+          DB_CONNECTION: mysql
+          DB_HOST: 127.0.0.1
+          DB_PORT: 3306
+          DB_DATABASE: mycomputer_test
+          DB_USERNAME: root
+          DB_PASSWORD: root
+          CACHE_STORE: array
+          QUEUE_CONNECTION: sync
+          SCOUT_DRIVER: database
+
       - name: Pint
         run: vendor/bin/pint --test
 
