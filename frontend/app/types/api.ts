@@ -206,9 +206,40 @@ export interface CartItem {
   id: number
   product_id: number
   quantity: number
+  is_gift: boolean
+  promotion_id: number | null
   unit_price: string | number
   total_price: string | number
   product: ProductCard
+  readiness: CartLineReadiness | null
+}
+
+export interface CartIssue {
+  code: string
+  message: string
+}
+
+export interface CartStockReadiness {
+  tracked: boolean | null
+  requested_quantity: number
+  available_quantity: number | null
+  max_purchasable_quantity: number | null
+  is_sufficient: boolean
+  components?: Array<Record<string, unknown>>
+}
+
+export interface CartLineReadiness {
+  is_eligible: boolean
+  can_checkout: boolean
+  issues: CartIssue[]
+  stock: CartStockReadiness
+}
+
+export interface CartReadiness {
+  can_checkout: boolean
+  issues_count: number
+  has_product_issues: boolean
+  has_stock_issues: boolean
 }
 
 export interface ProductBundleLine {
@@ -259,16 +290,44 @@ export interface CartBundleItem {
   total_price: string | number
   original_price: string | number
   savings: string | number
+  readiness: CartLineReadiness | null
+}
+
+export interface CartPromotion {
+  id: number
+  name: string
+  code: string | null
+  type: string
+  discount: string | number
+  shipping_discount: string | number
+}
+
+export interface CartGiftProduct {
+  product_id: number
+  quantity: number
+  promotion_id?: number | null
 }
 
 export interface CartResponse {
   id: number
   cart_session_id: string
   status: string
+  currency: string
+  coupon_code: string | null
   items: CartItem[]
-  bundle_items?: CartBundleItem[]
+  bundle_items: CartBundleItem[]
   items_count: number
   subtotal: string | number
+  applied_promotions: CartPromotion[]
+  promotion_discount_total: string | number
+  shipping_discount: string | number
+  gift_products: CartGiftProduct[]
+  readiness: CartReadiness | null
+  expires_at: string | null
+}
+
+export interface ApiDataResponse<T> {
+  data: T
 }
 
 export interface OrderResponse {

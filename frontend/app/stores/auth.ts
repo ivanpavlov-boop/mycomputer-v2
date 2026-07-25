@@ -46,6 +46,9 @@ export const useAuthStore = defineStore('auth', () => {
       body: payload,
     })
     setSession(response.data.token, response.data.user)
+    const cart = useCartStore()
+    cart.markUnresolvedForAuthTransition()
+    await cart.sync().catch(() => null)
     await useAnalytics().register()
   }
 
@@ -56,10 +59,12 @@ export const useAuthStore = defineStore('auth', () => {
       body: payload,
     })
     setSession(response.data.token, response.data.user)
+    const cart = useCartStore()
+    cart.markUnresolvedForAuthTransition()
     await useAnalytics().login()
     await useCompareStore().mergeAfterLogin().catch(() => null)
     await useWishlistStore().load().catch(() => null)
-    await useCartStore().sync().catch(() => null)
+    await cart.sync().catch(() => null)
   }
 
   async function logout() {
@@ -75,6 +80,7 @@ export const useAuthStore = defineStore('auth', () => {
     if (import.meta.client) {
       localStorage.removeItem('auth_token')
     }
+    useCartStore().markUnresolvedForAuthTransition()
   }
 
   async function fetchUser() {
@@ -89,9 +95,11 @@ export const useAuthStore = defineStore('auth', () => {
         headers: authHeaders(),
       })
       user.value = response.data
+      const cart = useCartStore()
+      cart.markUnresolvedForAuthTransition()
       await useCompareStore().mergeAfterLogin().catch(() => null)
       await useWishlistStore().load().catch(() => null)
-      await useCartStore().sync().catch(() => null)
+      await cart.sync().catch(() => null)
     } catch {
       await logout()
     } finally {

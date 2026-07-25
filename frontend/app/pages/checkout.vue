@@ -70,7 +70,7 @@
       <aside class="surface h-fit p-5">
         <h2 class="font-semibold">Обобщение</h2>
         <div class="mt-4 space-y-3 text-sm">
-          <div v-for="item in cart.backendItems" :key="item.id" class="flex justify-between gap-3">
+          <div v-for="item in cart.paidItems" :key="item.id" class="flex justify-between gap-3">
             <span>{{ item.product.name }} x {{ item.quantity }}</span>
             <span>{{ Number(item.total_price).toFixed(2) }} EUR</span>
           </div>
@@ -88,14 +88,15 @@
 </template>
 
 <script setup lang="ts">
-import type { OrderResponse, ShippingOffice } from '~/types/api'
+import type { ShippingOffice } from '~/types/api'
+import { normalizeApiError } from '~/utils/apiError'
 
 const cart = useCartStore()
 const router = useRouter()
 const shipping = useShipping()
 const payments = usePayments()
 const analytics = useAnalytics()
-await cart.sync()
+await cart.sync().catch(() => null)
 await analytics.beginCheckout({ value: cart.subtotal, items_count: cart.count })
 
 const error = ref('')
@@ -175,9 +176,7 @@ async function captureEmail() {
   if (!form.email.includes('@')) return
 
   try {
-    const api = useCartApi()
-    const response = await api.email(form.email) as { data: any }
-    cart.backendCart = response.data
+    await cart.attachEmail(form.email)
   } catch {
     // Email capture must not block checkout.
   }
@@ -188,7 +187,7 @@ async function submit() {
   try {
     await captureEmail()
     const api = useCartApi()
-    const response = await api.checkout(form) as { data: OrderResponse }
+    const response = await api.checkout(form)
     await analytics.addPaymentInfo({ payment_method: form.payment_method, value: response.data.grand_total })
     const payment = response.data.payment_transactions?.[0]
     await cart.clear()
@@ -203,8 +202,8 @@ async function submit() {
         instructions: payment?.instructions || selectedPaymentMethod.value?.instructions || undefined,
       },
     })
-  } catch (e: any) {
-    error.value = e?.data?.message || 'Поръчката не може да бъде изпратена.'
+  } catch (failure) {
+    error.value = normalizeApiError(failure).message
   }
 }
 

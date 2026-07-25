@@ -21,32 +21,29 @@
 </template>
 
 <script setup lang="ts">
-import type { CartResponse, ProductBundle } from '~/types/api'
+import type { ProductBundle } from '~/types/api'
 
 const props = defineProps<{ bundle: ProductBundle; selectedItems: Array<Record<string, unknown>> }>()
 
 const cart = useCartStore()
 const quantity = ref(1)
-const pending = ref(false)
+const pending = computed(() => cart.isOperationPending(`bundle:add:${props.bundle.id}`))
 const message = ref('')
 const error = ref(false)
 const formatPrice = (value: string | number) => `${Number(value).toFixed(2)} EUR`
 
 async function add() {
-  pending.value = true
   message.value = ''
   error.value = false
   try {
-    const response = await useCartApi().addBundle(props.bundle.id, quantity.value, props.selectedItems) as { data: CartResponse }
-    cart.backendCart = response.data
-    cart.backendAvailable = true
-    message.value = 'Комплектът е добавен в количката.'
-    await useAnalytics().addToCart({ bundle_id: props.bundle.id, quantity: quantity.value, value: Number(props.bundle.price) * quantity.value })
+    const confirmed = await cart.addBundle(props.bundle.id, quantity.value, props.selectedItems)
+
+    if (confirmed) {
+      message.value = 'Комплектът е добавен в количката.'
+    }
   } catch {
     error.value = true
-    message.value = 'Комплектът не може да бъде добавен. Проверете опциите и наличността.'
-  } finally {
-    pending.value = false
+    message.value = cart.error?.message || 'Комплектът не може да бъде добавен. Проверете опциите и наличността.'
   }
 }
 </script>

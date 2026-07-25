@@ -98,6 +98,7 @@
       "severity": "high",
       "confidence": "confirmed",
       "status": "open",
+      "local_remediation_status": "remediated_locally",
       "current_behavior": "The Nuxt cart API composable stores the cart session identifier in useState and does not persist it in a cookie or browser storage.",
       "risk": "A hard reload, new tab or browser restart can create a new cart and make the previous guest cart appear lost.",
       "evidence": [
@@ -122,6 +123,7 @@
       "severity": "high",
       "confidence": "confirmed",
       "status": "open",
+      "local_remediation_status": "remediated_locally",
       "current_behavior": "The Pinia store catches backend failures and writes local in-memory lines while retaining backend cart state. Rendering, count and subtotal can therefore use different sources, and local lines are not submitted to checkout.",
       "risk": "Customers can see items that cannot be checked out, receive incorrect counts or totals, and lose fallback lines on reload without an error.",
       "evidence": [
@@ -873,17 +875,43 @@
     },
     {
       "phase": "Commerce Phase 1B.6",
-      "status": "complete_locally",
+      "status": "merged_deployed_staging_verified",
       "finding_ids": [
         "CART-009",
         "CART-010"
       ],
+      "partial_finding_ids": [],
+      "open_finding_ids": [],
       "notes": [
         "Promotion limits are consumed atomically under deterministic Promotion row locks.",
         "Redemption and usage updates roll back together.",
         "Recovery tokens become single-use at successful restore.",
         "Recovery never clears or overwrites a populated unrelated Cart.",
-        "Recovery tokens remain plaintext and bundle/coupon snapshot fidelity remains outside this phase."
+        "Recovery tokens remain plaintext and bundle/coupon snapshot fidelity remains outside this phase.",
+        "Phase 1B.6 is merged, deployed and staging verified."
+      ]
+    },
+    {
+      "phase": "Commerce Phase 1C.1",
+      "status": "complete_locally",
+      "finding_ids": [
+        "CART-004",
+        "CART-005"
+      ],
+      "partial_finding_ids": [
+        "CART-018",
+        "CART-019"
+      ],
+      "open_finding_ids": [
+        "CART-024",
+        "CART-026"
+      ],
+      "notes": [
+        "Cart session identity is persisted in an SSR-safe Nuxt cookie.",
+        "Backend Cart state is the sole frontend Cart-content authority.",
+        "Silent local fallback Cart lines were removed.",
+        "Successful analytics now require confirmed backend mutation.",
+        "Full Cart UX and browser acceptance coverage remain in later Phase 1C work."
       ]
     }
   ]
