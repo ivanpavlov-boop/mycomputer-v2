@@ -22,12 +22,10 @@ const error = ref('')
 
 try {
   const token = String(route.params.token || '')
-  const api = useCartApi()
-  const response = await api.recover(token) as { data: any }
-  cart.backendCart = response.data
+  await cart.recover(token)
   await router.replace('/cart')
 } catch {
-  error.value = '\u041b\u0438\u043d\u043a\u044a\u0442 \u0437\u0430 \u0432\u044a\u0437\u0441\u0442\u0430\u043d\u043e\u0432\u044f\u0432\u0430\u043d\u0435 \u0435 \u043d\u0435\u0432\u0430\u043b\u0438\u0434\u0435\u043d \u0438\u043b\u0438 \u0435 \u0438\u0437\u0442\u0435\u043a\u044a\u043b.'
+  error.value = cart.error?.message || '\u041b\u0438\u043d\u043a\u044a\u0442 \u0437\u0430 \u0432\u044a\u0437\u0441\u0442\u0430\u043d\u043e\u0432\u044f\u0432\u0430\u043d\u0435 \u0435 \u043d\u0435\u0432\u0430\u043b\u0438\u0434\u0435\u043d \u0438\u043b\u0438 \u0435 \u0438\u0437\u0442\u0435\u043a\u044a\u043b.'
 } finally {
   pending.value = false
 }

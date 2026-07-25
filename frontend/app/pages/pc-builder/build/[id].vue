@@ -14,7 +14,13 @@
           <CompatibilityPanel :compatibility="compatibilityData" />
           <section class="surface grid gap-3 p-5">
             <BaseButton @click="saveBuild">Запази</BaseButton>
-            <BaseButton variant="secondary" @click="addBuildToCart">Добави в количката</BaseButton>
+            <BaseButton
+              variant="secondary"
+              :disabled="cart.isOperationPending(`pc-build:${buildData.id}`)"
+              @click="addBuildToCart"
+            >
+              Добави в количката
+            </BaseButton>
             <BaseButton variant="ghost" @click="duplicateBuild">Дублирай</BaseButton>
           </section>
         </aside>
@@ -88,10 +94,17 @@ async function duplicateBuild() {
 
 async function addBuildToCart() {
   if (!buildData.value) return
-  const response = await pcBuilder.addToCart(buildData.value.id)
-  cart.backendCart = response.data
-  await analytics.builderComplete({ build_id: buildData.value.id, total: buildData.value.total_price })
-  await router.push('/cart')
+
+  const build = buildData.value
+  const confirmed = await cart.acceptExternalMutation(
+    `pc-build:${build.id}`,
+    () => pcBuilder.addToCart(build.id),
+  ).catch(() => null)
+
+  if (confirmed) {
+    await analytics.builderComplete({ build_id: build.id, total: build.total_price })
+    await router.push('/cart')
+  }
 }
 
 useSeo().page('PC конфигурация', 'Редакция и проверка на съвместимост на PC конфигурация.', `/pc-builder/build/${route.params.id}`)

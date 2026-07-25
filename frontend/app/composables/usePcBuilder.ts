@@ -5,6 +5,7 @@ const SESSION_KEY = 'mycomputer_pc_build_session'
 export function usePcBuilder() {
   const config = useRuntimeConfig()
   const auth = useAuthStore()
+  const cartApi = useCartApi()
   const baseURL = config.public.apiBaseUrl
 
   function sessionId() {
@@ -93,8 +94,7 @@ export function usePcBuilder() {
   }
 
   async function addToCart(id: number | string) {
-    return await $fetch<{ data: CartResponse }>(`/pc-builder/builds/${id}/add-to-cart`, {
-      baseURL,
+    return await cartApi.request<{ data: CartResponse }>(`/pc-builder/builds/${id}/add-to-cart`, {
       method: 'POST',
       headers: headers(),
     })

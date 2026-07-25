@@ -1,49 +1,132 @@
+import type { ApiDataResponse, CartResponse, OrderResponse } from '~/types/api'
+import { invalidCartSessionResponseError, normalizeApiError } from '~/utils/apiError'
+import { normalizeCartSessionId } from '~/utils/cartSession'
+
+type SessionResponsePolicy = 'required' | 'if-present'
+
+interface CartRequestPolicy {
+  sessionResponse?: SessionResponsePolicy
+  retryInvalidSessionGet?: boolean
+}
+
+function responseSession(response: unknown): { present: boolean, value: unknown } {
+  if (typeof response !== 'object' || response === null || !('data' in response)) {
+    return { present: false, value: null }
+  }
+
+  const data = response.data
+
+  if (typeof data !== 'object' || data === null || !('cart_session_id' in data)) {
+    return { present: false, value: null }
+  }
+
+  return { present: true, value: data.cart_session_id }
+}
+
 export function useCartApi() {
   const config = useRuntimeConfig()
   const baseURL = config.public.apiBaseUrl
   const auth = useAuthStore()
+  const cartSession = useCartSession()
 
-  const sessionId = useState<string | null>('cart-session-id', () => null)
-  const headers = computed(() => sessionId.value ? { 'X-Cart-Session': sessionId.value } : {})
+  async function request<T>(
+    path: string,
+    options: Record<string, unknown> = {},
+    policy: CartRequestPolicy = {},
+    hasRetried = false,
+  ): Promise<T> {
+    const callerHeaders = typeof options.headers === 'object' && options.headers !== null
+      ? options.headers as Record<string, string>
+      : {}
+    const sentSession = normalizeCartSessionId(cartSession.sessionId.value)
 
-  async function request<T>(path: string, options: Record<string, unknown> = {}) {
-    const response = await $fetch<T>(path, {
-      baseURL,
-      ...options,
-      headers: {
-        ...auth.authHeaders(),
-        ...(options.headers as Record<string, string> || {}),
-        ...headers.value,
-      },
-    })
+    if (cartSession.sessionId.value !== null && sentSession === null) {
+      cartSession.clear()
+    }
 
-    const maybeSession = (response as any)?.data?.cart_session_id
-    if (maybeSession) sessionId.value = maybeSession
+    try {
+      const response = await $fetch<T>(path, {
+        baseURL,
+        ...options,
+        headers: {
+          ...auth.authHeaders(),
+          ...callerHeaders,
+          ...(sentSession ? { 'X-Cart-Session': sentSession } : {}),
+        },
+      })
+      const returned = responseSession(response)
 
-    return response
+      if (returned.present) {
+        const normalized = normalizeCartSessionId(returned.value)
+
+        if (normalized === null) {
+          throw invalidCartSessionResponseError()
+        }
+
+        cartSession.persist(normalized)
+      } else if (policy.sessionResponse === 'required') {
+        throw invalidCartSessionResponseError()
+      }
+
+      return response
+    } catch (error) {
+      const normalized = normalizeApiError(error)
+      const canRetry = policy.retryInvalidSessionGet === true
+        && normalized.code === 'invalid_cart_session'
+        && sentSession !== null
+        && !hasRetried
+
+      if (canRetry) {
+        cartSession.clear()
+
+        return request<T>(path, options, policy, true)
+      }
+
+      throw normalized
+    }
   }
 
+  const cartRequest = (
+    path: string,
+    options: Record<string, unknown> = {},
+    retryInvalidSessionGet = false,
+  ) => request<ApiDataResponse<CartResponse>>(path, options, {
+    sessionResponse: 'required',
+    retryInvalidSessionGet,
+  })
+
   return {
-    sessionId,
+    sessionId: cartSession.sessionId,
     request,
-    get: () => request('/cart'),
-    add: (productId: number, quantity: number) => request('/cart/items', { method: 'POST', body: { product_id: productId, quantity } }),
-    addBundle: (bundleId: number, quantity: number, selectedItems: Array<Record<string, unknown>> = []) => request('/cart/bundles', {
+    get: () => cartRequest('/cart', {}, true),
+    add: (productId: number, quantity: number) => cartRequest('/cart/items', {
+      method: 'POST',
+      body: { product_id: productId, quantity },
+    }),
+    addBundle: (bundleId: number, quantity: number, selectedItems: Array<Record<string, unknown>> = []) => cartRequest('/cart/bundles', {
       method: 'POST',
       body: { bundle_id: bundleId, quantity, selected_items: selectedItems },
     }),
-    updateBundle: (bundleItemId: number, quantity: number, selectedItems: Array<Record<string, unknown>> = []) => request(`/cart/bundles/${bundleItemId}`, {
+    updateBundle: (bundleItemId: number, quantity: number, selectedItems: Array<Record<string, unknown>> = []) => cartRequest(`/cart/bundles/${bundleItemId}`, {
       method: 'PATCH',
       body: { quantity, selected_items: selectedItems },
     }),
-    removeBundle: (bundleItemId: number) => request(`/cart/bundles/${bundleItemId}`, { method: 'DELETE' }),
-    applyCoupon: (code: string) => request('/cart/coupon', { method: 'POST', body: { code } }),
-    removeCoupon: () => request('/cart/coupon', { method: 'DELETE' }),
-    email: (email: string) => request('/cart/email', { method: 'POST', body: { email } }),
-    recover: (token: string) => request(`/cart/recover/${token}`, { method: 'POST' }),
-    update: (itemId: number, quantity: number) => request(`/cart/items/${itemId}`, { method: 'PATCH', body: { quantity } }),
-    remove: (itemId: number) => request(`/cart/items/${itemId}`, { method: 'DELETE' }),
-    clear: () => request('/cart', { method: 'DELETE' }),
-    checkout: (body: Record<string, unknown>) => request('/checkout', { method: 'POST', body }),
+    removeBundle: (bundleItemId: number) => cartRequest(`/cart/bundles/${bundleItemId}`, { method: 'DELETE' }),
+    applyCoupon: (code: string) => cartRequest('/cart/coupon', { method: 'POST', body: { code } }),
+    removeCoupon: () => cartRequest('/cart/coupon', { method: 'DELETE' }),
+    email: (email: string) => cartRequest('/cart/email', { method: 'POST', body: { email } }),
+    recover: (token: string) => cartRequest(`/cart/recover/${token}`, { method: 'POST' }),
+    update: (itemId: number, quantity: number) => cartRequest(`/cart/items/${itemId}`, {
+      method: 'PATCH',
+      body: { quantity },
+    }),
+    remove: (itemId: number) => cartRequest(`/cart/items/${itemId}`, { method: 'DELETE' }),
+    clear: () => cartRequest('/cart', { method: 'DELETE' }),
+    checkout: (body: Record<string, unknown>) => request<ApiDataResponse<OrderResponse>>('/checkout', {
+      method: 'POST',
+      body,
+    }, {
+      sessionResponse: 'if-present',
+    }),
   }
 }

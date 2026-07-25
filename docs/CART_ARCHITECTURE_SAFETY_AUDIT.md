@@ -949,7 +949,8 @@ remained open after this phase and is remediated locally by Phase 1B.6.
 
 ### Commerce Phase 1B.6 - Promotion and Recovery Safety
 
-Phase 1B.6 is complete locally and remediates CART-009 and CART-010 locally.
+Phase 1B.6 is merged, deployed and staging verified and remediates CART-009 and
+CART-010.
 Promotion rows are the concurrency boundary for usage consumption. Applied IDs
 are sorted and locked in ascending order. Status, dates, coupon association,
 rules, global usage, per-user usage and canonical Cart-session usage are
@@ -989,6 +990,39 @@ snapshot fidelity was not added. Public Cart and checkout pages remain
 disabled. No Product mutation during recovery, stock reservation, frontend
 production change, supplier behavior, Catalog Sync behavior, Sync All,
 automatic sync or UPDATE enablement was added.
+
+### Commerce Phase 1C.1 - Persistent Cart Identity and Authoritative Frontend State
+
+Phase 1C.1 is complete locally and remediates CART-004 and CART-005 locally.
+The frontend stores only a canonical Cart UUID in the request-scoped,
+frontend-readable `mc_cart_session` Nuxt cookie. The cookie is shared by SSR
+and hydration, and valid backend rotation from Cart-bearing responses is
+persisted before consumers receive the response. Malformed persisted values
+are cleared before requests. An `invalid_cart_session` Cart GET may retry once
+after clearing the cookie; mutations are never replayed automatically.
+
+The backend Cart response is the sole frontend Cart-content authority. Pinia
+no longer has local fallback lines or a `backendAvailable` source switch.
+Confirmed Cart contents remain visible after a failed mutation, while explicit
+request status, safe errors and per-operation pending keys support retry and
+duplicate-click protection. Cart count, subtotal, lines, bundles, gifts,
+coupon and readiness all derive from the same response.
+
+Login preserves the guest capability and sends it with authenticated headers,
+allowing the existing backend policy to claim, merge or rotate the Cart.
+Logout and User switching retain the canonical capability but invalidate stale
+rendered Cart state; an authority epoch prevents an earlier in-flight response
+from repopulating it. No quantities, coupons or gifts are merged in the
+browser.
+
+Add/remove analytics run only after confirmed backend mutation and use returned
+Cart line prices and currency. CART-018 remains partially open for the complete
+loading/error/accessibility UX matrix. CART-019 remains partially open because
+general cross-layer analytics deduplication was not added. CART-024 remains
+open for real-browser SSR, reload, new-tab and accessibility coverage.
+CART-026 remains open. Public Cart and checkout pages remain disabled, and no
+backend Cart, checkout, Product, stock, supplier or Catalog Sync behavior
+changed.
 
 ## 30. Release Gates
 

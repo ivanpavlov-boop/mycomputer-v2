@@ -52,9 +52,13 @@ Manual selected UPDATE price/stock sync is implemented behind `CATALOG_SYNC_UPDA
   merged, deployed and staging verified with same-Cart serialization, separate
   paid/gift identity and canonical automatic gifts that do not enter paid
   promotion inputs.
-- Commerce Phase 1B.6 Promotion and Recovery Safety, completed locally with
+- Commerce Phase 1B.6 Promotion and Recovery Safety, merged, deployed and
+  staging verified with
   atomic Promotion-limit consumption and single-use, ownership-aware,
   non-destructive abandoned-Cart recovery.
+- Commerce Phase 1C.1 Persistent Cart Identity and Authoritative Frontend State,
+  completed locally with an SSR-safe canonical UUID cookie, backend-only Cart
+  content state, explicit operation errors and success-only mutation analytics.
 - Unified Product edit quality summary combining existing scanner issues,
   category specification quality and active manual flags without blocking or
   mutating Product workflow.
@@ -442,8 +446,8 @@ concurrency redesign, frontend production change or public commerce route was
 added. CART-009 remained open after Phase 1B.5 and is remediated locally by
 Phase 1B.6. Catalog Sync behavior and flags are unchanged.
 
-Commerce Phase 1B.6 is complete locally and remediates CART-009 and CART-010
-locally. Promotion rows are locked by ascending ID and provide the atomic
+Commerce Phase 1B.6 is merged, deployed and staging verified and remediates
+CART-009 and CART-010. Promotion rows are locked by ascending ID and provide the atomic
 boundary for global, per-user and canonical-session limits. Every Promotion in
 the checkout result is revalidated before any write, one Promotion/Order pair
 is unique, multi-Promotion redemption is all-or-nothing, and rollback restores
@@ -462,6 +466,26 @@ CART-021 remains open: tokens are still plaintext and recovery URLs are
 unchanged. CART-025 remains open: bundle and coupon snapshot fidelity was not
 redesigned. Public Cart and checkout pages remain disabled. No Product,
 supplier or Catalog Sync behavior changed.
+
+Commerce Phase 1C.1 is complete locally and remediates CART-004 and CART-005
+locally. The request-scoped Nuxt cookie `mc_cart_session` contains only the
+canonical Cart UUID and supplies one session value to SSR, hydration and client
+requests. Valid backend rotation is persisted before a Cart response reaches
+the store; malformed persisted values are discarded, and only an idempotent
+Cart GET may retry once after an invalid-session response.
+
+The Pinia store now renders only confirmed backend Cart data. Local fallback
+lines and `backendAvailable` are removed, failed mutations preserve the last
+confirmed Cart, and pending operations prevent duplicate logical submissions.
+Login delegates guest-to-user convergence to the backend. Logout and User
+switching preserve the capability but clear stale rendered content until the
+next authoritative resolution. Add/remove analytics run only after confirmed
+mutations and use backend line prices.
+
+CART-018 and CART-019 remain partially open. CART-024 real-browser acceptance
+and CART-026 checkout-success navigation remain open. Public Cart and checkout
+pages remain disabled, and no backend Cart, Product, stock, supplier or Catalog
+Sync behavior changed.
 
 ## Next
 
