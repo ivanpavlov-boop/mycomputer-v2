@@ -44,6 +44,11 @@ class Cart extends Model
         return $this->hasMany(AbandonedCartRecord::class, 'session_id', 'session_id');
     }
 
+    public function restoredAbandonedCartRecords(): HasMany
+    {
+        return $this->hasMany(AbandonedCartRecord::class, 'restored_cart_id');
+    }
+
     public function promotionRedemptions(): HasMany
     {
         return $this->hasMany(PromotionRedemption::class, 'session_id', 'session_id');

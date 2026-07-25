@@ -3,10 +3,8 @@
 namespace App\Services\Promotions;
 
 use App\Models\Cart;
-use App\Models\Order;
 use App\Models\Product;
 use App\Models\Promotion;
-use App\Models\PromotionRedemption;
 use App\Services\Cart\CartMutationService;
 use App\Services\Marketing\MarketingEventService;
 use Illuminate\Support\Collection;
@@ -216,24 +214,6 @@ class PromotionEngineService
             'bundleItems.bundle',
             'user.loyaltyAccount',
         ]);
-    }
-
-    public function recordRedemptions(Cart $cart, Order $order, array $result): void
-    {
-        DB::transaction(function () use ($cart, $order, $result): void {
-            foreach ($result['applied_promotions'] as $applied) {
-                PromotionRedemption::query()->create([
-                    'promotion_id' => $applied['id'],
-                    'order_id' => $order->id,
-                    'user_id' => $cart->user_id,
-                    'session_id' => $cart->session_id,
-                    'discount_amount' => $applied['discount'] + $applied['shipping_discount'],
-                ]);
-
-                Promotion::query()->whereKey($applied['id'])->increment('usage_count');
-                $this->events->log('promotion_applied', 'internal', $applied + ['order_id' => $order->id], $cart->user, $cart->session_id);
-            }
-        });
     }
 
     /**

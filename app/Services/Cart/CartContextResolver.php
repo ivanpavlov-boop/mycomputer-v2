@@ -34,7 +34,7 @@ class CartContextResolver
         return $cart->load(self::RELATIONS);
     }
 
-    private function sessionId(Request $request): ?string
+    public function sessionId(Request $request): ?string
     {
         $sessionId = $request->header('X-Cart-Session');
 

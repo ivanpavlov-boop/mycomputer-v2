@@ -5,7 +5,12 @@ use App\Exceptions\CartMutationConflictException;
 use App\Exceptions\CartNotReadyException;
 use App\Exceptions\CartPriceChangedException;
 use App\Exceptions\CartProductUnavailableException;
+use App\Exceptions\CartPromotionChangedException;
 use App\Exceptions\CartQuantityUnavailableException;
+use App\Exceptions\CartRecoveryConsumedException;
+use App\Exceptions\CartRecoveryForbiddenException;
+use App\Exceptions\CartRecoveryInvalidException;
+use App\Exceptions\CartRecoveryRequiresReviewException;
 use App\Http\Middleware\ResolveApiLocale;
 use App\Support\Api\ErrorResponse;
 use Illuminate\Auth\Access\AuthorizationException;
@@ -99,6 +104,26 @@ return Application::configure(basePath: dirname(__DIR__))
                     $exception->getMessage(),
                     409,
                 );
+            }
+
+            if ($exception instanceof CartPromotionChangedException) {
+                return ErrorResponse::make('cart_promotion_changed', $exception->getMessage(), 409);
+            }
+
+            if ($exception instanceof CartRecoveryConsumedException) {
+                return ErrorResponse::make('cart_recovery_consumed', $exception->getMessage(), 409);
+            }
+
+            if ($exception instanceof CartRecoveryInvalidException) {
+                return ErrorResponse::make('cart_recovery_invalid', $exception->getMessage(), 422);
+            }
+
+            if ($exception instanceof CartRecoveryForbiddenException) {
+                return ErrorResponse::make('cart_recovery_forbidden', $exception->getMessage(), 403);
+            }
+
+            if ($exception instanceof CartRecoveryRequiresReviewException) {
+                return ErrorResponse::make('cart_recovery_requires_review', $exception->getMessage(), 409);
             }
 
             $status = $exception instanceof HttpExceptionInterface ? $exception->getStatusCode() : 500;

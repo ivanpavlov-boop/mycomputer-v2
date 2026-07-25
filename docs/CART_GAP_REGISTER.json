@@ -246,6 +246,7 @@
       "severity": "high",
       "confidence": "confirmed",
       "status": "open",
+      "local_remediation_status": "remediated_locally",
       "current_behavior": "Promotion eligibility reads usage and redemption counts before recording usage, and redemption indexes do not enforce one redemption per intended user or session scope.",
       "risk": "Concurrent checkouts can exceed global or per-customer limits and record duplicate redemptions.",
       "evidence": [
@@ -278,6 +279,7 @@
       "severity": "high",
       "confidence": "confirmed",
       "status": "open",
+      "local_remediation_status": "remediated_locally",
       "current_behavior": "A valid recovery token may restore into a supplied cart session by clearing and rebuilding its normal item lines. The token remains usable until a later checkout marks the record recovered.",
       "risk": "Recovery can overwrite a different cart and replay can repeatedly rebuild cart state without a single-use transition.",
       "evidence": [
@@ -852,7 +854,7 @@
     },
     {
       "phase": "Commerce Phase 1B.5",
-      "status": "complete_locally",
+      "status": "merged_deployed_staging_verified",
       "finding_ids": [
         "CART-014",
         "CART-015"
@@ -865,7 +867,23 @@
         "Paid and gift lines use separate database identity.",
         "Automatic gifts are aggregated and reconciled idempotently.",
         "Gift lines do not qualify promotion rules.",
-        "No stock reservation, checkout idempotency or promotion redemption concurrency redesign was added."
+        "No stock reservation, checkout idempotency or promotion redemption concurrency redesign was added.",
+        "Phase 1B.5 is merged, deployed and staging verified."
+      ]
+    },
+    {
+      "phase": "Commerce Phase 1B.6",
+      "status": "complete_locally",
+      "finding_ids": [
+        "CART-009",
+        "CART-010"
+      ],
+      "notes": [
+        "Promotion limits are consumed atomically under deterministic Promotion row locks.",
+        "Redemption and usage updates roll back together.",
+        "Recovery tokens become single-use at successful restore.",
+        "Recovery never clears or overwrites a populated unrelated Cart.",
+        "Recovery tokens remain plaintext and bundle/coupon snapshot fidelity remains outside this phase."
       ]
     }
   ]

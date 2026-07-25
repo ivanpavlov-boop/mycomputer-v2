@@ -107,14 +107,13 @@ class CartController extends Controller
 
     public function recover(Request $request, string $token): CartResource
     {
-        $cart = $this->emailMarketing->restoreCartFromToken($token, $this->sessionId($request));
+        $cart = $this->emailMarketing->restoreCartFromToken(
+            $token,
+            $this->cartContext->sessionId($request),
+            Auth::guard('sanctum')->user(),
+        );
 
-        return CartResource::make($this->ready($cart));
-    }
-
-    private function sessionId(Request $request): ?string
-    {
-        return $request->header('X-Cart-Session');
+        return CartResource::make($this->readiness->assess($cart)->cart);
     }
 
     private function ready(Cart $cart): Cart
