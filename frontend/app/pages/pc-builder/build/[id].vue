@@ -17,10 +17,14 @@
             <BaseButton
               variant="secondary"
               :disabled="cart.isOperationPending(`pc-build:${buildData.id}`)"
+              :aria-busy="cart.isOperationPending(`pc-build:${buildData.id}`)"
               @click="addBuildToCart"
             >
-              Добави в количката
+              {{ cart.isOperationPending(`pc-build:${buildData.id}`) ? 'Добавяне…' : 'Добави в количката' }}
             </BaseButton>
+            <p v-if="cart.errorFor(`pc-build:${buildData.id}`)" class="text-sm text-red-700" role="alert">
+              {{ cart.errorFor(`pc-build:${buildData.id}`)?.message }}
+            </p>
             <BaseButton variant="ghost" @click="duplicateBuild">Дублирай</BaseButton>
           </section>
         </aside>

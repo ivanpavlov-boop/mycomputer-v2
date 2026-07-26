@@ -8,7 +8,7 @@ const SAFE_ERROR_MESSAGES: Record<string, string> = {
   cart_not_ready: 'Количката изисква преглед, преди да продължите.',
   cart_price_changed: 'Цената е променена. Прегледайте количката и опитайте отново.',
   cart_promotion_changed: 'Условията на промоцията са променени. Прегледайте количката.',
-  cart_mutation_conflict: 'Количката е променена от друга заявка. Обновете и опитайте отново.',
+  cart_mutation_conflict: 'Количката беше променена по време на заявката. Опитайте отново.',
   cart_gift_line_immutable: 'Подаръчният продукт се управлява от промоцията и не може да бъде променян.',
   cart_recovery_consumed: 'Този линк за възстановяване вече е използван.',
   cart_recovery_invalid: 'Линкът за възстановяване е невалиден или е изтекъл.',
@@ -102,7 +102,9 @@ export function normalizeApiError(error: unknown): CartApiError {
     code,
     message: SAFE_ERROR_MESSAGES[code] ?? GENERIC_API_ERROR_MESSAGE,
     details: safeDetails(payload.details),
-    retryable: statusCode === null || statusCode >= 500 || code === 'cart_mutation_conflict',
+    retryable: statusCode === null
+      || statusCode >= 500
+      || ['cart_mutation_conflict', 'cart_price_changed', 'cart_promotion_changed'].includes(code),
   })
 }
 

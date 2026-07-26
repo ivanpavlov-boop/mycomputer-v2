@@ -1,8 +1,32 @@
 <template>
   <div>
     <Breadcrumbs :items="[{ label: 'Поръчка' }]" />
-    <form class="container-page grid gap-6 lg:grid-cols-[1fr_360px]" @submit.prevent="submit">
+    <div v-if="cart.isUnresolved || cart.isInitialLoading" class="container-page py-8" role="status">
+      <p class="mb-3 text-sm text-slate-600">Зареждаме количката…</p>
+      <LoadingState :count="2" />
+    </div>
+    <div v-else-if="!cart.cart" class="container-page space-y-4 py-8">
+      <ErrorState title="Не успяхме да заредим количката" :text="cart.error?.message" />
+      <BaseButton variant="secondary" @click="retryCart">Опитай отново</BaseButton>
+    </div>
+    <div v-else-if="cart.isConfirmedEmpty" class="container-page py-8">
+      <EmptyState title="Количката е празна" text="Добавете продукт, преди да продължите към поръчка." />
+      <NuxtLink class="mt-4 inline-flex text-sm font-semibold text-brand-700" to="/catalog">Към каталога</NuxtLink>
+    </div>
+    <form
+      v-else
+      class="container-page grid gap-6 lg:grid-cols-[1fr_360px]"
+      :aria-busy="submitting"
+      @submit.prevent="submit"
+    >
       <div class="space-y-6">
+        <section
+          v-if="!cart.canCheckout"
+          class="rounded-md border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800"
+        >
+          <p class="font-semibold">Количката съдържа продукти, които трябва да прегледате.</p>
+          <NuxtLink class="mt-2 inline-flex font-semibold text-brand-700" to="/cart">Прегледай количката</NuxtLink>
+        </section>
         <section class="surface p-5">
           <h1 class="text-2xl font-bold">Данни за клиента</h1>
           <div class="mt-4 grid gap-4 sm:grid-cols-2">
@@ -80,7 +104,9 @@
           <div class="mt-2 flex justify-between"><span>Доставка</span><span>{{ shippingPrice.toFixed(2) }} EUR</span></div>
           <div class="mt-3 flex justify-between text-lg font-bold"><span>Общо</span><span>{{ (cart.subtotal + shippingPrice).toFixed(2) }} EUR</span></div>
         </div>
-        <BaseButton class="mt-5 w-full" type="submit">Изпрати поръчка</BaseButton>
+        <BaseButton class="mt-5 w-full" type="submit" :disabled="!cart.canCheckout || submitting">
+          {{ submitting ? 'Изпращане…' : 'Изпрати поръчка' }}
+        </BaseButton>
         <ErrorState v-if="error" class="mt-4" :text="error" />
       </aside>
     </form>
@@ -96,10 +122,11 @@ const router = useRouter()
 const shipping = useShipping()
 const payments = usePayments()
 const analytics = useAnalytics()
+const cartAnalytics = useCartAnalytics()
 await cart.sync().catch(() => null)
-await analytics.beginCheckout({ value: cart.subtotal, items_count: cart.count })
 
 const error = ref('')
+const submitting = ref(false)
 const selectedOffice = ref<ShippingOffice | null>(null)
 const officeSearch = ref('')
 const shippingPrice = ref(0)
@@ -182,12 +209,32 @@ async function captureEmail() {
   }
 }
 
+async function retryCart() {
+  await cart.sync().catch(() => null)
+}
+
 async function submit() {
+  if (!cart.cart || !cart.canCheckout || submitting.value) {
+    return
+  }
+
   error.value = ''
+  submitting.value = true
+
   try {
     await captureEmail()
+
+    if (!cart.cart || !cart.canCheckout) {
+      error.value = 'Количката трябва да бъде прегледана преди поръчка.'
+
+      return
+    }
+
+    const confirmedCart = cart.cart
+    const operationId = cartAnalytics.createOperationId('checkout')
     const api = useCartApi()
     const response = await api.checkout(form)
+    await cartAnalytics.beginCheckout(operationId, confirmedCart)
     await analytics.addPaymentInfo({ payment_method: form.payment_method, value: response.data.grand_total })
     const payment = response.data.payment_transactions?.[0]
     await cart.clear()
@@ -203,7 +250,14 @@ async function submit() {
       },
     })
   } catch (failure) {
-    error.value = normalizeApiError(failure).message
+    const normalized = normalizeApiError(failure)
+    error.value = normalized.message
+
+    if (['cart_price_changed', 'cart_promotion_changed'].includes(normalized.code)) {
+      await cart.sync().catch(() => null)
+    }
+  } finally {
+    submitting.value = false
   }
 }
 

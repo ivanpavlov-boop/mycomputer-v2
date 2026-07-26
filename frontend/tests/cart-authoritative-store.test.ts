@@ -38,7 +38,7 @@ describe('authoritative Cart store', () => {
     const store = source('app/stores/cart.ts')
 
     expect(store).toContain('const response = await request()')
-    expect(store).toContain('acceptConfirmedCart(response.data)')
+    expect(store).toContain('acceptConfirmedCart(response.data, key, token)')
     expect(store).toContain("status.value = cart.value === null ? 'error' : 'ready'")
     expect(store).not.toContain('cart.value = null\n    error.value = normalizeApiError')
   })
@@ -53,7 +53,8 @@ describe('authoritative Cart store', () => {
     expect(store).toContain('`update:${itemId}`')
     expect(store).toContain('`remove:${itemId}`')
     expect(store).toContain("'clear'")
-    expect(store).toContain("'coupon'")
+    expect(store).toContain("'coupon:apply'")
+    expect(store).toContain("'coupon:remove'")
     expect(store).toContain('delete nextPending[key]')
   })
 

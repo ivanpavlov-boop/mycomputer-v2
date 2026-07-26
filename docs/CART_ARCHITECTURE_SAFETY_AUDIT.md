@@ -993,7 +993,8 @@ automatic sync or UPDATE enablement was added.
 
 ### Commerce Phase 1C.1 - Persistent Cart Identity and Authoritative Frontend State
 
-Phase 1C.1 is complete locally and remediates CART-004 and CART-005 locally.
+Phase 1C.1 is merged, deployed and staging verified and remediates CART-004 and
+CART-005.
 The frontend stores only a canonical Cart UUID in the request-scoped,
 frontend-readable `mc_cart_session` Nuxt cookie. The cookie is shared by SSR
 and hydration, and valid backend rotation from Cart-bearing responses is
@@ -1023,6 +1024,40 @@ open for real-browser SSR, reload, new-tab and accessibility coverage.
 CART-026 remains open. Public Cart and checkout pages remain disabled, and no
 backend Cart, checkout, Product, stock, supplier or Catalog Sync behavior
 changed.
+
+### Commerce Phase 1C.2 - Cart UX States and Analytics Consistency
+
+Phase 1C.2 is complete locally and remediates CART-018 and CART-019 locally.
+The Cart page and drawer distinguish unresolved, loading, confirmed empty,
+confirmed ready, mutating, failed, readiness-blocked and review-required
+states. An initial failure offers an explicit idempotent Cart GET retry. A
+failed mutation preserves the last confirmed Cart and exposes a scoped
+Bulgarian error; important ownership, readiness, price, Promotion and mutation
+conflicts also receive a compact Cart-level summary.
+
+Quantity changes use a separate draft and explicit submit. The authoritative
+quantity changes only after an accepted backend response. Scoped operation keys
+prevent duplicate Product, bundle, coupon, remove and clear requests while
+allowing unrelated controls to remain independent. Coupon and bundle controls
+surface their own pending and failure states. Gifts show zero price and have no
+editable quantity or remove controls. Readiness issues are mapped to actionable
+Bulgarian messages, and stock maximums are displayed only when explicitly
+provided by backend readiness.
+
+`useCartAnalytics` centralizes frontend Cart events. Each accepted frontend
+operation has an in-memory identity, and confirmed pre/post Cart comparison
+provides Product or bundle identity, quantity delta, public SKU, authoritative
+line price and returned currency. Failed, stale, superseded and auth-transition
+responses produce no success analytics. Quantity changes reuse the existing
+`add_to_cart`/`remove_from_cart` delta contract. Clear Cart emits no synthetic
+remove cascade, no `view_cart` event was introduced, and `begin_checkout`
+requires an explicit ready checkout request that succeeds. Payloads omit Cart
+session UUIDs, recovery tokens, Supplier data and internal Product costs.
+
+CART-024 remains open for full real-browser lifecycle coverage. CART-026
+remains open for checkout-success URL data safety. Public Cart and checkout
+remain disabled. No backend Cart, checkout, payment, Product, stock, Supplier
+or Catalog Sync behavior changed.
 
 ## 30. Release Gates
 
