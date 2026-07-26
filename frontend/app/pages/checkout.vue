@@ -1,16 +1,16 @@
 <template>
   <div>
-    <Breadcrumbs :items="[{ label: 'Поръчка' }]" />
+    <LayoutBreadcrumbs :items="[{ label: 'Поръчка' }]" />
     <div v-if="cart.isUnresolved || cart.isInitialLoading" class="container-page py-8" role="status">
       <p class="mb-3 text-sm text-slate-600">Зареждаме количката…</p>
-      <LoadingState :count="2" />
+      <UiLoadingState :count="2" />
     </div>
     <div v-else-if="!cart.cart" class="container-page space-y-4 py-8">
-      <ErrorState title="Не успяхме да заредим количката" :text="cart.error?.message" />
-      <BaseButton variant="secondary" @click="retryCart">Опитай отново</BaseButton>
+      <UiErrorState title="Не успяхме да заредим количката" :text="cart.error?.message" />
+      <UiBaseButton variant="secondary" @click="retryCart">Опитай отново</UiBaseButton>
     </div>
     <div v-else-if="cart.isConfirmedEmpty" class="container-page py-8">
-      <EmptyState title="Количката е празна" text="Добавете продукт, преди да продължите към поръчка." />
+      <UiEmptyState title="Количката е празна" text="Добавете продукт, преди да продължите към поръчка." />
       <NuxtLink class="mt-4 inline-flex text-sm font-semibold text-brand-700" to="/catalog">Към каталога</NuxtLink>
     </div>
     <form
@@ -30,10 +30,10 @@
         <section class="surface p-5">
           <h1 class="text-2xl font-bold">Данни за клиента</h1>
           <div class="mt-4 grid gap-4 sm:grid-cols-2">
-            <BaseInput v-model="form.first_name" placeholder="Име" required />
-            <BaseInput v-model="form.last_name" placeholder="Фамилия" required />
-            <BaseInput v-model="form.email" placeholder="Имейл" required @blur="captureEmail" />
-            <BaseInput v-model="form.phone" placeholder="Телефон" required />
+            <UiBaseInput v-model="form.first_name" placeholder="Име" required />
+            <UiBaseInput v-model="form.last_name" placeholder="Фамилия" required />
+            <UiBaseInput v-model="form.email" placeholder="Имейл" required @blur="captureEmail" />
+            <UiBaseInput v-model="form.phone" placeholder="Телефон" required />
           </div>
         </section>
 
@@ -41,8 +41,8 @@
           <h2 class="font-semibold">Фактуриране</h2>
           <label class="mt-4 flex items-center gap-2 text-sm"><input v-model="isCompany" type="checkbox"> Фирма</label>
           <div v-if="isCompany" class="mt-4 grid gap-4 sm:grid-cols-2">
-            <BaseInput v-model="form.company_name" placeholder="Име на фирма" />
-            <BaseInput v-model="form.vat_number" placeholder="ДДС номер" />
+            <UiBaseInput v-model="form.company_name" placeholder="Име на фирма" />
+            <UiBaseInput v-model="form.vat_number" placeholder="ДДС номер" />
           </div>
           <textarea v-model="form.billing_address" class="mt-4 w-full rounded-md border border-slate-300 p-3 text-sm" rows="3" placeholder="Адрес за фактуриране" required />
         </section>
@@ -104,10 +104,10 @@
           <div class="mt-2 flex justify-between"><span>Доставка</span><span>{{ shippingPrice.toFixed(2) }} EUR</span></div>
           <div class="mt-3 flex justify-between text-lg font-bold"><span>Общо</span><span>{{ (cart.subtotal + shippingPrice).toFixed(2) }} EUR</span></div>
         </div>
-        <BaseButton class="mt-5 w-full" type="submit" :disabled="!cart.canCheckout || submitting">
+        <UiBaseButton class="mt-5 w-full" type="submit" :disabled="!cart.canCheckout || submitting">
           {{ submitting ? 'Изпращане…' : 'Изпрати поръчка' }}
-        </BaseButton>
-        <ErrorState v-if="error" class="mt-4" :text="error" />
+        </UiBaseButton>
+        <UiErrorState v-if="error" class="mt-4" :text="error" />
       </aside>
     </form>
   </div>

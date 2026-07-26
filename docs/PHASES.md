@@ -43,7 +43,8 @@ Phase 8 manual selected UPDATE price/stock sync has been implemented behind a fe
 | Commerce Phase 1B.5 | Cart Item Mutation Concurrency and Gift-Line Integrity | Merged, deployed and staging verified; same-Cart writes are serialized, paid and gift lines have separate identities, and automatic gifts are canonical, idempotent and excluded from paid promotion inputs. |
 | Commerce Phase 1B.6 | Promotion and Recovery Safety | Merged, deployed and staging verified; Promotion limits are consumed atomically and abandoned-Cart recovery is single-use, ownership-aware and non-destructive. |
 | Commerce Phase 1C.1 | Persistent Cart Identity and Authoritative Frontend State | Merged, deployed and staging verified; an SSR-safe UUID cookie persists Cart identity and confirmed backend Cart responses are the sole frontend content authority. |
-| Commerce Phase 1C.2 | Cart UX States and Analytics Consistency | Complete locally; explicit Cart UX states, scoped mutation feedback, actionable readiness and operation-deduplicated analytics use confirmed backend Cart data. |
+| Commerce Phase 1C.2 | Cart UX States and Analytics Consistency | Merged, deployed and staging verified; explicit Cart UX states, scoped mutation feedback, actionable readiness and operation-deduplicated analytics use confirmed backend Cart data. |
+| Commerce Phase 1C.3 | Real Browser Cart Lifecycle Acceptance | Complete locally; deterministic Playwright coverage verifies SSR, hydration, persistence, auth transitions, offline recovery, mutations, analytics, keyboard and mobile Cart behavior. |
 | Phase 9C.1 | Product attributes core foundation | Complete |
 | Phase 9C.2 | Product attributes admin usability and starter structure | Complete |
 | Phase 9C.3 | Category attribute sets | Complete |
@@ -636,8 +637,8 @@ Cart, checkout, Product, stock, supplier or Catalog Sync behavior.
 
 ## Commerce Phase 1C.2 Scope
 
-Commerce Phase 1C.2 is complete locally and remediates CART-018 and CART-019
-locally. Cart page and drawer state now distinguish unresolved, loading,
+Commerce Phase 1C.2 is merged, deployed and staging verified and remediates
+CART-018 and CART-019. Cart page and drawer state now distinguish unresolved, loading,
 confirmed empty, confirmed ready, mutation, failure, readiness-blocked and
 review-required states. Initial failure retries only the idempotent Cart GET.
 Failed mutations preserve the last confirmed Cart and expose one scoped
@@ -663,10 +664,32 @@ introduced. `begin_checkout` is emitted only after an explicit ready checkout
 request succeeds. Payloads contain no Cart session, recovery token, Supplier
 data or internal Product cost.
 
-CART-024 remains open for full real-browser lifecycle coverage and CART-026
-remains open for checkout-success URL data safety. Public Cart and checkout
-pages remain disabled. This phase changes no backend Cart, checkout, payment,
-Product, stock, supplier or Catalog Sync behavior.
+CART-024 is remediated locally by Commerce Phase 1C.3. CART-026 remains open
+for checkout-success URL data safety. Public Cart and checkout pages remain
+disabled. This phase changes no backend Cart, checkout, payment, Product,
+stock, supplier or Catalog Sync behavior.
+
+## Commerce Phase 1C.3 Scope
+
+Commerce Phase 1C.3 is complete locally and remediates CART-024 locally. The
+approved real-browser framework is Playwright, added only as a frontend
+development dependency. Chromium desktop verifies SSR and hydration,
+persistent Cart identity, hard reload, new-tab and browser-restart behavior,
+malformed-cookie recovery, backend session rotation, multi-tab convergence,
+offline failure and explicit recovery, authenticated convergence, stale
+response suppression, Cart mutations, readiness conflicts, analytics
+exactly-once behavior, keyboard operation and focus restoration. WebKit mobile
+verifies responsive Cart controls and the absence of horizontal overflow.
+
+The browser suite uses a deterministic local Cart API fixture. Laravel tests
+remain responsible for backend Cart, checkout, Promotion, recovery and
+concurrency behavior; the Playwright fixture verifies browser state and
+interaction contracts only. Tests access no staging or production service and
+submit no real checkout, Order or payment.
+
+CART-023 remains open because public Cart and checkout routes stay disabled at
+Nginx. CART-026 remains open for checkout-success URL data safety. This phase
+changes no backend Cart, Product, stock, supplier or Catalog Sync behavior.
 
 ## Phase 9C.6.5A and 9C.6.5B Implemented Scope
 

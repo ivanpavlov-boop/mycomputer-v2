@@ -20,12 +20,14 @@ describe('persistent Cart session identity', () => {
 
   it('uses one SSR-safe 14-day Nuxt cookie containing only the Cart UUID', () => {
     const composable = source('app/composables/useCartSession.ts')
+    const config = source('nuxt.config.ts')
 
     expect(composable).toContain("const CART_SESSION_COOKIE = 'mc_cart_session'")
     expect(composable).toContain('useCookie<string | null>(CART_SESSION_COOKIE')
     expect(composable).toContain("path: '/'")
     expect(composable).toContain("sameSite: 'lax'")
-    expect(composable).toContain('secure: !import.meta.dev')
+    expect(composable).toContain("secure: String(config.public.cartCookieSecure) !== 'false'")
+    expect(config).toContain("cartCookieSecure: process.env.NUXT_PUBLIC_CART_COOKIE_SECURE !== 'false'")
     expect(composable).toContain('httpOnly: false')
     expect(composable).toContain('14 * 24 * 60 * 60')
     expect(composable).toContain("useState<string | null>('cart-session-id', () => normalizedCookie)")

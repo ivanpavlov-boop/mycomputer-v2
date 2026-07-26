@@ -704,6 +704,7 @@
       "severity": "info",
       "confidence": "open_question",
       "status": "open",
+      "local_remediation_status": "remediated_locally",
       "current_behavior": "The repository has backend feature coverage but no identified browser suite proving SSR hydration, hard reload, multi-tab, offline recovery, mobile layout or accessibility for cart and checkout.",
       "risk": "State and UI defects can pass unit and feature suites while failing in a real browser.",
       "evidence": [
@@ -916,7 +917,7 @@
     },
     {
       "phase": "Commerce Phase 1C.2",
-      "status": "complete_locally",
+      "status": "merged_deployed_staging_verified",
       "finding_ids": [
         "CART-018",
         "CART-019"
@@ -932,7 +933,29 @@
         "Cart controls prevent duplicate logical submissions.",
         "Cart analytics emit only after confirmed accepted frontend operations.",
         "Stale and failed operations emit no success analytics.",
-        "Full real-browser Cart lifecycle coverage remains assigned to CART-024."
+        "Full real-browser Cart lifecycle coverage remains assigned to CART-024.",
+        "Phase 1C.2 is merged, deployed and staging verified."
+      ]
+    },
+    {
+      "phase": "Commerce Phase 1C.3",
+      "status": "complete_locally",
+      "finding_ids": [
+        "CART-024"
+      ],
+      "partial_finding_ids": [],
+      "open_finding_ids": [
+        "CART-023",
+        "CART-026"
+      ],
+      "notes": [
+        "A Playwright real-browser suite covers SSR, hydration, persistent Cart identity, reload, new tab and browser restart simulation.",
+        "The suite covers offline recovery, authenticated convergence, stale-response suppression and analytics deduplication.",
+        "Chromium desktop covers lifecycle and keyboard interaction.",
+        "WebKit mobile covers mobile Cart layout and controls.",
+        "The suite uses a deterministic local fixture API and never accesses staging or production.",
+        "Public Cart and checkout routes remain disabled at Nginx.",
+        "Checkout success URL data safety remains assigned to CART-026."
       ]
     }
   ]

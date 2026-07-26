@@ -1,9 +1,9 @@
 <template>
   <main class="container py-8">
-    <LoadingState v-if="pending" />
-    <ErrorState v-else-if="error || !bundle" title="Комплектът не е намерен" />
+    <UiLoadingState v-if="pending" />
+    <UiErrorState v-else-if="error || !bundle" title="Комплектът не е намерен" />
     <div v-else>
-      <Breadcrumbs :items="[{ label: 'Комплекти', to: '/bundles' }, { label: bundle.name }]" />
+      <LayoutBreadcrumbs :items="[{ label: 'Комплекти', to: '/bundles' }, { label: bundle.name }]" />
 
       <section class="mt-6 grid gap-8 lg:grid-cols-[1fr_360px]">
         <div>
@@ -23,10 +23,10 @@
               <div v-if="bundle.items?.length" class="mt-6">
                 <h2 class="text-xl font-semibold">Включени продукти</h2>
                 <div class="mt-3 grid gap-3 sm:grid-cols-2">
-                  <ProductCard v-for="line in fixedProducts" :key="line.id" :product="line.product!" />
+                  <CatalogProductCard v-for="line in fixedProducts" :key="line.id" :product="line.product!" />
                 </div>
               </div>
-              <BundleOptions
+              <BundlesBundleOptions
                 class="mt-6"
                 :bundle-id="bundle.id"
                 :options="bundle.options || []"
@@ -37,7 +37,7 @@
           </div>
         </div>
 
-        <BundlePriceBox :bundle="bundle" :selected-items="selectedItems" />
+        <BundlesBundlePriceBox :bundle="bundle" :selected-items="selectedItems" />
       </section>
     </div>
   </main>

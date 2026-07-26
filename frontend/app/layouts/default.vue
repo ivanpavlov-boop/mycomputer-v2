@@ -1,10 +1,10 @@
 <template>
   <div class="min-h-screen bg-slate-50">
-    <AppHeader />
+    <LayoutAppHeader />
     <main>
       <slot />
     </main>
-    <AppFooter />
+    <LayoutAppFooter />
     <CartDrawer v-if="!isReadOnlyStorefrontRoute" />
   </div>
 </template>

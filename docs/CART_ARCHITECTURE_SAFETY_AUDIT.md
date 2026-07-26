@@ -1027,7 +1027,8 @@ changed.
 
 ### Commerce Phase 1C.2 - Cart UX States and Analytics Consistency
 
-Phase 1C.2 is complete locally and remediates CART-018 and CART-019 locally.
+Phase 1C.2 is merged, deployed and staging verified and remediates CART-018
+and CART-019.
 The Cart page and drawer distinguish unresolved, loading, confirmed empty,
 confirmed ready, mutating, failed, readiness-blocked and review-required
 states. An initial failure offers an explicit idempotent Cart GET retry. A
@@ -1054,10 +1055,34 @@ remove cascade, no `view_cart` event was introduced, and `begin_checkout`
 requires an explicit ready checkout request that succeeds. Payloads omit Cart
 session UUIDs, recovery tokens, Supplier data and internal Product costs.
 
-CART-024 remains open for full real-browser lifecycle coverage. CART-026
-remains open for checkout-success URL data safety. Public Cart and checkout
-remain disabled. No backend Cart, checkout, payment, Product, stock, Supplier
-or Catalog Sync behavior changed.
+CART-024 is remediated locally by Phase 1C.3. CART-026 remains open for
+checkout-success URL data safety. Public Cart and checkout remain disabled. No
+backend Cart, checkout, payment, Product, stock, Supplier or Catalog Sync
+behavior changed.
+
+### Commerce Phase 1C.3 - Real Browser Cart Lifecycle Acceptance
+
+Phase 1C.3 is complete locally and remediates CART-024 locally. Playwright is
+the approved real-browser framework and is included only as a frontend
+development dependency. A deterministic local Cart API fixture mirrors the
+approved response envelope while Laravel tests remain the authority for
+backend Cart behavior.
+
+Chromium desktop covers SSR and hydration, persistent Cart identity, hard
+reload, new-tab and browser-restart behavior, separate-context isolation,
+malformed-cookie recovery, expired and converted session rotation, multi-tab
+convergence, offline failure and explicit retry, authenticated convergence,
+logout and User switching, stale-response suppression, Product, quantity,
+remove, clear, coupon and bundle mutations, gifts, readiness and conflict
+feedback, exactly-once analytics, keyboard navigation and drawer focus.
+WebKit mobile covers responsive Cart layout, reachable controls and
+horizontal-overflow protection.
+
+The suite uses only local Nuxt and fixture API services. It accesses no live
+environment and creates no real checkout, Order or payment. CART-023 remains
+open because public Cart and checkout routes remain disabled at Nginx.
+CART-026 remains open for checkout-success URL data safety. No backend Cart,
+Product, stock, Supplier or Catalog Sync behavior changed.
 
 ## 30. Release Gates
 

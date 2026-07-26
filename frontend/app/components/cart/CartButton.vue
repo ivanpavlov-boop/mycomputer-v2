@@ -13,12 +13,15 @@
 <script setup lang="ts">
 const cart = useCartStore()
 const ui = useUiStore()
-const isResolving = computed(() => cart.isUnresolved || cart.isInitialLoading)
+const isHydrated = ref(false)
+const isResolving = computed(() => !isHydrated.value || cart.isUnresolved || cart.isInitialLoading)
 const buttonLabel = computed(() => isResolving.value
   ? 'Зареждаме количката'
   : `Количка, ${cart.count} продукта`)
 
 onMounted(() => {
+  isHydrated.value = true
+
   if (cart.status === 'idle') {
     cart.sync().catch(() => null)
   }

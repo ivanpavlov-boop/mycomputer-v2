@@ -29,9 +29,21 @@
         <NuxtLink to="/login" class="hidden text-sm font-semibold text-slate-700 hover:text-brand-700 sm:block">Вход</NuxtLink>
         <NuxtLink to="/register" class="hidden text-sm font-semibold text-slate-700 hover:text-brand-700 sm:block">Регистрация</NuxtLink>
       </template>
-      <CartButton v-if="!isReadOnlyStorefrontRoute" />
+      <ClientOnly v-if="!isReadOnlyStorefrontRoute">
+        <CartButton />
+        <template #fallback>
+          <button
+            class="relative rounded-md bg-slate-100 px-3 py-2 text-sm font-semibold"
+            aria-busy="true"
+            aria-label="Зареждаме количката"
+            disabled
+          >
+            Зареждане…
+          </button>
+        </template>
+      </ClientOnly>
     </div>
-    <MobileMenu />
+    <LayoutMobileMenu />
   </header>
 </template>
 

@@ -1,16 +1,16 @@
 <template>
   <div>
     <form class="flex flex-wrap gap-2" :aria-busy="pending" @submit.prevent="apply">
-      <BaseInput
+      <UiBaseInput
         v-model="code"
         :disabled="pending"
         aria-label="Код за купон"
         placeholder="Промо код"
         @update:model-value="clearFeedback"
       />
-      <BaseButton type="submit" :disabled="pending || !code.trim()">
+      <UiBaseButton type="submit" :disabled="pending || !code.trim()">
         {{ applying ? 'Прилагане…' : 'Приложи' }}
-      </BaseButton>
+      </UiBaseButton>
       <button
         v-if="cart.couponCode"
         class="text-sm font-semibold text-red-600 disabled:opacity-50"

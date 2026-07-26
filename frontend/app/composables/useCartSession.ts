@@ -4,11 +4,12 @@ const CART_SESSION_COOKIE = 'mc_cart_session'
 const CART_SESSION_MAX_AGE = 14 * 24 * 60 * 60
 
 export function useCartSession() {
+  const config = useRuntimeConfig()
   const cookie = useCookie<string | null>(CART_SESSION_COOKIE, {
     default: () => null,
     path: '/',
     sameSite: 'lax',
-    secure: !import.meta.dev,
+    secure: String(config.public.cartCookieSecure) !== 'false',
     httpOnly: false,
     maxAge: CART_SESSION_MAX_AGE,
   })

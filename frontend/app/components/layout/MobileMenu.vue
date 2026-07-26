@@ -1,5 +1,5 @@
 <template>
-  <BaseModal :open="ui.mobileMenuOpen" @close="ui.mobileMenuOpen = false">
+  <UiBaseModal :open="ui.mobileMenuOpen" @close="ui.mobileMenuOpen = false">
     <div class="flex items-center justify-between">
       <p class="font-semibold">Меню</p>
       <button class="rounded-md p-2 hover:bg-slate-100" @click="ui.mobileMenuOpen = false">✕</button>
@@ -12,7 +12,7 @@
       <NuxtLink v-if="!isReadOnlyStorefrontRoute" to="/cart" @click="ui.mobileMenuOpen = false">Количка</NuxtLink>
       <NuxtLink to="/contacts" @click="ui.mobileMenuOpen = false">Контакти</NuxtLink>
     </nav>
-  </BaseModal>
+  </UiBaseModal>
 </template>
 
 <script setup lang="ts">

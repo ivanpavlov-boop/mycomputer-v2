@@ -22,7 +22,7 @@
         </div>
       </div>
       <div>
-        <NewsletterSignup />
+        <MarketingNewsletterSignup />
       </div>
     </div>
   </footer>

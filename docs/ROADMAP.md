@@ -59,9 +59,14 @@ Manual selected UPDATE price/stock sync is implemented behind `CATALOG_SYNC_UPDA
 - Commerce Phase 1C.1 Persistent Cart Identity and Authoritative Frontend State,
   merged, deployed and staging verified with an SSR-safe canonical UUID cookie, backend-only Cart
   content state, explicit operation errors and success-only mutation analytics.
-- Commerce Phase 1C.2 Cart UX States and Analytics Consistency, completed
-  locally with explicit Cart states, scoped controls, actionable Bulgarian
-  readiness feedback and deduplicated confirmed-operation analytics.
+- Commerce Phase 1C.2 Cart UX States and Analytics Consistency, merged,
+  deployed and staging verified with explicit Cart states, scoped controls,
+  actionable Bulgarian readiness feedback and deduplicated
+  confirmed-operation analytics.
+- Commerce Phase 1C.3 Real Browser Cart Lifecycle Acceptance, completed locally
+  with deterministic Chromium desktop and WebKit mobile coverage for SSR,
+  hydration, persistence, auth transitions, offline recovery, Cart mutations,
+  analytics, keyboard interaction and responsive layout.
 - Unified Product edit quality summary combining existing scanner issues,
   category specification quality and active manual flags without blocking or
   mutating Product workflow.
@@ -485,8 +490,8 @@ switching preserve the capability but clear stale rendered content until the
 next authoritative resolution. Add/remove analytics run only after confirmed
 mutations and use backend line prices.
 
-Commerce Phase 1C.2 is complete locally and remediates CART-018 and CART-019
-locally. Unresolved, loading, confirmed-empty, ready, mutating, failed,
+Commerce Phase 1C.2 is merged, deployed and staging verified and remediates
+CART-018 and CART-019. Unresolved, loading, confirmed-empty, ready, mutating, failed,
 readiness-blocked and review-required states are explicit in the Cart page and
 drawer. Failed mutations preserve confirmed contents. Quantity uses an explicit
 draft submit, and Product, bundle, coupon, remove and clear operations prevent
@@ -501,9 +506,26 @@ and no `view_cart` event was added. `begin_checkout` requires an explicit,
 ready, successful checkout action. Analytics contain no Cart session, recovery
 token, Supplier data or internal cost.
 
-CART-024 real-browser acceptance and CART-026 checkout-success navigation
-remain open. Public Cart and checkout pages remain disabled, and no backend
-Cart, Product, stock, supplier or Catalog Sync behavior changed.
+CART-024 is remediated locally by Commerce Phase 1C.3. CART-026
+checkout-success navigation remains open. Public Cart and checkout pages remain
+disabled, and no backend Cart, Product, stock, supplier or Catalog Sync
+behavior changed.
+
+Commerce Phase 1C.3 is complete locally and remediates CART-024 locally.
+Playwright is the approved browser framework and is a frontend development
+dependency only. Chromium desktop covers SSR, hydration, persistent Cart
+identity, hard reload, new tab, browser-restart simulation, malformed-cookie
+recovery, session rotation, multi-tab convergence, offline explicit recovery,
+authenticated convergence, stale-response suppression, mutations, readiness,
+conflicts, exactly-once analytics and keyboard focus. WebKit mobile covers Cart
+layout, reachable controls and horizontal-overflow protection.
+
+The suite uses only deterministic local Nuxt and fixture API services. Laravel
+tests continue to verify backend behavior; Playwright verifies browser state
+and interaction behavior. No live environment is accessed, and no real
+checkout, Order or payment is created. CART-023 remains open because public
+Cart and checkout routes stay disabled at Nginx. CART-026 remains open for
+checkout-success URL data safety.
 
 ## Next
 
