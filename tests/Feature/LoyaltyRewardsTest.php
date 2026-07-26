@@ -119,10 +119,11 @@ class LoyaltyRewardsTest extends TestCase
                 'email' => 'loyalty@example.com',
                 'reward_code' => $voucher->code,
             ]))
-            ->assertCreated()
-            ->assertJsonPath('data.discount_total', '20.00')
-            ->assertJsonPath('data.grand_total', '88.99');
+            ->assertCreated();
 
+        $order = Order::query()->sole();
+        $this->assertSame('20.00', $order->discount_total);
+        $this->assertSame('88.99', $order->grand_total);
         $this->assertSame(400, $user->loyaltyAccount()->firstOrFail()->points_balance);
         $this->assertDatabaseHas('voucher_redemptions', [
             'user_id' => $user->id,

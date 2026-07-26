@@ -63,7 +63,7 @@ describe('authoritative Cart store', () => {
       source('app/components/cart/CartDrawer.vue'),
       source('app/components/cart/CartItem.vue'),
       source('app/pages/cart.vue'),
-      source('app/pages/checkout.vue'),
+      source('app/pages/checkout/index.vue'),
     ].join('\n')
 
     expect(combined).toContain('cart.isInitialLoading')

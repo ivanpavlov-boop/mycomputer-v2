@@ -532,7 +532,7 @@
           "symbol": "template"
         },
         {
-          "path": "frontend/app/pages/checkout.vue",
+          "path": "frontend/app/pages/checkout/index.vue",
           "symbol": "template"
         },
         {
@@ -684,7 +684,7 @@
           "symbol": "page"
         },
         {
-          "path": "frontend/app/pages/checkout.vue",
+          "path": "frontend/app/pages/checkout/index.vue",
           "symbol": "page"
         }
       ],
@@ -765,11 +765,12 @@
       "severity": "medium",
       "confidence": "confirmed",
       "status": "open",
+      "local_remediation_status": "remediated_locally",
       "current_behavior": "The checkout page builds the success-page URL with order details including customer contact data and totals in query parameters.",
       "risk": "Sensitive checkout context can be retained in browser history, analytics, logs or referrer data and can be tampered with for display.",
       "evidence": [
         {
-          "path": "frontend/app/pages/checkout.vue",
+          "path": "frontend/app/pages/checkout/index.vue",
           "symbol": "submitCheckout"
         }
       ],
@@ -939,7 +940,7 @@
     },
     {
       "phase": "Commerce Phase 1C.3",
-      "status": "complete_locally",
+      "status": "merged_deployed_staging_verified",
       "finding_ids": [
         "CART-024"
       ],
@@ -956,6 +957,26 @@
         "The suite uses a deterministic local fixture API and never accesses staging or production.",
         "Public Cart and checkout routes remain disabled at Nginx.",
         "Checkout success URL data safety remains assigned to CART-026."
+      ]
+    },
+    {
+      "phase": "Commerce Phase 1C.4",
+      "status": "complete_locally",
+      "finding_ids": [
+        "CART-026"
+      ],
+      "partial_finding_ids": [],
+      "open_finding_ids": [
+        "CART-023"
+      ],
+      "notes": [
+        "Checkout success uses the clean /checkout/success URL with no Order, customer, total, payment or capability data.",
+        "A short-lived HttpOnly cookie carries an opaque capability whose SHA-256 hash is stored server-side.",
+        "The rate-limited no-store confirmation endpoint resolves only the cookie and returns minimal trusted data.",
+        "Nuxt forwards the cookie during SSR and includes credentials in browser requests.",
+        "Query tampering cannot alter displayed confirmation data or purchase analytics.",
+        "Public Cart and checkout routes remain disabled at Nginx.",
+        "Checkout and payment idempotency remain assigned to Commerce Phase 1D."
       ]
     }
   ]

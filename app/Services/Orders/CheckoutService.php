@@ -44,11 +44,12 @@ class CheckoutService
         private readonly PromotionEngineService $promotions,
         private readonly PromotionRedemptionService $promotionRedemptions,
         private readonly BundleCartService $bundleCart,
+        private readonly CheckoutConfirmationService $checkoutConfirmations,
     ) {}
 
-    public function checkout(Cart $cart, array $data): Order
+    public function checkout(Cart $cart, array $data): CheckoutResult
     {
-        $outcome = DB::transaction(function () use ($cart, $data): Order|CartPricingRefreshResult|CartReadinessResult {
+        $outcome = DB::transaction(function () use ($cart, $data): CheckoutResult|CartPricingRefreshResult|CartReadinessResult {
             $cart = Cart::query()->lockForUpdate()->findOrFail($cart->id);
             $pricing = $this->cartPricing->refresh($cart);
 
@@ -149,12 +150,16 @@ class CheckoutService
             if ($reward && $cart->user) {
                 $this->loyalty->vouchers->redeem($cart->user, $reward['voucher'], $order);
             }
+            $confirmationCapability = $this->checkoutConfirmations->issue($order);
             ConversionTrackingJob::dispatch($order->id);
             $this->emailMarketing->order($order, 'order_created');
             $this->emailMarketing->markCartRecovered($cart, $order);
             OrderCreated::dispatch($order->id);
 
-            return $order->load(['items', 'bundleItems', 'shipments.provider', 'shipments.method', 'shipments.office', 'paymentTransactions.method']);
+            return new CheckoutResult(
+                $order->load(['paymentTransactions.method']),
+                $confirmationCapability,
+            );
         }, 3);
 
         if ($outcome instanceof CartPricingRefreshResult) {

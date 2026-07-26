@@ -1,8 +1,8 @@
 <template>
-  <BaseSelect :model-value="modelValue" @update:model-value="$emit('update:modelValue', $event)">
+  <UiBaseSelect :model-value="modelValue" @update:model-value="$emit('update:modelValue', $event)">
     <option value="">Изберете куриер</option>
     <option v-for="provider in providers" :key="provider.code" :value="provider.code">{{ provider.name }}</option>
-  </BaseSelect>
+  </UiBaseSelect>
 </template>
 
 <script setup lang="ts">

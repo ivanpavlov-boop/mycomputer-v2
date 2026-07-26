@@ -135,7 +135,7 @@ describe('Cart analytics consistency', () => {
   it('keeps Cart identity, recovery, Supplier, and internal costs out of payload builders', () => {
     const events = source('app/utils/cartAnalytics.ts')
     const store = source('app/stores/cart.ts')
-    const checkout = source('app/pages/checkout.vue')
+    const checkout = source('app/pages/checkout/index.vue')
 
     for (const forbidden of [
       'cart_session_id',

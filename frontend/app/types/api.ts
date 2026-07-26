@@ -330,6 +330,33 @@ export interface ApiDataResponse<T> {
   data: T
 }
 
+export interface CheckoutResponse {
+  accepted: boolean
+  order_number: string
+  grand_total: string | number
+  currency: string
+  payment_method: string
+  payment_status: string
+}
+
+export interface CheckoutConfirmation {
+  order_number: string
+  grand_total: string | number
+  currency: string
+  order_status: string
+  payment_status: string
+  payment_method: {
+    code: string
+    name: string
+  }
+  customer_email_masked: string
+  payment: {
+    redirect_url: string | null
+    instructions: string | null
+  }
+  created_at: string
+}
+
 export interface OrderResponse {
   id: number
   order_number: string

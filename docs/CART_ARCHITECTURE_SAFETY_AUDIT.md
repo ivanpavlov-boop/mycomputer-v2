@@ -1062,7 +1062,7 @@ behavior changed.
 
 ### Commerce Phase 1C.3 - Real Browser Cart Lifecycle Acceptance
 
-Phase 1C.3 is complete locally and remediates CART-024 locally. Playwright is
+Phase 1C.3 is merged, deployed and staging verified and remediates CART-024. Playwright is
 the approved real-browser framework and is included only as a frontend
 development dependency. A deterministic local Cart API fixture mirrors the
 approved response envelope while Laravel tests remain the authority for
@@ -1083,6 +1083,27 @@ environment and creates no real checkout, Order or payment. CART-023 remains
 open because public Cart and checkout routes remain disabled at Nginx.
 CART-026 remains open for checkout-success URL data safety. No backend Cart,
 Product, stock, Supplier or Catalog Sync behavior changed.
+
+### Commerce Phase 1C.4 - Checkout Success Data Safety
+
+Phase 1C.4 is complete locally and remediates CART-026 locally. Successful
+checkout navigates only to `/checkout/success`; Order, customer, total,
+payment and capability data are not serialized into the URL. Checkout creates
+one 32-byte opaque confirmation capability inside the existing transaction,
+stores only its SHA-256 hash, and sends the plaintext capability only through
+a short-lived HttpOnly, SameSite Lax, host-only cookie.
+
+The dedicated confirmation endpoint is cookie-only, rate limited and
+no-store. It returns minimal trusted Order/payment presentation with a masked
+email. Missing, malformed, unknown, expired and deleted-Order capabilities
+share one generic response. Nuxt forwards the cookie during SSR, includes
+credentials in browser requests, ignores query authority, safely canonicalizes
+query/hash URLs, and emits purchase analytics only from trusted confirmation
+data. The page is noindex/nofollow/noarchive and no-referrer.
+
+No checkout or payment idempotency was added; both remain assigned to Commerce
+Phase 1D. CART-023 remains open because the Nginx commerce release gate is
+unchanged. No Product, stock, Supplier or Catalog Sync behavior changed.
 
 ## 30. Release Gates
 

@@ -70,9 +70,9 @@ class ShippingApiTest extends TestCase
                 'city' => $office->city,
                 'shipping_address' => $office->address,
             ]))
-            ->assertCreated()
-            ->assertJsonPath('data.shipments.0.delivery_type', 'office');
+            ->assertCreated();
 
+        $this->assertSame('office', OrderShipment::query()->sole()->delivery_type);
         $this->assertDatabaseHas('order_shipments', [
             'office_id' => $office->id,
             'delivery_type' => 'office',
@@ -92,9 +92,9 @@ class ShippingApiTest extends TestCase
                 'postcode' => '1000',
                 'shipping_address' => 'bul. Bulgaria 1',
             ]))
-            ->assertCreated()
-            ->assertJsonPath('data.shipments.0.delivery_type', 'address');
+            ->assertCreated();
 
+        $this->assertSame('address', OrderShipment::query()->sole()->delivery_type);
         $this->assertSame(1, OrderShipment::query()->count());
     }
 

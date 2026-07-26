@@ -56,6 +56,7 @@ export async function fixtureState(request: APIRequestContext) {
     }>
     orders_created: number
     payment_attempts: number
+    confirmation_capabilities: number
   }
 }
 

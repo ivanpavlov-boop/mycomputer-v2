@@ -112,10 +112,12 @@ class PromotionCheckoutSafetyTest extends TestCase
         $this->withHeader('X-Cart-Session', $cart->session_id)
             ->postJson('/api/v1/checkout', $this->checkoutPayload())
             ->assertCreated()
-            ->assertJsonPath('data.discount_total', '10.00');
+            ->assertJsonPath('data.accepted', true)
+            ->assertJsonMissingPath('data.discount_total');
 
         $this->assertSame(1, PromotionRedemption::query()->count());
         $this->assertSame(1, $promotion->fresh()->usage_count);
+        $this->assertSame('10.00', Order::query()->firstOrFail()->discount_total);
     }
 
     private function checkoutPayload(): array

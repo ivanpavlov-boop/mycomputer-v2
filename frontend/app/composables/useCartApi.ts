@@ -1,4 +1,4 @@
-import type { ApiDataResponse, CartResponse, OrderResponse } from '~/types/api'
+import type { ApiDataResponse, CartResponse, CheckoutResponse } from '~/types/api'
 import { invalidCartSessionResponseError, normalizeApiError } from '~/utils/apiError'
 import { normalizeCartSessionId } from '~/utils/cartSession'
 
@@ -122,9 +122,10 @@ export function useCartApi() {
     }),
     remove: (itemId: number) => cartRequest(`/cart/items/${itemId}`, { method: 'DELETE' }),
     clear: () => cartRequest('/cart', { method: 'DELETE' }),
-    checkout: (body: Record<string, unknown>) => request<ApiDataResponse<OrderResponse>>('/checkout', {
+    checkout: (body: Record<string, unknown>) => request<ApiDataResponse<CheckoutResponse>>('/checkout', {
       method: 'POST',
       body,
+      credentials: 'include',
     }, {
       sessionResponse: 'if-present',
     }),

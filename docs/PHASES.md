@@ -44,7 +44,8 @@ Phase 8 manual selected UPDATE price/stock sync has been implemented behind a fe
 | Commerce Phase 1B.6 | Promotion and Recovery Safety | Merged, deployed and staging verified; Promotion limits are consumed atomically and abandoned-Cart recovery is single-use, ownership-aware and non-destructive. |
 | Commerce Phase 1C.1 | Persistent Cart Identity and Authoritative Frontend State | Merged, deployed and staging verified; an SSR-safe UUID cookie persists Cart identity and confirmed backend Cart responses are the sole frontend content authority. |
 | Commerce Phase 1C.2 | Cart UX States and Analytics Consistency | Merged, deployed and staging verified; explicit Cart UX states, scoped mutation feedback, actionable readiness and operation-deduplicated analytics use confirmed backend Cart data. |
-| Commerce Phase 1C.3 | Real Browser Cart Lifecycle Acceptance | Complete locally; deterministic Playwright coverage verifies SSR, hydration, persistence, auth transitions, offline recovery, mutations, analytics, keyboard and mobile Cart behavior. |
+| Commerce Phase 1C.3 | Real Browser Cart Lifecycle Acceptance | Merged, deployed and staging verified; deterministic Playwright coverage verifies SSR, hydration, persistence, auth transitions, offline recovery, mutations, analytics, keyboard and mobile Cart behavior. |
+| Commerce Phase 1C.4 | Checkout Success Data Safety | Complete locally; checkout success uses a clean URL and a short-lived HttpOnly capability resolved through a minimal no-store confirmation endpoint. |
 | Phase 9C.1 | Product attributes core foundation | Complete |
 | Phase 9C.2 | Product attributes admin usability and starter structure | Complete |
 | Phase 9C.3 | Category attribute sets | Complete |
@@ -671,7 +672,7 @@ stock, supplier or Catalog Sync behavior.
 
 ## Commerce Phase 1C.3 Scope
 
-Commerce Phase 1C.3 is complete locally and remediates CART-024 locally. The
+Commerce Phase 1C.3 is merged, deployed and staging verified and remediates CART-024. The
 approved real-browser framework is Playwright, added only as a frontend
 development dependency. Chromium desktop verifies SSR and hydration,
 persistent Cart identity, hard reload, new-tab and browser-restart behavior,
@@ -690,6 +691,28 @@ submit no real checkout, Order or payment.
 CART-023 remains open because public Cart and checkout routes stay disabled at
 Nginx. CART-026 remains open for checkout-success URL data safety. This phase
 changes no backend Cart, Product, stock, supplier or Catalog Sync behavior.
+
+## Commerce Phase 1C.4 Scope
+
+Commerce Phase 1C.4 is complete locally and remediates CART-026 locally.
+Checkout now navigates only to `/checkout/success`; no Order, customer,
+payment or capability data is placed in the URL. A 32-byte opaque capability
+is issued atomically with the Order, only its SHA-256 hash is stored, and the
+plaintext value is carried in a short-lived HttpOnly, SameSite Lax,
+host-only cookie.
+
+The dedicated rate-limited confirmation endpoint accepts only that cookie,
+returns a minimal trusted response with a masked email, and applies no-store
+headers. Missing, malformed, unknown, expired and deleted-Order capabilities
+share one generic unavailable response. The Nuxt success page forwards the
+cookie during SSR, includes credentials in browser requests, ignores and
+removes query/hash data, uses trusted response values for display and purchase
+analytics, and is marked noindex/nofollow/noarchive with no-referrer.
+
+This phase adds no checkout or payment idempotency; those remain assigned to
+Commerce Phase 1D. CART-023 remains open because the existing Nginx commerce
+release gate still disables public Cart and checkout routes. No Product,
+stock, supplier or Catalog Sync behavior changed.
 
 ## Phase 9C.6.5A and 9C.6.5B Implemented Scope
 

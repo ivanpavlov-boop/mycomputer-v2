@@ -63,10 +63,14 @@ Manual selected UPDATE price/stock sync is implemented behind `CATALOG_SYNC_UPDA
   deployed and staging verified with explicit Cart states, scoped controls,
   actionable Bulgarian readiness feedback and deduplicated
   confirmed-operation analytics.
-- Commerce Phase 1C.3 Real Browser Cart Lifecycle Acceptance, completed locally
+- Commerce Phase 1C.3 Real Browser Cart Lifecycle Acceptance, merged, deployed
+  and staging verified
   with deterministic Chromium desktop and WebKit mobile coverage for SSR,
   hydration, persistence, auth transitions, offline recovery, Cart mutations,
   analytics, keyboard interaction and responsive layout.
+- Commerce Phase 1C.4 Checkout Success Data Safety, completed locally with a
+  clean success URL, short-lived HttpOnly confirmation capability, minimal
+  no-store confirmation endpoint and trusted success-page rendering.
 - Unified Product edit quality summary combining existing scanner issues,
   category specification quality and active manual flags without blocking or
   mutating Product workflow.
@@ -511,7 +515,8 @@ checkout-success navigation remains open. Public Cart and checkout pages remain
 disabled, and no backend Cart, Product, stock, supplier or Catalog Sync
 behavior changed.
 
-Commerce Phase 1C.3 is complete locally and remediates CART-024 locally.
+Commerce Phase 1C.3 is merged, deployed and staging verified and remediates
+CART-024.
 Playwright is the approved browser framework and is a frontend development
 dependency only. Chromium desktop covers SSR, hydration, persistent Cart
 identity, hard reload, new tab, browser-restart simulation, malformed-cookie
@@ -526,6 +531,21 @@ and interaction behavior. No live environment is accessed, and no real
 checkout, Order or payment is created. CART-023 remains open because public
 Cart and checkout routes stay disabled at Nginx. CART-026 remains open for
 checkout-success URL data safety.
+
+Commerce Phase 1C.4 is complete locally and remediates CART-026 locally.
+Checkout success navigation is now the clean `/checkout/success` path. Order,
+customer, total, payment and capability data are absent from the URL. Checkout
+atomically issues a short-lived, high-entropy capability in an HttpOnly,
+SameSite Lax, host-only cookie and stores only its SHA-256 hash.
+
+A dedicated rate-limited, no-store endpoint resolves only the capability
+cookie and returns minimal trusted confirmation data with a masked email.
+Invalid capabilities fail through one generic unavailable response. Nuxt
+supports SSR cookie forwarding and credentialed browser requests, renders only
+trusted confirmation values, ignores query tampering and uses noindex plus
+no-referrer metadata. Checkout and payment idempotency remain assigned to
+Commerce Phase 1D. CART-023 remains open and the Nginx commerce gate is
+unchanged.
 
 ## Next
 

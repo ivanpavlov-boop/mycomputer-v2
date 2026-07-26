@@ -14,6 +14,7 @@ const SAFE_ERROR_MESSAGES: Record<string, string> = {
   cart_recovery_invalid: 'Линкът за възстановяване е невалиден или е изтекъл.',
   cart_recovery_forbidden: 'Тази количка не може да бъде възстановена за текущия потребител.',
   cart_recovery_requires_review: 'Количката е възстановена, но трябва да бъде прегледана.',
+  checkout_confirmation_unavailable: 'Потвърждението за поръчката не е налично.',
   validation_error: 'Проверете въведените данни и опитайте отново.',
   unauthenticated: 'Необходимо е да влезете в профила си.',
   forbidden: 'Нямате право да извършите това действие.',

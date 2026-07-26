@@ -1,7 +1,7 @@
 <template>
   <div class="space-y-3">
-    <BaseInput :model-value="city" placeholder="Град" @update:model-value="$emit('update:city', $event)" />
-    <BaseInput v-model="search" placeholder="Търсене по офис или адрес" />
+    <UiBaseInput :model-value="city" placeholder="Град" @update:model-value="$emit('update:city', $event)" />
+    <UiBaseInput v-model="search" placeholder="Търсене по офис или адрес" />
     <div class="max-h-64 overflow-auto rounded-md border border-slate-200 bg-white">
       <button
         v-for="office in offices"

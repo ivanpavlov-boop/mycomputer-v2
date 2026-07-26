@@ -214,6 +214,10 @@ class AppServiceProvider extends ServiceProvider
             return Limit::perMinute(20)->by($request->user()?->id ?: $request->ip());
         });
 
+        RateLimiter::for('checkout-confirmation', function (Request $request): Limit {
+            return Limit::perMinute(30)->by($request->ip());
+        });
+
         Event::listen(OrderCreated::class, QueueOrderErpSync::class);
         Event::listen(OrderPaymentStatusChanged::class, QueuePaymentErpSync::class);
         Event::listen(OrderCancelled::class, QueueOrderCancellationErpSync::class);

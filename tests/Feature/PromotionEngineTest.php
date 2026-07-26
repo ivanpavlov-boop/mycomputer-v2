@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Cart;
 use App\Models\CartItem;
+use App\Models\Order;
 use App\Models\Product;
 use App\Models\Promotion;
 use App\Models\User;
@@ -160,12 +161,14 @@ class PromotionEngineTest extends TestCase
         $this->withHeader('X-Cart-Session', $this->cartSession('checkout-promo-cart'))
             ->postJson('/api/v1/checkout', $this->checkoutPayload())
             ->assertCreated()
-            ->assertJsonPath('data.discount_total', '25.00');
+            ->assertJsonPath('data.accepted', true)
+            ->assertJsonMissingPath('data.discount_total');
 
         $this->assertDatabaseHas('promotion_redemptions', [
             'session_id' => $this->cartSession('checkout-promo-cart'),
             'discount_amount' => 25,
         ]);
+        $this->assertSame('25.00', Order::query()->firstOrFail()->discount_total);
         $this->assertDatabaseHas('marketing_events', ['event_name' => 'promotion_applied']);
     }
 
