@@ -1,24 +1,24 @@
 <template>
   <div>
-    <Breadcrumbs :items="[{ label: 'Количка' }]" />
+    <LayoutBreadcrumbs :items="[{ label: 'Количка' }]" />
     <div class="container-page">
       <h1 class="text-3xl font-bold">Количка</h1>
 
       <div v-if="cart.isUnresolved || cart.isInitialLoading" class="mt-6" role="status">
         <p class="mb-3 text-sm text-slate-600">Зареждаме количката…</p>
-        <LoadingState :count="2" />
+        <UiLoadingState :count="2" />
       </div>
 
       <div v-else-if="!cart.cart" class="mt-6 max-w-2xl space-y-4">
-        <ErrorState title="Не успяхме да заредим количката" :text="cart.error?.message" />
-        <BaseButton
+        <UiErrorState title="Не успяхме да заредим количката" :text="cart.error?.message" />
+        <UiBaseButton
           variant="secondary"
           :disabled="cart.isOperationPending('sync')"
           :aria-busy="cart.isOperationPending('sync')"
           @click="retry"
         >
           {{ cart.isOperationPending('sync') ? 'Зареждане…' : 'Опитай отново' }}
-        </BaseButton>
+        </UiBaseButton>
       </div>
 
       <div v-else class="mt-6 grid gap-6 lg:grid-cols-[1fr_320px]">
@@ -47,7 +47,7 @@
           <CartBundleItem v-for="item in cart.bundleItems" :key="item.id" :item="item" />
 
           <div v-if="cart.isConfirmedEmpty">
-            <EmptyState
+            <UiEmptyState
               title="Количката е празна"
               text="Все още няма добавени продукти."
             />
@@ -95,14 +95,14 @@
             Прегледайте количката преди поръчка
           </p>
 
-          <BaseButton
+          <UiBaseButton
             class="mt-3 w-full"
             variant="secondary"
             :disabled="cart.isMutating"
             @click="requestQuote"
           >
             Заяви оферта за количката
-          </BaseButton>
+          </UiBaseButton>
         </aside>
       </div>
     </div>

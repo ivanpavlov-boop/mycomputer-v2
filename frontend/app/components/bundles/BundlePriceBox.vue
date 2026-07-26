@@ -20,9 +20,9 @@
         @input="clearFeedback"
       >
     </div>
-    <BaseButton class="w-full" :disabled="pending || !canAdd" :aria-busy="pending" @click="add">
+    <UiBaseButton class="w-full" :disabled="pending || !canAdd" :aria-busy="pending" @click="add">
       {{ pending ? 'Добавяне…' : 'Добави комплекта' }}
-    </BaseButton>
+    </UiBaseButton>
     <p v-if="message" class="text-sm" :class="error ? 'text-red-700' : 'text-emerald-700'">
       {{ message }}
     </p>

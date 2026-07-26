@@ -132,6 +132,12 @@ export const useCartStore = defineStore('cart', () => {
     authorityVersion.value += 1
   }
 
+  function restoreAcceptedCartSession() {
+    if (cart.value?.cart_session_id) {
+      useCartSession().persist(cart.value.cart_session_id)
+    }
+  }
+
   async function sync() {
     const key = 'sync'
     const token = beginOperation(key)
@@ -146,10 +152,12 @@ export const useCartStore = defineStore('cart', () => {
       const response = await useCartApi().get()
 
       if (authorityVersion.value !== expectedAuthorityVersion) {
+        restoreAcceptedCartSession()
         return null
       }
 
       if (token < latestAcceptedSequence.value) {
+        restoreAcceptedCartSession()
         return null
       }
 
@@ -161,6 +169,7 @@ export const useCartStore = defineStore('cart', () => {
         authorityVersion.value !== expectedAuthorityVersion
         || token < latestAcceptedSequence.value
       ) {
+        restoreAcceptedCartSession()
         return null
       }
 
@@ -191,6 +200,7 @@ export const useCartStore = defineStore('cart', () => {
         authorityVersion.value !== expectedAuthorityVersion
         || token < latestAcceptedSequence.value
       ) {
+        restoreAcceptedCartSession()
         return null
       }
 

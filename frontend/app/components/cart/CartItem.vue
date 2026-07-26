@@ -24,7 +24,7 @@
         @submit.prevent="submitQuantity"
       >
         <label class="sr-only" :for="`cart-quantity-${item.id}`">Количество</label>
-        <BaseInput
+        <UiBaseInput
           :id="`cart-quantity-${item.id}`"
           v-model="draftQuantity"
           :disabled="updatePending || removePending"
@@ -35,13 +35,13 @@
           class="max-w-20"
           @update:model-value="quantitySaved = false"
         />
-        <BaseButton
+        <UiBaseButton
           type="submit"
           variant="secondary"
           :disabled="!canSubmitQuantity"
         >
           {{ updatePending ? 'Обновяване…' : 'Обнови' }}
-        </BaseButton>
+        </UiBaseButton>
         <button
           class="text-sm font-semibold text-red-600 disabled:cursor-not-allowed disabled:opacity-50"
           type="button"

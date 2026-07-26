@@ -141,7 +141,7 @@ final class CartArchitectureAuditDocumentationTest extends TestCase
 
         $progress = $register['remediation_progress'] ?? [];
 
-        $this->assertCount(8, $progress);
+        $this->assertCount(9, $progress);
         $this->assertSame('Commerce Phase 1B.1', $progress[0]['phase'] ?? null);
         $this->assertSame('merged_deployed_staging_verified', $progress[0]['status'] ?? null);
         $this->assertSame(['CART-001', 'CART-022'], $progress[0]['finding_ids'] ?? null);
@@ -183,11 +183,17 @@ final class CartArchitectureAuditDocumentationTest extends TestCase
         $this->assertSame(['CART-024', 'CART-026'], $progress[6]['open_finding_ids'] ?? null);
         $this->assertNotEmpty($progress[6]['notes'] ?? []);
         $this->assertSame('Commerce Phase 1C.2', $progress[7]['phase'] ?? null);
-        $this->assertSame('complete_locally', $progress[7]['status'] ?? null);
+        $this->assertSame('merged_deployed_staging_verified', $progress[7]['status'] ?? null);
         $this->assertSame(['CART-018', 'CART-019'], $progress[7]['finding_ids'] ?? null);
         $this->assertSame([], $progress[7]['partial_finding_ids'] ?? null);
         $this->assertSame(['CART-024', 'CART-026'], $progress[7]['open_finding_ids'] ?? null);
         $this->assertNotEmpty($progress[7]['notes'] ?? []);
+        $this->assertSame('Commerce Phase 1C.3', $progress[8]['phase'] ?? null);
+        $this->assertSame('complete_locally', $progress[8]['status'] ?? null);
+        $this->assertSame(['CART-024'], $progress[8]['finding_ids'] ?? null);
+        $this->assertSame([], $progress[8]['partial_finding_ids'] ?? null);
+        $this->assertSame(['CART-023', 'CART-026'], $progress[8]['open_finding_ids'] ?? null);
+        $this->assertNotEmpty($progress[8]['notes'] ?? []);
     }
 
     public function test_audit_artifacts_contain_no_environment_or_secret_material(): void
@@ -229,6 +235,7 @@ final class CartArchitectureAuditDocumentationTest extends TestCase
         $this->assertStringContainsString('Commerce Phase 1B.6', $phases);
         $this->assertStringContainsString('Commerce Phase 1C.1', $phases);
         $this->assertStringContainsString('Commerce Phase 1C.2', $phases);
+        $this->assertStringContainsString('Commerce Phase 1C.3', $phases);
         foreach (['Commerce Phase 1A', 'Commerce Phase 1B', 'Commerce Phase 1C', 'Commerce Phase 1D'] as $phase) {
             $this->assertStringContainsString($phase, $roadmap);
         }

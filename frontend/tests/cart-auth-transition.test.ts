@@ -37,5 +37,7 @@ describe('Cart authentication transitions', () => {
     expect(store).toContain('authorityVersion.value += 1')
     expect(store).toContain('const expectedAuthorityVersion = authorityVersion.value')
     expect(store).toContain('if (authorityVersion.value !== expectedAuthorityVersion)')
+    expect(store).toContain('restoreAcceptedCartSession()')
+    expect(store).toContain('useCartSession().persist(cart.value.cart_session_id)')
   })
 })
