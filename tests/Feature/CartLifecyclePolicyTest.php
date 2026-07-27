@@ -495,6 +495,7 @@ class CartLifecyclePolicyTest extends TestCase
             ->assertOk();
 
         $this->withHeader('X-Cart-Session', $sessionId)
+            ->withHeader('Idempotency-Key', $this->checkoutIdempotencyKey('lifecycle-checkout'))
             ->postJson('/api/v1/checkout', $this->checkoutPayload())
             ->assertCreated();
 

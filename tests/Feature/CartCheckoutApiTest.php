@@ -67,6 +67,7 @@ class CartCheckoutApiTest extends TestCase
             ->assertJsonPath('data.subtotal', 200);
 
         $response = $this->withHeader('X-Cart-Session', $this->cartSession('test-cart'))
+            ->withHeader('Idempotency-Key', $this->checkoutIdempotencyKey('test-cart'))
             ->postJson('/api/v1/checkout', $this->checkoutPayload())
             ->assertCreated()
             ->assertJsonPath('data.accepted', true)
@@ -88,6 +89,7 @@ class CartCheckoutApiTest extends TestCase
 
         $this->actingAs($user, 'sanctum')
             ->withHeader('X-Cart-Session', $this->cartSession('test-cart'))
+            ->withHeader('Idempotency-Key', $this->checkoutIdempotencyKey('authenticated-test-cart'))
             ->postJson('/api/v1/checkout', array_merge($this->checkoutPayload(), ['email' => 'member@example.com']))
             ->assertCreated();
 
@@ -103,6 +105,7 @@ class CartCheckoutApiTest extends TestCase
         $item->product->update(['active' => false]);
 
         $this->withHeader('X-Cart-Session', $this->cartSession('test-cart'))
+            ->withHeader('Idempotency-Key', $this->checkoutIdempotencyKey('inactive-test-cart'))
             ->postJson('/api/v1/checkout', $this->checkoutPayload())
             ->assertConflict()
             ->assertJsonPath('error.code', 'cart_not_ready')
@@ -115,6 +118,7 @@ class CartCheckoutApiTest extends TestCase
         $item->product->update(['quantity' => 1]);
 
         $this->withHeader('X-Cart-Session', $this->cartSession('test-cart'))
+            ->withHeader('Idempotency-Key', $this->checkoutIdempotencyKey('stock-test-cart'))
             ->postJson('/api/v1/checkout', $this->checkoutPayload())
             ->assertConflict()
             ->assertJsonPath('error.code', 'cart_not_ready')

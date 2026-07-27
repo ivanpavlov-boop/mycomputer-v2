@@ -11,6 +11,9 @@ use App\Exceptions\CartRecoveryConsumedException;
 use App\Exceptions\CartRecoveryForbiddenException;
 use App\Exceptions\CartRecoveryInvalidException;
 use App\Exceptions\CartRecoveryRequiresReviewException;
+use App\Exceptions\CheckoutAlreadyCompletedException;
+use App\Exceptions\CheckoutIdempotencyConflictException;
+use App\Exceptions\CheckoutIdempotencyKeyInvalidException;
 use App\Http\Middleware\ResolveApiLocale;
 use App\Support\Api\ErrorResponse;
 use Illuminate\Auth\Access\AuthorizationException;
@@ -124,6 +127,30 @@ return Application::configure(basePath: dirname(__DIR__))
 
             if ($exception instanceof CartRecoveryRequiresReviewException) {
                 return ErrorResponse::make('cart_recovery_requires_review', $exception->getMessage(), 409);
+            }
+
+            if ($exception instanceof CheckoutIdempotencyKeyInvalidException) {
+                return ErrorResponse::make(
+                    'checkout_idempotency_key_invalid',
+                    $exception->getMessage(),
+                    422,
+                );
+            }
+
+            if ($exception instanceof CheckoutIdempotencyConflictException) {
+                return ErrorResponse::make(
+                    'checkout_idempotency_conflict',
+                    $exception->getMessage(),
+                    409,
+                );
+            }
+
+            if ($exception instanceof CheckoutAlreadyCompletedException) {
+                return ErrorResponse::make(
+                    'checkout_already_completed',
+                    $exception->getMessage(),
+                    409,
+                );
             }
 
             $status = $exception instanceof HttpExceptionInterface ? $exception->getStatusCode() : 500;

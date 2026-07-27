@@ -151,6 +151,7 @@ class ProductBundleTest extends TestCase
             ->assertOk();
 
         $this->withHeader('X-Cart-Session', $this->cartSession('bundle-checkout'))
+            ->withHeader('Idempotency-Key', $this->checkoutIdempotencyKey('bundle-checkout'))
             ->postJson('/api/v1/checkout', $this->checkoutPayload())
             ->assertCreated();
 
@@ -259,6 +260,7 @@ class ProductBundleTest extends TestCase
 
         $this->actingAs($user, 'sanctum')
             ->withHeader('X-Cart-Session', $this->cartSession('bundle-loyalty'))
+            ->withHeader('Idempotency-Key', $this->checkoutIdempotencyKey('bundle-loyalty'))
             ->postJson('/api/v1/checkout', array_merge($this->checkoutPayload(), [
                 'email' => 'bundle-loyalty@example.com',
                 'reward_code' => $voucher->code,
@@ -281,6 +283,7 @@ class ProductBundleTest extends TestCase
 
         $this->actingAs($user, 'sanctum')
             ->withHeader('X-Cart-Session', $this->cartSession('bundle-points'))
+            ->withHeader('Idempotency-Key', $this->checkoutIdempotencyKey('bundle-points'))
             ->postJson('/api/v1/checkout', array_merge($this->checkoutPayload(), ['email' => 'bundle-points@example.com']))
             ->assertCreated();
 
@@ -307,6 +310,7 @@ class ProductBundleTest extends TestCase
 
         $this->actingAs($user, 'sanctum')
             ->withHeader('X-Cart-Session', $this->cartSession('bundle-negative'))
+            ->withHeader('Idempotency-Key', $this->checkoutIdempotencyKey('bundle-negative'))
             ->postJson('/api/v1/checkout', array_merge($this->checkoutPayload(), [
                 'email' => 'bundle-negative@example.com',
                 'reward_code' => $voucher->code,
@@ -329,6 +333,7 @@ class ProductBundleTest extends TestCase
         $this->assertSame(169, $added->payload['total_price']);
 
         $this->withHeader('X-Cart-Session', $this->cartSession('bundle-analytics'))
+            ->withHeader('Idempotency-Key', $this->checkoutIdempotencyKey('bundle-analytics'))
             ->postJson('/api/v1/checkout', array_merge($this->checkoutPayload(), ['email' => 'bundle-analytics@example.com']))
             ->assertCreated();
 

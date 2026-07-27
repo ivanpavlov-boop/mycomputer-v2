@@ -159,6 +159,7 @@ class PromotionEngineTest extends TestCase
             ->assertOk();
 
         $this->withHeader('X-Cart-Session', $this->cartSession('checkout-promo-cart'))
+            ->withHeader('Idempotency-Key', $this->checkoutIdempotencyKey('checkout-promo-cart'))
             ->postJson('/api/v1/checkout', $this->checkoutPayload())
             ->assertCreated()
             ->assertJsonPath('data.accepted', true)

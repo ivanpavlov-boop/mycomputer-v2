@@ -20,4 +20,13 @@ abstract class TestCase extends BaseTestCase
             substr($hex, 20, 12),
         ]);
     }
+
+    protected function checkoutIdempotencyKey(string $name): string
+    {
+        return rtrim(strtr(
+            base64_encode(hash('sha256', 'checkout-idempotency:'.$name, true)),
+            '+/',
+            '-_',
+        ), '=');
+    }
 }

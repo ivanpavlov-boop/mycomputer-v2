@@ -122,10 +122,13 @@ export function useCartApi() {
     }),
     remove: (itemId: number) => cartRequest(`/cart/items/${itemId}`, { method: 'DELETE' }),
     clear: () => cartRequest('/cart', { method: 'DELETE' }),
-    checkout: (body: Record<string, unknown>) => request<ApiDataResponse<CheckoutResponse>>('/checkout', {
+    checkout: (body: Record<string, unknown>, idempotencyKey: string) => request<ApiDataResponse<CheckoutResponse>>('/checkout', {
       method: 'POST',
       body,
       credentials: 'include',
+      headers: {
+        'Idempotency-Key': idempotencyKey,
+      },
     }, {
       sessionResponse: 'if-present',
     }),

@@ -185,6 +185,7 @@ class AbandonedCartRecoveryTest extends TestCase
             ->json('data.cart_session_id');
 
         $this->withHeader('X-Cart-Session', $recoverySession)
+            ->withHeader('Idempotency-Key', $this->checkoutIdempotencyKey('recover-checkout'))
             ->postJson('/api/v1/checkout', $this->checkoutPayload('recover-checkout@example.com'))
             ->assertCreated();
 

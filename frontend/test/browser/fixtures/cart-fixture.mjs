@@ -1,4 +1,4 @@
-import { createHash, randomBytes } from 'node:crypto'
+import { createHash, createHmac, randomBytes } from 'node:crypto'
 
 export const FIXTURE_ORIGIN = 'http://127.0.0.1:3000'
 export const FIXTURE_API_URL = 'http://127.0.0.1:4010'
@@ -80,6 +80,22 @@ const AUTH_SESSIONS = {
 
 function clone(value) {
   return structuredClone(value)
+}
+
+function canonicalize(value) {
+  if (Array.isArray(value)) {
+    return value.map(canonicalize)
+  }
+
+  if (typeof value !== 'object' || value === null) {
+    return value
+  }
+
+  return Object.fromEntries(
+    Object.keys(value)
+      .sort()
+      .map(key => [key, canonicalize(value[key])]),
+  )
 }
 
 function lineReadiness(issueCode = null) {
@@ -291,6 +307,7 @@ function defaultScenario() {
     get_delay_ms: 0,
     rotate_next_get: null,
     next_checkout_error: 'cart_not_ready',
+    lose_next_checkout_response: false,
     expire_confirmation: false,
   }
 }
@@ -299,6 +316,8 @@ export function createFixtureState() {
   let sessionSequence = 0
   const sessions = new Map()
   const confirmations = new Map()
+  const checkoutByKey = new Map()
+  const checkoutByCart = new Map()
   const requests = []
   const analytics = []
   let scenario = defaultScenario()
@@ -315,6 +334,8 @@ export function createFixtureState() {
     sessionSequence = 0
     sessions.clear()
     confirmations.clear()
+    checkoutByKey.clear()
+    checkoutByCart.clear()
     requests.length = 0
     analytics.length = 0
     scenario = defaultScenario()
@@ -424,13 +445,73 @@ export function createFixtureState() {
   }
 
   function recordRequest(request) {
+    const validIdempotencyKey = typeof request.idempotencyKey === 'string'
+      && /^[A-Za-z0-9_-]{43}$/.test(request.idempotencyKey)
+
     requests.push({
       method: request.method,
       path: request.path,
       cart_session: request.cartSession || null,
       authorization_present: Boolean(request.bearerToken),
       origin: request.origin || null,
+      idempotency_key_present: typeof request.idempotencyKey === 'string',
+      idempotency_key_valid: validIdempotencyKey,
+      idempotency_identity: validIdempotencyKey
+        ? createHash('sha256').update(request.idempotencyKey).digest('hex')
+        : null,
     })
+  }
+
+  function inspectCheckout(key, cartSession, payload) {
+    if (typeof key !== 'string' || !/^[A-Za-z0-9_-]{43}$/.test(key)) {
+      return { error: 'checkout_idempotency_key_invalid' }
+    }
+
+    const keyHash = createHash('sha256').update(key).digest('hex')
+    const requestHash = createHmac('sha256', 'fixture-checkout-fingerprint-v1')
+      .update(JSON.stringify(canonicalize(payload)))
+      .digest('hex')
+    const byKey = checkoutByKey.get(keyHash)
+    const byCart = checkoutByCart.get(cartSession)
+
+    if (byKey && byKey.cartSession !== cartSession) {
+      return { error: 'checkout_idempotency_conflict' }
+    }
+
+    const existing = byKey || byCart
+
+    if (existing) {
+      if (existing.requestHash !== requestHash) {
+        return {
+          error: byKey
+            ? 'checkout_idempotency_conflict'
+            : 'checkout_already_completed',
+        }
+      }
+
+      return { replay: existing }
+    }
+
+    return {
+      pending: {
+        keyHash,
+        requestHash,
+        cartSession,
+      },
+    }
+  }
+
+  function completeCheckout(pending, checkout) {
+    const completed = {
+      ...pending,
+      checkout: clone(checkout),
+    }
+    checkoutByKey.set(pending.keyHash, completed)
+    checkoutByCart.set(pending.cartSession, completed)
+    ordersCreated += 1
+    paymentAttempts += 1
+
+    return completed
   }
 
   function recordAnalytics(event) {
@@ -476,6 +557,10 @@ export function createFixtureState() {
       orders_created: ordersCreated,
       payment_attempts: paymentAttempts,
       confirmation_capabilities: confirmations.size,
+      checkout_identities: [...checkoutByKey.values()].map(record => ({
+        identity: record.keyHash,
+        completed: true,
+      })),
     }
   }
 
@@ -492,6 +577,8 @@ export function createFixtureState() {
     resolveSession,
     recordRequest,
     recordAnalytics,
+    inspectCheckout,
+    completeCheckout,
     issueConfirmation,
     resolveConfirmation,
     snapshot,

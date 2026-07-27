@@ -230,6 +230,7 @@ class CartOwnershipBoundaryTest extends TestCase
 
         $this->actingAs($other, 'sanctum')
             ->withHeader('X-Cart-Session', $cart->session_id)
+            ->withHeader('Idempotency-Key', $this->checkoutIdempotencyKey('foreign-user-checkout'))
             ->postJson('/api/v1/checkout', $this->checkoutPayload())
             ->assertForbidden()
             ->assertJsonPath('error.message', 'Cart access is not allowed.');
@@ -264,6 +265,7 @@ class CartOwnershipBoundaryTest extends TestCase
         $cart = $this->cart('guest-protected-checkout', $owner);
 
         $this->withHeader('X-Cart-Session', $cart->session_id)
+            ->withHeader('Idempotency-Key', $this->checkoutIdempotencyKey('guest-owned-checkout'))
             ->postJson('/api/v1/checkout', $this->checkoutPayload())
             ->assertForbidden();
 

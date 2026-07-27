@@ -38,6 +38,7 @@
       "severity": "blocker",
       "confidence": "confirmed",
       "status": "open",
+      "local_remediation_status": "remediated_locally",
       "current_behavior": "Checkout creates an order and payment transaction in a database transaction, but accepts no idempotency key and does not lock or atomically transition the cart before order creation.",
       "risk": "Duplicate submissions or two browser tabs can create duplicate orders and payment attempts when stock is sufficient.",
       "evidence": [
@@ -961,7 +962,7 @@
     },
     {
       "phase": "Commerce Phase 1C.4",
-      "status": "merged_deployed_staging_verification_pending",
+      "status": "merged_deployed_staging_verified",
       "finding_ids": [
         "CART-026"
       ],
@@ -975,12 +976,35 @@
         "The rate-limited no-store confirmation endpoint resolves only the cookie and returns minimal trusted data.",
         "Nuxt forwards the cookie during SSR and includes credentials in browser requests.",
         "Query tampering cannot alter displayed confirmation data or purchase analytics.",
-        "Staging verification found that Laravel CookieJar inherited the configured shared session domain for the confirmation cookie.",
-        "The host-only issued-cookie and deletion-cookie correction uses explicit Symfony Cookie domain null and is complete locally.",
+        "Issued and deletion cookies use explicit Symfony Cookie domain null.",
+        "Staging verification confirmed that the confirmation cookie has no Domain attribute and preserves HttpOnly, Secure, SameSite Lax and Path root.",
         "Global Laravel and admin session-cookie behavior is unchanged.",
-        "Final Phase 1C.4 staging verification remains pending correction merge and deployment.",
+        "Phase 1C.4 is merged, deployed and staging verified.",
         "Public Cart and checkout routes remain disabled at Nginx.",
-        "Checkout and payment idempotency remain assigned to Commerce Phase 1D."
+        "Checkout idempotency is handled by Commerce Phase 1D.1; provider-level payment idempotency remains assigned to Phase 1D.2."
+      ]
+    },
+    {
+      "phase": "Commerce Phase 1D.1",
+      "status": "complete_locally",
+      "finding_ids": [
+        "CART-002"
+      ],
+      "partial_finding_ids": [],
+      "open_finding_ids": [
+        "CART-008",
+        "CART-023"
+      ],
+      "notes": [
+        "Checkout requires a high-entropy Idempotency-Key whose SHA-256 hash is stored server-side.",
+        "Validated checkout payloads are compared using a keyed HMAC without persisting customer PII.",
+        "One canonical idempotency record is enforced per Cart and completed checkout replays return the original Order.",
+        "Replay is authorized independently by the authenticated Cart owner or original guest Cart session before converted-Cart rotation.",
+        "Cart conversion, Order creation and checkout database effects are atomic.",
+        "Equivalent concurrent submissions create at most one Order and one set of checkout side effects.",
+        "Successful replays receive fresh short-lived host-only confirmation capabilities without invalidating other valid confirmations.",
+        "Standalone payment initiation ownership and provider-level payment idempotency remain assigned to Commerce Phase 1D.2.",
+        "Public commerce routes remain disabled at Nginx."
       ]
     }
   ]

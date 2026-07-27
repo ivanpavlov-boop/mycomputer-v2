@@ -33,6 +33,6 @@ describe('Cart API client', () => {
     expect(api).toContain("sessionResponse: 'required'")
     expect(api).toContain('throw invalidCartSessionResponseError()')
     expect(api).toContain("sessionResponse: 'if-present'")
-    expect(api).toContain("checkout: (body: Record<string, unknown>)")
+    expect(api).toContain("checkout: (body: Record<string, unknown>, idempotencyKey: string)")
   })
 })

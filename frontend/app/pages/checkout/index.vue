@@ -123,6 +123,7 @@ const shipping = useShipping()
 const payments = usePayments()
 const analytics = useAnalytics()
 const cartAnalytics = useCartAnalytics()
+const checkoutIdempotency = useCheckoutIdempotency()
 await cart.sync().catch(() => null)
 
 const error = ref('')
@@ -153,6 +154,22 @@ const form = reactive({
 })
 
 const isCompany = ref(false)
+const cartCheckoutIdentity = computed(() => JSON.stringify({
+  session: cart.cart?.cart_session_id ?? null,
+  items: (cart.cart?.items ?? []).map(item => [
+    item.id,
+    item.product.id,
+    item.quantity,
+    item.unit_price,
+    item.total_price,
+    item.is_gift,
+  ]),
+  bundles: (cart.cart?.bundle_items ?? []).map(item => [
+    item.id,
+    item.quantity,
+    item.total_price,
+  ]),
+}))
 const { data: providersResponse } = await useAsyncData('shipping-providers', () => shipping.providers())
 const { data: paymentMethodsResponse } = await useAsyncData('payment-methods', () => payments.methods())
 const providers = computed(() => providersResponse.value?.data || [])
@@ -170,6 +187,13 @@ watch(() => form.delivery_type, (type) => {
   form.shipping_method = type === 'office' ? 'office' : 'address'
   selectedOffice.value = null
   form.office_id = null
+})
+watch(form, () => checkoutIdempotency.clear(), { deep: true })
+watch(isCompany, () => checkoutIdempotency.clear())
+watch(cartCheckoutIdentity, (current, previous) => {
+  if (previous !== undefined && current !== previous) {
+    checkoutIdempotency.clear()
+  }
 })
 
 function selectOffice(office: ShippingOffice) {
@@ -233,7 +257,9 @@ async function submit() {
     const confirmedCart = cart.cart
     const operationId = cartAnalytics.createOperationId('checkout')
     const api = useCartApi()
-    const response = await api.checkout(form)
+    const idempotencyKey = checkoutIdempotency.keyForAttempt()
+    const response = await api.checkout(form, idempotencyKey)
+    checkoutIdempotency.clear()
     await cartAnalytics.beginCheckout(operationId, confirmedCart)
     await analytics.addPaymentInfo({ payment_method: form.payment_method, value: response.data.grand_total })
     await cart.clear()
@@ -241,6 +267,10 @@ async function submit() {
   } catch (failure) {
     const normalized = normalizeApiError(failure)
     error.value = normalized.message
+
+    if (!shouldRetainCheckoutIdempotencyKey(normalized)) {
+      checkoutIdempotency.clear()
+    }
 
     if (['cart_price_changed', 'cart_promotion_changed'].includes(normalized.code)) {
       await cart.sync().catch(() => null)

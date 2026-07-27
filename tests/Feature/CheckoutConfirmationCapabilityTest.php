@@ -7,7 +7,6 @@ use App\Models\Order;
 use App\Models\Product;
 use App\Models\User;
 use App\Services\Orders\CheckoutConfirmationService;
-use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
@@ -70,13 +69,16 @@ class CheckoutConfirmationCapabilityTest extends TestCase
         $this->assertSame($order->id, CheckoutConfirmationCapability::query()->sole()->order_id);
     }
 
-    public function test_one_order_cannot_receive_duplicate_capability_rows(): void
+    public function test_one_order_can_receive_multiple_hash_only_capabilities(): void
     {
         $this->checkout('duplicate-capability')->assertCreated();
         $order = Order::query()->sole();
+        $first = CheckoutConfirmationCapability::query()->sole();
+        $secondToken = app(CheckoutConfirmationService::class)->issue($order);
 
-        $this->expectException(QueryException::class);
-        app(CheckoutConfirmationService::class)->issue($order);
+        $this->assertSame(2, $order->checkoutConfirmationCapabilities()->count());
+        $this->assertNotSame($first->token_hash, hash('sha256', $secondToken));
+        $this->assertSame($order->id, app(CheckoutConfirmationService::class)->resolve($secondToken)->order_id);
     }
 
     public function test_https_and_production_cookie_security_are_fail_closed(): void
@@ -110,7 +112,7 @@ class CheckoutConfirmationCapabilityTest extends TestCase
 
         $indexes = collect(Schema::getIndexes('checkout_confirmation_capabilities'));
         $this->assertTrue($indexes->contains(
-            fn (array $index): bool => $index['unique'] && $index['columns'] === ['order_id'],
+            fn (array $index): bool => ! $index['unique'] && $index['columns'] === ['order_id'],
         ));
         $this->assertTrue($indexes->contains(
             fn (array $index): bool => $index['unique'] && $index['columns'] === ['token_hash'],
@@ -175,6 +177,7 @@ class CheckoutConfirmationCapabilityTest extends TestCase
 
         return $request
             ->withHeader('X-Cart-Session', $this->cartSession($sessionName))
+            ->withHeader('Idempotency-Key', $this->checkoutIdempotencyKey($sessionName))
             ->postJson('/api/v1/checkout', $this->checkoutPayload($overrides));
     }
 

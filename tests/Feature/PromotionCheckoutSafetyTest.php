@@ -80,6 +80,7 @@ class PromotionCheckoutSafetyTest extends TestCase
         $this->app->instance(PromotionRedemptionService::class, $conflictingService);
 
         $this->withHeader('X-Cart-Session', $cart->session_id)
+            ->withHeader('Idempotency-Key', $this->checkoutIdempotencyKey('promotion-conflict'))
             ->postJson('/api/v1/checkout', $this->checkoutPayload())
             ->assertConflict()
             ->assertJsonPath('error.code', 'cart_promotion_changed')
@@ -110,6 +111,7 @@ class PromotionCheckoutSafetyTest extends TestCase
         $this->assertDatabaseMissing('marketing_events', ['event_name' => 'promotion_applied']);
 
         $this->withHeader('X-Cart-Session', $cart->session_id)
+            ->withHeader('Idempotency-Key', $this->checkoutIdempotencyKey('promotion-success'))
             ->postJson('/api/v1/checkout', $this->checkoutPayload())
             ->assertCreated()
             ->assertJsonPath('data.accepted', true)
@@ -118,6 +120,16 @@ class PromotionCheckoutSafetyTest extends TestCase
         $this->assertSame(1, PromotionRedemption::query()->count());
         $this->assertSame(1, $promotion->fresh()->usage_count);
         $this->assertSame('10.00', Order::query()->firstOrFail()->discount_total);
+
+        $this->withHeader('X-Cart-Session', $cart->session_id)
+            ->withHeader('Idempotency-Key', $this->checkoutIdempotencyKey('promotion-success'))
+            ->postJson('/api/v1/checkout', $this->checkoutPayload())
+            ->assertCreated()
+            ->assertJsonPath('data.idempotent_replay', true);
+
+        $this->assertSame(1, PromotionRedemption::query()->count());
+        $this->assertSame(1, $promotion->fresh()->usage_count);
+        $this->assertDatabaseCount('orders', 1);
     }
 
     private function checkoutPayload(): array

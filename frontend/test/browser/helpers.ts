@@ -48,6 +48,9 @@ export async function fixtureState(request: APIRequestContext) {
       cart_session: string | null
       authorization_present: boolean
       origin: string | null
+      idempotency_key_present: boolean
+      idempotency_key_valid: boolean
+      idempotency_identity: string | null
     }>
     analytics: Array<{
       event_name: string
@@ -57,6 +60,10 @@ export async function fixtureState(request: APIRequestContext) {
     orders_created: number
     payment_attempts: number
     confirmation_capabilities: number
+    checkout_identities: Array<{
+      identity: string
+      completed: boolean
+    }>
   }
 }
 

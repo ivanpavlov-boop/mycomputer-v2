@@ -45,12 +45,35 @@ class CheckoutService
         private readonly PromotionRedemptionService $promotionRedemptions,
         private readonly BundleCartService $bundleCart,
         private readonly CheckoutConfirmationService $checkoutConfirmations,
+        private readonly CheckoutIdempotencyService $idempotency,
     ) {}
 
-    public function checkout(Cart $cart, array $data): CheckoutResult
-    {
-        $outcome = DB::transaction(function () use ($cart, $data): CheckoutResult|CartPricingRefreshResult|CartReadinessResult {
+    public function checkout(
+        Cart $cart,
+        array $data,
+        CheckoutIdempotencyContext $idempotencyContext,
+    ): CheckoutResult {
+        $outcome = DB::transaction(function () use ($cart, $data, $idempotencyContext): CheckoutResult|CartPricingRefreshResult|CartReadinessResult {
             $cart = Cart::query()->lockForUpdate()->findOrFail($cart->id);
+            $completedReplay = $this->idempotency->lockCompletedReplay($cart, $idempotencyContext);
+
+            if ($completedReplay) {
+                $order = $completedReplay->order()->with('paymentTransactions.method')->firstOrFail();
+
+                return new CheckoutResult(
+                    $order,
+                    $this->checkoutConfirmations->issue($order),
+                    replayed: true,
+                );
+            }
+
+            abort_unless(
+                $cart->status === CartStatus::Active->value
+                    && ($cart->expires_at === null || $cart->expires_at->isFuture()),
+                409,
+                'Cart session is not available.',
+            );
+
             $pricing = $this->cartPricing->refresh($cart);
 
             if ($pricing->requiresReview) {
@@ -87,6 +110,7 @@ class CheckoutService
             }
 
             $discountTotal = min($discountTotal, $subtotal + $shippingPrice);
+            $idempotencyRecord = $this->idempotency->startRecord($cart, $idempotencyContext);
 
             $customer = Customer::query()->updateOrCreate(
                 ['email' => $data['email']],
@@ -151,14 +175,13 @@ class CheckoutService
                 $this->loyalty->vouchers->redeem($cart->user, $reward['voucher'], $order);
             }
             $confirmationCapability = $this->checkoutConfirmations->issue($order);
-            ConversionTrackingJob::dispatch($order->id);
-            $this->emailMarketing->order($order, 'order_created');
             $this->emailMarketing->markCartRecovered($cart, $order);
-            OrderCreated::dispatch($order->id);
+            $this->idempotency->completeRecord($idempotencyRecord, $order);
 
             return new CheckoutResult(
                 $order->load(['paymentTransactions.method']),
                 $confirmationCapability,
+                replayed: false,
             );
         }, 3);
 
@@ -170,7 +193,18 @@ class CheckoutService
             throw new CartNotReadyException($outcome);
         }
 
+        if (! $outcome->replayed()) {
+            $this->dispatchPostCommitEffects($outcome->order());
+        }
+
         return $outcome;
+    }
+
+    private function dispatchPostCommitEffects(Order $order): void
+    {
+        ConversionTrackingJob::dispatch($order->getKey())->afterCommit();
+        $this->emailMarketing->order($order, 'order_created');
+        OrderCreated::dispatch($order->getKey());
     }
 
     private function shippingPayload(array $data): array

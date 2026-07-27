@@ -62,6 +62,7 @@ class ShippingApiTest extends TestCase
         $office = $this->prepareCartAndOffice();
 
         $this->withHeader('X-Cart-Session', $this->cartSession('shipping-cart'))
+            ->withHeader('Idempotency-Key', $this->checkoutIdempotencyKey('shipping-speedy'))
             ->postJson('/api/v1/checkout', $this->checkoutPayload([
                 'shipping_provider' => 'speedy',
                 'shipping_method' => 'office',
@@ -84,6 +85,7 @@ class ShippingApiTest extends TestCase
         $this->prepareCartAndOffice();
 
         $this->withHeader('X-Cart-Session', $this->cartSession('shipping-cart'))
+            ->withHeader('Idempotency-Key', $this->checkoutIdempotencyKey('shipping-econt'))
             ->postJson('/api/v1/checkout', $this->checkoutPayload([
                 'shipping_provider' => 'econt',
                 'shipping_method' => 'address',

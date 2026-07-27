@@ -68,11 +68,16 @@ Manual selected UPDATE price/stock sync is implemented behind `CATALOG_SYNC_UPDA
   with deterministic Chromium desktop and WebKit mobile coverage for SSR,
   hydration, persistence, auth transitions, offline recovery, Cart mutations,
   analytics, keyboard interaction and responsive layout.
-- Commerce Phase 1C.4 Checkout Success Data Safety, merged and deployed with a
+- Commerce Phase 1C.4 Checkout Success Data Safety, merged, deployed and
+  staging verified with a
   clean success URL, short-lived HttpOnly confirmation capability, minimal
-  no-store confirmation endpoint and trusted success-page rendering; its
-  host-only cookie correction is complete locally and final staging
-  verification remains pending.
+  no-store confirmation endpoint, trusted success-page rendering and a
+  verified host-only confirmation cookie.
+- Commerce Phase 1D.1 Checkout Idempotency and Atomic Cart Conversion,
+  complete locally with a required 256-bit Base64URL key, hash-only persistent
+  Cart identity, keyed request fingerprint, atomic conversion, authorized
+  completed replay, after-commit side effects and in-memory explicit frontend
+  retry. CART-002 is remediated locally; CART-008 and CART-023 remain open.
 - Unified Product edit quality summary combining existing scanner issues,
   category specification quality and active manual flags without blocking or
   mutating Product workflow.
@@ -534,29 +539,42 @@ checkout, Order or payment is created. CART-023 remains open because public
 Cart and checkout routes stay disabled at Nginx. CART-026 remains open for
 checkout-success URL data safety.
 
-Commerce Phase 1C.4 is merged and deployed. CART-026 is functionally
-remediated, but final Phase 1C.4 staging verification remains pending the
-host-only cookie correction. Checkout success navigation is now the clean
+Commerce Phase 1C.4 is merged, deployed and staging verified. CART-026 is
+remediated. Checkout success navigation is now the clean
 `/checkout/success` path. Order, customer, total, payment and capability data
 are absent from the URL. Checkout atomically issues a short-lived,
 high-entropy capability in an HttpOnly, SameSite Lax cookie and stores only
 its SHA-256 hash.
 
-Staging verification found that Laravel CookieJar inherited
-`SESSION_DOMAIN=.computer2u.eu` for the dedicated confirmation cookie. The
-host-only cookie correction is complete locally: issued and deletion cookies
-are constructed explicitly with Symfony Cookie `domain: null`. Global Laravel
-and admin session-cookie behavior is unchanged. The correction is not yet
-merged, deployed or staging verified.
+Issued and deletion cookies are constructed explicitly with Symfony Cookie
+`domain: null`. Staging verification confirmed the absence of a Domain
+attribute while preserving HttpOnly, Secure, SameSite Lax and Path `/`.
+Global Laravel and admin session-cookie behavior is unchanged.
 
 A dedicated rate-limited, no-store endpoint resolves only the capability
 cookie and returns minimal trusted confirmation data with a masked email.
 Invalid capabilities fail through one generic unavailable response. Nuxt
 supports SSR cookie forwarding and credentialed browser requests, renders only
 trusted confirmation values, ignores query tampering and uses noindex plus
-no-referrer metadata. Checkout and payment idempotency remain assigned to
-Commerce Phase 1D. CART-023 remains open and the Nginx commerce gate is
-unchanged.
+no-referrer metadata.
+
+Commerce Phase 1D.1 is complete locally. Checkout now requires a 32-byte
+Base64URL key, persists only its SHA-256 hash, compares canonical validated
+checkout data with a keyed HMAC and stores no customer PII in the idempotency
+record. One canonical record per Cart serializes Order creation and Cart
+conversion. Authorized completed replays are found before lifecycle rotation,
+return the same Order without repeated stock, payment, shipment, Promotion,
+loyalty, job, email or event effects, and issue a fresh confirmation
+capability without invalidating other unexpired capabilities.
+
+The frontend keeps its Web Crypto key only in checkout-page memory, retains it
+after ambiguous response loss for explicit retry, and clears it on definitive
+rejection, form/Cart changes or success. MySQL-only process concurrency tests
+cover same-key, different-key, changed-payload and rollback races; deterministic
+Playwright coverage covers double submit and lost-response replay. CART-002 is
+remediated locally. CART-008 remains assigned to Phase 1D.2, CART-023 remains
+open, broader acceptance remains assigned to Phase 1D.3, and the Nginx
+commerce gate is unchanged.
 
 ## Next
 

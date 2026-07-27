@@ -126,6 +126,9 @@ describe('Cart browser fixture contract', () => {
       cart_session: '11111111-1111-4111-8111-111111111111',
       authorization_present: true,
       origin: 'http://127.0.0.1:3000',
+      idempotency_key_present: false,
+      idempotency_key_valid: false,
+      idempotency_identity: null,
     })
     expect(JSON.stringify(state.snapshot())).not.toContain('fixture-token-user-a')
   })

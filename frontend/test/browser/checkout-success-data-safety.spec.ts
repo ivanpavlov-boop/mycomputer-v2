@@ -65,6 +65,7 @@ test.describe('Checkout success data safety', () => {
         currency: 'EUR',
         payment_method: 'cash_on_delivery',
         payment_status: 'pending',
+        idempotent_replay: false,
       },
     })
     await expect(page.getByText('MC-FIXTURE-0001')).toBeVisible()

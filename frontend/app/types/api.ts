@@ -337,6 +337,7 @@ export interface CheckoutResponse {
   currency: string
   payment_method: string
   payment_status: string
+  idempotent_replay: boolean
 }
 
 export interface CheckoutConfirmation {

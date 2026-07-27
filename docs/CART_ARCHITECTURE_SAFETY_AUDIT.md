@@ -1086,20 +1086,17 @@ Product, stock, Supplier or Catalog Sync behavior changed.
 
 ### Commerce Phase 1C.4 - Checkout Success Data Safety
 
-Phase 1C.4 is merged and deployed. CART-026 is functionally remediated, but
-final Phase 1C.4 staging verification remains pending the host-only cookie
-correction. Successful checkout navigates only to `/checkout/success`; Order,
+Phase 1C.4 is merged, deployed and staging verified. CART-026 is remediated.
+Successful checkout navigates only to `/checkout/success`; Order,
 customer, total, payment and capability data are not serialized into the URL.
 Checkout creates one 32-byte opaque confirmation capability inside the
 existing transaction, stores only its SHA-256 hash, and sends the plaintext
 capability only through a short-lived HttpOnly, SameSite Lax cookie.
 
-Staging verification found that Laravel CookieJar inherited the configured
-shared session domain for the dedicated confirmation cookie. The host-only
-cookie correction is complete locally: issued and deletion cookies are now
-constructed explicitly with Symfony Cookie `domain: null`. Global Laravel and
-admin session-cookie behavior is unchanged. Final staging verification awaits
-merge and deployment of this correction.
+Issued and deletion cookies are constructed explicitly with Symfony Cookie
+`domain: null`. Staging verification confirmed that the dedicated cookie is
+host-only and preserves HttpOnly, Secure, SameSite Lax and Path `/`. Global
+Laravel and admin session-cookie behavior is unchanged.
 
 The dedicated confirmation endpoint is cookie-only, rate limited and
 no-store. It returns minimal trusted Order/payment presentation with a masked
@@ -1109,9 +1106,42 @@ credentials in browser requests, ignores query authority, safely canonicalizes
 query/hash URLs, and emits purchase analytics only from trusted confirmation
 data. The page is noindex/nofollow/noarchive and no-referrer.
 
-No checkout or payment idempotency was added; both remain assigned to Commerce
-Phase 1D. CART-023 remains open because the Nginx commerce release gate is
-unchanged. No Product, stock, Supplier or Catalog Sync behavior changed.
+### Commerce Phase 1D.1 - Checkout Idempotency and Atomic Cart Conversion
+
+Phase 1D.1 is complete locally and remediates CART-002 locally. Checkout
+requires a 43-character Base64URL key generated from 32 cryptographically
+secure bytes. The database stores only the key's SHA-256 hash and a keyed
+HMAC-SHA-256 fingerprint of recursively canonicalized validated checkout data;
+no customer PII or raw request/response is persisted in that record.
+
+A unique canonical idempotency row per Cart is created after side-effect-free
+validation and before checkout writes. It is completed with the Order inside
+the same transaction as payment transaction, shipment, Promotion and loyalty
+effects, stock reduction, Cart conversion and confirmation capability.
+Rollback removes the entire attempt. Approved jobs, email and Order events are
+dispatched after commit only once.
+
+Completed replay lookup runs before normal converted-Cart rotation and remains
+independently authorized by Cart owner or original guest session. Equivalent
+same-key or different-key requests return the original trusted Order values
+without repeating checkout effects. Changed data receives a generic conflict.
+Each successful replay issues a fresh hash-only confirmation capability while
+other unexpired capabilities remain valid; the host-only cookie contract and
+120-minute lifetime remain unchanged.
+
+The Nuxt client keeps one Web Crypto key in checkout-page memory only. It
+retains the key after ambiguous network/server failure for an explicit retry,
+clears it for definitive conflicts and validation failures, and clears it when
+form or Cart identity/content changes or checkout succeeds. It adds no
+automatic retry and sends no idempotency identity to URLs, storage or
+analytics. Focused Laravel, MySQL process-concurrency, frontend and Playwright
+tests cover duplicate submission, response loss, replay, conflict and rollback.
+
+CART-008 remains open for payment-initiation authorization and provider-level
+idempotency in Phase 1D.2. CART-023 remains open because Nginx still disables
+public Cart and checkout routes. Broader browser/MySQL acceptance remains
+assigned to Phase 1D.3. No Product, stock-policy, Supplier or Catalog Sync
+behavior changed.
 
 ## 30. Release Gates
 

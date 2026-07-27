@@ -352,6 +352,7 @@ class AbandonedCartRecoverySafetyTest extends TestCase
         $this->assertSame($canonical->id, $record->fresh()->restored_cart_id);
 
         $this->withHeader('X-Cart-Session', $canonical->session_id)
+            ->withHeader('Idempotency-Key', $this->checkoutIdempotencyKey('recovery-safety-checkout'))
             ->postJson('/api/v1/checkout', $this->checkoutPayload($user->email))
             ->assertCreated();
 

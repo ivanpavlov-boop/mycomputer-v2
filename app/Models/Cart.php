@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Cart extends Model
 {
@@ -52,5 +53,10 @@ class Cart extends Model
     public function promotionRedemptions(): HasMany
     {
         return $this->hasMany(PromotionRedemption::class, 'session_id', 'session_id');
+    }
+
+    public function checkoutIdempotencyRecord(): HasOne
+    {
+        return $this->hasOne(CheckoutIdempotencyRecord::class);
     }
 }
