@@ -45,6 +45,7 @@ class CartReadinessCheckoutTest extends TestCase
         Queue::fake();
 
         $this->withHeader('X-Cart-Session', $cart->session_id)
+            ->withHeader('Idempotency-Key', $this->checkoutIdempotencyKey('readiness-blocked'))
             ->postJson('/api/v1/checkout', $this->checkoutPayload())
             ->assertConflict()
             ->assertJsonPath('error.code', 'cart_not_ready')
@@ -77,6 +78,7 @@ class CartReadinessCheckoutTest extends TestCase
         $cart = $this->cartWithItem($product, 2, 'price-before-readiness', storedPrice: 80);
 
         $this->withHeader('X-Cart-Session', $cart->session_id)
+            ->withHeader('Idempotency-Key', $this->checkoutIdempotencyKey('readiness-price-review'))
             ->postJson('/api/v1/checkout', $this->checkoutPayload())
             ->assertConflict()
             ->assertJsonPath('error.code', 'cart_price_changed');
@@ -86,6 +88,7 @@ class CartReadinessCheckoutTest extends TestCase
         $this->assertSame(0, Order::query()->count());
 
         $this->withHeader('X-Cart-Session', $cart->session_id)
+            ->withHeader('Idempotency-Key', $this->checkoutIdempotencyKey('readiness-price-review'))
             ->postJson('/api/v1/checkout', $this->checkoutPayload())
             ->assertConflict()
             ->assertJsonPath('error.code', 'cart_not_ready');
@@ -98,6 +101,7 @@ class CartReadinessCheckoutTest extends TestCase
             ->assertJsonPath('data.readiness.can_checkout', true);
 
         $this->withHeader('X-Cart-Session', $cart->session_id)
+            ->withHeader('Idempotency-Key', $this->checkoutIdempotencyKey('readiness-price-review'))
             ->postJson('/api/v1/checkout', $this->checkoutPayload())
             ->assertCreated();
 

@@ -74,6 +74,7 @@ class ErpIntegrationTest extends TestCase
             ->assertOk();
 
         $this->withHeader('X-Cart-Session', $this->cartSession('erp-order-created'))
+            ->withHeader('Idempotency-Key', $this->checkoutIdempotencyKey('erp-order-created'))
             ->postJson('/api/v1/checkout', $this->checkoutPayload())
             ->assertCreated();
 

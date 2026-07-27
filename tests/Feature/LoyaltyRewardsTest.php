@@ -115,6 +115,7 @@ class LoyaltyRewardsTest extends TestCase
 
         $this->actingAs($user, 'sanctum')
             ->withHeader('X-Cart-Session', $this->cartSession('loyalty-cart'))
+            ->withHeader('Idempotency-Key', $this->checkoutIdempotencyKey('loyalty-cart'))
             ->postJson('/api/v1/checkout', array_merge($this->checkoutPayload(), [
                 'email' => 'loyalty@example.com',
                 'reward_code' => $voucher->code,
@@ -130,6 +131,21 @@ class LoyaltyRewardsTest extends TestCase
             'reward_voucher_id' => $voucher->id,
             'redeemed_points' => 100,
         ]);
+
+        $this->actingAs($user, 'sanctum')
+            ->withHeader('X-Cart-Session', $this->cartSession('loyalty-cart'))
+            ->withHeader('Idempotency-Key', $this->checkoutIdempotencyKey('loyalty-cart'))
+            ->postJson('/api/v1/checkout', array_merge($this->checkoutPayload(), [
+                'email' => 'loyalty@example.com',
+                'reward_code' => $voucher->code,
+            ]))
+            ->assertCreated()
+            ->assertJsonPath('data.idempotent_replay', true)
+            ->assertJsonPath('data.order_number', $order->order_number);
+
+        $this->assertSame(400, $user->loyaltyAccount()->firstOrFail()->points_balance);
+        $this->assertDatabaseCount('voucher_redemptions', 1);
+        $this->assertDatabaseCount('orders', 1);
     }
 
     public function test_birthday_reward_awards_configured_points(): void

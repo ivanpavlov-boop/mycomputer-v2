@@ -110,7 +110,7 @@ final class CartArchitectureAuditDocumentationTest extends TestCase
             $this->assertContains($finding['severity'] ?? null, $allowedSeverities);
             $this->assertContains($finding['confidence'] ?? null, $allowedConfidence);
             $this->assertSame('open', $finding['status'] ?? null);
-            if (in_array($finding['id'], ['CART-004', 'CART-005', 'CART-009', 'CART-010', 'CART-014', 'CART-015', 'CART-026'], true)) {
+            if (in_array($finding['id'], ['CART-002', 'CART-004', 'CART-005', 'CART-009', 'CART-010', 'CART-014', 'CART-015', 'CART-026'], true)) {
                 $this->assertSame('remediated_locally', $finding['local_remediation_status'] ?? null);
             }
             $this->assertContains($finding['target_phase'] ?? null, $allowedTargets);
@@ -141,7 +141,7 @@ final class CartArchitectureAuditDocumentationTest extends TestCase
 
         $progress = $register['remediation_progress'] ?? [];
 
-        $this->assertCount(10, $progress);
+        $this->assertCount(11, $progress);
         $this->assertSame('Commerce Phase 1B.1', $progress[0]['phase'] ?? null);
         $this->assertSame('merged_deployed_staging_verified', $progress[0]['status'] ?? null);
         $this->assertSame(['CART-001', 'CART-022'], $progress[0]['finding_ids'] ?? null);
@@ -195,19 +195,25 @@ final class CartArchitectureAuditDocumentationTest extends TestCase
         $this->assertSame(['CART-023', 'CART-026'], $progress[8]['open_finding_ids'] ?? null);
         $this->assertNotEmpty($progress[8]['notes'] ?? []);
         $this->assertSame('Commerce Phase 1C.4', $progress[9]['phase'] ?? null);
-        $this->assertSame('merged_deployed_staging_verification_pending', $progress[9]['status'] ?? null);
+        $this->assertSame('merged_deployed_staging_verified', $progress[9]['status'] ?? null);
         $this->assertSame(['CART-026'], $progress[9]['finding_ids'] ?? null);
         $this->assertSame([], $progress[9]['partial_finding_ids'] ?? null);
         $this->assertSame(['CART-023'], $progress[9]['open_finding_ids'] ?? null);
         $this->assertNotEmpty($progress[9]['notes'] ?? []);
         $this->assertContains(
-            'The host-only issued-cookie and deletion-cookie correction uses explicit Symfony Cookie domain null and is complete locally.',
+            'Issued and deletion cookies use explicit Symfony Cookie domain null.',
             $progress[9]['notes'],
         );
         $this->assertContains(
-            'Final Phase 1C.4 staging verification remains pending correction merge and deployment.',
+            'Phase 1C.4 is merged, deployed and staging verified.',
             $progress[9]['notes'],
         );
+        $this->assertSame('Commerce Phase 1D.1', $progress[10]['phase'] ?? null);
+        $this->assertSame('complete_locally', $progress[10]['status'] ?? null);
+        $this->assertSame(['CART-002'], $progress[10]['finding_ids'] ?? null);
+        $this->assertSame([], $progress[10]['partial_finding_ids'] ?? null);
+        $this->assertSame(['CART-008', 'CART-023'], $progress[10]['open_finding_ids'] ?? null);
+        $this->assertNotEmpty($progress[10]['notes'] ?? []);
     }
 
     public function test_audit_artifacts_contain_no_environment_or_secret_material(): void
@@ -279,11 +285,11 @@ final class CartArchitectureAuditDocumentationTest extends TestCase
                 $normalizedDocument,
             );
             $this->assertStringContainsString(
-                'host-only cookie correction is complete locally',
+                'Staging verification confirmed',
                 $normalizedDocument,
             );
             $this->assertStringContainsString(
-                'final Phase 1C.4 staging verification remains pending',
+                'Commerce Phase 1D.1',
                 $normalizedDocument,
             );
             $this->assertStringContainsString(

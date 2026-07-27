@@ -102,11 +102,14 @@ class CheckoutConfirmationApiTest extends TestCase
             ->assertNotFound()
             ->assertExactJson($expected);
 
-        CheckoutConfirmationCapability::query()->update(['expires_at' => now()->addHour()]);
-        Order::query()->sole()->delete();
+        $deletedOrder = Order::query()->sole()->replicate();
+        $deletedOrder->order_number = 'MC-DELETED-CONFIRMATION';
+        $deletedOrder->save();
+        $deletedToken = app(CheckoutConfirmationService::class)->issue($deletedOrder);
+        $deletedOrder->delete();
 
         $this->withCredentials()
-            ->withUnencryptedCookie(CheckoutConfirmationService::COOKIE_NAME, $token)
+            ->withUnencryptedCookie(CheckoutConfirmationService::COOKIE_NAME, $deletedToken)
             ->getJson('/api/v1/checkout/confirmation')
             ->assertNotFound()
             ->assertExactJson($expected);
@@ -198,6 +201,7 @@ class CheckoutConfirmationApiTest extends TestCase
 
         return $request
             ->withHeader('X-Cart-Session', $this->cartSession($sessionName))
+            ->withHeader('Idempotency-Key', $this->checkoutIdempotencyKey($sessionName))
             ->postJson('/api/v1/checkout', array_replace([
                 'first_name' => 'Ivan',
                 'last_name' => 'Petrov',

@@ -25,6 +25,10 @@ class CheckoutConfirmationService
     {
         $token = rtrim(strtr(base64_encode(random_bytes(self::TOKEN_BYTES)), '+/', '-_'), '=');
 
+        $order->checkoutConfirmationCapabilities()
+            ->where('expires_at', '<=', now())
+            ->delete();
+
         CheckoutConfirmationCapability::query()->create([
             'order_id' => $order->getKey(),
             'token_hash' => $this->hash($token),

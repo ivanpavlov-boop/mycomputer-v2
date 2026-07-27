@@ -31,6 +31,7 @@ class CartPriceRefreshCheckoutTest extends TestCase
         Queue::fake();
 
         $this->withHeader('X-Cart-Session', $cart->session_id)
+            ->withHeader('Idempotency-Key', $this->checkoutIdempotencyKey('price-review'))
             ->postJson('/api/v1/checkout', $this->checkoutPayload())
             ->assertStatus(409)
             ->assertExactJson([
@@ -62,6 +63,7 @@ class CartPriceRefreshCheckoutTest extends TestCase
         $cart = $this->cartWithItem($product, 80, 2, 'price-review-retry');
 
         $this->withHeader('X-Cart-Session', $cart->session_id)
+            ->withHeader('Idempotency-Key', $this->checkoutIdempotencyKey('price-review-retry'))
             ->postJson('/api/v1/checkout', $this->checkoutPayload())
             ->assertStatus(409);
 
@@ -71,6 +73,7 @@ class CartPriceRefreshCheckoutTest extends TestCase
             ->assertJsonPath('data.subtotal', 200);
 
         $this->withHeader('X-Cart-Session', $cart->session_id)
+            ->withHeader('Idempotency-Key', $this->checkoutIdempotencyKey('price-review-retry'))
             ->postJson('/api/v1/checkout', $this->checkoutPayload())
             ->assertCreated()
             ->assertJsonPath('data.accepted', true)

@@ -245,7 +245,7 @@ Route::prefix('v1')->group(function (): void {
     Route::delete('cart/bundles/{bundle}', [CartBundleController::class, 'destroy']);
     Route::delete('cart', [CartController::class, 'clear']);
 
-    Route::post('checkout', CheckoutController::class);
+    Route::post('checkout', CheckoutController::class)->middleware('throttle:checkout');
     Route::get('checkout/confirmation', CheckoutConfirmationController::class)
         ->middleware('throttle:checkout-confirmation');
 

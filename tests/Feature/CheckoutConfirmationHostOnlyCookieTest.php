@@ -119,6 +119,7 @@ final class CheckoutConfirmationHostOnlyCookieTest extends TestCase
             ->assertOk();
 
         return $this->withHeader('X-Cart-Session', $this->cartSession($sessionName))
+            ->withHeader('Idempotency-Key', $this->checkoutIdempotencyKey($sessionName))
             ->postJson('https://example.test/api/v1/checkout', [
                 'first_name' => 'Ivan',
                 'last_name' => 'Petrov',

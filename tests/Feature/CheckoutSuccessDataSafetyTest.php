@@ -32,6 +32,7 @@ class CheckoutSuccessDataSafetyTest extends TestCase
                 'currency' => 'EUR',
                 'payment_method' => 'cash_on_delivery',
                 'payment_status' => 'pending',
+                'idempotent_replay' => false,
             ],
         ]);
 
@@ -65,13 +66,15 @@ class CheckoutSuccessDataSafetyTest extends TestCase
 
     public function test_validation_readiness_stock_price_and_payment_rejections_create_no_capability(): void
     {
-        $this->postJson('/api/v1/checkout', [])
+        $this->withHeader('Idempotency-Key', $this->checkoutIdempotencyKey('validation-rejection'))
+            ->postJson('/api/v1/checkout', [])
             ->assertUnprocessable();
         $this->assertDatabaseCount('checkout_confirmation_capabilities', 0);
 
         $inactive = $this->preparedCart('inactive-rejection');
         $inactive->items()->firstOrFail()->product->update(['active' => false]);
         $this->withHeader('X-Cart-Session', $inactive->session_id)
+            ->withHeader('Idempotency-Key', $this->checkoutIdempotencyKey('inactive-rejection'))
             ->postJson('/api/v1/checkout', $this->checkoutPayload())
             ->assertConflict();
         $this->assertDatabaseCount('checkout_confirmation_capabilities', 0);
@@ -79,6 +82,7 @@ class CheckoutSuccessDataSafetyTest extends TestCase
         $stock = $this->preparedCart('stock-rejection', 4);
         $stock->items()->firstOrFail()->product->update(['quantity' => 1]);
         $this->withHeader('X-Cart-Session', $stock->session_id)
+            ->withHeader('Idempotency-Key', $this->checkoutIdempotencyKey('stock-rejection'))
             ->postJson('/api/v1/checkout', $this->checkoutPayload())
             ->assertConflict();
         $this->assertDatabaseCount('checkout_confirmation_capabilities', 0);
@@ -89,6 +93,7 @@ class CheckoutSuccessDataSafetyTest extends TestCase
             'total_price' => 1,
         ]);
         $this->withHeader('X-Cart-Session', $price->session_id)
+            ->withHeader('Idempotency-Key', $this->checkoutIdempotencyKey('price-rejection'))
             ->postJson('/api/v1/checkout', $this->checkoutPayload())
             ->assertConflict();
         $this->assertDatabaseCount('checkout_confirmation_capabilities', 0);
@@ -96,6 +101,7 @@ class CheckoutSuccessDataSafetyTest extends TestCase
         $payment = $this->preparedCart('payment-rejection');
         PaymentMethod::query()->where('code', 'cash_on_delivery')->update(['status' => 'inactive']);
         $this->withHeader('X-Cart-Session', $payment->session_id)
+            ->withHeader('Idempotency-Key', $this->checkoutIdempotencyKey('payment-rejection'))
             ->postJson('/api/v1/checkout', $this->checkoutPayload())
             ->assertNotFound();
         $this->assertDatabaseCount('checkout_confirmation_capabilities', 0);
@@ -114,10 +120,12 @@ class CheckoutSuccessDataSafetyTest extends TestCase
         $this->app->instance(CheckoutConfirmationService::class, $confirmationService);
 
         $this->withHeader('X-Cart-Session', $cart->session_id)
+            ->withHeader('Idempotency-Key', $this->checkoutIdempotencyKey('atomic-rollback'))
             ->postJson('/api/v1/checkout', $this->checkoutPayload())
             ->assertServerError();
 
         $this->assertDatabaseCount('orders', 0);
+        $this->assertDatabaseCount('checkout_idempotency_records', 0);
         $this->assertDatabaseCount('checkout_confirmation_capabilities', 0);
         $this->assertSame($customerCount, Customer::query()->count());
         $this->assertSame($stockBefore, $product->fresh()->quantity);
@@ -129,14 +137,14 @@ class CheckoutSuccessDataSafetyTest extends TestCase
     {
         $source = file_get_contents(app_path('Services/Orders/CheckoutService.php'));
         $issuePosition = strpos($source, '$this->checkoutConfirmations->issue($order)');
-        $jobPosition = strpos($source, 'ConversionTrackingJob::dispatch($order->id)');
-        $eventPosition = strpos($source, 'OrderCreated::dispatch($order->id)');
+        $completionPosition = strpos($source, '$this->idempotency->completeRecord($idempotencyRecord, $order)');
+        $postCommitPosition = strpos($source, '$this->dispatchPostCommitEffects($outcome->order())');
 
         $this->assertIsInt($issuePosition);
-        $this->assertIsInt($jobPosition);
-        $this->assertIsInt($eventPosition);
-        $this->assertLessThan($jobPosition, $issuePosition);
-        $this->assertLessThan($eventPosition, $issuePosition);
+        $this->assertIsInt($completionPosition);
+        $this->assertIsInt($postCommitPosition);
+        $this->assertLessThan($completionPosition, $issuePosition);
+        $this->assertLessThan($postCommitPosition, $completionPosition);
         $this->assertStringContainsString('}, 3);', $source);
     }
 
@@ -157,6 +165,7 @@ class CheckoutSuccessDataSafetyTest extends TestCase
         $cart = $this->preparedCart($sessionName);
 
         return $this->withHeader('X-Cart-Session', $cart->session_id)
+            ->withHeader('Idempotency-Key', $this->checkoutIdempotencyKey($sessionName))
             ->postJson('/api/v1/checkout', $this->checkoutPayload());
     }
 

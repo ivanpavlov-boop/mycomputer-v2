@@ -86,7 +86,9 @@ class EmailMarketingService
 
     public function queue(string $email, string $type, array $data = [], ?string $subject = null): void
     {
-        SendEmailJob::dispatch(strtolower($email), $type, $data, $subject)->onQueue('emails');
+        SendEmailJob::dispatch(strtolower($email), $type, $data, $subject)
+            ->onQueue('emails')
+            ->afterCommit();
     }
 
     public function send(string $email, string $type, array $data = [], ?string $subject = null): EmailLog

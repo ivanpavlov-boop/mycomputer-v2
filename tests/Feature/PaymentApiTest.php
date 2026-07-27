@@ -86,6 +86,7 @@ class PaymentApiTest extends TestCase
         PaymentMethod::query()->where('code', 'card')->update(['status' => 'inactive']);
 
         $this->withHeader('X-Cart-Session', $this->cartSession('payment-cart'))
+            ->withHeader('Idempotency-Key', $this->checkoutIdempotencyKey('inactive-payment-cart'))
             ->postJson('/api/v1/checkout', $this->payload('card'))
             ->assertNotFound();
     }
@@ -163,6 +164,7 @@ class PaymentApiTest extends TestCase
         $this->prepareCart();
 
         return $this->withHeader('X-Cart-Session', $this->cartSession('payment-cart'))
+            ->withHeader('Idempotency-Key', $this->checkoutIdempotencyKey('payment-cart-'.$method))
             ->postJson('/api/v1/checkout', $this->payload($method));
     }
 

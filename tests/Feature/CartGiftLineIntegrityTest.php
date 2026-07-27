@@ -203,6 +203,7 @@ class CartGiftLineIntegrityTest extends TestCase
         app(PromotionEngineService::class)->applyAutomaticGifts($cart);
 
         $this->withHeader('X-Cart-Session', $cart->session_id)
+            ->withHeader('Idempotency-Key', $this->checkoutIdempotencyKey('gift-checkout-success'))
             ->postJson('/api/v1/checkout', $this->checkoutPayload())
             ->assertCreated();
 
@@ -232,6 +233,7 @@ class CartGiftLineIntegrityTest extends TestCase
         app(PromotionEngineService::class)->applyAutomaticGifts($cart);
 
         $this->withHeader('X-Cart-Session', $cart->session_id)
+            ->withHeader('Idempotency-Key', $this->checkoutIdempotencyKey('gift-checkout-stock'))
             ->postJson('/api/v1/checkout', $this->checkoutPayload())
             ->assertUnprocessable();
 

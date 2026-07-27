@@ -95,9 +95,14 @@ class Order extends Model
         return $this->hasMany(PaymentTransaction::class);
     }
 
-    public function checkoutConfirmationCapability(): HasOne
+    public function checkoutConfirmationCapabilities(): HasMany
     {
-        return $this->hasOne(CheckoutConfirmationCapability::class);
+        return $this->hasMany(CheckoutConfirmationCapability::class);
+    }
+
+    public function checkoutIdempotencyRecord(): HasOne
+    {
+        return $this->hasOne(CheckoutIdempotencyRecord::class);
     }
 
     public function productReviews(): HasMany

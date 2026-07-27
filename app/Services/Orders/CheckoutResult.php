@@ -11,6 +11,7 @@ final readonly class CheckoutResult
         private Order $order,
         #[SensitiveParameter]
         private string $confirmationCapability,
+        private bool $replayed,
     ) {}
 
     public function order(): Order
@@ -21,5 +22,10 @@ final readonly class CheckoutResult
     public function confirmationCapability(): string
     {
         return $this->confirmationCapability;
+    }
+
+    public function replayed(): bool
+    {
+        return $this->replayed;
     }
 }

@@ -17,7 +17,7 @@ const port = Number(new URL(FIXTURE_API_URL).port)
 function corsHeaders(origin) {
   return {
     'Access-Control-Allow-Origin': origin === FIXTURE_ORIGIN ? origin : FIXTURE_ORIGIN,
-    'Access-Control-Allow-Headers': 'Authorization, Content-Type, X-Cart-Session, X-Compare-Session, X-Locale, X-Marketing-Session',
+    'Access-Control-Allow-Headers': 'Authorization, Content-Type, Idempotency-Key, X-Cart-Session, X-Compare-Session, X-Locale, X-Marketing-Session',
     'Access-Control-Allow-Methods': 'GET, POST, PATCH, DELETE, OPTIONS',
     'Access-Control-Expose-Headers': 'Content-Type',
     'Access-Control-Allow-Credentials': 'true',
@@ -144,6 +144,7 @@ const server = createServer(async (request, response) => {
     path: url.pathname,
     cartSession,
     bearerToken: token,
+    idempotencyKey: request.headers['idempotency-key'],
     origin,
   })
 
@@ -552,13 +553,41 @@ const server = createServer(async (request, response) => {
   }
 
   if (request.method === 'POST' && url.pathname === '/api/v1/checkout') {
+    const input = await bodyOf(request)
+    const idempotency = state.inspectCheckout(
+      request.headers['idempotency-key'],
+      cartSession,
+      input,
+    )
+
+    if (idempotency.error) {
+      const status = idempotency.error === 'checkout_idempotency_key_invalid' ? 422 : 409
+      const failure = safeError(idempotency.error, status)
+      send(response, failure.status, failure.body, origin)
+      return
+    }
+
+    if (idempotency.replay) {
+      const token = state.issueConfirmation(idempotency.replay.checkout.confirmation)
+      send(response, 201, {
+        data: {
+          ...idempotency.replay.checkout.response,
+          idempotent_replay: true,
+        },
+      }, origin, {
+        'Cache-Control': 'private, no-store, max-age=0',
+        Pragma: 'no-cache',
+        'Set-Cookie': `mc_checkout_confirmation=${token}; Max-Age=7200; Path=/; HttpOnly; SameSite=Lax`,
+      })
+      return
+    }
+
     if (state.scenario.next_checkout_error) {
       const failure = safeError(state.scenario.next_checkout_error, 409)
       send(response, failure.status, failure.body, origin)
       return
     }
 
-    const input = await bodyOf(request)
     const resolved = currentCart(request)
 
     if (!resolved.entry.cart.readiness.can_checkout) {
@@ -572,7 +601,7 @@ const server = createServer(async (request, response) => {
     const paymentMethod = typeof input.payment_method === 'string'
       ? input.payment_method
       : 'cash_on_delivery'
-    const token = state.issueConfirmation({
+    const confirmation = {
       order_number: orderNumber,
       grand_total: grandTotal,
       currency: resolved.entry.cart.currency,
@@ -588,18 +617,31 @@ const server = createServer(async (request, response) => {
         instructions: null,
       },
       created_at: '2030-01-01T00:00:00.000000Z',
-    })
-
-    state.incrementOrders()
-    state.incrementPayments()
-    send(response, 201, {
-      data: {
+    }
+    const checkout = {
+      response: {
         accepted: true,
         order_number: orderNumber,
         grand_total: grandTotal,
         currency: resolved.entry.cart.currency,
         payment_method: paymentMethod,
         payment_status: 'pending',
+      },
+      confirmation,
+    }
+    state.completeCheckout(idempotency.pending, checkout)
+    const token = state.issueConfirmation(confirmation)
+
+    if (state.scenario.lose_next_checkout_response) {
+      state.configure({ lose_next_checkout_response: false })
+      response.destroy()
+      return
+    }
+
+    send(response, 201, {
+      data: {
+        ...checkout.response,
+        idempotent_replay: false,
       },
     }, origin, {
       'Cache-Control': 'private, no-store, max-age=0',
