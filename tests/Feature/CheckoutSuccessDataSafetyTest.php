@@ -103,7 +103,8 @@ class CheckoutSuccessDataSafetyTest extends TestCase
         $this->withHeader('X-Cart-Session', $payment->session_id)
             ->withHeader('Idempotency-Key', $this->checkoutIdempotencyKey('payment-rejection'))
             ->postJson('/api/v1/checkout', $this->checkoutPayload())
-            ->assertNotFound();
+            ->assertUnprocessable()
+            ->assertJsonPath('error.code', 'payment_method_unavailable');
         $this->assertDatabaseCount('checkout_confirmation_capabilities', 0);
     }
 

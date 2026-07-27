@@ -14,6 +14,7 @@ use App\Exceptions\CartRecoveryRequiresReviewException;
 use App\Exceptions\CheckoutAlreadyCompletedException;
 use App\Exceptions\CheckoutIdempotencyConflictException;
 use App\Exceptions\CheckoutIdempotencyKeyInvalidException;
+use App\Exceptions\PaymentMethodUnavailableException;
 use App\Http\Middleware\ResolveApiLocale;
 use App\Support\Api\ErrorResponse;
 use Illuminate\Auth\Access\AuthorizationException;
@@ -24,6 +25,7 @@ use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
+use Symfony\Component\HttpKernel\Exception\MethodNotAllowedHttpException;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -151,6 +153,21 @@ return Application::configure(basePath: dirname(__DIR__))
                     $exception->getMessage(),
                     409,
                 );
+            }
+
+            if ($exception instanceof PaymentMethodUnavailableException) {
+                return ErrorResponse::make(
+                    'payment_method_unavailable',
+                    $exception->getMessage(),
+                    422,
+                );
+            }
+
+            if (
+                $exception instanceof MethodNotAllowedHttpException
+                && $request->is('api/v1/payments/initiate')
+            ) {
+                return ErrorResponse::make('not_found', 'Not Found.', 404);
             }
 
             $status = $exception instanceof HttpExceptionInterface ? $exception->getStatusCode() : 500;

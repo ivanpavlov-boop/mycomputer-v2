@@ -1,6 +1,7 @@
 export const GENERIC_API_ERROR_MESSAGE = 'Възникна проблем. Моля, опитайте отново.'
 
 const SAFE_ERROR_MESSAGES: Record<string, string> = {
+  payment_method_unavailable: 'Избраният начин на плащане не е наличен.',
   invalid_cart_session: 'Сесията на количката е невалидна. Моля, опитайте отново.',
   invalid_cart_session_response: 'Получен е невалиден отговор за количката. Моля, опитайте отново.',
   cart_product_unavailable: 'Продуктът вече не е наличен за покупка.',

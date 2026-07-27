@@ -73,11 +73,13 @@ Manual selected UPDATE price/stock sync is implemented behind `CATALOG_SYNC_UPDA
   clean success URL, short-lived HttpOnly confirmation capability, minimal
   no-store confirmation endpoint, trusted success-page rendering and a
   verified host-only confirmation cookie.
-- Commerce Phase 1D.1 Checkout Idempotency and Atomic Cart Conversion,
-  complete locally with a required 256-bit Base64URL key, hash-only persistent
-  Cart identity, keyed request fingerprint, atomic conversion, authorized
-  completed replay, after-commit side effects and in-memory explicit frontend
-  retry. CART-002 is remediated locally; CART-008 and CART-023 remain open.
+- Commerce Phase 1D.1 Checkout Idempotency and Atomic Cart Conversion is
+  merged, MySQL 8.4 CI verified, deployed and staging schema/release-gate
+  verified. CART-002 is remediated.
+- Commerce Phase 1D.2A Payment Launch Policy, Card Gate and Public Initiation
+  Lockdown is complete locally. Card remains disabled by default and
+  fail-closed, public initiation is removed, CART-008 is partially remediated
+  and CART-023 remains open.
 - Unified Product edit quality summary combining existing scanner issues,
   category specification quality and active manual flags without blocking or
   mutating Product workflow.
@@ -558,7 +560,8 @@ supports SSR cookie forwarding and credentialed browser requests, renders only
 trusted confirmation values, ignores query tampering and uses noindex plus
 no-referrer metadata.
 
-Commerce Phase 1D.1 is complete locally. Checkout now requires a 32-byte
+Commerce Phase 1D.1 is merged, MySQL 8.4 CI verified, deployed and staging
+schema/release-gate verified. Checkout requires a 32-byte
 Base64URL key, persists only its SHA-256 hash, compares canonical validated
 checkout data with a keyed HMAC and stores no customer PII in the idempotency
 record. One canonical record per Cart serializes Order creation and Cart
@@ -572,9 +575,24 @@ after ambiguous response loss for explicit retry, and clears it on definitive
 rejection, form/Cart changes or success. MySQL-only process concurrency tests
 cover same-key, different-key, changed-payload and rollback races; deterministic
 Playwright coverage covers double submit and lost-response replay. CART-002 is
-remediated locally. CART-008 remains assigned to Phase 1D.2, CART-023 remains
-open, broader acceptance remains assigned to Phase 1D.3, and the Nginx
-commerce gate is unchanged.
+remediated.
+
+Commerce Phase 1D.2A is complete locally. Launch card payments are disabled by
+default through `PAYMENT_CARD_ENABLED=false`; active database rows cannot
+bypass the flag and the provider must separately report operational readiness.
+The production card provider is non-operational, collects no card data, creates
+no redirect and performs no network request. A test-only container binding
+proves the future integration boundary without choosing a gateway.
+
+The public payment-method API and checkout use one availability authority.
+Unavailable card checkout is rejected before idempotency persistence or any
+checkout side effect. The unauthenticated public payment-initiation route is
+removed, while initial transaction creation remains inside atomic checkout.
+COD and bank transfer are preserved; leasing and webhook behavior are
+unchanged. CART-008 is partially remediated, with authenticated Order-owned
+re-initiation and payment-attempt idempotency remaining in Phase 1D.2B.
+CART-023 remains open, broader acceptance remains assigned to Phase 1D.3, and
+the Nginx commerce gate is unchanged.
 
 ## Next
 

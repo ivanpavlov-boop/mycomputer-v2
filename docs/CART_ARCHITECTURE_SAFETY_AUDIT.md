@@ -219,7 +219,7 @@ All paths below use the `/api/v1` prefix.
 | `DELETE /cart/bundles/{item}` | `CartBundleController@destroy` | Optional | Header + item | Route model | Item cart match | API only | Deletes bundle line | Cart resource; 404 |
 | `POST /checkout` | `CheckoutController` | Optional | Header | Customer/shipping/payment | Reassigns instead of rejecting other owner | API only | Customer, order, lines, shipment, payment, stock, cart | Order resource; validation/stock/provider errors |
 | `POST /cart/request-quote` | `CartQuoteController` | Required | Header | Quote fields | Null/same user accepted | Auth middleware | Quote records | Quote response; auth/ownership errors |
-| `POST /payments/initiate` | `PaymentController@initiate` | No | Order id | Payment request | No order owner check | API only | Payment transaction | Transaction resource; provider errors |
+| `POST /payments/initiate` | Removed in Commerce Phase 1D.2A | N/A | N/A | N/A | Retired unsafe guest surface | N/A | None | Returns 404 |
 | `POST /shipping/calculate` | `ShippingController@calculate` | No | Optional cart id/header | Shipping request | No cart owner check for direct id | API only | No intended cart write | Price result; validation/provider errors |
 
 Payment webhook routes use provider signature, timestamp and replay validation;
@@ -1108,7 +1108,8 @@ data. The page is noindex/nofollow/noarchive and no-referrer.
 
 ### Commerce Phase 1D.1 - Checkout Idempotency and Atomic Cart Conversion
 
-Phase 1D.1 is complete locally and remediates CART-002 locally. Checkout
+Phase 1D.1 is merged, MySQL 8.4 CI verified, deployed and staging
+schema/release-gate verified. It remediates CART-002. Checkout
 requires a 43-character Base64URL key generated from 32 cryptographically
 secure bytes. The database stores only the key's SHA-256 hash and a keyed
 HMAC-SHA-256 fingerprint of recursively canonicalized validated checkout data;
@@ -1137,11 +1138,37 @@ automatic retry and sends no idempotency identity to URLs, storage or
 analytics. Focused Laravel, MySQL process-concurrency, frontend and Playwright
 tests cover duplicate submission, response loss, replay, conflict and rollback.
 
-CART-008 remains open for payment-initiation authorization and provider-level
-idempotency in Phase 1D.2. CART-023 remains open because Nginx still disables
-public Cart and checkout routes. Broader browser/MySQL acceptance remains
-assigned to Phase 1D.3. No Product, stock-policy, Supplier or Catalog Sync
-behavior changed.
+CART-008 remained open for payment-initiation authorization and provider-level
+idempotency after Phase 1D.1. CART-023 remains open because Nginx still
+disables public Cart and checkout routes. Broader browser/MySQL acceptance
+remains assigned to Phase 1D.3. No Product, stock-policy, Supplier or Catalog
+Sync behavior changed.
+
+### Commerce Phase 1D.2A - Payment Launch Policy, Card Gate and Public Initiation Lockdown
+
+Phase 1D.2A is complete locally. Initial launch keeps card disabled through
+`PAYMENT_CARD_ENABLED=false`. Database status cannot bypass this launch policy,
+and an allowlisted, container-resolved provider must independently report
+operational readiness. The production card provider reports non-operational,
+throws safely on direct initiation, collects no cardholder data, creates no
+redirect and performs no external request. A test-only fake validates the
+provider boundary without selecting a gateway.
+
+Payment-method discovery, checkout acceptance and `PaymentService` share one
+fail-closed availability authority. Card is omitted from the public method
+collection and rejected before Cart resolution, idempotency persistence or any
+checkout effect. The unauthenticated `POST /api/v1/payments/initiate` route,
+controller action, request and frontend client are removed. Checkout remains
+the only public creator of an initial payment transaction and preserves its
+atomic replay contract.
+
+Cash on delivery and bank transfer remain available when active. Leasing and
+webhook behavior are unchanged; the leasing placeholder URL remains a separate
+known issue. CART-008 is partially remediated. Authenticated Order-owned
+re-initiation, payment-attempt idempotency, retry/concurrency policy, provider
+attempt identity and a card-ready lifecycle remain Phase 1D.2B. CART-023
+remains open because Nginx continues to disable public Cart and checkout
+routes.
 
 ## 30. Release Gates
 

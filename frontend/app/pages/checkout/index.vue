@@ -85,7 +85,6 @@
           <CheckoutPaymentMethodSelect v-model="form.payment_method" class="mt-3" :methods="paymentMethods" />
           <CheckoutBankTransferInstructions v-if="selectedPaymentMethod?.code === 'bank_transfer'" class="mt-4" :instructions="selectedPaymentMethod.instructions" />
           <CheckoutLeasingInfoBox v-if="selectedPaymentMethod?.code === 'leasing'" class="mt-4" />
-          <CheckoutPaymentInstructionsBox v-if="selectedPaymentMethod?.code === 'card'" class="mt-4" text="Плащането с карта е placeholder и ще върне тестова страница за плащане." />
           <textarea v-model="form.notes" class="mt-4 w-full rounded-md border border-slate-300 p-3 text-sm" rows="3" placeholder="Бележки към поръчката" />
           <label class="mt-4 flex items-center gap-2 text-sm"><input v-model="form.terms" type="checkbox" required> Приемам общите условия</label>
         </section>

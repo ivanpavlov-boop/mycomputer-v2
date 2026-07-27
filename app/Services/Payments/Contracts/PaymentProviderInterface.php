@@ -7,6 +7,8 @@ use App\Models\PaymentTransaction;
 
 interface PaymentProviderInterface
 {
+    public function isOperational(): bool;
+
     public function initiatePayment(Order $order, array $data): array;
 
     public function verifyPayment(array $data): array;

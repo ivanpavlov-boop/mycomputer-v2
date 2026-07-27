@@ -255,6 +255,5 @@ Route::prefix('v1')->group(function (): void {
     Route::post('shipping/calculate', [ShippingController::class, 'calculate']);
 
     Route::get('payments/methods', [PaymentController::class, 'methods']);
-    Route::post('payments/initiate', [PaymentController::class, 'initiate']);
     Route::post('payments/webhook/{provider}', [PaymentController::class, 'webhook']);
 });

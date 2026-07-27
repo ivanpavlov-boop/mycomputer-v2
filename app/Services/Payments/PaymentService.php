@@ -3,40 +3,28 @@
 namespace App\Services\Payments;
 
 use App\Events\OrderPaymentStatusChanged;
+use App\Exceptions\PaymentMethodUnavailableException;
 use App\Models\Order;
 use App\Models\PaymentMethod;
-use App\Models\PaymentProvider;
 use App\Models\PaymentTransaction;
 use App\Services\Payments\Contracts\PaymentProviderInterface;
-use App\Services\Payments\Providers\BankTransferProvider;
-use App\Services\Payments\Providers\CardPaymentProvider;
-use App\Services\Payments\Providers\CashOnDeliveryProvider;
-use App\Services\Payments\Providers\LeasingPaymentProvider;
-use App\Services\Payments\Providers\ManualPaymentProvider;
 
 class PaymentService
 {
-    public function provider(PaymentMethod|PaymentProvider|string|null $provider): PaymentProviderInterface
-    {
-        $code = $provider instanceof PaymentMethod ? $provider->code : ($provider instanceof PaymentProvider ? $provider->code : $provider);
-
-        return match ($code) {
-            'cash_on_delivery' => new CashOnDeliveryProvider,
-            'bank_transfer' => new BankTransferProvider,
-            'card' => new CardPaymentProvider,
-            'leasing' => new LeasingPaymentProvider,
-            default => new ManualPaymentProvider,
-        };
-    }
+    public function __construct(
+        private readonly PaymentMethodAvailabilityService $availability,
+        private readonly PaymentProviderResolver $providers,
+    ) {}
 
     public function activeMethod(string $code): PaymentMethod
     {
-        return PaymentMethod::query()
-            ->with('provider')
-            ->where('code', $code)
-            ->where('status', 'active')
-            ->where(fn ($query) => $query->whereNull('payment_provider_id')->orWhereHas('provider', fn ($provider) => $provider->where('status', 'active')))
-            ->firstOrFail();
+        return $this->availability->requireAvailable($code);
+    }
+
+    public function provider(PaymentMethod|string $method): PaymentProviderInterface
+    {
+        return $this->providers->resolve($method)
+            ?? throw new PaymentMethodUnavailableException;
     }
 
     public function initiate(Order $order, string $methodCode, array $data = []): PaymentTransaction

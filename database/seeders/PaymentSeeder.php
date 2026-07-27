@@ -2,6 +2,7 @@
 
 namespace Database\Seeders;
 
+use App\Models\PaymentMethod;
 use App\Models\PaymentProvider;
 use Illuminate\Database\Seeder;
 
@@ -9,7 +10,7 @@ class PaymentSeeder extends Seeder
 {
     public function run(): void
     {
-        $manual = PaymentProvider::query()->updateOrCreate(
+        $manual = PaymentProvider::query()->firstOrCreate(
             ['code' => 'manual'],
             ['name' => 'Manual Payments', 'status' => 'active', 'settings' => ['mock' => true]],
         );
@@ -22,9 +23,19 @@ class PaymentSeeder extends Seeder
         ];
 
         foreach ($methods as $method) {
-            $manual->methods()->updateOrCreate(
+            if ($method['code'] === 'card') {
+                $method['description'] = 'Requires a separately approved card provider configuration.';
+            }
+
+            PaymentMethod::query()->firstOrCreate(
                 ['code' => $method['code']],
-                ['status' => 'active', 'settings' => ['mock' => true]] + $method,
+                [
+                    'payment_provider_id' => $manual->id,
+                    'status' => $method['code'] === 'card' ? 'inactive' : 'active',
+                    'settings' => $method['code'] === 'card'
+                        ? ['requires_provider_configuration' => true]
+                        : ['mock' => true],
+                ] + $method,
             );
         }
     }

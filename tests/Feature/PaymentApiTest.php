@@ -24,7 +24,7 @@ class PaymentApiTest extends TestCase
             ->assertOk()
             ->assertJsonFragment(['code' => 'cash_on_delivery'])
             ->assertJsonFragment(['code' => 'bank_transfer'])
-            ->assertJsonFragment(['code' => 'card'])
+            ->assertJsonMissing(['code' => 'card'])
             ->assertJsonFragment(['code' => 'leasing']);
     }
 
@@ -52,20 +52,14 @@ class PaymentApiTest extends TestCase
             ->assertJsonPath('data.payment.instructions', 'Очаквайте банкови данни и основание за плащане в потвърждението.');
     }
 
-    public function test_checkout_with_card_placeholder_keeps_unapproved_relative_redirect_private(): void
+    public function test_checkout_with_card_is_unavailable_by_default(): void
     {
         $response = $this->checkout('card');
 
-        $response->assertCreated();
-        $this->confirmation($response)
-            ->assertOk()
-            ->assertJsonPath('data.payment_method.code', 'card')
-            ->assertJsonPath('data.payment.redirect_url', null);
-
-        $this->assertSame(
-            '/payment/mock-card?order='.Order::query()->firstOrFail()->order_number,
-            PaymentTransaction::query()->firstOrFail()->raw_response['redirect_url'],
-        );
+        $response->assertUnprocessable()
+            ->assertJsonPath('error.code', 'payment_method_unavailable');
+        $this->assertDatabaseCount('orders', 0);
+        $this->assertDatabaseCount('payment_transactions', 0);
     }
 
     public function test_checkout_with_leasing_placeholder_returns_redirect(): void
@@ -88,7 +82,8 @@ class PaymentApiTest extends TestCase
         $this->withHeader('X-Cart-Session', $this->cartSession('payment-cart'))
             ->withHeader('Idempotency-Key', $this->checkoutIdempotencyKey('inactive-payment-cart'))
             ->postJson('/api/v1/checkout', $this->payload('card'))
-            ->assertNotFound();
+            ->assertUnprocessable()
+            ->assertJsonPath('error.code', 'payment_method_unavailable');
     }
 
     public function test_payment_transaction_amount_equals_order_grand_total(): void
