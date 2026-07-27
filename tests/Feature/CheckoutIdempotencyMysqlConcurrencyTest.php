@@ -9,15 +9,22 @@ use App\Exceptions\CheckoutIdempotencyConflictException;
 use App\Jobs\ConversionTrackingJob;
 use App\Jobs\SendEmailJob;
 use App\Models\Cart;
+use App\Models\Category;
 use App\Models\CheckoutIdempotencyRecord;
+use App\Models\Customer;
 use App\Models\Order;
+use App\Models\PaymentMethod;
+use App\Models\PaymentProvider;
 use App\Models\Product;
+use App\Models\ShippingMethod;
+use App\Models\ShippingProvider;
 use App\Services\Orders\IdempotentCheckoutService;
 use App\Services\Shipping\ShipmentService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Queue;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Mockery;
 use PDOException;
@@ -30,93 +37,120 @@ class CheckoutIdempotencyMysqlConcurrencyTest extends TestCase
     public function test_mysql_checkout_serializes_same_and_different_keys_and_payloads(): void
     {
         $this->requireMysqlConcurrency();
-        $this->seed();
+        $stateBefore = $this->sharedDatabaseState();
+        $referenceFixtures = [];
 
-        $sameKey = $this->runScenario('same-key', [
-            ['key' => 'same-key', 'overrides' => []],
-            ['key' => 'same-key', 'overrides' => []],
-        ]);
-        $this->assertSame([201, 201], $sameKey->pluck('status')->sort()->values()->all());
-        $this->assertSame(1, $sameKey->pluck('order_number')->unique()->count());
+        try {
+            $referenceFixtures = $this->createReferenceFixtures('serialization');
 
-        $differentKeys = $this->runScenario('different-keys', [
-            ['key' => 'different-key-a', 'overrides' => []],
-            ['key' => 'different-key-b', 'overrides' => []],
-        ]);
-        $this->assertSame([201, 201], $differentKeys->pluck('status')->sort()->values()->all());
-        $this->assertSame(1, $differentKeys->pluck('order_number')->unique()->count());
+            $sameKey = $this->runScenario('same-key', [
+                ['key' => 'same-key', 'overrides' => []],
+                ['key' => 'same-key', 'overrides' => []],
+            ], $referenceFixtures);
+            $this->assertSame([201, 201], $sameKey->pluck('status')->sort()->values()->all());
+            $this->assertSame(2, $sameKey->where('status', 201)->count());
+            $this->assertSame(1, $sameKey->pluck('order_number')->unique()->count());
 
-        $differentPayloads = $this->runScenario('different-payloads', [
-            ['key' => 'different-payload-a', 'overrides' => []],
-            ['key' => 'different-payload-b', 'overrides' => ['notes' => 'Changed payload']],
-        ]);
-        $this->assertSame([201, 409], $differentPayloads->pluck('status')->sort()->values()->all());
-        $this->assertSame(
-            ['checkout_already_completed'],
-            $differentPayloads->pluck('code')->filter()->values()->all(),
-        );
+            $differentKeys = $this->runScenario('different-keys', [
+                ['key' => 'different-key-a', 'overrides' => []],
+                ['key' => 'different-key-b', 'overrides' => []],
+            ], $referenceFixtures);
+            $this->assertSame([201, 201], $differentKeys->pluck('status')->sort()->values()->all());
+            $this->assertSame(2, $differentKeys->where('status', 201)->count());
+            $this->assertSame(1, $differentKeys->pluck('order_number')->unique()->count());
 
-        $rollbackRace = $this->runScenario('rollback-race', [
-            ['key' => 'rollback-race-a', 'overrides' => [], 'fail' => true],
-            ['key' => 'rollback-race-b', 'overrides' => [], 'wait_for_failure' => true],
-        ]);
-        $this->assertSame([201, 500], $rollbackRace->pluck('status')->sort()->values()->all());
-        $this->assertSame(1, $rollbackRace->pluck('order_number')->filter()->unique()->count());
+            $differentPayloads = $this->runScenario('different-payloads', [
+                ['key' => 'different-payload-a', 'overrides' => []],
+                ['key' => 'different-payload-b', 'overrides' => ['notes' => 'Changed payload']],
+            ], $referenceFixtures);
+            $this->assertSame([201, 409], $differentPayloads->pluck('status')->sort()->values()->all());
+            $this->assertSame(1, $differentPayloads->where('status', 201)->count());
+            $this->assertSame(
+                ['checkout_already_completed'],
+                $differentPayloads->pluck('code')->filter()->values()->all(),
+            );
+
+            $rollbackRace = $this->runScenario('rollback-race', [
+                ['key' => 'rollback-race-a', 'overrides' => [], 'fail' => true],
+                ['key' => 'rollback-race-b', 'overrides' => [], 'wait_for_failure' => true],
+            ], $referenceFixtures);
+            $this->assertSame([201, 500], $rollbackRace->pluck('status')->sort()->values()->all());
+            $this->assertSame(1, $rollbackRace->where('status', 201)->count());
+            $this->assertSame(1, $rollbackRace->pluck('order_number')->filter()->unique()->count());
+        } finally {
+            $this->cleanupReferenceFixtures($referenceFixtures);
+            $this->assertSame($stateBefore, $this->sharedDatabaseState());
+        }
     }
 
     public function test_mysql_transaction_retry_commits_once_and_dispatches_once(): void
     {
         $this->requireMysqlConcurrency();
-        $this->seed();
-        Queue::fake([ConversionTrackingJob::class, SendEmailJob::class]);
-        Event::fake([OrderCreated::class, OrderPaymentStatusChanged::class]);
-        [$cart, $product, $stockBefore] = $this->cartFixture('transaction-retry');
-        $shipmentService = app(ShipmentService::class);
-        $attempts = 0;
-        $mock = Mockery::mock(ShipmentService::class);
-        $mock->shouldReceive('create')
-            ->twice()
-            ->andReturnUsing(function ($order, array $data) use (&$attempts, $shipmentService) {
-                $attempts++;
-
-                if ($attempts === 1) {
-                    throw new PDOException(
-                        'Deadlock found when trying to get lock; try restarting transaction',
-                        40001,
-                    );
-                }
-
-                return $shipmentService->create($order, $data);
-            });
-        $this->app->instance(ShipmentService::class, $mock);
+        $stateBefore = $this->sharedDatabaseState();
+        $referenceFixtures = [];
 
         try {
-            $result = app(IdempotentCheckoutService::class)->checkout(
-                $this->checkoutRequest($cart, 'transaction-retry', []),
-                $this->checkoutPayload(),
+            $referenceFixtures = $this->createReferenceFixtures('transaction-retry');
+            Queue::fake([ConversionTrackingJob::class, SendEmailJob::class]);
+            Event::fake([OrderCreated::class, OrderPaymentStatusChanged::class]);
+            [$cart, $product, $stockBefore, $checkoutFixture] = $this->cartFixture(
+                'transaction-retry',
+                $referenceFixtures,
             );
+            $shipmentService = app(ShipmentService::class);
+            $attempts = 0;
+            $mock = Mockery::mock(ShipmentService::class);
+            $mock->shouldReceive('create')
+                ->twice()
+                ->andReturnUsing(function ($order, array $data) use (&$attempts, $shipmentService) {
+                    $attempts++;
 
-            $this->assertSame(2, $attempts);
-            $this->assertFalse($result->replayed());
-            $this->assertScenarioEffects($cart, $product, $stockBefore);
-            Queue::assertPushed(ConversionTrackingJob::class, 1);
-            Queue::assertPushed(SendEmailJob::class, 1);
-            Event::assertDispatched(OrderCreated::class, 1);
-            Event::assertDispatched(OrderPaymentStatusChanged::class, 1);
+                    if ($attempts === 1) {
+                        throw new PDOException(
+                            'Deadlock found when trying to get lock; try restarting transaction',
+                            40001,
+                        );
+                    }
+
+                    return $shipmentService->create($order, $data);
+                });
+            $this->app->instance(ShipmentService::class, $mock);
+
+            try {
+                $result = app(IdempotentCheckoutService::class)->checkout(
+                    $this->checkoutRequest($cart, 'transaction-retry', $checkoutFixture),
+                    $this->checkoutPayload($checkoutFixture),
+                );
+
+                $this->assertSame(2, $attempts);
+                $this->assertFalse($result->replayed());
+                $this->assertScenarioEffects($cart, $product, $stockBefore, 1);
+                Queue::assertPushed(ConversionTrackingJob::class, 1);
+                Queue::assertPushed(SendEmailJob::class, 1);
+                Event::assertDispatched(OrderCreated::class, 1);
+                Event::assertDispatched(OrderPaymentStatusChanged::class, 1);
+            } finally {
+                $this->cleanupScenario($cart, $product, $checkoutFixture);
+            }
         } finally {
-            $this->cleanupScenario($cart, $product, $stockBefore);
+            $this->cleanupReferenceFixtures($referenceFixtures);
+            $this->assertSame($stateBefore, $this->sharedDatabaseState());
         }
     }
 
-    private function runScenario(string $name, array $attempts)
+    private function runScenario(string $name, array $attempts, array $referenceFixtures)
     {
-        [$cart, $product, $stockBefore] = $this->cartFixture($name);
+        [$cart, $product, $stockBefore, $checkoutFixture] = $this->cartFixture(
+            $name,
+            $referenceFixtures,
+        );
         $directory = sys_get_temp_dir().DIRECTORY_SEPARATOR.'checkout-idempotency-'.Str::uuid();
         $startFile = $directory.DIRECTORY_SEPARATOR.'start';
         $failureBarrier = $directory.DIRECTORY_SEPARATOR.'failure-barrier';
         $children = [];
         $waited = [];
 
+        $this->assertNoOpenTransactions();
         $this->purgeDatabaseConnections();
 
         if (! mkdir($directory)) {
@@ -137,6 +171,7 @@ class CheckoutIdempotencyMysqlConcurrencyTest extends TestCase
                         $attempt,
                         $cart->id,
                         $cart->session_id,
+                        $checkoutFixture,
                         $startFile,
                         $failureBarrier,
                         $directory,
@@ -163,7 +198,13 @@ class CheckoutIdempotencyMysqlConcurrencyTest extends TestCase
                 return json_decode((string) file_get_contents($path), true, 512, JSON_THROW_ON_ERROR);
             });
             $this->purgeDatabaseConnections();
-            $this->assertScenarioEffects($cart, $product, $stockBefore);
+            $successfulResponses = $results->where('status', 201)->count();
+            $this->assertScenarioEffects(
+                $cart,
+                $product,
+                $stockBefore,
+                $successfulResponses,
+            );
 
             return $results;
         } finally {
@@ -176,7 +217,7 @@ class CheckoutIdempotencyMysqlConcurrencyTest extends TestCase
             }
 
             $this->purgeDatabaseConnections();
-            $this->cleanupScenario($cart, $product, $stockBefore);
+            $this->cleanupScenario($cart, $product, $checkoutFixture);
 
             foreach (glob($directory.DIRECTORY_SEPARATOR.'*') ?: [] as $path) {
                 unlink($path);
@@ -193,6 +234,7 @@ class CheckoutIdempotencyMysqlConcurrencyTest extends TestCase
         array $attempt,
         int $cartId,
         string $cartSession,
+        array $checkoutFixture,
         string $startFile,
         string $failureBarrier,
         string $directory,
@@ -229,12 +271,18 @@ class CheckoutIdempotencyMysqlConcurrencyTest extends TestCase
         }
 
         $overrides = $attempt['overrides'] ?? [];
-        $payload = $this->checkoutPayload($overrides);
+        $payload = $this->checkoutPayload($checkoutFixture, $overrides);
 
         try {
             $cart = Cart::query()->findOrFail($cartId);
             $result = app(IdempotentCheckoutService::class)->checkout(
-                $this->checkoutRequest($cart, $attempt['key'], $overrides, $cartSession),
+                $this->checkoutRequest(
+                    $cart,
+                    $attempt['key'],
+                    $checkoutFixture,
+                    $overrides,
+                    $cartSession,
+                ),
                 $payload,
             );
             $response = [
@@ -260,102 +308,369 @@ class CheckoutIdempotencyMysqlConcurrencyTest extends TestCase
         exit($written === false ? 1 : 0);
     }
 
-    private function assertScenarioEffects(Cart $cart, Product $product, int $stockBefore): void
-    {
+    private function assertScenarioEffects(
+        Cart $cart,
+        Product $product,
+        int $stockBefore,
+        int $expectedCapabilityCount,
+    ): void {
         $record = CheckoutIdempotencyRecord::query()->where('cart_id', $cart->id)->sole();
         $this->assertSame('completed', $record->status);
         $this->assertNotNull($record->order_id);
         $this->assertSame(1, Order::query()->whereKey($record->order_id)->count());
         $this->assertSame(1, DB::table('payment_transactions')->where('order_id', $record->order_id)->count());
         $this->assertSame(1, DB::table('order_shipments')->where('order_id', $record->order_id)->count());
-        $this->assertSame(1, DB::table('checkout_confirmation_capabilities')->where('order_id', $record->order_id)->count());
+        $capabilities = DB::table('checkout_confirmation_capabilities')
+            ->where('order_id', $record->order_id)
+            ->get(['order_id', 'token_hash']);
+        $this->assertCount($expectedCapabilityCount, $capabilities);
+        $this->assertSame(
+            $expectedCapabilityCount,
+            $capabilities->pluck('token_hash')->unique()->count(),
+        );
+        $this->assertSame(
+            [$record->order_id],
+            $capabilities->pluck('order_id')->unique()->values()->all(),
+        );
+        $this->assertFalse(Schema::hasColumn('checkout_confirmation_capabilities', 'token'));
         $this->assertSame($stockBefore - 1, (int) $product->fresh()->quantity);
         $this->assertSame('converted', $cart->fresh()->status);
     }
 
-    private function cartFixture(string $name): array
+    private function cartFixture(string $name, array $referenceFixtures): array
     {
-        $product = Product::query()->where('sku', 'MC-LAP-001')->firstOrFail();
-        $product->update([
-            'active' => true,
-            'workflow_status' => 'published',
-            'product_status' => 'active',
-            'published_at' => now(),
-            'price' => 100,
-            'regular_price' => 100,
-            'promo_price' => null,
-            'quantity' => 100,
-        ]);
-        $cart = Cart::query()->create([
-            'session_id' => $this->cartSession('mysql-'.$name),
-            'status' => 'active',
-            'expires_at' => now()->addDay(),
-        ]);
-        $cart->items()->create([
-            'product_id' => $product->id,
-            'quantity' => 1,
-            'is_gift' => false,
-            'unit_price' => 100,
-            'total_price' => 100,
-        ]);
+        $suffix = Str::lower(Str::random(12));
+        $product = null;
+        $cart = null;
 
-        return [$cart, $product, 100];
+        try {
+            $product = Product::factory()->create([
+                'category_id' => $referenceFixtures['category_id'],
+                'brand_id' => null,
+                'supplier_id' => null,
+                'sku' => 'TEST-CHECKOUT-IDEMPOTENCY-'.Str::upper($suffix),
+                'supplier_sku' => null,
+                'name' => 'Checkout idempotency test product '.$suffix,
+                'slug' => 'checkout-idempotency-test-product-'.$suffix,
+                'active' => true,
+                'workflow_status' => Product::WORKFLOW_PUBLISHED,
+                'product_status' => 'active',
+                'published_at' => now(),
+                'price' => 100,
+                'regular_price' => 100,
+                'promo_price' => null,
+                'quantity' => 100,
+                'reserved_quantity' => 0,
+                'stock_status' => Product::STOCK_STATUS_IN_STOCK,
+                'availability_status_id' => null,
+            ]);
+            $cart = Cart::query()->create([
+                'session_id' => $this->cartSession('mysql-'.$name.'-'.$suffix),
+                'status' => 'active',
+                'expires_at' => now()->addDay(),
+            ]);
+            $cart->items()->create([
+                'product_id' => $product->id,
+                'quantity' => 1,
+                'is_gift' => false,
+                'unit_price' => 100,
+                'total_price' => 100,
+            ]);
+            $checkoutFixture = [
+                'customer_email' => "checkout-idempotency-{$suffix}@example.test",
+                'payment_method' => $referenceFixtures['payment_method_code'],
+                'shipping_method' => $referenceFixtures['shipping_method_code'],
+                'shipping_provider' => $referenceFixtures['shipping_provider_code'],
+            ];
+
+            return [$cart, $product, 100, $checkoutFixture];
+        } catch (Throwable $exception) {
+            if ($cart !== null) {
+                Cart::query()->whereKey($cart->id)->delete();
+            }
+
+            if ($product !== null) {
+                Product::withTrashed()->whereKey($product->id)->forceDelete();
+            }
+
+            throw $exception;
+        }
     }
 
     private function checkoutRequest(
         Cart $cart,
         string $key,
+        array $checkoutFixture,
         array $overrides = [],
         ?string $cartSession = null,
     ): Request {
-        $request = Request::create('/api/v1/checkout', 'POST', $this->checkoutPayload($overrides));
+        $request = Request::create(
+            '/api/v1/checkout',
+            'POST',
+            $this->checkoutPayload($checkoutFixture, $overrides),
+        );
         $request->headers->set('X-Cart-Session', $cartSession ?? $cart->session_id);
         $request->headers->set('Idempotency-Key', $this->checkoutIdempotencyKey($key));
 
         return $request;
     }
 
-    private function checkoutPayload(array $overrides = []): array
+    private function checkoutPayload(array $checkoutFixture, array $overrides = []): array
     {
         return array_replace([
             'first_name' => 'Ivan',
             'last_name' => 'Petrov',
-            'email' => 'checkout-concurrency@example.test',
+            'email' => $checkoutFixture['customer_email'],
             'phone' => '0888123456',
             'billing_address' => 'Sofia, Bulgaria',
             'shipping_address' => 'Sofia, Bulgaria',
-            'payment_method' => 'cash_on_delivery',
-            'shipping_method' => 'address_delivery',
-            'shipping_provider' => 'manual',
+            'payment_method' => $checkoutFixture['payment_method'],
+            'shipping_method' => $checkoutFixture['shipping_method'],
+            'shipping_provider' => $checkoutFixture['shipping_provider'],
+            'delivery_type' => 'address',
             'city' => 'Sofia',
             'notes' => 'Concurrent checkout',
             'terms' => true,
         ], $overrides);
     }
 
-    private function cleanupScenario(Cart $cart, Product $product, int $stockBefore): void
+    private function createReferenceFixtures(string $name): array
     {
-        $record = CheckoutIdempotencyRecord::query()->where('cart_id', $cart->id)->first();
-        $orderId = $record?->order_id;
-        $record?->delete();
+        $suffix = Str::lower(Str::random(12));
+        $fixtures = [
+            'category_id' => null,
+            'payment_provider_id' => null,
+            'payment_method_id' => null,
+            'payment_method_owned' => false,
+            'payment_method_code' => 'cash_on_delivery',
+            'shipping_provider_id' => null,
+            'shipping_method_id' => null,
+            'shipping_provider_code' => 'ci-shipping-'.$suffix,
+            'shipping_method_code' => 'ci-address-'.$suffix,
+        ];
 
-        DB::table('promotion_redemptions')->where('session_id', $cart->session_id)->delete();
-        DB::table('abandoned_cart_records')->where('session_id', $cart->session_id)->delete();
-        DB::table('marketing_events')->where('session_id', $cart->session_id)->delete();
+        try {
+            $category = Category::factory()->create([
+                'name' => 'Checkout idempotency '.$name.' '.$suffix,
+                'slug' => 'checkout-idempotency-'.$name.'-'.$suffix,
+                'is_active' => true,
+            ]);
+            $fixtures['category_id'] = $category->id;
 
-        if ($orderId !== null) {
-            Order::query()->whereKey($orderId)->delete();
+            $paymentMethod = PaymentMethod::query()
+                ->with('provider')
+                ->where('code', $fixtures['payment_method_code'])
+                ->first();
+
+            if ($paymentMethod === null) {
+                $paymentProvider = PaymentProvider::query()->create([
+                    'name' => 'Checkout idempotency payment '.$suffix,
+                    'code' => 'ci-payment-'.$suffix,
+                    'status' => 'active',
+                    'settings' => ['test_owned' => true],
+                ]);
+                $fixtures['payment_provider_id'] = $paymentProvider->id;
+                $paymentMethod = $paymentProvider->methods()->create([
+                    'name' => 'Checkout idempotency cash on delivery',
+                    'code' => $fixtures['payment_method_code'],
+                    'type' => 'offline',
+                    'status' => 'active',
+                    'settings' => ['test_owned' => true],
+                ]);
+                $fixtures['payment_method_owned'] = true;
+            } else {
+                $this->assertSame('active', $paymentMethod->status);
+
+                if ($paymentMethod->provider !== null) {
+                    $this->assertSame('active', $paymentMethod->provider->status);
+                }
+            }
+
+            $fixtures['payment_method_id'] = $paymentMethod->id;
+            $shippingProvider = ShippingProvider::query()->create([
+                'name' => 'Checkout idempotency shipping '.$suffix,
+                'code' => $fixtures['shipping_provider_code'],
+                'status' => 'active',
+                'settings' => ['test_owned' => true],
+            ]);
+            $fixtures['shipping_provider_id'] = $shippingProvider->id;
+            $shippingMethod = $shippingProvider->methods()->create([
+                'name' => 'Checkout idempotency address delivery',
+                'code' => $fixtures['shipping_method_code'],
+                'type' => 'address',
+                'status' => 'active',
+                'price' => 8.99,
+                'free_shipping_threshold' => null,
+                'settings' => ['test_owned' => true],
+            ]);
+            $fixtures['shipping_method_id'] = $shippingMethod->id;
+
+            return $fixtures;
+        } catch (Throwable $exception) {
+            $this->cleanupReferenceFixtures($fixtures);
+
+            throw $exception;
+        }
+    }
+
+    private function cleanupScenario(
+        Cart $cart,
+        Product $product,
+        array $checkoutFixture,
+    ): void {
+        $this->purgeDatabaseConnections();
+        $orderIds = DB::table('orders')
+            ->where('customer_email', $checkoutFixture['customer_email'])
+            ->pluck('id');
+
+        DB::table('checkout_idempotency_records')
+            ->where('cart_id', $cart->id)
+            ->orWhereIn('order_id', $orderIds)
+            ->delete();
+        DB::table('promotion_redemptions')
+            ->where('session_id', $cart->session_id)
+            ->orWhereIn('order_id', $orderIds)
+            ->delete();
+        DB::table('abandoned_cart_records')
+            ->where('session_id', $cart->session_id)
+            ->orWhere('restored_cart_id', $cart->id)
+            ->orWhereIn('recovered_order_id', $orderIds)
+            ->delete();
+        DB::table('marketing_events')
+            ->where('session_id', $cart->session_id)
+            ->orWhere('payload->email', $checkoutFixture['customer_email'])
+            ->delete();
+        DB::table('email_logs')
+            ->where('email', $checkoutFixture['customer_email'])
+            ->delete();
+        DB::table('conversion_logs')->whereIn('order_id', $orderIds)->delete();
+        DB::table('erp_documents')->whereIn('order_id', $orderIds)->delete();
+        DB::table('erp_sync_jobs')
+            ->whereIn('entity_type', ['order', 'payment'])
+            ->whereIn('entity_id', $orderIds)
+            ->delete();
+        Order::query()->whereKey($orderIds)->delete();
+        Customer::query()
+            ->where('email', $checkoutFixture['customer_email'])
+            ->delete();
+        Cart::query()->whereKey($cart->id)->delete();
+        Product::withTrashed()->whereKey($product->id)->forceDelete();
+
+        $this->assertSame(0, DB::table('checkout_idempotency_records')->where('cart_id', $cart->id)->count());
+        $this->assertSame(0, DB::table('checkout_confirmation_capabilities')->whereIn('order_id', $orderIds)->count());
+        $this->assertSame(0, DB::table('orders')->whereIn('id', $orderIds)->count());
+        $this->assertSame(0, DB::table('customers')->where('email', $checkoutFixture['customer_email'])->count());
+        $this->assertSame(0, DB::table('carts')->where('id', $cart->id)->count());
+        $this->assertSame(0, DB::table('products')->where('id', $product->id)->count());
+        $this->purgeDatabaseConnections();
+    }
+
+    private function cleanupReferenceFixtures(array $fixtures): void
+    {
+        $this->purgeDatabaseConnections();
+
+        if (($fixtures['shipping_method_id'] ?? null) !== null) {
+            ShippingMethod::query()->whereKey($fixtures['shipping_method_id'])->delete();
         }
 
-        Cart::query()->whereKey($cart->id)->delete();
-        Product::query()->whereKey($product->id)->update(['quantity' => $stockBefore]);
+        if (($fixtures['shipping_provider_id'] ?? null) !== null) {
+            ShippingProvider::query()->whereKey($fixtures['shipping_provider_id'])->delete();
+        }
+
+        if (($fixtures['payment_method_owned'] ?? false) === true) {
+            PaymentMethod::query()->whereKey($fixtures['payment_method_id'])->delete();
+        }
+
+        if (($fixtures['payment_provider_id'] ?? null) !== null) {
+            PaymentProvider::query()->whereKey($fixtures['payment_provider_id'])->delete();
+        }
+
+        if (($fixtures['category_id'] ?? null) !== null) {
+            Category::withTrashed()->whereKey($fixtures['category_id'])->forceDelete();
+        }
+
+        foreach ([
+            'shipping_methods' => $fixtures['shipping_method_id'] ?? null,
+            'shipping_providers' => $fixtures['shipping_provider_id'] ?? null,
+            'payment_providers' => $fixtures['payment_provider_id'] ?? null,
+            'categories' => $fixtures['category_id'] ?? null,
+        ] as $table => $id) {
+            if ($id !== null) {
+                $this->assertSame(0, DB::table($table)->where('id', $id)->count());
+            }
+        }
+
+        if (($fixtures['payment_method_owned'] ?? false) === true) {
+            $this->assertSame(
+                0,
+                DB::table('payment_methods')
+                    ->where('id', $fixtures['payment_method_id'])
+                    ->count(),
+            );
+        }
+
+        $this->purgeDatabaseConnections();
+    }
+
+    private function sharedDatabaseState(): array
+    {
+        $this->purgeDatabaseConnections();
+
+        $tables = [
+            'users',
+            'categories',
+            'products',
+            'carts',
+            'cart_items',
+            'customers',
+            'orders',
+            'order_items',
+            'payment_providers',
+            'payment_methods',
+            'payment_transactions',
+            'shipping_providers',
+            'shipping_methods',
+            'order_shipments',
+            'checkout_idempotency_records',
+            'checkout_confirmation_capabilities',
+            'promotion_redemptions',
+            'abandoned_cart_records',
+            'marketing_events',
+            'email_logs',
+            'conversion_logs',
+            'erp_sync_jobs',
+            'erp_documents',
+        ];
+        $state = collect($tables)
+            ->mapWithKeys(fn (string $table): array => [
+                $table => (int) DB::table($table)->count(),
+            ])
+            ->all();
+
+        return [
+            'admin_count' => (int) DB::table('users')
+                ->where('email', 'admin@mycomputer.bg')
+                ->count(),
+            'migration_count' => (int) DB::table('migrations')->count(),
+            'migration_max_batch' => (int) DB::table('migrations')->max('batch'),
+        ] + $state;
+    }
+
+    private function assertNoOpenTransactions(): void
+    {
+        foreach (array_keys(DB::getConnections()) as $connectionName) {
+            $this->assertSame(0, DB::connection($connectionName)->transactionLevel());
+        }
     }
 
     private function purgeDatabaseConnections(): void
     {
         foreach (array_keys(DB::getConnections()) as $connectionName) {
+            DB::disconnect($connectionName);
             DB::purge($connectionName);
         }
+
+        DB::purge(config('database.default'));
     }
 
     private function requireMysqlConcurrency(): void
