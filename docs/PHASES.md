@@ -46,7 +46,8 @@ Phase 8 manual selected UPDATE price/stock sync has been implemented behind a fe
 | Commerce Phase 1C.2 | Cart UX States and Analytics Consistency | Merged, deployed and staging verified; explicit Cart UX states, scoped mutation feedback, actionable readiness and operation-deduplicated analytics use confirmed backend Cart data. |
 | Commerce Phase 1C.3 | Real Browser Cart Lifecycle Acceptance | Merged, deployed and staging verified; deterministic Playwright coverage verifies SSR, hydration, persistence, auth transitions, offline recovery, mutations, analytics, keyboard and mobile Cart behavior. |
 | Commerce Phase 1C.4 | Checkout Success Data Safety | Merged, deployed and staging verified; the confirmation cookie is host-only. |
-| Commerce Phase 1D.1 | Checkout Idempotency and Atomic Cart Conversion | Complete locally; checkout identity, replay, atomic conversion and post-commit effects are covered without enabling public commerce routes. |
+| Commerce Phase 1D.1 | Checkout Idempotency and Atomic Cart Conversion | Merged, MySQL 8.4 CI verified, deployed and staging schema/release-gate verified. |
+| Commerce Phase 1D.2A | Payment Launch Policy, Card Gate and Public Initiation Lockdown | Complete locally; card is fail-closed, payment availability is centralized and the unauthenticated public initiation route is removed without enabling commerce routes. |
 | Phase 9C.1 | Product attributes core foundation | Complete |
 | Phase 9C.2 | Product attributes admin usability and starter structure | Complete |
 | Phase 9C.3 | Category attribute sets | Complete |
@@ -717,7 +718,8 @@ analytics, and is marked noindex/nofollow/noarchive with no-referrer.
 
 ## Commerce Phase 1D.1 Scope
 
-Commerce Phase 1D.1 is complete locally and remediates CART-002 locally.
+Commerce Phase 1D.1 is merged, MySQL 8.4 CI verified, deployed and staging
+schema/release-gate verified. It remediates CART-002.
 `POST /api/v1/checkout` requires one 32-byte Base64URL `Idempotency-Key`.
 Only its SHA-256 hash is persisted. Validated checkout data is recursively
 canonicalized and compared through a keyed HMAC; no customer PII, raw request
@@ -742,11 +744,36 @@ clears it after success, definitive rejection, form change or Cart change.
 Focused Laravel, MySQL-only concurrency, frontend and Playwright coverage
 verify the contract.
 
-CART-008 remains open for payment-initiation authorization and provider-level
-payment idempotency in Phase 1D.2. CART-023 remains open because the Nginx
-commerce release gate still disables public Cart and checkout routes. Broader
+CART-008 remained open for payment-initiation authorization and provider-level
+idempotency after this phase. CART-023 remains open because the Nginx commerce
+release gate still disables public Cart and checkout routes. Broader
 real-browser/MySQL acceptance remains assigned to Phase 1D.3. No Product,
 stock-policy, supplier or Catalog Sync behavior changed.
+
+## Commerce Phase 1D.2A Scope
+
+Commerce Phase 1D.2A is complete locally. Initial launch does not enable card
+payments. `PAYMENT_CARD_ENABLED=false` is the default, database status cannot
+bypass the flag, and an operational provider is also required. The production
+card provider is deliberately non-operational, performs no network request,
+collects no card data and creates no redirect. A container-bound test fake
+proves future provider replaceability without selecting or integrating a real
+gateway.
+
+Public payment-method discovery and checkout acceptance share one
+fail-closed availability service. Card is absent from the public methods API
+and a submitted unavailable card method is rejected before Cart resolution,
+checkout idempotency persistence or any checkout side effect. The
+unauthenticated `POST /api/v1/payments/initiate` surface is removed. Initial
+transaction creation remains inside the atomic idempotent checkout flow.
+
+Cash on delivery and bank transfer are preserved. Leasing and webhook behavior
+are unchanged; the existing leasing placeholder URL remains a separate known
+finding for a future scoped phase. CART-008 is partially remediated:
+authenticated Order-owned re-initiation, payment-attempt idempotency, retries,
+concurrency, attempt identity and a card-ready result lifecycle remain assigned
+to Commerce Phase 1D.2B. CART-023 remains open and public commerce routes remain
+disabled.
 
 ## Phase 9C.6.5A and 9C.6.5B Implemented Scope
 

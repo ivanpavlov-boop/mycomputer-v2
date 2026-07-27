@@ -501,15 +501,35 @@ const server = createServer(async (request, response) => {
 
   if (request.method === 'GET' && url.pathname === '/api/v1/payments/methods') {
     send(response, 200, {
-      data: [{
-        id: 1,
-        name: 'Наложен платеж',
-        code: 'cash_on_delivery',
-        type: 'offline',
-        description: null,
-        instructions: null,
-        sort_order: 1,
-      }],
+      data: [
+        {
+          id: 1,
+          name: 'Наложен платеж',
+          code: 'cash_on_delivery',
+          type: 'offline',
+          description: null,
+          instructions: null,
+          sort_order: 1,
+        },
+        {
+          id: 2,
+          name: 'Банков превод',
+          code: 'bank_transfer',
+          type: 'offline',
+          description: null,
+          instructions: 'Ще получите данни за банков превод.',
+          sort_order: 2,
+        },
+        {
+          id: 4,
+          name: 'Лизинг',
+          code: 'leasing',
+          type: 'leasing',
+          description: null,
+          instructions: null,
+          sort_order: 4,
+        },
+      ],
     }, origin)
     return
   }
@@ -554,6 +574,19 @@ const server = createServer(async (request, response) => {
 
   if (request.method === 'POST' && url.pathname === '/api/v1/checkout') {
     const input = await bodyOf(request)
+
+    if (input.payment_method === 'card') {
+      send(response, 422, {
+        success: false,
+        error: {
+          code: 'payment_method_unavailable',
+          message: 'Избраният начин на плащане не е наличен.',
+          details: null,
+        },
+      }, origin)
+      return
+    }
+
     const idempotency = state.inspectCheckout(
       request.headers['idempotency-key'],
       cartSession,

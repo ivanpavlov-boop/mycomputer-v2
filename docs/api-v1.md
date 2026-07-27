@@ -602,7 +602,8 @@ Leasing placeholder:
 
 `GET /api/v1/payments/methods`
 
-Returns active payment methods:
+Returns payment methods allowed by the launch policy. Card is absent by
+default and cannot be enabled by database status alone:
 
 ```json
 {
@@ -619,29 +620,9 @@ Returns active payment methods:
 }
 ```
 
-`POST /api/v1/payments/initiate`
-
-```json
-{
-  "order_id": 1,
-  "payment_method_code": "card"
-}
-```
-
-Response:
-
-```json
-{
-  "data": {
-    "transaction_id": "PAY-ABC123",
-    "amount": "208.99",
-    "currency": "EUR",
-    "status": "pending",
-    "redirect_url": "/payment/mock-card?order=MC20260608-12345",
-    "instructions": null
-  }
-}
-```
+The former public `POST /api/v1/payments/initiate` endpoint is removed and
+returns `404`. Initial payment transactions are created only inside the atomic
+checkout flow.
 
 `POST /api/v1/payments/webhook/{provider}`
 

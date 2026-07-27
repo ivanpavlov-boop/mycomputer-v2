@@ -34,6 +34,31 @@ class CartContextResolver
         return $cart->load(self::RELATIONS);
     }
 
+    public function assertSessionOwnership(Request $request): void
+    {
+        $sessionId = $this->sessionId($request);
+
+        if ($sessionId === null) {
+            return;
+        }
+
+        $ownerId = Cart::query()
+            ->where('session_id', $sessionId)
+            ->value('user_id');
+
+        if ($ownerId === null) {
+            return;
+        }
+
+        $userId = Auth::guard('sanctum')->id();
+
+        abort_if(
+            $userId === null || (int) $ownerId !== (int) $userId,
+            403,
+            'Cart access is not allowed.',
+        );
+    }
+
     public function sessionId(Request $request): ?string
     {
         $sessionId = $request->header('X-Cart-Session');

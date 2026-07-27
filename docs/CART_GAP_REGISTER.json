@@ -217,6 +217,7 @@
       "severity": "high",
       "confidence": "confirmed",
       "status": "open",
+      "local_remediation_status": "partially_remediated_locally",
       "current_behavior": "The payment initiation endpoint accepts an order identifier without authentication or ownership enforcement and creates a new transaction on each request. Transaction identifiers are indexed but not unique.",
       "risk": "Arbitrary orders can receive duplicate or unauthorized payment attempts.",
       "evidence": [
@@ -986,7 +987,7 @@
     },
     {
       "phase": "Commerce Phase 1D.1",
-      "status": "complete_locally",
+      "status": "merged_deployed_staging_verified",
       "finding_ids": [
         "CART-002"
       ],
@@ -1004,7 +1005,30 @@
         "Equivalent concurrent submissions create at most one Order and one set of checkout side effects.",
         "Successful replays receive fresh short-lived host-only confirmation capabilities without invalidating other valid confirmations.",
         "Standalone payment initiation ownership and provider-level payment idempotency remain assigned to Commerce Phase 1D.2.",
-        "Public commerce routes remain disabled at Nginx."
+        "Public commerce routes remain disabled at Nginx.",
+        "Phase 1D.1 is merged, MySQL 8.4 CI verified, deployed and staging schema/release-gate verified."
+      ]
+    },
+    {
+      "phase": "Commerce Phase 1D.2A",
+      "status": "complete_locally",
+      "finding_ids": [],
+      "partial_finding_ids": [
+        "CART-008"
+      ],
+      "open_finding_ids": [
+        "CART-008",
+        "CART-023"
+      ],
+      "notes": [
+        "Card payment is disabled by default through a fail-closed launch policy.",
+        "Public payment-method discovery and checkout acceptance share one authoritative availability service.",
+        "The production card provider is non-operational and performs no external request.",
+        "A test-only fake provider verifies future container-resolved card integration without activating card.",
+        "The unauthenticated public payment-initiation endpoint has been removed.",
+        "Initial payment transaction creation remains inside the atomic idempotent checkout flow.",
+        "Authenticated Order-owned payment re-initiation and payment-attempt idempotency remain assigned to Commerce Phase 1D.2B.",
+        "Public Cart and checkout pages remain disabled through Nginx."
       ]
     }
   ]

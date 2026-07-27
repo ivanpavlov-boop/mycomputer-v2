@@ -9,6 +9,11 @@ use Illuminate\Support\Str;
 
 class ManualPaymentProvider implements PaymentProviderInterface
 {
+    public function isOperational(): bool
+    {
+        return true;
+    }
+
     public function initiatePayment(Order $order, array $data): array
     {
         return [

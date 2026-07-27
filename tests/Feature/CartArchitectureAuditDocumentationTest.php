@@ -141,7 +141,7 @@ final class CartArchitectureAuditDocumentationTest extends TestCase
 
         $progress = $register['remediation_progress'] ?? [];
 
-        $this->assertCount(11, $progress);
+        $this->assertCount(12, $progress);
         $this->assertSame('Commerce Phase 1B.1', $progress[0]['phase'] ?? null);
         $this->assertSame('merged_deployed_staging_verified', $progress[0]['status'] ?? null);
         $this->assertSame(['CART-001', 'CART-022'], $progress[0]['finding_ids'] ?? null);
@@ -209,11 +209,21 @@ final class CartArchitectureAuditDocumentationTest extends TestCase
             $progress[9]['notes'],
         );
         $this->assertSame('Commerce Phase 1D.1', $progress[10]['phase'] ?? null);
-        $this->assertSame('complete_locally', $progress[10]['status'] ?? null);
+        $this->assertSame('merged_deployed_staging_verified', $progress[10]['status'] ?? null);
         $this->assertSame(['CART-002'], $progress[10]['finding_ids'] ?? null);
         $this->assertSame([], $progress[10]['partial_finding_ids'] ?? null);
         $this->assertSame(['CART-008', 'CART-023'], $progress[10]['open_finding_ids'] ?? null);
         $this->assertNotEmpty($progress[10]['notes'] ?? []);
+        $this->assertSame('Commerce Phase 1D.2A', $progress[11]['phase'] ?? null);
+        $this->assertSame('complete_locally', $progress[11]['status'] ?? null);
+        $this->assertSame([], $progress[11]['finding_ids'] ?? null);
+        $this->assertSame(['CART-008'], $progress[11]['partial_finding_ids'] ?? null);
+        $this->assertSame(['CART-008', 'CART-023'], $progress[11]['open_finding_ids'] ?? null);
+        $this->assertNotEmpty($progress[11]['notes'] ?? []);
+
+        $cart008 = collect($register['findings'])->firstWhere('id', 'CART-008');
+        $this->assertSame('open', $cart008['status'] ?? null);
+        $this->assertSame('partially_remediated_locally', $cart008['local_remediation_status'] ?? null);
     }
 
     public function test_audit_artifacts_contain_no_environment_or_secret_material(): void
