@@ -195,11 +195,19 @@ final class CartArchitectureAuditDocumentationTest extends TestCase
         $this->assertSame(['CART-023', 'CART-026'], $progress[8]['open_finding_ids'] ?? null);
         $this->assertNotEmpty($progress[8]['notes'] ?? []);
         $this->assertSame('Commerce Phase 1C.4', $progress[9]['phase'] ?? null);
-        $this->assertSame('complete_locally', $progress[9]['status'] ?? null);
+        $this->assertSame('merged_deployed_staging_verification_pending', $progress[9]['status'] ?? null);
         $this->assertSame(['CART-026'], $progress[9]['finding_ids'] ?? null);
         $this->assertSame([], $progress[9]['partial_finding_ids'] ?? null);
         $this->assertSame(['CART-023'], $progress[9]['open_finding_ids'] ?? null);
         $this->assertNotEmpty($progress[9]['notes'] ?? []);
+        $this->assertContains(
+            'The host-only issued-cookie and deletion-cookie correction uses explicit Symfony Cookie domain null and is complete locally.',
+            $progress[9]['notes'],
+        );
+        $this->assertContains(
+            'Final Phase 1C.4 staging verification remains pending correction merge and deployment.',
+            $progress[9]['notes'],
+        );
     }
 
     public function test_audit_artifacts_contain_no_environment_or_secret_material(): void
@@ -268,6 +276,14 @@ final class CartArchitectureAuditDocumentationTest extends TestCase
             );
             $this->assertStringContainsString(
                 'CART-026',
+                $normalizedDocument,
+            );
+            $this->assertStringContainsString(
+                'host-only cookie correction is complete locally',
+                $normalizedDocument,
+            );
+            $this->assertStringContainsString(
+                'final Phase 1C.4 staging verification remains pending',
                 $normalizedDocument,
             );
             $this->assertStringContainsString(

@@ -60,31 +60,31 @@ class CheckoutConfirmationService
 
     public function cookie(string $token, Request $request): Cookie
     {
-        return cookie()->make(
-            self::COOKIE_NAME,
-            $token,
-            self::LIFETIME_MINUTES,
-            '/',
-            null,
-            $this->requiresSecureCookie($request),
-            true,
-            false,
-            Cookie::SAMESITE_LAX,
+        return new Cookie(
+            name: self::COOKIE_NAME,
+            value: $token,
+            expire: time() + self::LIFETIME_SECONDS,
+            path: '/',
+            domain: null,
+            secure: $this->requiresSecureCookie($request),
+            httpOnly: true,
+            raw: false,
+            sameSite: Cookie::SAMESITE_LAX,
         );
     }
 
     public function forgetCookie(Request $request): Cookie
     {
-        return cookie()->make(
-            self::COOKIE_NAME,
-            '',
-            -1,
-            '/',
-            null,
-            $this->requiresSecureCookie($request),
-            true,
-            false,
-            Cookie::SAMESITE_LAX,
+        return new Cookie(
+            name: self::COOKIE_NAME,
+            value: '',
+            expire: 1,
+            path: '/',
+            domain: null,
+            secure: $this->requiresSecureCookie($request),
+            httpOnly: true,
+            raw: false,
+            sameSite: Cookie::SAMESITE_LAX,
         );
     }
 

@@ -1086,12 +1086,20 @@ Product, stock, Supplier or Catalog Sync behavior changed.
 
 ### Commerce Phase 1C.4 - Checkout Success Data Safety
 
-Phase 1C.4 is complete locally and remediates CART-026 locally. Successful
-checkout navigates only to `/checkout/success`; Order, customer, total,
-payment and capability data are not serialized into the URL. Checkout creates
-one 32-byte opaque confirmation capability inside the existing transaction,
-stores only its SHA-256 hash, and sends the plaintext capability only through
-a short-lived HttpOnly, SameSite Lax, host-only cookie.
+Phase 1C.4 is merged and deployed. CART-026 is functionally remediated, but
+final Phase 1C.4 staging verification remains pending the host-only cookie
+correction. Successful checkout navigates only to `/checkout/success`; Order,
+customer, total, payment and capability data are not serialized into the URL.
+Checkout creates one 32-byte opaque confirmation capability inside the
+existing transaction, stores only its SHA-256 hash, and sends the plaintext
+capability only through a short-lived HttpOnly, SameSite Lax cookie.
+
+Staging verification found that Laravel CookieJar inherited the configured
+shared session domain for the dedicated confirmation cookie. The host-only
+cookie correction is complete locally: issued and deletion cookies are now
+constructed explicitly with Symfony Cookie `domain: null`. Global Laravel and
+admin session-cookie behavior is unchanged. Final staging verification awaits
+merge and deployment of this correction.
 
 The dedicated confirmation endpoint is cookie-only, rate limited and
 no-store. It returns minimal trusted Order/payment presentation with a masked

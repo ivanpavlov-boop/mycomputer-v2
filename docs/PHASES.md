@@ -45,7 +45,7 @@ Phase 8 manual selected UPDATE price/stock sync has been implemented behind a fe
 | Commerce Phase 1C.1 | Persistent Cart Identity and Authoritative Frontend State | Merged, deployed and staging verified; an SSR-safe UUID cookie persists Cart identity and confirmed backend Cart responses are the sole frontend content authority. |
 | Commerce Phase 1C.2 | Cart UX States and Analytics Consistency | Merged, deployed and staging verified; explicit Cart UX states, scoped mutation feedback, actionable readiness and operation-deduplicated analytics use confirmed backend Cart data. |
 | Commerce Phase 1C.3 | Real Browser Cart Lifecycle Acceptance | Merged, deployed and staging verified; deterministic Playwright coverage verifies SSR, hydration, persistence, auth transitions, offline recovery, mutations, analytics, keyboard and mobile Cart behavior. |
-| Commerce Phase 1C.4 | Checkout Success Data Safety | Complete locally; checkout success uses a clean URL and a short-lived HttpOnly capability resolved through a minimal no-store confirmation endpoint. |
+| Commerce Phase 1C.4 | Checkout Success Data Safety | Merged and deployed; host-only cookie correction complete locally and final staging verification pending. |
 | Phase 9C.1 | Product attributes core foundation | Complete |
 | Phase 9C.2 | Product attributes admin usability and starter structure | Complete |
 | Phase 9C.3 | Category attribute sets | Complete |
@@ -694,12 +694,20 @@ changes no backend Cart, Product, stock, supplier or Catalog Sync behavior.
 
 ## Commerce Phase 1C.4 Scope
 
-Commerce Phase 1C.4 is complete locally and remediates CART-026 locally.
-Checkout now navigates only to `/checkout/success`; no Order, customer,
-payment or capability data is placed in the URL. A 32-byte opaque capability
-is issued atomically with the Order, only its SHA-256 hash is stored, and the
-plaintext value is carried in a short-lived HttpOnly, SameSite Lax,
-host-only cookie.
+Commerce Phase 1C.4 is merged and deployed. CART-026 is functionally
+remediated, but final Phase 1C.4 staging verification remains pending the
+host-only cookie correction. Checkout now navigates only to
+`/checkout/success`; no Order, customer, payment or capability data is placed
+in the URL. A 32-byte opaque capability is issued atomically with the Order,
+only its SHA-256 hash is stored, and the plaintext value is carried in a
+short-lived HttpOnly, SameSite Lax cookie.
+
+Staging verification found that Laravel CookieJar inherited
+`SESSION_DOMAIN=.computer2u.eu` for the dedicated confirmation cookie. The
+host-only cookie correction is complete locally: issued and deletion cookies
+are constructed explicitly with Symfony Cookie `domain: null`, while global
+Laravel and admin session-cookie behavior remains unchanged. The correction
+is not yet merged, deployed or staging verified.
 
 The dedicated rate-limited confirmation endpoint accepts only that cookie,
 returns a minimal trusted response with a masked email, and applies no-store
