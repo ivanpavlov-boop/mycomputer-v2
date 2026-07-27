@@ -961,7 +961,7 @@
     },
     {
       "phase": "Commerce Phase 1C.4",
-      "status": "complete_locally",
+      "status": "merged_deployed_staging_verification_pending",
       "finding_ids": [
         "CART-026"
       ],
@@ -975,6 +975,10 @@
         "The rate-limited no-store confirmation endpoint resolves only the cookie and returns minimal trusted data.",
         "Nuxt forwards the cookie during SSR and includes credentials in browser requests.",
         "Query tampering cannot alter displayed confirmation data or purchase analytics.",
+        "Staging verification found that Laravel CookieJar inherited the configured shared session domain for the confirmation cookie.",
+        "The host-only issued-cookie and deletion-cookie correction uses explicit Symfony Cookie domain null and is complete locally.",
+        "Global Laravel and admin session-cookie behavior is unchanged.",
+        "Final Phase 1C.4 staging verification remains pending correction merge and deployment.",
         "Public Cart and checkout routes remain disabled at Nginx.",
         "Checkout and payment idempotency remain assigned to Commerce Phase 1D."
       ]

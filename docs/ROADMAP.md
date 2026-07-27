@@ -68,9 +68,11 @@ Manual selected UPDATE price/stock sync is implemented behind `CATALOG_SYNC_UPDA
   with deterministic Chromium desktop and WebKit mobile coverage for SSR,
   hydration, persistence, auth transitions, offline recovery, Cart mutations,
   analytics, keyboard interaction and responsive layout.
-- Commerce Phase 1C.4 Checkout Success Data Safety, completed locally with a
+- Commerce Phase 1C.4 Checkout Success Data Safety, merged and deployed with a
   clean success URL, short-lived HttpOnly confirmation capability, minimal
-  no-store confirmation endpoint and trusted success-page rendering.
+  no-store confirmation endpoint and trusted success-page rendering; its
+  host-only cookie correction is complete locally and final staging
+  verification remains pending.
 - Unified Product edit quality summary combining existing scanner issues,
   category specification quality and active manual flags without blocking or
   mutating Product workflow.
@@ -532,11 +534,20 @@ checkout, Order or payment is created. CART-023 remains open because public
 Cart and checkout routes stay disabled at Nginx. CART-026 remains open for
 checkout-success URL data safety.
 
-Commerce Phase 1C.4 is complete locally and remediates CART-026 locally.
-Checkout success navigation is now the clean `/checkout/success` path. Order,
-customer, total, payment and capability data are absent from the URL. Checkout
-atomically issues a short-lived, high-entropy capability in an HttpOnly,
-SameSite Lax, host-only cookie and stores only its SHA-256 hash.
+Commerce Phase 1C.4 is merged and deployed. CART-026 is functionally
+remediated, but final Phase 1C.4 staging verification remains pending the
+host-only cookie correction. Checkout success navigation is now the clean
+`/checkout/success` path. Order, customer, total, payment and capability data
+are absent from the URL. Checkout atomically issues a short-lived,
+high-entropy capability in an HttpOnly, SameSite Lax cookie and stores only
+its SHA-256 hash.
+
+Staging verification found that Laravel CookieJar inherited
+`SESSION_DOMAIN=.computer2u.eu` for the dedicated confirmation cookie. The
+host-only cookie correction is complete locally: issued and deletion cookies
+are constructed explicitly with Symfony Cookie `domain: null`. Global Laravel
+and admin session-cookie behavior is unchanged. The correction is not yet
+merged, deployed or staging verified.
 
 A dedicated rate-limited, no-store endpoint resolves only the capability
 cookie and returns minimal trusted confirmation data with a masked email.
