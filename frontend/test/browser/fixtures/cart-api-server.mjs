@@ -17,7 +17,7 @@ const port = Number(new URL(FIXTURE_API_URL).port)
 function corsHeaders(origin) {
   return {
     'Access-Control-Allow-Origin': origin === FIXTURE_ORIGIN ? origin : FIXTURE_ORIGIN,
-    'Access-Control-Allow-Headers': 'Authorization, Content-Type, X-Cart-Session, X-Compare-Session, X-Marketing-Session',
+    'Access-Control-Allow-Headers': 'Authorization, Content-Type, X-Cart-Session, X-Compare-Session, X-Locale, X-Marketing-Session',
     'Access-Control-Allow-Methods': 'GET, POST, PATCH, DELETE, OPTIONS',
     'Access-Control-Expose-Headers': 'Content-Type',
     'Access-Control-Allow-Credentials': 'true',
@@ -25,10 +25,11 @@ function corsHeaders(origin) {
   }
 }
 
-function send(response, status, body, origin = null) {
+function send(response, status, body, origin = null, headers = {}) {
   response.writeHead(status, {
     'Content-Type': 'application/json; charset=utf-8',
     ...corsHeaders(origin),
+    ...headers,
   })
   response.end(JSON.stringify(body))
 }
@@ -57,6 +58,36 @@ function bearerToken(request) {
   return typeof header === 'string' && header.startsWith('Bearer ')
     ? header.slice('Bearer '.length)
     : null
+}
+
+function cookieValue(request, name) {
+  const header = request.headers.cookie
+
+  if (typeof header !== 'string') {
+    return null
+  }
+
+  for (const part of header.split(';')) {
+    const separator = part.indexOf('=')
+    const key = separator >= 0 ? part.slice(0, separator).trim() : ''
+
+    if (key === name) {
+      return decodeURIComponent(part.slice(separator + 1).trim())
+    }
+  }
+
+  return null
+}
+
+function maskEmail(value) {
+  const email = typeof value === 'string' ? value.trim() : ''
+  const separator = email.lastIndexOf('@')
+
+  if (separator <= 0 || separator === email.length - 1) {
+    return '***'
+  }
+
+  return `${email.charAt(0)}***@${email.slice(separator + 1)}`
 }
 
 function wait(milliseconds) {
@@ -499,9 +530,82 @@ const server = createServer(async (request, response) => {
     return
   }
 
+  if (request.method === 'GET' && url.pathname === '/api/v1/checkout/confirmation') {
+    const confirmation = state.resolveConfirmation(
+      cookieValue(request, 'mc_checkout_confirmation'),
+    )
+    const privacyHeaders = {
+      'Cache-Control': 'private, no-store, max-age=0',
+      Pragma: 'no-cache',
+    }
+
+    if (!confirmation) {
+      send(response, 404, safeError('checkout_confirmation_unavailable', 404).body, origin, {
+        ...privacyHeaders,
+        'Set-Cookie': 'mc_checkout_confirmation=; Max-Age=0; Path=/; HttpOnly; SameSite=Lax',
+      })
+      return
+    }
+
+    send(response, 200, { data: confirmation }, origin, privacyHeaders)
+    return
+  }
+
   if (request.method === 'POST' && url.pathname === '/api/v1/checkout') {
-    const failure = safeError(state.scenario.next_checkout_error || 'cart_not_ready', 409)
-    send(response, failure.status, failure.body, origin)
+    if (state.scenario.next_checkout_error) {
+      const failure = safeError(state.scenario.next_checkout_error, 409)
+      send(response, failure.status, failure.body, origin)
+      return
+    }
+
+    const input = await bodyOf(request)
+    const resolved = currentCart(request)
+
+    if (!resolved.entry.cart.readiness.can_checkout) {
+      const failure = safeError('cart_not_ready', 409)
+      send(response, failure.status, failure.body, origin)
+      return
+    }
+
+    const orderNumber = `MC-FIXTURE-${String(state.snapshot().orders_created + 1).padStart(4, '0')}`
+    const grandTotal = (Number(resolved.entry.cart.subtotal) + 6.9).toFixed(2)
+    const paymentMethod = typeof input.payment_method === 'string'
+      ? input.payment_method
+      : 'cash_on_delivery'
+    const token = state.issueConfirmation({
+      order_number: orderNumber,
+      grand_total: grandTotal,
+      currency: resolved.entry.cart.currency,
+      order_status: 'pending',
+      payment_status: 'pending',
+      payment_method: {
+        code: paymentMethod,
+        name: paymentMethod === 'bank_transfer' ? 'Банков превод' : 'Наложен платеж',
+      },
+      customer_email_masked: maskEmail(input.email),
+      payment: {
+        redirect_url: null,
+        instructions: null,
+      },
+      created_at: '2030-01-01T00:00:00.000000Z',
+    })
+
+    state.incrementOrders()
+    state.incrementPayments()
+    send(response, 201, {
+      data: {
+        accepted: true,
+        order_number: orderNumber,
+        grand_total: grandTotal,
+        currency: resolved.entry.cart.currency,
+        payment_method: paymentMethod,
+        payment_status: 'pending',
+      },
+    }, origin, {
+      'Cache-Control': 'private, no-store, max-age=0',
+      Pragma: 'no-cache',
+      'Set-Cookie': `mc_checkout_confirmation=${token}; Max-Age=7200; Path=/; HttpOnly; SameSite=Lax`,
+    })
     return
   }
 

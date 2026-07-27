@@ -73,12 +73,15 @@ class CartPriceRefreshCheckoutTest extends TestCase
         $this->withHeader('X-Cart-Session', $cart->session_id)
             ->postJson('/api/v1/checkout', $this->checkoutPayload())
             ->assertCreated()
-            ->assertJsonPath('data.subtotal', '200.00')
-            ->assertJsonPath('data.items.0.unit_price', '100.00')
-            ->assertJsonPath('data.items.0.total_price', '200.00');
+            ->assertJsonPath('data.accepted', true)
+            ->assertJsonMissingPath('data.items');
 
         $this->assertSame('converted', $cart->fresh()->status);
         $this->assertSame(3, $product->fresh()->quantity);
+        $this->assertDatabaseHas('order_items', [
+            'unit_price' => 100,
+            'total_price' => 200,
+        ]);
     }
 
     private function cartWithItem(Product $product, float $storedPrice, int $quantity, string $name): Cart

@@ -152,9 +152,9 @@ class ProductBundleTest extends TestCase
 
         $this->withHeader('X-Cart-Session', $this->cartSession('bundle-checkout'))
             ->postJson('/api/v1/checkout', $this->checkoutPayload())
-            ->assertCreated()
-            ->assertJsonPath('data.bundle_items.0.bundle_name', $bundle->name);
+            ->assertCreated();
 
+        $this->assertSame($bundle->name, Order::query()->sole()->bundleItems()->sole()->bundle_name);
         $this->assertDatabaseHas('order_bundle_items', [
             'product_bundle_id' => $bundle->id,
             'quantity' => 2,
@@ -263,9 +263,9 @@ class ProductBundleTest extends TestCase
                 'email' => 'bundle-loyalty@example.com',
                 'reward_code' => $voucher->code,
             ]))
-            ->assertCreated()
-            ->assertJsonPath('data.discount_total', '50.00');
+            ->assertCreated();
 
+        $this->assertSame('50.00', Order::query()->sole()->discount_total);
         $this->assertSame(400, $user->loyaltyAccount()->firstOrFail()->points_balance);
     }
 

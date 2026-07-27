@@ -33,7 +33,7 @@ describe('Cart conflict UI', () => {
   })
 
   it('refreshes safely after checkout price or promotion review without replaying checkout', () => {
-    const checkout = source('app/pages/checkout.vue')
+    const checkout = source('app/pages/checkout/index.vue')
     const catchBlock = checkout.slice(checkout.indexOf('} catch (failure)'), checkout.indexOf('} finally'))
 
     expect(catchBlock).toContain("'cart_price_changed', 'cart_promotion_changed'")

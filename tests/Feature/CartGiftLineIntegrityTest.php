@@ -202,11 +202,11 @@ class CartGiftLineIntegrityTest extends TestCase
         $this->sameProductGiftPromotion($product);
         app(PromotionEngineService::class)->applyAutomaticGifts($cart);
 
-        $response = $this->withHeader('X-Cart-Session', $cart->session_id)
+        $this->withHeader('X-Cart-Session', $cart->session_id)
             ->postJson('/api/v1/checkout', $this->checkoutPayload())
             ->assertCreated();
 
-        $order = Order::query()->findOrFail($response->json('data.id'));
+        $order = Order::query()->sole();
         $lines = $order->items()->where('product_id', $product->id)->orderByDesc('unit_price')->get();
         $this->assertCount(2, $lines);
         $this->assertSame(2, $lines[0]->quantity);

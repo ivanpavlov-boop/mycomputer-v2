@@ -66,15 +66,18 @@ class CartCheckoutApiTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.subtotal', 200);
 
-        $this->withHeader('X-Cart-Session', $this->cartSession('test-cart'))
+        $response = $this->withHeader('X-Cart-Session', $this->cartSession('test-cart'))
             ->postJson('/api/v1/checkout', $this->checkoutPayload())
             ->assertCreated()
-            ->assertJsonPath('data.subtotal', '200.00')
+            ->assertJsonPath('data.accepted', true)
             ->assertJsonPath('data.grand_total', '208.99')
-            ->assertJsonPath('data.customer_email', 'client@example.com');
+            ->assertJsonMissingPath('data.customer_email')
+            ->assertCookie('mc_checkout_confirmation', null, false);
 
         $this->assertSame(3, $item->product->fresh()->quantity);
         $this->assertSame(1, Order::query()->count());
+        $this->assertDatabaseCount('checkout_confirmation_capabilities', 1);
+        $this->assertNotNull($response->getCookie('mc_checkout_confirmation', false));
         $this->assertSame('converted', Cart::query()->where('session_id', $this->cartSession('test-cart'))->firstOrFail()->status);
     }
 

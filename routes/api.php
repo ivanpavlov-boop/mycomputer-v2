@@ -19,6 +19,7 @@ use App\Http\Controllers\Api\V1\CartBundleController;
 use App\Http\Controllers\Api\V1\CartController;
 use App\Http\Controllers\Api\V1\CartQuoteController;
 use App\Http\Controllers\Api\V1\CategoryController;
+use App\Http\Controllers\Api\V1\CheckoutConfirmationController;
 use App\Http\Controllers\Api\V1\CheckoutController;
 use App\Http\Controllers\Api\V1\CompareController;
 use App\Http\Controllers\Api\V1\CompareListController;
@@ -245,6 +246,8 @@ Route::prefix('v1')->group(function (): void {
     Route::delete('cart', [CartController::class, 'clear']);
 
     Route::post('checkout', CheckoutController::class);
+    Route::get('checkout/confirmation', CheckoutConfirmationController::class)
+        ->middleware('throttle:checkout-confirmation');
 
     Route::get('shipping/providers', [ShippingController::class, 'providers']);
     Route::get('shipping/methods', [ShippingController::class, 'methods']);

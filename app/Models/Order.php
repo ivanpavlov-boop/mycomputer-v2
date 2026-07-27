@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Order extends Model
 {
@@ -92,6 +93,11 @@ class Order extends Model
     public function paymentTransactions(): HasMany
     {
         return $this->hasMany(PaymentTransaction::class);
+    }
+
+    public function checkoutConfirmationCapability(): HasOne
+    {
+        return $this->hasOne(CheckoutConfirmationCapability::class);
     }
 
     public function productReviews(): HasMany

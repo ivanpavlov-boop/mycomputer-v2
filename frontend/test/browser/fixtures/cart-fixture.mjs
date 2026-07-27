@@ -1,3 +1,5 @@
+import { createHash, randomBytes } from 'node:crypto'
+
 export const FIXTURE_ORIGIN = 'http://127.0.0.1:3000'
 export const FIXTURE_API_URL = 'http://127.0.0.1:4010'
 
@@ -289,12 +291,14 @@ function defaultScenario() {
     get_delay_ms: 0,
     rotate_next_get: null,
     next_checkout_error: 'cart_not_ready',
+    expire_confirmation: false,
   }
 }
 
 export function createFixtureState() {
   let sessionSequence = 0
   const sessions = new Map()
+  const confirmations = new Map()
   const requests = []
   const analytics = []
   let scenario = defaultScenario()
@@ -310,6 +314,7 @@ export function createFixtureState() {
   function reset() {
     sessionSequence = 0
     sessions.clear()
+    confirmations.clear()
     requests.length = 0
     analytics.length = 0
     scenario = defaultScenario()
@@ -432,6 +437,33 @@ export function createFixtureState() {
     analytics.push(sanitizeAnalyticsEvent(event))
   }
 
+  function issueConfirmation(data) {
+    const token = randomBytes(32).toString('base64url')
+    const tokenHash = createHash('sha256').update(token).digest('hex')
+
+    confirmations.set(tokenHash, {
+      data: clone(data),
+      expiresAt: Date.now() + (120 * 60 * 1000),
+    })
+
+    return token
+  }
+
+  function resolveConfirmation(token) {
+    if (typeof token !== 'string' || !/^[A-Za-z0-9_-]{43}$/.test(token)) {
+      return null
+    }
+
+    const tokenHash = createHash('sha256').update(token).digest('hex')
+    const confirmation = confirmations.get(tokenHash)
+
+    if (!confirmation || scenario.expire_confirmation || confirmation.expiresAt <= Date.now()) {
+      return null
+    }
+
+    return clone(confirmation.data)
+  }
+
   function snapshot() {
     return {
       scenario: clone(scenario),
@@ -443,6 +475,7 @@ export function createFixtureState() {
       analytics: clone(analytics),
       orders_created: ordersCreated,
       payment_attempts: paymentAttempts,
+      confirmation_capabilities: confirmations.size,
     }
   }
 
@@ -459,6 +492,8 @@ export function createFixtureState() {
     resolveSession,
     recordRequest,
     recordAnalytics,
+    issueConfirmation,
+    resolveConfirmation,
     snapshot,
     incrementOrders() {
       ordersCreated += 1

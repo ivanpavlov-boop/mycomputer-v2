@@ -50,10 +50,10 @@
         <section class="surface p-5">
           <h2 class="font-semibold">Доставка</h2>
           <div class="mt-4 grid gap-4">
-            <ShippingProviderSelect v-model="form.shipping_provider" :providers="providers" />
-            <DeliveryTypeSelect v-model="form.delivery_type" />
+            <CheckoutShippingProviderSelect v-model="form.shipping_provider" :providers="providers" />
+            <CheckoutDeliveryTypeSelect v-model="form.delivery_type" />
 
-            <ShippingOfficeSearch
+            <CheckoutShippingOfficeSearch
               v-if="form.delivery_type === 'office'"
               v-model:search="officeSearch"
               :city="form.city"
@@ -62,7 +62,7 @@
               @select="selectOffice"
             />
 
-            <ShippingAddressForm
+            <CheckoutShippingAddressForm
               v-else
               :city="form.city"
               :postcode="form.postcode"
@@ -76,16 +76,16 @@
               Избран офис: {{ selectedOffice.name }}, {{ selectedOffice.city }}, {{ selectedOffice.address }}
             </div>
 
-            <ShippingPriceBox :price="shippingPrice" :estimated="estimatedDelivery" />
+            <CheckoutShippingPriceBox :price="shippingPrice" :estimated="estimatedDelivery" />
           </div>
         </section>
 
         <section class="surface p-5">
           <h2 class="font-semibold">Плащане</h2>
-          <PaymentMethodSelect v-model="form.payment_method" class="mt-3" :methods="paymentMethods" />
-          <BankTransferInstructions v-if="selectedPaymentMethod?.code === 'bank_transfer'" class="mt-4" :instructions="selectedPaymentMethod.instructions" />
-          <LeasingInfoBox v-if="selectedPaymentMethod?.code === 'leasing'" class="mt-4" />
-          <PaymentInstructionsBox v-if="selectedPaymentMethod?.code === 'card'" class="mt-4" text="Плащането с карта е placeholder и ще върне тестова страница за плащане." />
+          <CheckoutPaymentMethodSelect v-model="form.payment_method" class="mt-3" :methods="paymentMethods" />
+          <CheckoutBankTransferInstructions v-if="selectedPaymentMethod?.code === 'bank_transfer'" class="mt-4" :instructions="selectedPaymentMethod.instructions" />
+          <CheckoutLeasingInfoBox v-if="selectedPaymentMethod?.code === 'leasing'" class="mt-4" />
+          <CheckoutPaymentInstructionsBox v-if="selectedPaymentMethod?.code === 'card'" class="mt-4" text="Плащането с карта е placeholder и ще върне тестова страница за плащане." />
           <textarea v-model="form.notes" class="mt-4 w-full rounded-md border border-slate-300 p-3 text-sm" rows="3" placeholder="Бележки към поръчката" />
           <label class="mt-4 flex items-center gap-2 text-sm"><input v-model="form.terms" type="checkbox" required> Приемам общите условия</label>
         </section>
@@ -236,19 +236,8 @@ async function submit() {
     const response = await api.checkout(form)
     await cartAnalytics.beginCheckout(operationId, confirmedCart)
     await analytics.addPaymentInfo({ payment_method: form.payment_method, value: response.data.grand_total })
-    const payment = response.data.payment_transactions?.[0]
     await cart.clear()
-    await router.push({
-      path: '/checkout/success',
-      query: {
-        order: response.data.order_number,
-        total: response.data.grand_total,
-        email: response.data.customer_email,
-        payment: form.payment_method,
-        redirect: payment?.redirect_url || undefined,
-        instructions: payment?.instructions || selectedPaymentMethod.value?.instructions || undefined,
-      },
-    })
+    await router.push('/checkout/success')
   } catch (failure) {
     const normalized = normalizeApiError(failure)
     error.value = normalized.message

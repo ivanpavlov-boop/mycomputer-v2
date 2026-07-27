@@ -9,6 +9,7 @@ use App\Models\PaymentTransaction;
 use App\Models\Product;
 use App\Services\Payments\PaymentService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Testing\TestResponse;
 use Tests\TestCase;
 
 class PaymentApiTest extends TestCase
@@ -33,30 +34,48 @@ class PaymentApiTest extends TestCase
 
         $response->assertCreated()
             ->assertJsonPath('data.payment_status', 'pending')
-            ->assertJsonPath('data.payment_transactions.0.status', 'pending');
+            ->assertJsonMissingPath('data.payment_transactions');
+
+        $this->confirmation($response)
+            ->assertOk()
+            ->assertJsonPath('data.payment_status', 'pending');
     }
 
     public function test_checkout_with_bank_transfer_returns_instructions(): void
     {
-        $this->checkout('bank_transfer')
-            ->assertCreated()
-            ->assertJsonPath('data.payment_transactions.0.payment_method.code', 'bank_transfer')
-            ->assertJsonPath('data.payment_transactions.0.instructions', 'Очаквайте банкови данни и основание за плащане в потвърждението.');
+        $response = $this->checkout('bank_transfer');
+
+        $response->assertCreated();
+        $this->confirmation($response)
+            ->assertOk()
+            ->assertJsonPath('data.payment_method.code', 'bank_transfer')
+            ->assertJsonPath('data.payment.instructions', 'Очаквайте банкови данни и основание за плащане в потвърждението.');
     }
 
-    public function test_checkout_with_card_placeholder_returns_redirect(): void
+    public function test_checkout_with_card_placeholder_keeps_unapproved_relative_redirect_private(): void
     {
-        $this->checkout('card')
-            ->assertCreated()
-            ->assertJsonPath('data.payment_transactions.0.payment_method.code', 'card')
-            ->assertJsonPath('data.payment_transactions.0.redirect_url', '/payment/mock-card?order='.Order::query()->firstOrFail()->order_number);
+        $response = $this->checkout('card');
+
+        $response->assertCreated();
+        $this->confirmation($response)
+            ->assertOk()
+            ->assertJsonPath('data.payment_method.code', 'card')
+            ->assertJsonPath('data.payment.redirect_url', null);
+
+        $this->assertSame(
+            '/payment/mock-card?order='.Order::query()->firstOrFail()->order_number,
+            PaymentTransaction::query()->firstOrFail()->raw_response['redirect_url'],
+        );
     }
 
     public function test_checkout_with_leasing_placeholder_returns_redirect(): void
     {
-        $this->checkout('leasing')
-            ->assertCreated()
-            ->assertJsonPath('data.payment_transactions.0.payment_method.code', 'leasing');
+        $response = $this->checkout('leasing');
+
+        $response->assertCreated();
+        $this->confirmation($response)
+            ->assertOk()
+            ->assertJsonPath('data.payment_method.code', 'leasing');
 
         $this->assertStringContainsString('/payment/mock-leasing', PaymentTransaction::query()->firstOrFail()->raw_response['redirect_url']);
     }
@@ -139,12 +158,22 @@ class PaymentApiTest extends TestCase
             ->assertUnauthorized();
     }
 
-    private function checkout(string $method)
+    private function checkout(string $method): TestResponse
     {
         $this->prepareCart();
 
         return $this->withHeader('X-Cart-Session', $this->cartSession('payment-cart'))
             ->postJson('/api/v1/checkout', $this->payload($method));
+    }
+
+    private function confirmation(TestResponse $checkout): TestResponse
+    {
+        $cookie = $checkout->getCookie('mc_checkout_confirmation', false);
+        $this->assertNotNull($cookie);
+
+        return $this->withCredentials()
+            ->withUnencryptedCookie($cookie->getName(), $cookie->getValue())
+            ->getJson('/api/v1/checkout/confirmation');
     }
 
     private function prepareCart(): void
