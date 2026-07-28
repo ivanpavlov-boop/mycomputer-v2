@@ -47,15 +47,19 @@ describe('payment attempt sensitive data boundaries', () => {
     expect(composable).not.toContain('setInterval')
   })
 
-  it('does not mount a visible payment retry action', () => {
+  it('mounts payment retry only through the scoped payment action component', () => {
     const visibleSources = [
       ...sourceFiles(resolve(frontendRoot, 'app/components')),
       ...sourceFiles(resolve(frontendRoot, 'app/layouts')),
       ...sourceFiles(resolve(frontendRoot, 'app/pages')),
     ].map((path) => readFileSync(path, 'utf8')).join('\n')
 
-    expect(visibleSources).not.toContain('usePaymentAttempts')
-    expect(visibleSources).not.toContain('retryAccountOrder')
-    expect(visibleSources).not.toContain('retryGuestOrder')
+    expect(visibleSources).toContain('usePaymentAttempts')
+    expect(visibleSources).toContain('retryAccountOrder')
+    expect(visibleSources).toContain('retryGuestOrder')
+    expect(visibleSources).not.toContain('mc_payment_retry')
+    expect(visibleSources).not.toContain('Idempotency-Key')
+    expect(visibleSources).not.toContain('localStorage')
+    expect(visibleSources).not.toContain('sessionStorage')
   })
 })

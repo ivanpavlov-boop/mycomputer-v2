@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Services\Payments\PaymentActionPresentationService;
 use App\Services\Payments\PaymentAttemptResult;
 use App\Services\Payments\PaymentRedirectPolicy;
 use Illuminate\Http\Request;
@@ -39,6 +40,8 @@ class PaymentAttemptResource extends JsonResource
                 'instructions' => is_string($instructions) && trim($instructions) !== ''
                     ? Str::limit(trim(strip_tags($instructions)), 2000, '')
                     : null,
+                'presentation' => app(PaymentActionPresentationService::class)
+                    ->forPaymentAttempt($result),
             ],
         ];
     }

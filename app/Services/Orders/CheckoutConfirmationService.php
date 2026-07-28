@@ -5,7 +5,6 @@ namespace App\Services\Orders;
 use App\Exceptions\CheckoutConfirmationUnavailableException;
 use App\Models\CheckoutConfirmationCapability;
 use App\Models\Order;
-use App\Services\Payments\PaymentRedirectPolicy;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Symfony\Component\HttpFoundation\Cookie;
@@ -21,10 +20,6 @@ class CheckoutConfirmationService
     private const TOKEN_BYTES = 32;
 
     private const TOKEN_PATTERN = '/\A[A-Za-z0-9_-]{43}\z/';
-
-    public function __construct(
-        private readonly PaymentRedirectPolicy $redirects,
-    ) {}
 
     public function issue(Order $order): string
     {
@@ -51,7 +46,10 @@ class CheckoutConfirmationService
 
         $tokenHash = $this->hash($token);
         $capability = CheckoutConfirmationCapability::query()
-            ->with(['order.paymentTransactions.method'])
+            ->with([
+                'order.paymentTransactions.method.provider',
+                'order.paymentAttempts',
+            ])
             ->where('token_hash', $tokenHash)
             ->where('expires_at', '>', now())
             ->first();
@@ -110,35 +108,6 @@ class CheckoutConfirmationService
         }
 
         return Str::substr($local, 0, 1).'***@'.$domain;
-    }
-
-    /**
-     * @return array{
-     *     currency: string,
-     *     method_name: string,
-     *     redirect_url: string|null,
-     *     instructions: string|null
-     * }
-     */
-    public function safePaymentPresentation(Order $order): array
-    {
-        $transaction = $order->paymentTransactions
-            ->sortByDesc('id')
-            ->first();
-        $raw = is_array($transaction?->raw_response) ? $transaction->raw_response : [];
-        $redirectUrl = $this->redirects->approved($raw['redirect_url'] ?? null);
-        $instructions = $raw['instructions'] ?? $transaction?->method?->instructions;
-
-        return [
-            'currency' => is_string($transaction?->currency) && strlen($transaction->currency) === 3
-                ? strtoupper($transaction->currency)
-                : 'EUR',
-            'method_name' => $transaction?->method?->name ?: $order->payment_method,
-            'redirect_url' => $redirectUrl,
-            'instructions' => is_string($instructions) && trim($instructions) !== ''
-                ? Str::limit(trim($instructions), 2000, '')
-                : null,
-        ];
     }
 
     private function hash(string $token): string

@@ -19,19 +19,9 @@
             <p>Потвърждението е изпратено до <strong>{{ confirmation.customer_email_masked }}</strong>.</p>
           </div>
 
-          <CheckoutBankTransferInstructions
-            v-if="confirmation.payment_method.code === 'bank_transfer'"
-            class="mt-5"
-            :instructions="confirmation.payment.instructions"
-          />
-          <CheckoutPaymentInstructionsBox
-            v-if="confirmation.payment_method.code === 'card'"
-            class="mt-5"
-            :text="cardPaymentText"
-          />
-          <CheckoutLeasingInfoBox
-            v-if="confirmation.payment_method.code === 'leasing'"
-            class="mt-5"
+          <PaymentsPaymentActionPanel
+            :presentation="confirmation.payment.presentation"
+            mode="guest"
           />
 
           <p class="mt-5 text-slate-600">Екипът ни ще се свърже с Вас при нужда от уточнение.</p>
@@ -66,9 +56,6 @@ const { data, status } = useLazyAsyncData(
   () => confirmationApi.get(),
 )
 const confirmation = computed(() => data.value?.data ?? null)
-const cardPaymentText = computed(() => confirmation.value?.payment.redirect_url
-  ? `Адрес за плащане: ${confirmation.value.payment.redirect_url}`
-  : 'Плащането с карта е в подготвителен режим.')
 
 watch(confirmation, async (value) => {
   if (!import.meta.client || !value || purchaseEmitted.value) {

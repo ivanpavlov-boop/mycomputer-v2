@@ -354,8 +354,25 @@ export interface CheckoutConfirmation {
   payment: {
     redirect_url: string | null
     instructions: string | null
+    presentation: PaymentActionPresentation
   }
   created_at: string
+}
+
+export type PaymentActionType = 'none' | 'continue_payment' | 'retry_payment'
+
+export interface PaymentActionPresentation {
+  state: string
+  status_label: string
+  message: string
+  action: {
+    type: PaymentActionType
+    label: string | null
+    available: boolean
+  }
+  redirect_url: string | null
+  instructions: string | null
+  currency: string
 }
 
 export interface OrderResponse {
@@ -375,6 +392,9 @@ export interface OrderResponse {
   status: string
   items: Array<{ product_name: string; sku: string; quantity: number; unit_price: string | number; total_price: string | number }>
   payment_transactions?: PaymentTransaction[]
+  payment?: {
+    presentation: PaymentActionPresentation
+  }
 }
 
 export interface PaymentMethod {
@@ -425,6 +445,7 @@ export interface PaymentAttemptResponse {
     }
     redirect_url: string | null
     instructions: string | null
+    presentation: PaymentActionPresentation
   }
 }
 

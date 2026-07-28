@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
+use App\Http\Resources\AccountOrderDetailResource;
 use App\Http\Resources\CustomerAddressResource;
 use App\Http\Resources\OrderResource;
 use App\Http\Resources\UserResource;
@@ -54,7 +55,12 @@ class AccountController extends Controller
         );
 
         return response()->json([
-            'data' => OrderResource::make($order->load('items', 'shipments', 'paymentTransactions')),
+            'data' => AccountOrderDetailResource::make($order->load([
+                'items',
+                'shipments',
+                'paymentTransactions.method.provider',
+                'paymentAttempts',
+            ])),
         ]);
     }
 

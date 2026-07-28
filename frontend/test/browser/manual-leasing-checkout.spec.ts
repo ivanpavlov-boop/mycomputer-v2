@@ -79,7 +79,7 @@ test.describe('manual leasing checkout', () => {
       },
     })
     await expect(page).toHaveURL(`${storefrontUrl}/checkout/success`)
-    await expect(page.getByText('Получихме Вашата заявка за покупка на изплащане')).toBeVisible()
+    await expect(page.getByText('Получихме заявката Ви за покупка на изплащане.', { exact: true })).toBeVisible()
 
     const state = await fixtureState(request)
     expect(state.orders_created).toBe(1)
