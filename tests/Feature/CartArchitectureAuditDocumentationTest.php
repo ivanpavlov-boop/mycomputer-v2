@@ -141,7 +141,7 @@ final class CartArchitectureAuditDocumentationTest extends TestCase
 
         $progress = $register['remediation_progress'] ?? [];
 
-        $this->assertCount(12, $progress);
+        $this->assertCount(13, $progress);
         $this->assertSame('Commerce Phase 1B.1', $progress[0]['phase'] ?? null);
         $this->assertSame('merged_deployed_staging_verified', $progress[0]['status'] ?? null);
         $this->assertSame(['CART-001', 'CART-022'], $progress[0]['finding_ids'] ?? null);
@@ -215,11 +215,20 @@ final class CartArchitectureAuditDocumentationTest extends TestCase
         $this->assertSame(['CART-008', 'CART-023'], $progress[10]['open_finding_ids'] ?? null);
         $this->assertNotEmpty($progress[10]['notes'] ?? []);
         $this->assertSame('Commerce Phase 1D.2A', $progress[11]['phase'] ?? null);
-        $this->assertSame('complete_locally', $progress[11]['status'] ?? null);
+        $this->assertSame('merged_deployed_staging_verified', $progress[11]['status'] ?? null);
         $this->assertSame([], $progress[11]['finding_ids'] ?? null);
         $this->assertSame(['CART-008'], $progress[11]['partial_finding_ids'] ?? null);
         $this->assertSame(['CART-008', 'CART-023'], $progress[11]['open_finding_ids'] ?? null);
         $this->assertNotEmpty($progress[11]['notes'] ?? []);
+        $this->assertSame('Commerce Leasing Phase A', $progress[12]['phase'] ?? null);
+        $this->assertSame('complete_locally', $progress[12]['status'] ?? null);
+        $this->assertSame([], $progress[12]['finding_ids'] ?? null);
+        $this->assertSame(['CART-008'], $progress[12]['partial_finding_ids'] ?? null);
+        $this->assertSame(['CART-008', 'CART-023'], $progress[12]['open_finding_ids'] ?? null);
+        $this->assertContains(
+            'Commerce Leasing Phase A is complete locally only and has not been pushed, merged, deployed or enabled.',
+            $progress[12]['notes'] ?? [],
+        );
 
         $cart008 = collect($register['findings'])->firstWhere('id', 'CART-008');
         $this->assertSame('open', $cart008['status'] ?? null);

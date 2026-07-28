@@ -47,7 +47,8 @@ Phase 8 manual selected UPDATE price/stock sync has been implemented behind a fe
 | Commerce Phase 1C.3 | Real Browser Cart Lifecycle Acceptance | Merged, deployed and staging verified; deterministic Playwright coverage verifies SSR, hydration, persistence, auth transitions, offline recovery, mutations, analytics, keyboard and mobile Cart behavior. |
 | Commerce Phase 1C.4 | Checkout Success Data Safety | Merged, deployed and staging verified; the confirmation cookie is host-only. |
 | Commerce Phase 1D.1 | Checkout Idempotency and Atomic Cart Conversion | Merged, MySQL 8.4 CI verified, deployed and staging schema/release-gate verified. |
-| Commerce Phase 1D.2A | Payment Launch Policy, Card Gate and Public Initiation Lockdown | Complete locally; card is fail-closed, payment availability is centralized and the unauthenticated public initiation route is removed without enabling commerce routes. |
+| Commerce Phase 1D.2A | Payment Launch Policy, Card Gate and Public Initiation Lockdown | Merged, CI verified, deployed and staging verified; card remains fail-closed, payment availability is centralized and the unauthenticated public initiation route is removed without enabling commerce routes. |
+| Commerce Leasing Phase A | Manual Leasing Application Module | Complete locally only; default-disabled manual application capture, atomic Order linkage, queued notifications and read-only Filament review with controlled assignment/status/note actions. No provider integration or automatic decisioning. |
 | Phase 9C.1 | Product attributes core foundation | Complete |
 | Phase 9C.2 | Product attributes admin usability and starter structure | Complete |
 | Phase 9C.3 | Category attribute sets | Complete |
@@ -752,7 +753,8 @@ stock-policy, supplier or Catalog Sync behavior changed.
 
 ## Commerce Phase 1D.2A Scope
 
-Commerce Phase 1D.2A is complete locally. Initial launch does not enable card
+Commerce Phase 1D.2A is merged, CI verified, deployed and staging verified.
+Initial launch does not enable card
 payments. `PAYMENT_CARD_ENABLED=false` is the default, database status cannot
 bypass the flag, and an operational provider is also required. The production
 card provider is deliberately non-operational, performs no network request,
@@ -774,6 +776,34 @@ authenticated Order-owned re-initiation, payment-attempt idempotency, retries,
 concurrency, attempt identity and a card-ready result lifecycle remain assigned
 to Commerce Phase 1D.2B. CART-023 remains open and public commerce routes remain
 disabled.
+
+## Commerce Leasing Phase A Scope
+
+Commerce Leasing Phase A is complete locally only. It adds a default-disabled
+manual purchase-on-installments application path behind
+`PAYMENT_LEASING_ENABLED=false`. The public payment-method API and checkout use
+the existing fail-closed availability authority, so an active database row
+cannot bypass the launch flag.
+
+When explicitly enabled, checkout validates a small allowlisted preference
+payload, verifies the requested down payment against the trusted Order total
+and creates exactly one leasing application in the existing atomic,
+idempotent Cart-to-Order transaction. The application contains no EGN,
+identity-card, employment, income, bank, card or provider data. Idempotent
+replay creates no duplicate application, activity or notification event.
+
+After commit, queued notifications acknowledge receipt to the customer and
+notify the configured internal address and authorized Filament staff. The
+Filament resource is list/view only. Super Admin and Order-management staff may
+assign an eligible colleague, follow allowlisted manual status transitions and
+add plain-text internal notes; the append-only activity history remains
+visible. No create, edit, delete or bulk-delete admin action is exposed.
+
+The provider boundary is intentionally non-networked and returns no provider
+transaction ID, redirect, approval or financing terms. This phase adds no
+calculator, automatic decision, webhook, schedule or external API. Public Cart
+and checkout routes remain disabled, CART-008 remains partially remediated and
+CART-023 remains open. See [Manual Leasing Applications](MANUAL_LEASING_APPLICATION.md).
 
 ## Phase 9C.6.5A and 9C.6.5B Implemented Scope
 

@@ -42,7 +42,9 @@ class PaymentService
             'currency' => 'EUR',
             'status' => $response['status'] ?? 'pending',
             'raw_request' => ['payment_method_code' => $methodCode],
-            'raw_response' => $response,
+            'raw_response' => $methodCode === 'leasing'
+                ? ($response['raw_response'] ?? ['mode' => 'manual_leasing_application'])
+                : $response,
             'paid_at' => ($response['status'] ?? null) === 'paid' ? now() : null,
             'failed_at' => ($response['status'] ?? null) === 'failed' ? now() : null,
         ]);

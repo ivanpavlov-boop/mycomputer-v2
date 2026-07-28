@@ -309,6 +309,7 @@ function defaultScenario() {
     next_checkout_error: 'cart_not_ready',
     lose_next_checkout_response: false,
     expire_confirmation: false,
+    leasing_enabled: false,
   }
 }
 
@@ -323,6 +324,7 @@ export function createFixtureState() {
   let scenario = defaultScenario()
   let ordersCreated = 0
   let paymentAttempts = 0
+  let leasingApplicationsCreated = 0
 
   function nextSessionId() {
     sessionSequence += 1
@@ -341,6 +343,7 @@ export function createFixtureState() {
     scenario = defaultScenario()
     ordersCreated = 0
     paymentAttempts = 0
+    leasingApplicationsCreated = 0
   }
 
   function configure(input = {}) {
@@ -501,7 +504,7 @@ export function createFixtureState() {
     }
   }
 
-  function completeCheckout(pending, checkout) {
+  function completeCheckout(pending, checkout, options = {}) {
     const completed = {
       ...pending,
       checkout: clone(checkout),
@@ -510,6 +513,9 @@ export function createFixtureState() {
     checkoutByCart.set(pending.cartSession, completed)
     ordersCreated += 1
     paymentAttempts += 1
+    if (options.leasingApplication === true) {
+      leasingApplicationsCreated += 1
+    }
 
     return completed
   }
@@ -556,6 +562,7 @@ export function createFixtureState() {
       analytics: clone(analytics),
       orders_created: ordersCreated,
       payment_attempts: paymentAttempts,
+      leasing_applications_created: leasingApplicationsCreated,
       confirmation_capabilities: confirmations.size,
       checkout_identities: [...checkoutByKey.values()].map(record => ({
         identity: record.keyHash,

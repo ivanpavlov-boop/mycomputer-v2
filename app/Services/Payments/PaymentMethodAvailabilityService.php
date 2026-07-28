@@ -74,7 +74,8 @@ class PaymentMethodAvailabilityService
     {
         return match ($method->code) {
             'card' => config('payments.methods.card.enabled') === true,
-            'cash_on_delivery', 'bank_transfer', 'leasing' => true,
+            'leasing' => config('payments.methods.leasing.enabled') === true,
+            'cash_on_delivery', 'bank_transfer' => true,
             default => false,
         };
     }

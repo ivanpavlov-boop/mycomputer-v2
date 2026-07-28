@@ -7,23 +7,26 @@ const frontendRoot = resolve(import.meta.dirname, '..')
 const source = (path: string) => readFileSync(resolve(frontendRoot, path), 'utf8')
 
 describe('checkout payment methods', () => {
-  it('keeps COD and bank transfer selectable while preserving leasing', () => {
+  it('keeps COD and bank transfer selectable while leasing is disabled by default', () => {
     const fixture = source('test/browser/fixtures/cart-api-server.mjs')
 
     expect(fixture).toContain("code: 'cash_on_delivery'")
     expect(fixture).toContain("code: 'bank_transfer'")
-    expect(fixture).toContain("code: 'leasing'")
-    expect(fixture.slice(
+    const paymentMethods = fixture.slice(
       fixture.indexOf("url.pathname === '/api/v1/payments/methods'"),
       fixture.indexOf("url.pathname === '/api/v1/shipping/offices'"),
-    )).not.toContain("code: 'card'")
+    )
+
+    expect(paymentMethods).toContain('if (state.scenario.leasing_enabled)')
+    expect(paymentMethods).toContain("code: 'leasing'")
+    expect(paymentMethods).not.toContain("code: 'card'")
   })
 
   it('submits the selected method through checkout only', () => {
     const checkout = source('app/pages/checkout/index.vue')
 
     expect(checkout).toContain('payment_method: \'cash_on_delivery\'')
-    expect(checkout).toContain('await api.checkout(form, idempotencyKey)')
+    expect(checkout).toContain('await api.checkout(checkoutPayload, idempotencyKey)')
     expect(checkout).not.toContain('/payments/initiate')
   })
 

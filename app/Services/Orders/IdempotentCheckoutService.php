@@ -2,9 +2,9 @@
 
 namespace App\Services\Orders;
 
-use App\Exceptions\PaymentMethodUnavailableException;
 use App\Models\CheckoutIdempotencyRecord;
 use App\Services\Cart\CartContextResolver;
+use App\Services\Leasing\LeasingApplicationService;
 use App\Services\Payments\PaymentMethodAvailabilityService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -17,17 +17,17 @@ class IdempotentCheckoutService
         private readonly CheckoutService $checkout,
         private readonly CheckoutConfirmationService $checkoutConfirmations,
         private readonly PaymentMethodAvailabilityService $paymentMethods,
+        private readonly LeasingApplicationService $leasingApplications,
     ) {}
 
     public function checkout(Request $request, array $validatedPayload): CheckoutResult
     {
-        try {
-            $this->paymentMethods->requireAvailable($validatedPayload['payment_method']);
-        } catch (PaymentMethodUnavailableException $exception) {
-            $this->cartContext->assertSessionOwnership($request);
-
-            throw $exception;
-        }
+        $this->cartContext->assertSessionOwnership($request);
+        $this->paymentMethods->requireAvailable($validatedPayload['payment_method']);
+        $validatedPayload = $this->leasingApplications->validateCheckoutPayload(
+            $request,
+            $validatedPayload,
+        );
 
         $submittedCartSession = $this->cartContext->sessionId($request);
         $context = $this->idempotency->context(

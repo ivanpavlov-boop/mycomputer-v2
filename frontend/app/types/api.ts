@@ -385,6 +385,19 @@ export interface PaymentMethod {
   description?: string | null
   instructions?: string | null
   sort_order: number
+  options?: LeasingPaymentOptions
+}
+
+export interface LeasingPaymentOption {
+  value: string
+  label: string
+}
+
+export interface LeasingPaymentOptions {
+  term_months: number[]
+  contact_methods: LeasingPaymentOption[]
+  contact_time_slots: LeasingPaymentOption[]
+  currency: string
 }
 
 export interface PaymentTransaction {

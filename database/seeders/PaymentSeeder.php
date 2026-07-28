@@ -19,7 +19,7 @@ class PaymentSeeder extends Seeder
             ['name' => 'Наложен платеж', 'code' => 'cash_on_delivery', 'type' => 'offline', 'description' => 'Плащане при доставка.', 'instructions' => null, 'sort_order' => 1],
             ['name' => 'Банков превод', 'code' => 'bank_transfer', 'type' => 'offline', 'description' => 'Плащане по банков път.', 'instructions' => 'Очаквайте банкови данни и основание за плащане в потвърждението.', 'sort_order' => 2],
             ['name' => 'Карта', 'code' => 'card', 'type' => 'online', 'description' => 'Плащане с карта, placeholder за myPOS/BORICA/Stripe.', 'instructions' => null, 'sort_order' => 3],
-            ['name' => 'Лизинг', 'code' => 'leasing', 'type' => 'leasing', 'description' => 'Лизингова заявка, placeholder за TBI/UniCredit/BNP.', 'instructions' => 'След поръчка ще продължите към лизингова заявка.', 'sort_order' => 4],
+            ['name' => 'Покупка на изплащане', 'code' => 'leasing', 'type' => 'leasing', 'description' => 'Изпращане на заявка за покупка на изплащане. Наш служител ще се свърже с клиента.', 'instructions' => 'Получихме заявката Ви за покупка на изплащане. Наш служител ще се свърже с Вас.', 'sort_order' => 4],
         ];
 
         foreach ($methods as $method) {
@@ -31,10 +31,12 @@ class PaymentSeeder extends Seeder
                 ['code' => $method['code']],
                 [
                     'payment_provider_id' => $manual->id,
-                    'status' => $method['code'] === 'card' ? 'inactive' : 'active',
-                    'settings' => $method['code'] === 'card'
-                        ? ['requires_provider_configuration' => true]
-                        : ['mock' => true],
+                    'status' => in_array($method['code'], ['card', 'leasing'], true) ? 'inactive' : 'active',
+                    'settings' => match ($method['code']) {
+                        'card' => ['requires_provider_configuration' => true],
+                        'leasing' => ['mode' => 'manual_leasing_application'],
+                        default => ['mock' => true],
+                    },
                 ] + $method,
             );
         }
