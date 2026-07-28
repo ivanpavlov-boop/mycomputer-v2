@@ -3,10 +3,11 @@
 namespace App\Services\Payments\Providers;
 
 use App\Models\Order;
+use App\Services\Payments\PaymentInitiationContext;
 
 class LeasingPaymentProvider extends ManualPaymentProvider
 {
-    public function initiatePayment(Order $order, array $data): array
+    public function initiatePayment(Order $order, PaymentInitiationContext $context): array
     {
         return [
             'status' => 'pending',

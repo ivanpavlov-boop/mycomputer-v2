@@ -48,7 +48,8 @@ Phase 8 manual selected UPDATE price/stock sync has been implemented behind a fe
 | Commerce Phase 1C.4 | Checkout Success Data Safety | Merged, deployed and staging verified; the confirmation cookie is host-only. |
 | Commerce Phase 1D.1 | Checkout Idempotency and Atomic Cart Conversion | Merged, MySQL 8.4 CI verified, deployed and staging schema/release-gate verified. |
 | Commerce Phase 1D.2A | Payment Launch Policy, Card Gate and Public Initiation Lockdown | Merged, CI verified, deployed and staging verified; card remains fail-closed, payment availability is centralized and the unauthenticated public initiation route is removed without enabling commerce routes. |
-| Commerce Leasing Phase A | Manual Leasing Application Module | Complete locally only; default-disabled manual application capture, atomic Order linkage, queued notifications and read-only Filament review with controlled assignment/status/note actions. No provider integration or automatic decisioning. |
+| Commerce Leasing Phase A | Manual Leasing Application Module | Merged, MySQL CI verified, deployed and staging schema/safety verified; leasing remains default-disabled and manual, with no provider integration or automatic decisioning. |
+| Commerce Phase 1D.2B | Order-owned Payment Re-initiation, Attempt Idempotency and Retry Policy | Complete locally; direct-owner or guest-capability authorization, hash-only attempt idempotency, Order locking and explicit online retry policy. Card remains disabled and no real provider is integrated. |
 | Phase 9C.1 | Product attributes core foundation | Complete |
 | Phase 9C.2 | Product attributes admin usability and starter structure | Complete |
 | Phase 9C.3 | Category attribute sets | Complete |
@@ -771,15 +772,45 @@ transaction creation remains inside the atomic idempotent checkout flow.
 
 Cash on delivery and bank transfer are preserved. Leasing and webhook behavior
 are unchanged; the existing leasing placeholder URL remains a separate known
-finding for a future scoped phase. CART-008 is partially remediated:
+finding for a future scoped phase. At completion of 1D.2A, CART-008 was
+partially remediated:
 authenticated Order-owned re-initiation, payment-attempt idempotency, retries,
-concurrency, attempt identity and a card-ready result lifecycle remain assigned
-to Commerce Phase 1D.2B. CART-023 remains open and public commerce routes remain
-disabled.
+concurrency, attempt identity and a card-ready result lifecycle were assigned
+to Commerce Phase 1D.2B and are now complete locally. CART-023 remains open and
+public commerce routes remain disabled.
+
+## Commerce Phase 1D.2B Scope
+
+Commerce Phase 1D.2B is complete locally only. It adds separate authenticated
+and guest payment-attempt endpoints backed by one transactional service.
+Authenticated initiation requires direct `order.user_id` ownership; email
+matching, staff permissions and Order identifiers are not authorization.
+Guests use a separate 60-minute, host-only `mc_payment_retry` cookie whose
+plaintext capability is never persisted or returned.
+
+Payment attempts require an exact 32-byte Base64URL idempotency key. The
+database stores only its SHA-256 hash and a trusted HMAC fingerprint. The Order
+and relevant attempt/transaction rows are locked before the retry decision.
+Pending or authorized payments return the existing safe result. Paid,
+refunded, missing and unsupported payment states fail closed. Failed or
+cancelled transactions may create one explicit new attempt for an available,
+operational online method.
+
+Cash on delivery, bank transfer and leasing are not retryable. Card and leasing
+remain disabled by default. The production card provider remains
+non-operational and no external payment request is introduced. The provider
+idempotency identity is derived in memory and is not persisted, logged or
+returned. There is no automatic retry, schedule, polling, webhook redesign or
+ERP payment sync. See [Order-owned Payment Retry](PAYMENT_RETRY.md).
+
+CART-008 is remediated locally. CART-023 remains open because public Cart and
+checkout routes remain disabled. Phase 1D.3, real card integration and real
+leasing integration have not started.
 
 ## Commerce Leasing Phase A Scope
 
-Commerce Leasing Phase A is complete locally only. It adds a default-disabled
+Commerce Leasing Phase A is merged, MySQL CI verified, deployed and staging
+schema/safety verified. It adds a default-disabled
 manual purchase-on-installments application path behind
 `PAYMENT_LEASING_ENABLED=false`. The public payment-method API and checkout use
 the existing fail-closed availability authority, so an active database row
@@ -802,8 +833,9 @@ visible. No create, edit, delete or bulk-delete admin action is exposed.
 The provider boundary is intentionally non-networked and returns no provider
 transaction ID, redirect, approval or financing terms. This phase adds no
 calculator, automatic decision, webhook, schedule or external API. Public Cart
-and checkout routes remain disabled, CART-008 remains partially remediated and
-CART-023 remains open. See [Manual Leasing Applications](MANUAL_LEASING_APPLICATION.md).
+and checkout routes remain disabled. CART-008 is remediated locally by Phase
+1D.2B and CART-023 remains open. See
+[Manual Leasing Applications](MANUAL_LEASING_APPLICATION.md).
 
 ## Phase 9C.6.5A and 9C.6.5B Implemented Scope
 

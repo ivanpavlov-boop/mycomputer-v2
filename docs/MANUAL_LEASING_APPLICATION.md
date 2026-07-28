@@ -2,8 +2,8 @@
 
 ## Status
 
-Commerce Leasing Phase A is complete locally only. It has not been pushed,
-merged, deployed or enabled in a shared environment.
+Commerce Leasing Phase A is merged, MySQL CI verified, deployed and staging
+schema/safety verified. Leasing remains disabled unless explicitly enabled.
 
 The feature is disabled by default:
 
@@ -125,9 +125,9 @@ This phase does not:
 - enable card payments;
 - add or restore public payment initiation;
 - enable public Cart or checkout routing;
-- close CART-008 or CART-023;
+- close CART-023;
 - change Product, stock, supplier import or Catalog Sync behavior;
 - add Sync All, automatic sync or Catalog Sync UPDATE enablement;
 - call a financing provider or download remote content.
 
-CART-008 remains partially remediated. CART-023 remains open.
+CART-008 is remediated locally by Commerce Phase 1D.2B. CART-023 remains open.

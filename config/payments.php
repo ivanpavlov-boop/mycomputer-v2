@@ -4,6 +4,7 @@ return [
     'methods' => [
         'card' => [
             'enabled' => env('PAYMENT_CARD_ENABLED', false),
+            'approved_redirect_hosts' => [],
         ],
         'leasing' => [
             'enabled' => env('PAYMENT_LEASING_ENABLED', false),

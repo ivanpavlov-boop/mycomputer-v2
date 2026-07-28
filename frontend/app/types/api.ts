@@ -411,6 +411,23 @@ export interface PaymentTransaction {
   payment_method?: PaymentMethod
 }
 
+export interface PaymentAttemptResponse {
+  reference: string
+  status: 'processing' | 'completed' | 'failed' | 'indeterminate'
+  replayed: boolean
+  payment: {
+    status: string
+    amount: string | number
+    currency: string
+    method: {
+      code: string
+      name: string
+    }
+    redirect_url: string | null
+    instructions: string | null
+  }
+}
+
 export interface ShippingProvider {
   id: number
   name: string

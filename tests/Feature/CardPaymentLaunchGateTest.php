@@ -9,7 +9,9 @@ use App\Models\Customer;
 use App\Models\Order;
 use App\Models\PaymentMethod;
 use App\Models\PaymentTransaction;
+use App\Models\User;
 use App\Services\Orders\CheckoutConfirmationService;
+use App\Services\Payments\PaymentRetryCapabilityService;
 use App\Services\Payments\Providers\CardPaymentProvider;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Event;
@@ -107,6 +109,7 @@ class CardPaymentLaunchGateTest extends TestCase
         $this->assertDatabaseCount('payment_transactions', 1);
         $this->assertDatabaseCount('checkout_idempotency_records', 1);
         $this->assertDatabaseCount('checkout_confirmation_capabilities', 2);
+        $this->assertDatabaseCount('payment_retry_capabilities', 2);
         $this->assertSame(1, $fake->initiationCount);
 
         $order = Order::query()->sole();
@@ -120,6 +123,26 @@ class CardPaymentLaunchGateTest extends TestCase
         $this->assertNotNull($cookie);
         $this->assertNull($cookie->getDomain());
         $this->assertTrue($cookie->isHttpOnly());
+
+        $retryCookie = $first->getCookie(
+            PaymentRetryCapabilityService::COOKIE_NAME,
+            false,
+        );
+        $this->assertNotNull($retryCookie);
+        $this->assertNull($retryCookie->getDomain());
+        $this->assertSame(
+            PaymentRetryCapabilityService::COOKIE_PATH,
+            $retryCookie->getPath(),
+        );
+        $this->assertTrue($retryCookie->isHttpOnly());
+        $this->assertStringNotContainsString(
+            PaymentRetryCapabilityService::COOKIE_NAME,
+            $first->getContent(),
+        );
+        $this->assertNotSame(
+            $retryCookie->getValue(),
+            $replay->getCookie(PaymentRetryCapabilityService::COOKIE_NAME, false)?->getValue(),
+        );
     }
 
     public function test_removed_public_payment_initiation_endpoint_returns_not_found(): void
@@ -132,5 +155,26 @@ class CardPaymentLaunchGateTest extends TestCase
         ])->assertNotFound();
 
         $this->assertDatabaseCount('payment_transactions', 0);
+    }
+
+    public function test_authenticated_card_checkout_does_not_issue_guest_retry_capability(): void
+    {
+        config()->set('payments.methods.card.enabled', true);
+        $user = User::factory()->create();
+        $cart = $this->prepareCheckoutCart('authenticated-card', user: $user);
+        PaymentMethod::query()->where('code', 'card')->update(['status' => 'active']);
+        $this->app->instance(CardPaymentProvider::class, new FakeCardPaymentProvider);
+
+        $response = $this->submitCheckout(
+            $cart,
+            'authenticated-card',
+            ['payment_method' => 'card'],
+            $user,
+        )->assertCreated();
+
+        $this->assertNull(
+            $response->getCookie(PaymentRetryCapabilityService::COOKIE_NAME, false),
+        );
+        $this->assertDatabaseCount('payment_retry_capabilities', 0);
     }
 }

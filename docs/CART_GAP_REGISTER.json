@@ -217,26 +217,26 @@
       "severity": "high",
       "confidence": "confirmed",
       "status": "open",
-      "local_remediation_status": "partially_remediated_locally",
-      "current_behavior": "The unauthenticated public payment initiation endpoint was removed in Commerce Phase 1D.2A. Initial payment transactions and the default-disabled manual leasing application are created only inside atomic idempotent checkout. Authenticated Order-owned re-initiation and provider-level attempt idempotency remain unimplemented.",
-      "risk": "Arbitrary orders can receive duplicate or unauthorized payment attempts.",
+      "local_remediation_status": "remediated_locally",
+      "current_behavior": "The unauthenticated public payment initiation endpoint remains removed. Commerce Phase 1D.2B adds direct-owner and dedicated guest-capability authorization, hash-only attempt idempotency, Order-level locking, stable in-memory provider identity and an explicit fail-closed retry policy. The production card provider remains non-operational and disabled.",
+      "risk": "Without the local Phase 1D.2B controls, arbitrary orders could receive duplicate or unauthorized payment attempts.",
       "evidence": [
         {
-          "path": "app/Http/Controllers/Api/V1/PaymentController.php",
-          "symbol": "initiate"
+          "path": "app/Services/Payments/PaymentAttemptService.php",
+          "symbol": "attempt"
         },
         {
-          "path": "app/Services/Payments/PaymentService.php",
-          "symbol": "initiate"
+          "path": "app/Services/Payments/PaymentRetryAuthorizationService.php",
+          "symbol": "accountOwner"
         },
         {
-          "path": "database/migrations/2026_06_08_130002_create_payment_transactions_table.php",
+          "path": "database/migrations/2026_07_28_100001_create_payment_attempts_table.php",
           "symbol": "up"
         }
       ],
-      "verification": "Call payment initiation repeatedly for the same order from an unrelated client and compare transaction records.",
-      "recommendation": "Gate initiation by an order-scoped authorization or signed capability and enforce payment idempotency.",
-      "target_phase": "Commerce Phase 1D",
+      "verification": "Run the Phase 1D.2B ownership, capability, idempotency, retry-policy, atomicity and MySQL concurrency suites.",
+      "recommendation": "Keep the local controls fail-closed through review, MySQL CI and the later explicit commerce release gate.",
+      "target_phase": "Commerce Phase 1D.2B",
       "acceptance_criteria": [
         "An unrelated client cannot initiate payment for an order.",
         "Repeated equivalent requests do not create duplicate transactions.",
@@ -1033,14 +1033,34 @@
       ]
     },
     {
-      "phase": "Commerce Leasing Phase A",
+      "phase": "Commerce Phase 1D.2B",
       "status": "complete_locally",
-      "finding_ids": [],
-      "partial_finding_ids": [
+      "finding_ids": [
         "CART-008"
       ],
+      "partial_finding_ids": [],
       "open_finding_ids": [
-        "CART-008",
+        "CART-023"
+      ],
+      "notes": [
+        "Authenticated payment attempts require direct Order user ownership; email and staff permissions do not authorize the public customer endpoint.",
+        "Guest attempts resolve only a dedicated 60-minute host-only capability whose SHA-256 hash is stored.",
+        "Client Idempotency-Key values are 32-byte Base64URL identities stored only as SHA-256 hashes.",
+        "The Order and payment state are locked before applying the explicit retry policy.",
+        "Pending and authorized transactions are returned without provider invocation; failed and cancelled transactions may create one controlled attempt.",
+        "COD, bank transfer and leasing are not retryable.",
+        "The production card provider remains non-operational and card remains disabled by default.",
+        "There is no automatic retry, external provider request, webhook redesign, ERP sync or public commerce activation.",
+        "CART-008 is remediated locally and CART-023 remains open.",
+        "Phase 1D.2B has not been pushed, merged, deployed or staging verified."
+      ]
+    },
+    {
+      "phase": "Commerce Leasing Phase A",
+      "status": "merged_deployed_staging_verified",
+      "finding_ids": [],
+      "partial_finding_ids": [],
+      "open_finding_ids": [
         "CART-023"
       ],
       "notes": [
@@ -1053,8 +1073,8 @@
         "The Filament resource is list/view only with controlled assignment, allowlisted status transitions and append-only notes/activity.",
         "No financing provider, external request, redirect, calculator, automatic approval, webhook or schedule is implemented.",
         "Public Cart and checkout pages remain disabled through Nginx.",
-        "CART-008 remains partially remediated and CART-023 remains open.",
-        "Commerce Leasing Phase A is complete locally only and has not been pushed, merged, deployed or enabled."
+        "CART-008 is remediated locally by Commerce Phase 1D.2B and CART-023 remains open.",
+        "Commerce Leasing Phase A is merged, MySQL CI verified, deployed and staging schema/safety verified; leasing remains disabled by default."
       ]
     }
   ]

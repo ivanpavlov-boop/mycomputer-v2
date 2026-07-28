@@ -225,6 +225,19 @@ class AppServiceProvider extends ServiceProvider
             return Limit::perMinute(20)->by(Auth::guard('sanctum')->id() ?: $request->ip());
         });
 
+        RateLimiter::for('payment-attempts', function (Request $request): Limit {
+            $identity = Auth::guard('sanctum')->id();
+
+            if ($identity === null) {
+                $capability = $request->cookie('mc_payment_retry');
+                $identity = is_string($capability) && $capability !== ''
+                    ? hash('sha256', $capability)
+                    : $request->ip();
+            }
+
+            return Limit::perMinute(10)->by((string) $identity);
+        });
+
         Event::listen(OrderCreated::class, QueueOrderErpSync::class);
         Event::listen(OrderPaymentStatusChanged::class, QueuePaymentErpSync::class);
         Event::listen(OrderCancelled::class, QueueOrderCancellationErpSync::class);

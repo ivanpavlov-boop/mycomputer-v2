@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\V1\AccountController;
+use App\Http\Controllers\Api\V1\AccountPaymentAttemptController;
 use App\Http\Controllers\Api\V1\AccountReviewController;
 use App\Http\Controllers\Api\V1\AddressController;
 use App\Http\Controllers\Api\V1\Admin\ErpController;
@@ -26,6 +27,7 @@ use App\Http\Controllers\Api\V1\CompareListController;
 use App\Http\Controllers\Api\V1\ContentController;
 use App\Http\Controllers\Api\V1\FeedController;
 use App\Http\Controllers\Api\V1\FilterController;
+use App\Http\Controllers\Api\V1\GuestPaymentAttemptController;
 use App\Http\Controllers\Api\V1\HealthController;
 use App\Http\Controllers\Api\V1\HomeController;
 use App\Http\Controllers\Api\V1\LoyaltyController;
@@ -50,6 +52,7 @@ use App\Http\Controllers\Api\V1\ServiceTicketController;
 use App\Http\Controllers\Api\V1\ShippingController;
 use App\Http\Controllers\Api\V1\SitemapController;
 use App\Http\Controllers\Api\V1\WishlistController;
+use App\Http\Middleware\PrivatePaymentAttemptResponse;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1')->group(function (): void {
@@ -82,6 +85,10 @@ Route::prefix('v1')->group(function (): void {
         Route::get('account/loyalty', LoyaltyController::class);
         Route::get('account/orders', [AccountController::class, 'orders']);
         Route::get('account/orders/{order}', [AccountController::class, 'order']);
+        Route::post(
+            'account/orders/{order}/payment-attempts',
+            AccountPaymentAttemptController::class,
+        )->middleware('throttle:payment-attempts');
         Route::get('account/reviews', AccountReviewController::class);
         Route::get('account/service', [ServiceTicketController::class, 'index']);
         Route::post('account/service', [ServiceTicketController::class, 'store']);
@@ -246,6 +253,13 @@ Route::prefix('v1')->group(function (): void {
     Route::delete('cart', [CartController::class, 'clear']);
 
     Route::post('checkout', CheckoutController::class)->middleware('throttle:checkout');
+    Route::post(
+        'checkout/payment-attempts',
+        GuestPaymentAttemptController::class,
+    )->middleware([
+        'throttle:payment-attempts',
+        PrivatePaymentAttemptResponse::class,
+    ]);
     Route::get('checkout/confirmation', CheckoutConfirmationController::class)
         ->middleware('throttle:checkout-confirmation');
 

@@ -1165,15 +1165,36 @@ atomic replay contract.
 
 Cash on delivery and bank transfer remain available when active. Leasing and
 webhook behavior are unchanged; the leasing placeholder URL remains a separate
-known issue. CART-008 is partially remediated. Authenticated Order-owned
-re-initiation, payment-attempt idempotency, retry/concurrency policy, provider
-attempt identity and a card-ready lifecycle remain Phase 1D.2B. CART-023
-remains open because Nginx continues to disable public Cart and checkout
-routes.
+known issue. At completion of 1D.2A, CART-008 was partially remediated and its
+remaining authenticated re-initiation, attempt idempotency, concurrency,
+provider identity and retry lifecycle were assigned to Phase 1D.2B. That work
+is now complete locally. CART-023 remains open because Nginx continues to
+disable public Cart and checkout routes.
+
+### Commerce Phase 1D.2B - Order-owned Payment Re-initiation and Idempotency
+
+Phase 1D.2B is complete locally only. The authenticated endpoint requires
+direct Order ownership; a separate guest endpoint resolves only a dedicated,
+hash-only retry capability. Both accept an empty body and require a 32-byte
+Base64URL idempotency key whose plaintext is never stored.
+
+The transactional coordinator locks the Order, rechecks authorization and
+serializes attempt/transaction decisions. Pending or authorized payments are
+returned without provider invocation. Failed or cancelled payments may create
+one explicit new attempt only for an available operational online method.
+Paid, refunded, missing, offline and leasing states fail closed. A stable
+provider identity is derived in memory and is never persisted or returned.
+
+The production card provider remains non-operational and card remains disabled
+by default. There is no external request, automatic retry, payment polling,
+webhook redesign, ERP sync or public commerce activation. CART-008 is
+remediated locally. CART-023 remains open. See
+[Order-owned Payment Retry](PAYMENT_RETRY.md).
 
 ### Commerce Leasing Phase A - Manual Leasing Application Module
 
-Commerce Leasing Phase A is complete locally only. It does not release public
+Commerce Leasing Phase A is merged, MySQL CI verified, deployed and staging
+schema/safety verified. It does not release public
 Cart or checkout routes. Leasing is absent from payment discovery and rejected
 by checkout unless the independent `PAYMENT_LEASING_ENABLED` flag is explicitly
 enabled; database activation alone is insufficient.
@@ -1196,7 +1217,7 @@ the checkout commit and acknowledge receipt without promising approval or
 terms. Provider integration, retries, webhook verification and automatic
 decisioning require a separate reviewed phase.
 
-CART-008 remains partially remediated. CART-023 remains open because Nginx
+CART-008 is remediated locally by Phase 1D.2B. CART-023 remains open because Nginx
 continues to disable public Cart and checkout routes. See
 [Manual Leasing Applications](MANUAL_LEASING_APPLICATION.md).
 
