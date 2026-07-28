@@ -176,6 +176,97 @@ function validateLeasingApplication(input, grandTotal) {
   return errors
 }
 
+function paymentPresentation(method, state, redirectUrl = null, instructions = null) {
+  const safeRedirect = typeof redirectUrl === 'string' && redirectUrl.startsWith('https://')
+    ? redirectUrl
+    : null
+  const labels = {
+    pending: 'Очаква плащане',
+    authorized: 'Плащането е разрешено',
+    failed: 'Плащането е неуспешно',
+    cancelled: 'Плащането е отказано',
+    paid: 'Платено',
+    refunded: 'Възстановено плащане',
+    processing: 'Плащането се обработва',
+    indeterminate: 'Непотвърден резултат',
+  }
+  const messages = {
+    pending: method === 'bank_transfer'
+      ? 'Очакваме плащане по банков път.'
+      : method === 'leasing'
+        ? 'Получихме заявката Ви за покупка на изплащане.'
+        : method === 'cash_on_delivery'
+          ? 'Плащането ще бъде извършено при доставката.'
+          : 'Завършете плащането само чрез изричното действие.',
+    authorized: 'Плащането е разрешено и очаква окончателно потвърждение.',
+    failed: 'Плащането не беше прието.',
+    cancelled: 'Плащането беше отказано.',
+    paid: 'Плащането е потвърдено.',
+    refunded: 'Плащането е възстановено.',
+    processing: 'Платежният опит се обработва.',
+    indeterminate: 'Резултатът от плащането още не е потвърден.',
+  }
+  let action = { type: 'none', label: null, available: false }
+
+  if (['pending', 'authorized'].includes(state) && safeRedirect) {
+    action = {
+      type: 'continue_payment',
+      label: 'Продължи към плащане',
+      available: true,
+    }
+  } else if (['failed', 'cancelled'].includes(state) && method === 'card') {
+    action = {
+      type: 'retry_payment',
+      label: 'Опитай плащането отново',
+      available: true,
+    }
+  }
+
+  return {
+    state,
+    status_label: labels[state] || 'Неизвестно',
+    message: messages[state] || 'Няма налична допълнителна информация за плащането.',
+    action,
+    redirect_url: action.type === 'continue_payment' ? safeRedirect : null,
+    instructions,
+    currency: 'EUR',
+  }
+}
+
+function paymentAttemptResponse(orderNumber, paymentState, replayed = false) {
+  const presentation = paymentPresentation(
+    'card',
+    paymentState,
+    ['pending', 'authorized'].includes(paymentState)
+      ? state.scenario.card_redirect_url
+      : null,
+  )
+
+  return {
+    reference: `PAY-${orderNumber}`,
+    status: paymentState === 'indeterminate'
+      ? 'indeterminate'
+      : paymentState === 'processing'
+        ? 'processing'
+        : ['failed', 'cancelled'].includes(paymentState)
+          ? 'failed'
+          : 'completed',
+    replayed,
+    payment: {
+      status: paymentState,
+      amount: '1006.80',
+      currency: 'EUR',
+      method: {
+        code: 'card',
+        name: 'Плащане с карта',
+      },
+      redirect_url: presentation.redirect_url,
+      instructions: null,
+      presentation,
+    },
+  }
+}
+
 const server = createServer(async (request, response) => {
   const url = new URL(request.url || '/', FIXTURE_API_URL)
   const origin = request.headers.origin || null
@@ -588,6 +679,18 @@ const server = createServer(async (request, response) => {
       })
     }
 
+    if (state.scenario.card_enabled) {
+      methods.push({
+        id: 3,
+        name: 'Плащане с карта',
+        code: 'card',
+        type: 'online',
+        description: 'Сигурно онлайн плащане.',
+        instructions: null,
+        sort_order: 3,
+      })
+    }
+
     send(response, 200, {
       data: methods,
     }, origin)
@@ -632,10 +735,69 @@ const server = createServer(async (request, response) => {
     return
   }
 
+  if (request.method === 'POST' && url.pathname === '/api/v1/checkout/payment-attempts') {
+    const capability = state.resolvePaymentRetry(
+      cookieValue(request, 'mc_payment_retry'),
+    )
+
+    if (!capability) {
+      send(response, 404, safeError('payment_retry_unavailable', 404).body, origin, {
+        'Cache-Control': 'private, no-store, max-age=0',
+        Pragma: 'no-cache',
+      })
+      return
+    }
+
+    const idempotency = state.inspectPaymentAttempt(
+      request.headers['idempotency-key'],
+      capability.orderNumber,
+    )
+
+    if (idempotency.error) {
+      const status = idempotency.error === 'payment_attempt_idempotency_key_invalid' ? 422 : 409
+      send(response, status, safeError(idempotency.error, status).body, origin)
+      return
+    }
+
+    if (idempotency.replay) {
+      send(response, 200, {
+        data: {
+          ...idempotency.replay.result,
+          replayed: true,
+        },
+      }, origin, {
+        'Cache-Control': 'private, no-store, max-age=0',
+        Pragma: 'no-cache',
+      })
+      return
+    }
+
+    const result = paymentAttemptResponse(
+      capability.orderNumber,
+      state.scenario.card_retry_state,
+    )
+    state.completePaymentAttempt(idempotency.pending, result)
+
+    if (state.scenario.lose_next_payment_attempt_response) {
+      state.configure({ lose_next_payment_attempt_response: false })
+      send(response, 503, safeError('request_failed', 503).body, origin, {
+        'Cache-Control': 'private, no-store, max-age=0',
+        Pragma: 'no-cache',
+      })
+      return
+    }
+
+    send(response, 201, { data: result }, origin, {
+      'Cache-Control': 'private, no-store, max-age=0',
+      Pragma: 'no-cache',
+    })
+    return
+  }
+
   if (request.method === 'POST' && url.pathname === '/api/v1/checkout') {
     const input = await bodyOf(request)
 
-    if (input.payment_method === 'card') {
+    if (input.payment_method === 'card' && !state.scenario.card_enabled) {
       send(response, 422, {
         success: false,
         error: {
@@ -683,7 +845,20 @@ const server = createServer(async (request, response) => {
     }
 
     if (idempotency.replay) {
-      const token = state.issueConfirmation(idempotency.replay.checkout.confirmation)
+      const confirmationToken = state.issueConfirmation(idempotency.replay.checkout.confirmation)
+      const retryToken = !token && idempotency.replay.checkout.response.payment_method === 'card'
+        ? state.issuePaymentRetry(idempotency.replay.checkout.response.order_number)
+        : null
+      const cookies = [
+        `mc_checkout_confirmation=${confirmationToken}; Max-Age=7200; Path=/; HttpOnly; SameSite=Lax`,
+      ]
+
+      if (retryToken) {
+        cookies.push(
+          `mc_payment_retry=${retryToken}; Max-Age=3600; Path=/api/v1/checkout/payment-attempts; HttpOnly; SameSite=Lax`,
+        )
+      }
+
       send(response, 201, {
         data: {
           ...idempotency.replay.checkout.response,
@@ -692,7 +867,7 @@ const server = createServer(async (request, response) => {
       }, origin, {
         'Cache-Control': 'private, no-store, max-age=0',
         Pragma: 'no-cache',
-        'Set-Cookie': `mc_checkout_confirmation=${token}; Max-Age=7200; Path=/; HttpOnly; SameSite=Lax`,
+        'Set-Cookie': cookies,
       })
       return
     }
@@ -716,6 +891,17 @@ const server = createServer(async (request, response) => {
     const paymentMethod = typeof input.payment_method === 'string'
       ? input.payment_method
       : 'cash_on_delivery'
+    const paymentState = paymentMethod === 'card'
+      ? state.scenario.card_payment_state
+      : 'pending'
+    const paymentInstructions = paymentMethod === 'leasing'
+      ? 'Получихме заявката Ви за покупка на изплащане. Наш служител ще се свърже с Вас.'
+      : paymentMethod === 'bank_transfer'
+        ? 'Ще получите данни за банковия превод по имейл.'
+        : null
+    const paymentRedirect = paymentMethod === 'card'
+      ? state.scenario.card_redirect_url
+      : null
     const leasingErrors = paymentMethod === 'leasing'
       ? validateLeasingApplication(input, grandTotal)
       : {}
@@ -750,6 +936,18 @@ const server = createServer(async (request, response) => {
       },
       created_at: '2030-01-01T00:00:00.000000Z',
     }
+    confirmation.payment_status = paymentState
+    confirmation.payment.presentation = paymentPresentation(
+      paymentMethod,
+      paymentState,
+      paymentRedirect,
+      paymentInstructions,
+    )
+
+    if (paymentMethod === 'card') {
+      confirmation.payment_method.name = 'Плащане с карта'
+    }
+
     const checkout = {
       response: {
         accepted: true,
@@ -761,15 +959,30 @@ const server = createServer(async (request, response) => {
       },
       confirmation,
     }
+    checkout.response.payment_status = paymentState
     state.completeCheckout(idempotency.pending, checkout, {
       leasingApplication: paymentMethod === 'leasing',
+      providerInvocation: paymentMethod === 'card',
     })
-    const token = state.issueConfirmation(confirmation)
+    const confirmationToken = state.issueConfirmation(confirmation)
+    const retryToken = !token && paymentMethod === 'card'
+      ? state.issuePaymentRetry(orderNumber)
+      : null
 
     if (state.scenario.lose_next_checkout_response) {
       state.configure({ lose_next_checkout_response: false })
       response.destroy()
       return
+    }
+
+    const cookies = [
+      `mc_checkout_confirmation=${confirmationToken}; Max-Age=7200; Path=/; HttpOnly; SameSite=Lax`,
+    ]
+
+    if (retryToken) {
+      cookies.push(
+        `mc_payment_retry=${retryToken}; Max-Age=3600; Path=/api/v1/checkout/payment-attempts; HttpOnly; SameSite=Lax`,
+      )
     }
 
     send(response, 201, {
@@ -780,7 +993,7 @@ const server = createServer(async (request, response) => {
     }, origin, {
       'Cache-Control': 'private, no-store, max-age=0',
       Pragma: 'no-cache',
-      'Set-Cookie': `mc_checkout_confirmation=${token}; Max-Age=7200; Path=/; HttpOnly; SameSite=Lax`,
+      'Set-Cookie': cookies,
     })
     return
   }

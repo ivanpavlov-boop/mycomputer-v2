@@ -310,6 +310,11 @@ function defaultScenario() {
     lose_next_checkout_response: false,
     expire_confirmation: false,
     leasing_enabled: false,
+    card_enabled: false,
+    card_payment_state: 'pending',
+    card_retry_state: 'authorized',
+    card_redirect_url: 'https://payments.example.test/continue',
+    lose_next_payment_attempt_response: false,
   }
 }
 
@@ -317,6 +322,8 @@ export function createFixtureState() {
   let sessionSequence = 0
   const sessions = new Map()
   const confirmations = new Map()
+  const paymentRetryCapabilities = new Map()
+  const paymentAttemptsByKey = new Map()
   const checkoutByKey = new Map()
   const checkoutByCart = new Map()
   const requests = []
@@ -324,6 +331,10 @@ export function createFixtureState() {
   let scenario = defaultScenario()
   let ordersCreated = 0
   let paymentAttempts = 0
+  let paymentTransactions = 0
+  let paymentRetryAttempts = 0
+  let providerInvocations = 0
+  let notificationsDispatched = 0
   let leasingApplicationsCreated = 0
 
   function nextSessionId() {
@@ -336,6 +347,8 @@ export function createFixtureState() {
     sessionSequence = 0
     sessions.clear()
     confirmations.clear()
+    paymentRetryCapabilities.clear()
+    paymentAttemptsByKey.clear()
     checkoutByKey.clear()
     checkoutByCart.clear()
     requests.length = 0
@@ -343,6 +356,10 @@ export function createFixtureState() {
     scenario = defaultScenario()
     ordersCreated = 0
     paymentAttempts = 0
+    paymentTransactions = 0
+    paymentRetryAttempts = 0
+    providerInvocations = 0
+    notificationsDispatched = 0
     leasingApplicationsCreated = 0
   }
 
@@ -513,6 +530,11 @@ export function createFixtureState() {
     checkoutByCart.set(pending.cartSession, completed)
     ordersCreated += 1
     paymentAttempts += 1
+    paymentTransactions += 1
+    notificationsDispatched += 1
+    if (options.providerInvocation === true) {
+      providerInvocations += 1
+    }
     if (options.leasingApplication === true) {
       leasingApplicationsCreated += 1
     }
@@ -551,6 +573,63 @@ export function createFixtureState() {
     return clone(confirmation.data)
   }
 
+  function issuePaymentRetry(orderNumber) {
+    const token = randomBytes(32).toString('base64url')
+    const tokenHash = createHash('sha256').update(token).digest('hex')
+
+    paymentRetryCapabilities.set(tokenHash, {
+      orderNumber,
+      expiresAt: Date.now() + (60 * 60 * 1000),
+    })
+
+    return token
+  }
+
+  function resolvePaymentRetry(token) {
+    if (typeof token !== 'string' || !/^[A-Za-z0-9_-]{43}$/.test(token)) {
+      return null
+    }
+
+    const tokenHash = createHash('sha256').update(token).digest('hex')
+    const capability = paymentRetryCapabilities.get(tokenHash)
+
+    if (!capability || capability.expiresAt <= Date.now()) {
+      return null
+    }
+
+    return clone(capability)
+  }
+
+  function inspectPaymentAttempt(key, orderNumber) {
+    if (typeof key !== 'string' || !/^[A-Za-z0-9_-]{43}$/.test(key)) {
+      return { error: 'payment_attempt_idempotency_key_invalid' }
+    }
+
+    const keyHash = createHash('sha256').update(key).digest('hex')
+    const existing = paymentAttemptsByKey.get(keyHash)
+
+    if (existing) {
+      return existing.orderNumber === orderNumber
+        ? { replay: existing }
+        : { error: 'payment_attempt_idempotency_conflict' }
+    }
+
+    return { pending: { keyHash, orderNumber } }
+  }
+
+  function completePaymentAttempt(pending, result) {
+    const completed = {
+      ...pending,
+      result: clone(result),
+    }
+
+    paymentAttemptsByKey.set(pending.keyHash, completed)
+    paymentRetryAttempts += 1
+    providerInvocations += 1
+
+    return completed
+  }
+
   function snapshot() {
     return {
       scenario: clone(scenario),
@@ -562,8 +641,13 @@ export function createFixtureState() {
       analytics: clone(analytics),
       orders_created: ordersCreated,
       payment_attempts: paymentAttempts,
+      payment_transactions: paymentTransactions,
+      payment_retry_attempts: paymentRetryAttempts,
+      provider_invocations: providerInvocations,
+      notifications_dispatched: notificationsDispatched,
       leasing_applications_created: leasingApplicationsCreated,
       confirmation_capabilities: confirmations.size,
+      payment_retry_capabilities: paymentRetryCapabilities.size,
       checkout_identities: [...checkoutByKey.values()].map(record => ({
         identity: record.keyHash,
         completed: true,
@@ -588,6 +672,10 @@ export function createFixtureState() {
     completeCheckout,
     issueConfirmation,
     resolveConfirmation,
+    issuePaymentRetry,
+    resolvePaymentRetry,
+    inspectPaymentAttempt,
+    completePaymentAttempt,
     snapshot,
     incrementOrders() {
       ordersCreated += 1

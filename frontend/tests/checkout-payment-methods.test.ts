@@ -9,6 +9,7 @@ const source = (path: string) => readFileSync(resolve(frontendRoot, path), 'utf8
 describe('checkout payment methods', () => {
   it('keeps COD and bank transfer selectable while leasing is disabled by default', () => {
     const fixture = source('test/browser/fixtures/cart-api-server.mjs')
+    const fixtureState = source('test/browser/fixtures/cart-fixture.mjs')
 
     expect(fixture).toContain("code: 'cash_on_delivery'")
     expect(fixture).toContain("code: 'bank_transfer'")
@@ -19,7 +20,9 @@ describe('checkout payment methods', () => {
 
     expect(paymentMethods).toContain('if (state.scenario.leasing_enabled)')
     expect(paymentMethods).toContain("code: 'leasing'")
-    expect(paymentMethods).not.toContain("code: 'card'")
+    expect(paymentMethods).toContain('if (state.scenario.card_enabled)')
+    expect(paymentMethods).toContain("code: 'card'")
+    expect(fixtureState).toContain('card_enabled: false')
   })
 
   it('submits the selected method through checkout only', () => {

@@ -216,10 +216,10 @@
       "title": "Payment initiation lacks order ownership and idempotency",
       "severity": "high",
       "confidence": "confirmed",
-      "status": "open",
-      "local_remediation_status": "remediated_locally",
-      "current_behavior": "The unauthenticated public payment initiation endpoint remains removed. Commerce Phase 1D.2B adds direct-owner and dedicated guest-capability authorization, hash-only attempt idempotency, Order-level locking, stable in-memory provider identity and an explicit fail-closed retry policy. The production card provider remains non-operational and disabled.",
-      "risk": "Without the local Phase 1D.2B controls, arbitrary orders could receive duplicate or unauthorized payment attempts.",
+      "status": "remediated",
+      "local_remediation_status": "merged_deployed_staging_verified",
+      "current_behavior": "The unauthenticated public payment initiation endpoint remains removed. Commerce Phase 1D.2B enforces direct-owner and dedicated guest-capability authorization, hash-only attempt idempotency, Order-level locking, stable in-memory provider identity and an explicit fail-closed retry policy. It is merged, MySQL CI verified, deployed and staging schema/security verified. The production card provider remains non-operational and disabled.",
+      "risk": "The remediated controls must remain fail-closed through the later public commerce release gate.",
       "evidence": [
         {
           "path": "app/Services/Payments/PaymentAttemptService.php",
@@ -235,7 +235,7 @@
         }
       ],
       "verification": "Run the Phase 1D.2B ownership, capability, idempotency, retry-policy, atomicity and MySQL concurrency suites.",
-      "recommendation": "Keep the local controls fail-closed through review, MySQL CI and the later explicit commerce release gate.",
+      "recommendation": "Keep the deployed controls fail-closed through the later explicit commerce release gate.",
       "target_phase": "Commerce Phase 1D.2B",
       "acceptance_criteria": [
         "An unrelated client cannot initiate payment for an order.",
@@ -1034,7 +1034,7 @@
     },
     {
       "phase": "Commerce Phase 1D.2B",
-      "status": "complete_locally",
+      "status": "merged_deployed_staging_verified",
       "finding_ids": [
         "CART-008"
       ],
@@ -1051,8 +1051,27 @@
         "COD, bank transfer and leasing are not retryable.",
         "The production card provider remains non-operational and card remains disabled by default.",
         "There is no automatic retry, external provider request, webhook redesign, ERP sync or public commerce activation.",
-        "CART-008 is remediated locally and CART-023 remains open.",
-        "Phase 1D.2B has not been pushed, merged, deployed or staging verified."
+        "CART-008 is remediated, deployed and staging verified; CART-023 remains open.",
+        "Phase 1D.2B is merged, MySQL CI verified, deployed and staging schema/security verified."
+      ]
+    },
+    {
+      "phase": "Commerce Phase 1D.3",
+      "status": "complete_locally",
+      "finding_ids": [
+        "CART-008"
+      ],
+      "partial_finding_ids": [],
+      "open_finding_ids": [
+        "CART-023"
+      ],
+      "notes": [
+        "One server-authoritative payment presentation combines trusted Order, transaction, attempt, method/provider availability, retry policy, redirect policy and ownership context.",
+        "Checkout confirmation and direct-owned account Order detail expose only safe Bulgarian presentation fields and no capability, key, payment database ID, provider transaction ID, raw response or customer PII.",
+        "The checkout success page renders only explicit continue or retry actions; it performs no automatic redirect, retry or payment polling.",
+        "A machine-readable acceptance matrix covers checkout, presentation, retry, ownership, capabilities, concurrency, rollback, notifications, browser behavior and the release gate.",
+        "Card and leasing remain disabled by default, no real provider is integrated, and public Cart/checkout routes remain disabled.",
+        "Phase 1D.3 is complete locally only and has not been pushed, merged, deployed or staging verified."
       ]
     },
     {

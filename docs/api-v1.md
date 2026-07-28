@@ -189,7 +189,17 @@ Returns only orders owned by the authenticated user email.
 
 `GET /api/v1/account/orders/{id}`
 
-Returns one owned order with items, shipments and payment transactions. Orders belonging to another user return `404`.
+Returns one visible order with items, shipments and payment transactions.
+Direct-owned Orders (`order.user_id` equals the authenticated user ID) also
+receive the safe `payment.presentation` object described under checkout
+confirmation. An Order visible only through the legacy email fallback remains
+read-only and receives no retry action. Unrelated Orders return `404`.
+
+`POST /api/v1/account/orders/{id}/payment-attempts`
+
+Creates or replays one explicit payment attempt only for the direct Order
+owner. Email matching and staff/admin access do not authorize this customer
+endpoint. The existing Order payment method is authoritative.
 
 Service portal endpoints require Sanctum authentication:
 
@@ -617,6 +627,44 @@ Successful leasing checkout creates the Order, initial pending payment
 transaction and one manual leasing application atomically. It returns no
 provider redirect, provider transaction ID, approval or financing terms.
 Equivalent idempotent replay creates no duplicate application.
+
+`GET /api/v1/checkout/confirmation`
+
+Resolves only the short-lived HttpOnly checkout-confirmation cookie and returns
+a private, no-store, customer-safe response. Existing fields remain compatible.
+The `payment` object additionally contains:
+
+```json
+{
+  "presentation": {
+    "state": "pending",
+    "status_label": "Плащането се очаква",
+    "message": "Плащането все още не е завършено.",
+    "action": {
+      "type": "continue_payment",
+      "label": "Продължи към плащане",
+      "available": true
+    },
+    "redirect_url": "https://approved.example.test/continue",
+    "instructions": null,
+    "currency": "EUR"
+  }
+}
+```
+
+Action types are `none`, `continue_payment`, and `retry_payment`. The service
+rechecks method/provider availability, retry policy, request ownership and the
+HTTPS redirect allowlist. It never returns a retry endpoint, capability,
+idempotency key, payment database ID, provider transaction ID, raw response,
+internal failure code or customer PII. The checkout-confirmation capability
+does not authorize guest payment retry.
+
+`POST /api/v1/checkout/payment-attempts`
+
+Creates or replays one explicit guest payment attempt only through the separate
+path-scoped `mc_payment_retry` HttpOnly capability and a valid
+`Idempotency-Key`. The response includes the same safe
+`payment.presentation`. There is no automatic retry or redirect.
 
 ### Payments
 

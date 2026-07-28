@@ -2,8 +2,8 @@
 
 ## Status
 
-Commerce Phase 1D.2B is complete locally. It has not been pushed, merged,
-deployed or verified in a shared environment.
+Commerce Phase 1D.2B is merged, MySQL CI verified, deployed and staging
+schema/security verified.
 
 Card and leasing remain disabled by default:
 
@@ -74,6 +74,7 @@ payment.currency
 payment.method code/name
 payment.redirect_url
 payment.instructions
+payment.presentation
 ```
 
 Redirects require an absolute HTTPS URL on an exact configured host allowlist.
@@ -88,4 +89,15 @@ gateway phase must separately design network-call recovery, reconciliation,
 credentials, provider-specific idempotency and webhook verification. This
 local phase does not authorize a real card or leasing integration.
 
-CART-008 is remediated locally by this phase. CART-023 remains open.
+CART-008 is remediated, deployed and staging verified. CART-023 remains open.
+
+Commerce Phase 1D.3 adds a read-only server-authoritative customer presentation
+and explicit frontend actions. The presentation reuses this retry policy,
+ownership service, capability service and redirect policy. It does not reveal
+an endpoint, capability, idempotency key, payment database ID, provider
+transaction ID, raw response or internal failure code.
+
+The frontend never retries or redirects automatically. Ambiguous operations
+retain the existing in-memory key; successful or definitive results clear it
+through the established composable. Phase 1D.3 is complete locally only and
+does not enable public commerce, card or leasing.

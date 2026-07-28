@@ -1,5 +1,23 @@
 # Catalog Sync Phases
 
+## Commerce Phase 1D.3 - End-to-end Checkout and Payment Acceptance
+
+Status: complete locally only.
+
+This phase adds a read-only, server-authoritative payment action presentation
+to checkout confirmation and direct-owned account Order detail responses. The
+checkout success page uses one shared component for Bulgarian status,
+instructions, approved HTTPS continuation and explicit payment retry.
+
+The phase reuses existing checkout idempotency, payment availability, retry,
+capability, ownership and redirect authorities. It adds no migration, public
+route, real provider, automatic retry, polling or automatic redirect. Card and
+leasing remain disabled by default. CART-008 is already remediated, deployed
+and staging verified by Phase 1D.2B; CART-023 remains open.
+
+See
+[Commerce Checkout and Payment Acceptance](COMMERCE_CHECKOUT_PAYMENT_ACCEPTANCE.md).
+
 ## Purpose
 
 Track completed and planned Catalog Sync phases.

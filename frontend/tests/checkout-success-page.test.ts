@@ -22,10 +22,13 @@ describe('Checkout success page', () => {
       'confirmation.order_status',
       'confirmation.payment_status',
       'confirmation.payment_method.name',
+      'confirmation.payment.presentation',
       'confirmation.customer_email_masked',
     ]) {
       expect(page).toContain(field)
     }
+
+    expect(page).toContain('PaymentsPaymentActionPanel')
 
     for (const forbidden of [
       'customer_phone',
@@ -36,6 +39,9 @@ describe('Checkout success page', () => {
       'raw_response',
       'cart_session_id',
       'supplier_products',
+      'cardPaymentText',
+      'Адрес за плащане',
+      'подготвителен режим',
     ]) {
       expect(page).not.toContain(forbidden)
     }

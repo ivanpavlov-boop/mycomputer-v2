@@ -1217,9 +1217,16 @@ the checkout commit and acknowledge receipt without promising approval or
 terms. Provider integration, retries, webhook verification and automatic
 decisioning require a separate reviewed phase.
 
-CART-008 is remediated locally by Phase 1D.2B. CART-023 remains open because Nginx
-continues to disable public Cart and checkout routes. See
+CART-008 is remediated, deployed and staging verified by Phase 1D.2B, which is
+merged, MySQL CI verified and staging schema/security verified. CART-023
+remains open because Nginx continues to disable public Cart and checkout routes. See
 [Manual Leasing Applications](MANUAL_LEASING_APPLICATION.md).
+
+Commerce Phase 1D.3 is complete locally only. It adds a server-authoritative
+payment presentation, explicit safe checkout-success actions and a
+machine-readable acceptance matrix. It does not enable public routes, card,
+leasing, a real provider, automatic retry or automatic redirect. See
+[Commerce Checkout and Payment Acceptance](COMMERCE_CHECKOUT_PAYMENT_ACCEPTANCE.md).
 
 ## 30. Release Gates
 

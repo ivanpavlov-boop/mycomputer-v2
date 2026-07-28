@@ -23,6 +23,7 @@ export function usePaymentAttempts() {
       const response = await $fetch<ApiDataResponse<PaymentAttemptResponse>>(path, {
         baseURL: config.public.apiBaseUrl,
         method: 'POST',
+        retry: 0,
         body: {},
         credentials: 'include',
         headers: {

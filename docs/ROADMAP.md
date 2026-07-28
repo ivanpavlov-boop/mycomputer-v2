@@ -82,10 +82,15 @@ Manual selected UPDATE price/stock sync is implemented behind `CATALOG_SYNC_UPDA
   fail-closed, public initiation is removed, CART-008 was partially remediated
   at that phase and CART-023 remains open.
 - Commerce Phase 1D.2B Order-owned Payment Re-initiation, Attempt Idempotency
-  and Retry Policy is complete locally. CART-008 is remediated locally through
-  direct ownership, a separate guest capability, hash-only idempotency,
-  Order-level locking and a fail-closed retry policy. Card remains disabled and
-  there is no real provider.
+  and Retry Policy is merged, MySQL CI verified, deployed and staging
+  schema/security verified. CART-008 is remediated through direct ownership, a
+  separate guest capability, hash-only idempotency, Order-level locking and a
+  fail-closed retry policy. Card remains disabled and there is no real provider.
+- Commerce Phase 1D.3 End-to-end Checkout and Payment Acceptance is complete
+  locally only. It adds a server-authoritative payment presentation, explicit
+  safe customer actions and deterministic backend/frontend/browser acceptance
+  evidence. Public commerce, card and leasing remain disabled; CART-023 remains
+  open.
 - Commerce Leasing Phase A Manual Leasing Application Module is merged,
   MySQL CI verified, deployed and staging schema/safety verified.
   Leasing remains default-disabled; the implementation records
