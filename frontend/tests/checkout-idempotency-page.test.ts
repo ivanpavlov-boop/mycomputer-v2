@@ -13,8 +13,8 @@ describe('checkout page idempotency lifecycle', () => {
   it('keeps the pending-click guard and creates the key immediately before checkout', () => {
     expect(page).toContain('if (!cart.cart || !cart.canCheckout || submitting.value)')
     expect(page).toContain('const idempotencyKey = checkoutIdempotency.keyForAttempt()')
-    expect(page).toContain('await api.checkout(form, idempotencyKey)')
-    expect(page.indexOf('keyForAttempt()')).toBeLessThan(page.indexOf('api.checkout(form, idempotencyKey)'))
+    expect(page).toContain('await api.checkout(checkoutPayload, idempotencyKey)')
+    expect(page.indexOf('keyForAttempt()')).toBeLessThan(page.indexOf('api.checkout(checkoutPayload, idempotencyKey)'))
   })
 
   it('clears on success, definitive failure, form edits, and Cart changes', () => {

@@ -185,6 +185,16 @@ class User extends Authenticatable implements FilamentUser
         return $this->hasMany(MarketingEvent::class);
     }
 
+    public function assignedLeasingApplications(): HasMany
+    {
+        return $this->hasMany(LeasingApplication::class, 'assigned_to_user_id');
+    }
+
+    public function leasingApplicationActivities(): HasMany
+    {
+        return $this->hasMany(LeasingApplicationActivity::class, 'actor_user_id');
+    }
+
     public function canAccessPanel(Panel $panel): bool
     {
         return $this->isActiveAdminAccount() && (

@@ -122,7 +122,7 @@ class CheckoutConfirmationService
             ->first();
         $raw = is_array($transaction?->raw_response) ? $transaction->raw_response : [];
         $redirectUrl = $this->approvedRedirectUrl($raw['redirect_url'] ?? null);
-        $instructions = $raw['instructions'] ?? null;
+        $instructions = $raw['instructions'] ?? $transaction?->method?->instructions;
 
         return [
             'currency' => is_string($transaction?->currency) && strlen($transaction->currency) === 3

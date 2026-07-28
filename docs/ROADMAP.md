@@ -77,9 +77,15 @@ Manual selected UPDATE price/stock sync is implemented behind `CATALOG_SYNC_UPDA
   merged, MySQL 8.4 CI verified, deployed and staging schema/release-gate
   verified. CART-002 is remediated.
 - Commerce Phase 1D.2A Payment Launch Policy, Card Gate and Public Initiation
-  Lockdown is complete locally. Card remains disabled by default and
+  Lockdown is merged, CI verified, deployed and staging verified. Card remains
+  disabled by default and
   fail-closed, public initiation is removed, CART-008 is partially remediated
   and CART-023 remains open.
+- Commerce Leasing Phase A Manual Leasing Application Module is complete
+  locally only. Leasing remains default-disabled; the implementation records
+  one minimal manual application per idempotent Order, queues receipt/internal
+  notifications after commit and provides controlled Filament follow-up
+  without provider integration, automatic approval or public route enablement.
 - Unified Product edit quality summary combining existing scanner issues,
   category specification quality and active manual flags without blocking or
   mutating Product workflow.
@@ -577,7 +583,8 @@ cover same-key, different-key, changed-payload and rollback races; deterministic
 Playwright coverage covers double submit and lost-response replay. CART-002 is
 remediated.
 
-Commerce Phase 1D.2A is complete locally. Launch card payments are disabled by
+Commerce Phase 1D.2A is merged, CI verified, deployed and staging verified.
+Launch card payments are disabled by
 default through `PAYMENT_CARD_ENABLED=false`; active database rows cannot
 bypass the flag and the provider must separately report operational readiness.
 The production card provider is non-operational, collects no card data, creates
@@ -593,6 +600,21 @@ unchanged. CART-008 is partially remediated, with authenticated Order-owned
 re-initiation and payment-attempt idempotency remaining in Phase 1D.2B.
 CART-023 remains open, broader acceptance remains assigned to Phase 1D.3, and
 the Nginx commerce gate is unchanged.
+
+Commerce Leasing Phase A is complete locally only. Leasing discovery and
+checkout acceptance are gated by `PAYMENT_LEASING_ENABLED=false` by default.
+When deliberately enabled, the existing checkout transaction records one
+minimal manual application per Order, enforces trusted-total and idempotency
+rules and emits one after-commit notification event. Authorized Filament staff
+can review, assign, update an allowlisted manual status and add plain-text
+notes; all activity remains append-only.
+
+This is not a financing-provider integration. There is no calculator,
+automatic eligibility or approval, provider redirect, remote request, webhook,
+schedule, sensitive identity/financial data collection or provider payload.
+Public Cart and checkout routes remain disabled. CART-008 remains partially
+remediated and CART-023 remains open. Operational boundaries are documented in
+[Manual Leasing Applications](MANUAL_LEASING_APPLICATION.md).
 
 ## Next
 

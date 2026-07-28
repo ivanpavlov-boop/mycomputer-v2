@@ -18,11 +18,13 @@ class PaymentMethodAvailabilityTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_launch_methods_are_available_but_card_is_fail_closed_by_default(): void
+    public function test_launch_methods_are_available_but_card_and_leasing_are_fail_closed_by_default(): void
     {
         config()->set('payments.methods.card.enabled', false);
+        config()->set('payments.methods.leasing.enabled', false);
         $this->seed();
         PaymentMethod::query()->where('code', 'card')->update(['status' => 'active']);
+        PaymentMethod::query()->where('code', 'leasing')->update(['status' => 'active']);
 
         $codes = app(PaymentMethodAvailabilityService::class)
             ->availableMethods()
@@ -30,12 +32,28 @@ class PaymentMethodAvailabilityTest extends TestCase
             ->all();
 
         $this->assertSame(
-            ['cash_on_delivery', 'bank_transfer', 'leasing'],
+            ['cash_on_delivery', 'bank_transfer'],
             $codes,
         );
         $this->getJson('/api/v1/payments/methods')
             ->assertOk()
-            ->assertJsonMissing(['code' => 'card']);
+            ->assertJsonMissing(['code' => 'card'])
+            ->assertJsonMissing(['code' => 'leasing']);
+    }
+
+    public function test_leasing_requires_flag_active_records_and_operational_provider(): void
+    {
+        config()->set('payments.methods.leasing.enabled', true);
+        $this->seed();
+        $leasing = PaymentMethod::query()->where('code', 'leasing')->firstOrFail();
+
+        $this->assertFalse(app(PaymentMethodAvailabilityService::class)->isAvailable($leasing->fresh('provider')));
+
+        $leasing->update(['status' => 'active']);
+        $this->assertTrue(app(PaymentMethodAvailabilityService::class)->isAvailable($leasing->fresh('provider')));
+
+        $leasing->provider()->update(['status' => 'inactive']);
+        $this->assertFalse(app(PaymentMethodAvailabilityService::class)->isAvailable($leasing->fresh('provider')));
     }
 
     public function test_card_requires_flag_active_records_and_operational_provider(): void
@@ -107,6 +125,25 @@ class PaymentMethodAvailabilityTest extends TestCase
 
         $this->assertSame('active', $card->fresh()->status);
         $this->assertSame('Existing production configuration', $card->fresh()->description);
+    }
+
+    public function test_seeded_leasing_is_inactive_and_existing_rows_are_not_mutated(): void
+    {
+        $this->seed(PaymentSeeder::class);
+        $leasing = PaymentMethod::query()->where('code', 'leasing')->firstOrFail();
+
+        $this->assertSame('inactive', $leasing->status);
+        $this->assertSame('Покупка на изплащане', $leasing->name);
+        $this->assertSame(['mode' => 'manual_leasing_application'], $leasing->settings);
+
+        $leasing->update([
+            'status' => 'active',
+            'description' => 'Existing production configuration',
+        ]);
+        $this->seed(PaymentSeeder::class);
+
+        $this->assertSame('active', $leasing->fresh()->status);
+        $this->assertSame('Existing production configuration', $leasing->fresh()->description);
     }
 
     public function test_production_card_provider_is_non_operational_and_fails_closed(): void

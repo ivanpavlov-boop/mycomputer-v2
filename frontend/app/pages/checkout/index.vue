@@ -84,7 +84,14 @@
           <h2 class="font-semibold">Плащане</h2>
           <CheckoutPaymentMethodSelect v-model="form.payment_method" class="mt-3" :methods="paymentMethods" />
           <CheckoutBankTransferInstructions v-if="selectedPaymentMethod?.code === 'bank_transfer'" class="mt-4" :instructions="selectedPaymentMethod.instructions" />
-          <CheckoutLeasingInfoBox v-if="selectedPaymentMethod?.code === 'leasing'" class="mt-4" />
+          <CheckoutLeasingApplicationForm
+            v-if="selectedPaymentMethod?.code === 'leasing' && leasingOptions"
+            v-model="leasingApplication"
+            class="mt-4"
+            :options="leasingOptions"
+            :order-total="checkoutTotal"
+            :errors="leasingErrors"
+          />
           <textarea v-model="form.notes" class="mt-4 w-full rounded-md border border-slate-300 p-3 text-sm" rows="3" placeholder="Бележки към поръчката" />
           <label class="mt-4 flex items-center gap-2 text-sm"><input v-model="form.terms" type="checkbox" required> Приемам общите условия</label>
         </section>
@@ -115,6 +122,12 @@
 <script setup lang="ts">
 import type { ShippingOffice } from '~/types/api'
 import { normalizeApiError } from '~/utils/apiError'
+import {
+  applyLeasingOptions,
+  createLeasingApplicationForm,
+  validateLeasingApplication,
+  withLeasingApplication,
+} from '~/utils/leasingCheckout'
 
 const cart = useCartStore()
 const router = useRouter()
@@ -131,6 +144,8 @@ const selectedOffice = ref<ShippingOffice | null>(null)
 const officeSearch = ref('')
 const shippingPrice = ref(0)
 const estimatedDelivery = ref('')
+const leasingErrors = ref({})
+const leasingApplication = ref(createLeasingApplicationForm())
 
 const form = reactive({
   first_name: '',
@@ -174,6 +189,10 @@ const { data: paymentMethodsResponse } = await useAsyncData('payment-methods', (
 const providers = computed(() => providersResponse.value?.data || [])
 const paymentMethods = computed(() => paymentMethodsResponse.value?.data || [])
 const selectedPaymentMethod = computed(() => paymentMethods.value.find((method) => method.code === form.payment_method))
+const leasingOptions = computed(() => selectedPaymentMethod.value?.code === 'leasing'
+  ? selectedPaymentMethod.value.options
+  : undefined)
+const checkoutTotal = computed(() => cart.subtotal + shippingPrice.value)
 const { data: officesResponse, refresh: refreshOffices } = await useAsyncData(
   'shipping-offices',
   () => shipping.offices({ provider: form.shipping_provider, city: form.city, search: officeSearch.value }),
@@ -187,6 +206,14 @@ watch(() => form.delivery_type, (type) => {
   selectedOffice.value = null
   form.office_id = null
 })
+watch(leasingOptions, (options) => {
+  applyLeasingOptions(leasingApplication.value, options)
+  leasingErrors.value = {}
+}, { immediate: true })
+watch(leasingApplication, () => {
+  leasingErrors.value = {}
+  checkoutIdempotency.clear()
+}, { deep: true })
 watch(form, () => checkoutIdempotency.clear(), { deep: true })
 watch(isCompany, () => checkoutIdempotency.clear())
 watch(cartCheckoutIdentity, (current, previous) => {
@@ -242,6 +269,23 @@ async function submit() {
   }
 
   error.value = ''
+  leasingErrors.value = {}
+
+  if (form.payment_method === 'leasing') {
+    const validation = validateLeasingApplication(
+      leasingApplication.value,
+      leasingOptions.value,
+      checkoutTotal.value,
+    )
+
+    if (Object.keys(validation).length > 0) {
+      leasingErrors.value = validation
+      error.value = 'Прегледайте данните за покупка на изплащане.'
+
+      return
+    }
+  }
+
   submitting.value = true
 
   try {
@@ -257,7 +301,12 @@ async function submit() {
     const operationId = cartAnalytics.createOperationId('checkout')
     const api = useCartApi()
     const idempotencyKey = checkoutIdempotency.keyForAttempt()
-    const response = await api.checkout(form, idempotencyKey)
+    const checkoutPayload = withLeasingApplication(
+      form,
+      form.payment_method,
+      leasingApplication.value,
+    )
+    const response = await api.checkout(checkoutPayload, idempotencyKey)
     checkoutIdempotency.clear()
     await cartAnalytics.beginCheckout(operationId, confirmedCart)
     await analytics.addPaymentInfo({ payment_method: form.payment_method, value: response.data.grand_total })

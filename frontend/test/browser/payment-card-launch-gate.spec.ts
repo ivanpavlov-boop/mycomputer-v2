@@ -22,7 +22,7 @@ test.describe('payment card launch gate', () => {
 
     await expect(page.locator('input[type="radio"][value="cash_on_delivery"]')).toBeVisible()
     await expect(page.locator('input[type="radio"][value="bank_transfer"]')).toBeVisible()
-    await expect(page.locator('input[type="radio"][value="leasing"]')).toBeVisible()
+    await expect(page.locator('input[type="radio"][value="leasing"]')).toHaveCount(0)
     await expect(page.locator('input[type="radio"][value="card"]')).toHaveCount(0)
     await expect(page.locator('input[name*="card" i], input[autocomplete*="cc-" i]')).toHaveCount(0)
 

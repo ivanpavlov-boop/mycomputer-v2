@@ -1146,7 +1146,8 @@ Sync behavior changed.
 
 ### Commerce Phase 1D.2A - Payment Launch Policy, Card Gate and Public Initiation Lockdown
 
-Phase 1D.2A is complete locally. Initial launch keeps card disabled through
+Phase 1D.2A is merged, CI verified, deployed and staging verified. Initial
+launch keeps card disabled through
 `PAYMENT_CARD_ENABLED=false`. Database status cannot bypass this launch policy,
 and an allowlisted, container-resolved provider must independently report
 operational readiness. The production card provider reports non-operational,
@@ -1169,6 +1170,35 @@ re-initiation, payment-attempt idempotency, retry/concurrency policy, provider
 attempt identity and a card-ready lifecycle remain Phase 1D.2B. CART-023
 remains open because Nginx continues to disable public Cart and checkout
 routes.
+
+### Commerce Leasing Phase A - Manual Leasing Application Module
+
+Commerce Leasing Phase A is complete locally only. It does not release public
+Cart or checkout routes. Leasing is absent from payment discovery and rejected
+by checkout unless the independent `PAYMENT_LEASING_ENABLED` flag is explicitly
+enabled; database activation alone is insufficient.
+
+The enabled path remains inside atomic idempotent checkout. It validates an
+allowlisted term, down payment, contact preference, optional plain-text note and
+explicit consent. The trusted server-side Order total bounds the down payment.
+One Order has at most one leasing application, and replay does not duplicate
+the application, immutable submitted activity or after-commit event.
+
+The workflow is manual. It records no EGN, identity document, employment,
+income, bank, card or provider data. The local provider performs no network
+request, returns no redirect or provider transaction ID and makes no approval
+decision. Authorized Filament staff review list/view pages, assign an eligible
+Order manager, follow allowlisted status transitions and append notes. There is
+no admin create/edit/delete/bulk-delete surface.
+
+Queued customer, internal-email and authorized-admin notifications run after
+the checkout commit and acknowledge receipt without promising approval or
+terms. Provider integration, retries, webhook verification and automatic
+decisioning require a separate reviewed phase.
+
+CART-008 remains partially remediated. CART-023 remains open because Nginx
+continues to disable public Cart and checkout routes. See
+[Manual Leasing Applications](MANUAL_LEASING_APPLICATION.md).
 
 ## 30. Release Gates
 

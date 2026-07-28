@@ -8,11 +8,12 @@ class LeasingPaymentProvider extends ManualPaymentProvider
 {
     public function initiatePayment(Order $order, array $data): array
     {
-        $response = parent::initiatePayment($order, $data);
-        $response['redirect_url'] = '/payment/mock-leasing?order='.$order->order_number;
-        $response['instructions'] = 'Ще бъдете пренасочени към лизингова заявка.';
-        $response['raw_response']['provider'] = 'leasing_placeholder';
-
-        return $response;
+        return [
+            'status' => 'pending',
+            'transaction_id' => null,
+            'redirect_url' => null,
+            'instructions' => 'Получихме заявката Ви за покупка на изплащане. Наш служител ще се свърже с Вас.',
+            'raw_response' => ['mode' => 'manual_leasing_application'],
+        ];
     }
 }

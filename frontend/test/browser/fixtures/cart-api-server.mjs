@@ -122,6 +122,60 @@ function routePattern(path, pattern) {
   return match ? match.slice(1) : null
 }
 
+const leasingOptions = {
+  term_months: [6, 12, 18, 24, 36, 48],
+  contact_methods: [
+    { value: 'phone', label: 'Телефон' },
+    { value: 'email', label: 'E-mail' },
+    { value: 'either', label: 'Телефон или e-mail' },
+  ],
+  contact_time_slots: [
+    { value: 'anytime', label: 'Без предпочитание' },
+    { value: 'morning', label: 'Сутрин' },
+    { value: 'afternoon', label: 'Следобед' },
+    { value: 'evening', label: 'Вечер' },
+  ],
+  currency: 'EUR',
+}
+
+function validateLeasingApplication(input, grandTotal) {
+  const application = input?.leasing_application
+  const errors = {}
+
+  if (!application || typeof application !== 'object' || Array.isArray(application)) {
+    return { leasing_application: ['Попълнете данните за покупка на изплащане.'] }
+  }
+
+  if (!leasingOptions.term_months.includes(Number(application.term_months))) {
+    errors['leasing_application.term_months'] = ['Избраният срок не се поддържа.']
+  }
+
+  if (
+    typeof application.down_payment !== 'string'
+    || !/^\d+(?:\.\d{1,2})?$/.test(application.down_payment)
+    || Number(application.down_payment) > Number(grandTotal)
+  ) {
+    errors['leasing_application.down_payment'] = ['Желаната първоначална вноска е невалидна.']
+  }
+
+  if (!leasingOptions.contact_methods.some(option => option.value === application.contact_method)) {
+    errors['leasing_application.contact_method'] = ['Избраният начин за контакт не се поддържа.']
+  }
+
+  if (
+    application.contact_time
+    && !leasingOptions.contact_time_slots.some(option => option.value === application.contact_time)
+  ) {
+    errors['leasing_application.contact_time'] = ['Избраното време за контакт не се поддържа.']
+  }
+
+  if (application.consent !== true) {
+    errors['leasing_application.consent'] = ['Необходимо е съгласие за обработване на заявката.']
+  }
+
+  return errors
+}
+
 const server = createServer(async (request, response) => {
   const url = new URL(request.url || '/', FIXTURE_API_URL)
   const origin = request.headers.origin || null
@@ -500,36 +554,42 @@ const server = createServer(async (request, response) => {
   }
 
   if (request.method === 'GET' && url.pathname === '/api/v1/payments/methods') {
+    const methods = [
+      {
+        id: 1,
+        name: 'Наложен платеж',
+        code: 'cash_on_delivery',
+        type: 'offline',
+        description: null,
+        instructions: null,
+        sort_order: 1,
+      },
+      {
+        id: 2,
+        name: 'Банков превод',
+        code: 'bank_transfer',
+        type: 'offline',
+        description: null,
+        instructions: 'Ще получите данни за банков превод.',
+        sort_order: 2,
+      },
+    ]
+
+    if (state.scenario.leasing_enabled) {
+      methods.push({
+        id: 4,
+        name: 'Покупка на изплащане',
+        code: 'leasing',
+        type: 'leasing',
+        description: 'Изпращане на заявка за покупка на изплащане. Наш служител ще се свърже с клиента.',
+        instructions: 'Получихме заявката Ви за покупка на изплащане. Наш служител ще се свърже с Вас.',
+        sort_order: 4,
+        options: leasingOptions,
+      })
+    }
+
     send(response, 200, {
-      data: [
-        {
-          id: 1,
-          name: 'Наложен платеж',
-          code: 'cash_on_delivery',
-          type: 'offline',
-          description: null,
-          instructions: null,
-          sort_order: 1,
-        },
-        {
-          id: 2,
-          name: 'Банков превод',
-          code: 'bank_transfer',
-          type: 'offline',
-          description: null,
-          instructions: 'Ще получите данни за банков превод.',
-          sort_order: 2,
-        },
-        {
-          id: 4,
-          name: 'Лизинг',
-          code: 'leasing',
-          type: 'leasing',
-          description: null,
-          instructions: null,
-          sort_order: 4,
-        },
-      ],
+      data: methods,
     }, origin)
     return
   }
@@ -587,6 +647,28 @@ const server = createServer(async (request, response) => {
       return
     }
 
+    if (input.payment_method === 'leasing' && !state.scenario.leasing_enabled) {
+      send(response, 422, {
+        success: false,
+        error: {
+          code: 'payment_method_unavailable',
+          message: 'Избраният начин на плащане не е наличен.',
+          details: null,
+        },
+      }, origin)
+      return
+    }
+
+    if (input.payment_method !== 'leasing' && Object.hasOwn(input, 'leasing_application')) {
+      send(response, 422, {
+        message: 'Данните са невалидни.',
+        errors: {
+          leasing_application: ['Данни за покупка на изплащане са позволени само при избран този начин на плащане.'],
+        },
+      }, origin)
+      return
+    }
+
     const idempotency = state.inspectCheckout(
       request.headers['idempotency-key'],
       cartSession,
@@ -634,6 +716,17 @@ const server = createServer(async (request, response) => {
     const paymentMethod = typeof input.payment_method === 'string'
       ? input.payment_method
       : 'cash_on_delivery'
+    const leasingErrors = paymentMethod === 'leasing'
+      ? validateLeasingApplication(input, grandTotal)
+      : {}
+
+    if (Object.keys(leasingErrors).length > 0) {
+      send(response, 422, {
+        message: 'Данните са невалидни.',
+        errors: leasingErrors,
+      }, origin)
+      return
+    }
     const confirmation = {
       order_number: orderNumber,
       grand_total: grandTotal,
@@ -642,12 +735,18 @@ const server = createServer(async (request, response) => {
       payment_status: 'pending',
       payment_method: {
         code: paymentMethod,
-        name: paymentMethod === 'bank_transfer' ? 'Банков превод' : 'Наложен платеж',
+        name: paymentMethod === 'bank_transfer'
+          ? 'Банков превод'
+          : paymentMethod === 'leasing'
+            ? 'Покупка на изплащане'
+            : 'Наложен платеж',
       },
       customer_email_masked: maskEmail(input.email),
       payment: {
         redirect_url: null,
-        instructions: null,
+        instructions: paymentMethod === 'leasing'
+          ? 'Получихме заявката Ви за покупка на изплащане. Наш служител ще се свърже с Вас.'
+          : null,
       },
       created_at: '2030-01-01T00:00:00.000000Z',
     }
@@ -662,7 +761,9 @@ const server = createServer(async (request, response) => {
       },
       confirmation,
     }
-    state.completeCheckout(idempotency.pending, checkout)
+    state.completeCheckout(idempotency.pending, checkout, {
+      leasingApplication: paymentMethod === 'leasing',
+    })
     const token = state.issueConfirmation(confirmation)
 
     if (state.scenario.lose_next_checkout_response) {

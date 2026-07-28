@@ -590,20 +590,72 @@ Card placeholder:
 }
 ```
 
-Leasing placeholder:
+Manual leasing application:
 
 ```json
 {
-  "payment_method": "leasing"
+  "payment_method": "leasing",
+  "leasing_application": {
+    "term_months": 24,
+    "down_payment": "200.00",
+    "contact_method": "phone",
+    "contact_time": "afternoon",
+    "note": "Свържете се с мен след 14:00.",
+    "consent": true
+  }
 }
 ```
+
+Leasing is rejected and omitted from payment-method discovery unless
+`PAYMENT_LEASING_ENABLED=true`. The accepted term, contact method and contact
+time values come from the safe `options` returned for the leasing method.
+`down_payment` must be non-negative, have at most two decimal places and may
+not exceed the trusted server-side Order total. `leasing_application` is
+rejected for every non-leasing payment method.
+
+Successful leasing checkout creates the Order, initial pending payment
+transaction and one manual leasing application atomically. It returns no
+provider redirect, provider transaction ID, approval or financing terms.
+Equivalent idempotent replay creates no duplicate application.
 
 ### Payments
 
 `GET /api/v1/payments/methods`
 
 Returns payment methods allowed by the launch policy. Card is absent by
-default and cannot be enabled by database status alone:
+default and cannot be enabled by database status alone. Leasing is also absent
+by default and cannot be enabled by database status alone. When leasing is
+explicitly enabled, its item additionally contains safe input options:
+
+```json
+{
+  "id": 4,
+  "name": "Покупка на изплащане",
+  "code": "leasing",
+  "type": "offline",
+  "description": "Изпратете заявка и наш служител ще се свърже с Вас.",
+  "instructions": "Заявката не гарантира одобрение или конкретни условия.",
+  "sort_order": 4,
+  "options": {
+    "term_months": [6, 12, 18, 24, 36, 48],
+    "contact_methods": [
+      {"value": "phone", "label": "Телефон"},
+      {"value": "email", "label": "E-mail"},
+      {"value": "either", "label": "Телефон или e-mail"}
+    ],
+    "contact_time_slots": [
+      {"value": "anytime", "label": "Без предпочитание"},
+      {"value": "morning", "label": "Сутрин"},
+      {"value": "afternoon", "label": "Следобед"},
+      {"value": "evening", "label": "Вечер"}
+    ],
+    "currency": "EUR"
+  }
+}
+```
+
+The endpoint never returns provider credentials, approval data or sensitive
+customer fields:
 
 ```json
 {

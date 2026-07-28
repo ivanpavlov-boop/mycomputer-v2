@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Events\LeasingApplicationSubmitted;
 use App\Events\OrderCreated;
 use App\Events\OrderPaymentStatusChanged;
 use App\Exceptions\CheckoutAlreadyCompletedException;
@@ -12,6 +13,7 @@ use App\Models\Cart;
 use App\Models\Category;
 use App\Models\CheckoutIdempotencyRecord;
 use App\Models\Customer;
+use App\Models\LeasingApplicationActivity;
 use App\Models\Order;
 use App\Models\PaymentMethod;
 use App\Models\PaymentProvider;
@@ -124,7 +126,13 @@ class CheckoutIdempotencyMysqlConcurrencyTest extends TestCase
 
                 $this->assertSame(2, $attempts);
                 $this->assertFalse($result->replayed());
-                $this->assertScenarioEffects($cart, $product, $stockBefore, 1);
+                $this->assertScenarioEffects(
+                    $cart,
+                    $product,
+                    $stockBefore,
+                    1,
+                    $checkoutFixture,
+                );
                 Queue::assertPushed(ConversionTrackingJob::class, 1);
                 Queue::assertPushed(SendEmailJob::class, 1);
                 Event::assertDispatched(OrderCreated::class, 1);
@@ -132,6 +140,32 @@ class CheckoutIdempotencyMysqlConcurrencyTest extends TestCase
             } finally {
                 $this->cleanupScenario($cart, $product, $checkoutFixture);
             }
+        } finally {
+            $this->cleanupReferenceFixtures($referenceFixtures);
+            $this->assertSame($stateBefore, $this->sharedDatabaseState());
+        }
+    }
+
+    public function test_mysql_concurrent_leasing_checkout_creates_one_application_and_activity(): void
+    {
+        $this->requireMysqlConcurrency();
+        config()->set('payments.methods.leasing.enabled', true);
+        Event::fake([LeasingApplicationSubmitted::class]);
+        $stateBefore = $this->sharedDatabaseState();
+        $referenceFixtures = [];
+
+        try {
+            $referenceFixtures = $this->createReferenceFixtures(
+                'leasing-concurrency',
+                'leasing',
+            );
+            $results = $this->runScenario('leasing-concurrency', [
+                ['key' => 'leasing-concurrency-a', 'overrides' => []],
+                ['key' => 'leasing-concurrency-b', 'overrides' => []],
+            ], $referenceFixtures);
+
+            $this->assertSame([201, 201], $results->pluck('status')->sort()->values()->all());
+            $this->assertSame(1, $results->pluck('order_number')->unique()->count());
         } finally {
             $this->cleanupReferenceFixtures($referenceFixtures);
             $this->assertSame($stateBefore, $this->sharedDatabaseState());
@@ -204,6 +238,7 @@ class CheckoutIdempotencyMysqlConcurrencyTest extends TestCase
                 $product,
                 $stockBefore,
                 $successfulResponses,
+                $checkoutFixture,
             );
 
             return $results;
@@ -313,6 +348,7 @@ class CheckoutIdempotencyMysqlConcurrencyTest extends TestCase
         Product $product,
         int $stockBefore,
         int $expectedCapabilityCount,
+        array $checkoutFixture,
     ): void {
         $record = CheckoutIdempotencyRecord::query()->where('cart_id', $cart->id)->sole();
         $this->assertSame('completed', $record->status);
@@ -320,6 +356,23 @@ class CheckoutIdempotencyMysqlConcurrencyTest extends TestCase
         $this->assertSame(1, Order::query()->whereKey($record->order_id)->count());
         $this->assertSame(1, DB::table('payment_transactions')->where('order_id', $record->order_id)->count());
         $this->assertSame(1, DB::table('order_shipments')->where('order_id', $record->order_id)->count());
+        $isLeasing = $checkoutFixture['payment_method'] === 'leasing';
+        $this->assertSame(
+            $isLeasing ? 1 : 0,
+            DB::table('leasing_applications')->where('order_id', $record->order_id)->count(),
+        );
+        if ($isLeasing) {
+            $applicationId = DB::table('leasing_applications')
+                ->where('order_id', $record->order_id)
+                ->value('id');
+            $this->assertSame(
+                1,
+                DB::table('leasing_application_activities')
+                    ->where('leasing_application_id', $applicationId)
+                    ->where('event_type', LeasingApplicationActivity::EVENT_SUBMITTED)
+                    ->count(),
+            );
+        }
         $capabilities = DB::table('checkout_confirmation_capabilities')
             ->where('order_id', $record->order_id)
             ->get(['order_id', 'token_hash']);
@@ -417,7 +470,7 @@ class CheckoutIdempotencyMysqlConcurrencyTest extends TestCase
 
     private function checkoutPayload(array $checkoutFixture, array $overrides = []): array
     {
-        return array_replace([
+        $payload = [
             'first_name' => 'Ivan',
             'last_name' => 'Petrov',
             'email' => $checkoutFixture['customer_email'],
@@ -431,18 +484,35 @@ class CheckoutIdempotencyMysqlConcurrencyTest extends TestCase
             'city' => 'Sofia',
             'notes' => 'Concurrent checkout',
             'terms' => true,
-        ], $overrides);
+        ];
+
+        if ($checkoutFixture['payment_method'] === 'leasing') {
+            $payload['leasing_application'] = [
+                'term_months' => 24,
+                'down_payment' => '0.00',
+                'contact_method' => 'phone',
+                'contact_time' => 'anytime',
+                'note' => null,
+                'consent' => true,
+            ];
+        }
+
+        return array_replace_recursive($payload, $overrides);
     }
 
-    private function createReferenceFixtures(string $name): array
-    {
+    private function createReferenceFixtures(
+        string $name,
+        string $paymentMethodCode = 'cash_on_delivery',
+    ): array {
         $suffix = Str::lower(Str::random(12));
         $fixtures = [
             'category_id' => null,
             'payment_provider_id' => null,
             'payment_method_id' => null,
             'payment_method_owned' => false,
-            'payment_method_code' => 'cash_on_delivery',
+            'payment_method_code' => $paymentMethodCode,
+            'payment_method_previous_status' => null,
+            'payment_provider_previous_status' => null,
             'shipping_provider_id' => null,
             'shipping_method_id' => null,
             'shipping_provider_code' => 'ci-shipping-'.$suffix,
@@ -479,10 +549,17 @@ class CheckoutIdempotencyMysqlConcurrencyTest extends TestCase
                 ]);
                 $fixtures['payment_method_owned'] = true;
             } else {
-                $this->assertSame('active', $paymentMethod->status);
+                $fixtures['payment_method_previous_status'] = $paymentMethod->status;
+                $fixtures['payment_provider_previous_status'] = $paymentMethod->provider?->status;
+
+                if ($paymentMethod->status !== 'active') {
+                    $paymentMethod->update(['status' => 'active']);
+                }
 
                 if ($paymentMethod->provider !== null) {
-                    $this->assertSame('active', $paymentMethod->provider->status);
+                    if ($paymentMethod->provider->status !== 'active') {
+                        $paymentMethod->provider->update(['status' => 'active']);
+                    }
                 }
             }
 
@@ -549,6 +626,13 @@ class CheckoutIdempotencyMysqlConcurrencyTest extends TestCase
             ->whereIn('entity_type', ['order', 'payment'])
             ->whereIn('entity_id', $orderIds)
             ->delete();
+        DB::table('leasing_application_activities')
+            ->whereIn(
+                'leasing_application_id',
+                DB::table('leasing_applications')->whereIn('order_id', $orderIds)->pluck('id'),
+            )
+            ->delete();
+        DB::table('leasing_applications')->whereIn('order_id', $orderIds)->delete();
         Order::query()->whereKey($orderIds)->delete();
         Customer::query()
             ->where('email', $checkoutFixture['customer_email'])
@@ -579,6 +663,22 @@ class CheckoutIdempotencyMysqlConcurrencyTest extends TestCase
 
         if (($fixtures['payment_method_owned'] ?? false) === true) {
             PaymentMethod::query()->whereKey($fixtures['payment_method_id'])->delete();
+        } elseif (($fixtures['payment_method_id'] ?? null) !== null) {
+            PaymentMethod::query()
+                ->whereKey($fixtures['payment_method_id'])
+                ->update(['status' => $fixtures['payment_method_previous_status']]);
+
+            $paymentMethod = PaymentMethod::query()
+                ->with('provider')
+                ->find($fixtures['payment_method_id']);
+            if (
+                $paymentMethod?->provider !== null
+                && ($fixtures['payment_provider_previous_status'] ?? null) !== null
+            ) {
+                $paymentMethod->provider->update([
+                    'status' => $fixtures['payment_provider_previous_status'],
+                ]);
+            }
         }
 
         if (($fixtures['payment_provider_id'] ?? null) !== null) {
@@ -628,6 +728,8 @@ class CheckoutIdempotencyMysqlConcurrencyTest extends TestCase
             'payment_providers',
             'payment_methods',
             'payment_transactions',
+            'leasing_applications',
+            'leasing_application_activities',
             'shipping_providers',
             'shipping_methods',
             'order_shipments',

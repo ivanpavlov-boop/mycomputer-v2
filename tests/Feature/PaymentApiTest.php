@@ -25,7 +25,7 @@ class PaymentApiTest extends TestCase
             ->assertJsonFragment(['code' => 'cash_on_delivery'])
             ->assertJsonFragment(['code' => 'bank_transfer'])
             ->assertJsonMissing(['code' => 'card'])
-            ->assertJsonFragment(['code' => 'leasing']);
+            ->assertJsonMissing(['code' => 'leasing']);
     }
 
     public function test_checkout_with_cash_on_delivery_creates_pending_transaction(): void
@@ -62,16 +62,14 @@ class PaymentApiTest extends TestCase
         $this->assertDatabaseCount('payment_transactions', 0);
     }
 
-    public function test_checkout_with_leasing_placeholder_returns_redirect(): void
+    public function test_checkout_with_leasing_is_unavailable_by_default(): void
     {
         $response = $this->checkout('leasing');
 
-        $response->assertCreated();
-        $this->confirmation($response)
-            ->assertOk()
-            ->assertJsonPath('data.payment_method.code', 'leasing');
-
-        $this->assertStringContainsString('/payment/mock-leasing', PaymentTransaction::query()->firstOrFail()->raw_response['redirect_url']);
+        $response->assertUnprocessable()
+            ->assertJsonPath('error.code', 'payment_method_unavailable');
+        $this->assertDatabaseCount('orders', 0);
+        $this->assertDatabaseCount('payment_transactions', 0);
     }
 
     public function test_inactive_payment_method_cannot_be_used(): void

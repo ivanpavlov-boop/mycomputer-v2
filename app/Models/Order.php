@@ -105,6 +105,11 @@ class Order extends Model
         return $this->hasOne(CheckoutIdempotencyRecord::class);
     }
 
+    public function leasingApplication(): HasOne
+    {
+        return $this->hasOne(LeasingApplication::class);
+    }
+
     public function productReviews(): HasMany
     {
         return $this->hasMany(ProductReview::class);

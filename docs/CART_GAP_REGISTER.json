@@ -218,7 +218,7 @@
       "confidence": "confirmed",
       "status": "open",
       "local_remediation_status": "partially_remediated_locally",
-      "current_behavior": "The payment initiation endpoint accepts an order identifier without authentication or ownership enforcement and creates a new transaction on each request. Transaction identifiers are indexed but not unique.",
+      "current_behavior": "The unauthenticated public payment initiation endpoint was removed in Commerce Phase 1D.2A. Initial payment transactions and the default-disabled manual leasing application are created only inside atomic idempotent checkout. Authenticated Order-owned re-initiation and provider-level attempt idempotency remain unimplemented.",
       "risk": "Arbitrary orders can receive duplicate or unauthorized payment attempts.",
       "evidence": [
         {
@@ -1011,7 +1011,7 @@
     },
     {
       "phase": "Commerce Phase 1D.2A",
-      "status": "complete_locally",
+      "status": "merged_deployed_staging_verified",
       "finding_ids": [],
       "partial_finding_ids": [
         "CART-008"
@@ -1028,7 +1028,33 @@
         "The unauthenticated public payment-initiation endpoint has been removed.",
         "Initial payment transaction creation remains inside the atomic idempotent checkout flow.",
         "Authenticated Order-owned payment re-initiation and payment-attempt idempotency remain assigned to Commerce Phase 1D.2B.",
-        "Public Cart and checkout pages remain disabled through Nginx."
+        "Public Cart and checkout pages remain disabled through Nginx.",
+        "Phase 1D.2A is merged, CI verified, deployed and staging verified."
+      ]
+    },
+    {
+      "phase": "Commerce Leasing Phase A",
+      "status": "complete_locally",
+      "finding_ids": [],
+      "partial_finding_ids": [
+        "CART-008"
+      ],
+      "open_finding_ids": [
+        "CART-008",
+        "CART-023"
+      ],
+      "notes": [
+        "Leasing is disabled by default through PAYMENT_LEASING_ENABLED=false and database activation cannot bypass the flag.",
+        "When explicitly enabled, one minimal manual leasing application is created per Order inside atomic idempotent checkout.",
+        "The requested down payment is validated against the trusted server-side Order total.",
+        "Equivalent checkout replay creates no duplicate leasing application, activity or submission event.",
+        "The workflow collects no EGN, identity-document, employment, income, bank, card or provider data.",
+        "Customer, internal-email and authorized-admin notifications are queued after commit.",
+        "The Filament resource is list/view only with controlled assignment, allowlisted status transitions and append-only notes/activity.",
+        "No financing provider, external request, redirect, calculator, automatic approval, webhook or schedule is implemented.",
+        "Public Cart and checkout pages remain disabled through Nginx.",
+        "CART-008 remains partially remediated and CART-023 remains open.",
+        "Commerce Leasing Phase A is complete locally only and has not been pushed, merged, deployed or enabled."
       ]
     }
   ]

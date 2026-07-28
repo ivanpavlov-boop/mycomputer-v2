@@ -18,6 +18,7 @@ use App\Services\Cart\CartReadinessResult;
 use App\Services\Cart\CartReadinessService;
 use App\Services\Cart\CartService;
 use App\Services\Email\EmailMarketingService;
+use App\Services\Leasing\LeasingApplicationService;
 use App\Services\Loyalty\LoyaltyService;
 use App\Services\Payments\PaymentService;
 use App\Services\Promotions\PromotionEngineService;
@@ -46,6 +47,7 @@ class CheckoutService
         private readonly BundleCartService $bundleCart,
         private readonly CheckoutConfirmationService $checkoutConfirmations,
         private readonly CheckoutIdempotencyService $idempotency,
+        private readonly LeasingApplicationService $leasingApplications,
     ) {}
 
     public function checkout(
@@ -110,6 +112,8 @@ class CheckoutService
             }
 
             $discountTotal = min($discountTotal, $subtotal + $shippingPrice);
+            $grandTotal = $subtotal + $shippingPrice - $discountTotal;
+            $this->leasingApplications->assertDownPaymentWithinTotal($data, $grandTotal);
             $idempotencyRecord = $this->idempotency->startRecord($cart, $idempotencyContext);
 
             $customer = Customer::query()->updateOrCreate(
@@ -139,7 +143,7 @@ class CheckoutService
                 'subtotal' => $subtotal,
                 'shipping_price' => $shippingPrice,
                 'discount_total' => $discountTotal,
-                'grand_total' => $subtotal + $shippingPrice - $discountTotal,
+                'grand_total' => $grandTotal,
                 'payment_method' => $data['payment_method'],
                 'payment_status' => 'pending',
                 'shipping_method' => $data['shipping_method'],
@@ -166,7 +170,8 @@ class CheckoutService
                 'address' => $data['shipping_address'],
             ]));
 
-            $this->paymentService->initiate($order, $data['payment_method']);
+            $paymentTransaction = $this->paymentService->initiate($order, $data['payment_method']);
+            $this->leasingApplications->createForOrder($order, $paymentTransaction, $data);
 
             $this->stockReservationService->reduce($cart);
             $this->cartService->clear($cart);
