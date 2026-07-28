@@ -5,6 +5,7 @@ namespace App\Services\Payments\Providers;
 use App\Models\Order;
 use App\Models\PaymentTransaction;
 use App\Services\Payments\Contracts\PaymentProviderInterface;
+use App\Services\Payments\PaymentInitiationContext;
 use Illuminate\Support\Str;
 
 class ManualPaymentProvider implements PaymentProviderInterface
@@ -14,13 +15,13 @@ class ManualPaymentProvider implements PaymentProviderInterface
         return true;
     }
 
-    public function initiatePayment(Order $order, array $data): array
+    public function initiatePayment(Order $order, PaymentInitiationContext $context): array
     {
         return [
             'status' => 'pending',
             'transaction_id' => 'PAY-'.Str::upper(Str::random(12)),
             'redirect_url' => null,
-            'instructions' => $data['instructions'] ?? null,
+            'instructions' => $context->instructions,
             'raw_response' => ['mode' => 'manual_placeholder'],
         ];
     }

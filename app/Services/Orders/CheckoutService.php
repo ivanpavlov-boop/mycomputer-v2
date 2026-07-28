@@ -20,6 +20,7 @@ use App\Services\Cart\CartService;
 use App\Services\Email\EmailMarketingService;
 use App\Services\Leasing\LeasingApplicationService;
 use App\Services\Loyalty\LoyaltyService;
+use App\Services\Payments\PaymentRetryCapabilityService;
 use App\Services\Payments\PaymentService;
 use App\Services\Promotions\PromotionEngineService;
 use App\Services\Promotions\PromotionRedemptionService;
@@ -48,6 +49,7 @@ class CheckoutService
         private readonly CheckoutConfirmationService $checkoutConfirmations,
         private readonly CheckoutIdempotencyService $idempotency,
         private readonly LeasingApplicationService $leasingApplications,
+        private readonly PaymentRetryCapabilityService $paymentRetryCapabilities,
     ) {}
 
     public function checkout(
@@ -65,6 +67,7 @@ class CheckoutService
                 return new CheckoutResult(
                     $order,
                     $this->checkoutConfirmations->issue($order),
+                    $this->paymentRetryCapabilities->issue($order),
                     replayed: true,
                 );
             }
@@ -186,6 +189,7 @@ class CheckoutService
             return new CheckoutResult(
                 $order->load(['paymentTransactions.method']),
                 $confirmationCapability,
+                $this->paymentRetryCapabilities->issue($order),
                 replayed: false,
             );
         }, 3);

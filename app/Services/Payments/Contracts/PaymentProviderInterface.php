@@ -4,12 +4,13 @@ namespace App\Services\Payments\Contracts;
 
 use App\Models\Order;
 use App\Models\PaymentTransaction;
+use App\Services\Payments\PaymentInitiationContext;
 
 interface PaymentProviderInterface
 {
     public function isOperational(): bool;
 
-    public function initiatePayment(Order $order, array $data): array;
+    public function initiatePayment(Order $order, PaymentInitiationContext $context): array;
 
     public function verifyPayment(array $data): array;
 

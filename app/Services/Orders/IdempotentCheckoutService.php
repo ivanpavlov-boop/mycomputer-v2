@@ -6,6 +6,7 @@ use App\Models\CheckoutIdempotencyRecord;
 use App\Services\Cart\CartContextResolver;
 use App\Services\Leasing\LeasingApplicationService;
 use App\Services\Payments\PaymentMethodAvailabilityService;
+use App\Services\Payments\PaymentRetryCapabilityService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -18,6 +19,7 @@ class IdempotentCheckoutService
         private readonly CheckoutConfirmationService $checkoutConfirmations,
         private readonly PaymentMethodAvailabilityService $paymentMethods,
         private readonly LeasingApplicationService $leasingApplications,
+        private readonly PaymentRetryCapabilityService $paymentRetryCapabilities,
     ) {}
 
     public function checkout(Request $request, array $validatedPayload): CheckoutResult
@@ -64,6 +66,7 @@ class IdempotentCheckoutService
             return new CheckoutResult(
                 $order,
                 $this->checkoutConfirmations->issue($order),
+                $this->paymentRetryCapabilities->issue($order),
                 replayed: true,
             );
         });

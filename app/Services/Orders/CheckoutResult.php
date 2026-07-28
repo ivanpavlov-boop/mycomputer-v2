@@ -11,6 +11,8 @@ final readonly class CheckoutResult
         private Order $order,
         #[SensitiveParameter]
         private string $confirmationCapability,
+        #[SensitiveParameter]
+        private ?string $paymentRetryCapability,
         private bool $replayed,
     ) {}
 
@@ -27,5 +29,10 @@ final readonly class CheckoutResult
     public function replayed(): bool
     {
         return $this->replayed;
+    }
+
+    public function paymentRetryCapability(): ?string
+    {
+        return $this->paymentRetryCapability;
     }
 }

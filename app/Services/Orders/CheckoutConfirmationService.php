@@ -5,6 +5,7 @@ namespace App\Services\Orders;
 use App\Exceptions\CheckoutConfirmationUnavailableException;
 use App\Models\CheckoutConfirmationCapability;
 use App\Models\Order;
+use App\Services\Payments\PaymentRedirectPolicy;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Symfony\Component\HttpFoundation\Cookie;
@@ -20,6 +21,10 @@ class CheckoutConfirmationService
     private const TOKEN_BYTES = 32;
 
     private const TOKEN_PATTERN = '/\A[A-Za-z0-9_-]{43}\z/';
+
+    public function __construct(
+        private readonly PaymentRedirectPolicy $redirects,
+    ) {}
 
     public function issue(Order $order): string
     {
@@ -121,7 +126,7 @@ class CheckoutConfirmationService
             ->sortByDesc('id')
             ->first();
         $raw = is_array($transaction?->raw_response) ? $transaction->raw_response : [];
-        $redirectUrl = $this->approvedRedirectUrl($raw['redirect_url'] ?? null);
+        $redirectUrl = $this->redirects->approved($raw['redirect_url'] ?? null);
         $instructions = $raw['instructions'] ?? $transaction?->method?->instructions;
 
         return [
@@ -144,16 +149,5 @@ class CheckoutConfirmationService
     private function requiresSecureCookie(Request $request): bool
     {
         return $request->isSecure() || app()->isProduction();
-    }
-
-    private function approvedRedirectUrl(mixed $redirectUrl): ?string
-    {
-        if (! is_string($redirectUrl) || filter_var($redirectUrl, FILTER_VALIDATE_URL) === false) {
-            return null;
-        }
-
-        return in_array(parse_url($redirectUrl, PHP_URL_SCHEME), ['http', 'https'], true)
-            ? $redirectUrl
-            : null;
     }
 }

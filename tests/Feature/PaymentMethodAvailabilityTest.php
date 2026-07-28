@@ -7,6 +7,7 @@ use App\Exceptions\PaymentMethodUnavailableException;
 use App\Models\Order;
 use App\Models\PaymentMethod;
 use App\Models\PaymentProvider;
+use App\Services\Payments\PaymentInitiationContext;
 use App\Services\Payments\PaymentMethodAvailabilityService;
 use App\Services\Payments\Providers\CardPaymentProvider;
 use Database\Seeders\PaymentSeeder;
@@ -153,6 +154,6 @@ class PaymentMethodAvailabilityTest extends TestCase
         $this->assertFalse($provider->isOperational());
         $this->expectException(CardPaymentProviderUnavailableException::class);
 
-        $provider->initiatePayment(new Order, []);
+        $provider->initiatePayment(new Order, new PaymentInitiationContext);
     }
 }

@@ -30,9 +30,12 @@ class PaymentService
     public function initiate(Order $order, string $methodCode, array $data = []): PaymentTransaction
     {
         $method = $this->activeMethod($methodCode);
-        $response = $this->provider($method)->initiatePayment($order, [
-            'instructions' => $method->instructions,
-        ] + $data);
+        $response = $this->provider($method)->initiatePayment(
+            $order,
+            new PaymentInitiationContext(
+                instructions: $data['instructions'] ?? $method->instructions,
+            ),
+        );
 
         $transaction = $order->paymentTransactions()->create([
             'payment_provider_id' => $method->payment_provider_id,

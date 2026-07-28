@@ -95,6 +95,16 @@ class Order extends Model
         return $this->hasMany(PaymentTransaction::class);
     }
 
+    public function paymentAttempts(): HasMany
+    {
+        return $this->hasMany(PaymentAttempt::class);
+    }
+
+    public function paymentRetryCapabilities(): HasMany
+    {
+        return $this->hasMany(PaymentRetryCapability::class);
+    }
+
     public function checkoutConfirmationCapabilities(): HasMany
     {
         return $this->hasMany(CheckoutConfirmationCapability::class);

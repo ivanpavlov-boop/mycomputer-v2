@@ -14,7 +14,14 @@ use App\Exceptions\CartRecoveryRequiresReviewException;
 use App\Exceptions\CheckoutAlreadyCompletedException;
 use App\Exceptions\CheckoutIdempotencyConflictException;
 use App\Exceptions\CheckoutIdempotencyKeyInvalidException;
+use App\Exceptions\PaymentAttemptInProgressException;
+use App\Exceptions\PaymentIdempotencyConflictException;
+use App\Exceptions\PaymentIdempotencyKeyInvalidException;
 use App\Exceptions\PaymentMethodUnavailableException;
+use App\Exceptions\PaymentProviderDefinitiveFailureException;
+use App\Exceptions\PaymentProviderIndeterminateException;
+use App\Exceptions\PaymentRetryNotAllowedException;
+use App\Exceptions\PaymentRetryUnavailableException;
 use App\Http\Middleware\ResolveApiLocale;
 use App\Support\Api\ErrorResponse;
 use Illuminate\Auth\Access\AuthorizationException;
@@ -160,6 +167,62 @@ return Application::configure(basePath: dirname(__DIR__))
                     'payment_method_unavailable',
                     $exception->getMessage(),
                     422,
+                );
+            }
+
+            if ($exception instanceof PaymentIdempotencyKeyInvalidException) {
+                return ErrorResponse::make(
+                    'payment_idempotency_key_invalid',
+                    $exception->getMessage(),
+                    422,
+                );
+            }
+
+            if ($exception instanceof PaymentIdempotencyConflictException) {
+                return ErrorResponse::make(
+                    'payment_idempotency_conflict',
+                    $exception->getMessage(),
+                    409,
+                );
+            }
+
+            if ($exception instanceof PaymentAttemptInProgressException) {
+                return ErrorResponse::make(
+                    'payment_attempt_in_progress',
+                    $exception->getMessage(),
+                    409,
+                )->withHeaders(['Retry-After' => '2']);
+            }
+
+            if ($exception instanceof PaymentRetryUnavailableException) {
+                return ErrorResponse::make(
+                    'payment_retry_unavailable',
+                    $exception->getMessage(),
+                    404,
+                );
+            }
+
+            if ($exception instanceof PaymentRetryNotAllowedException) {
+                return ErrorResponse::make(
+                    $exception->errorCode,
+                    $exception->getMessage(),
+                    $exception->statusCode,
+                );
+            }
+
+            if ($exception instanceof PaymentProviderDefinitiveFailureException) {
+                return ErrorResponse::make(
+                    'payment_provider_failed',
+                    $exception->getMessage(),
+                    422,
+                );
+            }
+
+            if ($exception instanceof PaymentProviderIndeterminateException) {
+                return ErrorResponse::make(
+                    'payment_result_indeterminate',
+                    $exception->getMessage(),
+                    503,
                 );
             }
 
