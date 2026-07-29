@@ -445,7 +445,7 @@ class CheckoutIdempotencyMysqlConcurrencyTest extends TestCase
         if ($checkoutFixture['user_id'] !== null) {
             $this->assertSame(
                 $checkoutFixture['user_attributes'],
-                User::query()->findOrFail($checkoutFixture['user_id'])->getAttributes(),
+                User::query()->findOrFail($checkoutFixture['user_id'])->getRawOriginal(),
             );
         }
         $this->assertSame(1, DB::table('payment_transactions')->where('order_id', $record->order_id)->count());
@@ -540,7 +540,9 @@ class CheckoutIdempotencyMysqlConcurrencyTest extends TestCase
                 'shipping_method' => $referenceFixtures['shipping_method_code'],
                 'shipping_provider' => $referenceFixtures['shipping_provider_code'],
                 'user_id' => $user?->getKey(),
-                'user_attributes' => $user?->getAttributes(),
+                'user_attributes' => $user === null
+                    ? null
+                    : User::query()->findOrFail($user->getKey())->getRawOriginal(),
             ];
 
             return [$cart, $product, 100, $checkoutFixture];
