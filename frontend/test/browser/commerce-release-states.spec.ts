@@ -6,6 +6,28 @@ const state = process.env.COMMERCE_TEST_STATE
 const storefrontPort = state === 'closed' ? 3001 : 3002
 const storefrontUrl = `http://127.0.0.1:${storefrontPort}`
 
+test('legal drafts remain available and non-indexable in every release state', async ({ page }) => {
+  for (const path of ['/obshti-usloviya', '/politika-za-poveritelnost']) {
+    const response = await page.goto(path)
+
+    expect(response?.status(), path).toBe(200)
+    await expect(page.getByText('Проект за правен преглед')).toBeVisible()
+    await expect(page.locator('meta[name="robots"]')).toHaveAttribute(
+      'content',
+      'noindex, nofollow, noarchive',
+    )
+  }
+
+  for (const path of [
+    '/en/terms',
+    '/en/privacy',
+    '/en/obshti-usloviya',
+    '/en/politika-za-poveritelnost',
+  ]) {
+    expect((await page.goto(path))?.status(), path).toBe(404)
+  }
+})
+
 test('closed mode returns real 404 responses and exposes no Cart entry', async ({ page }) => {
   test.skip(state !== 'closed')
 

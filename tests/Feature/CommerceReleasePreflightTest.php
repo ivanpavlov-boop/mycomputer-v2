@@ -10,7 +10,7 @@ use Database\Seeders\ShippingSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\Schema;
 use RuntimeException;
 use Tests\TestCase;
 
@@ -27,21 +27,28 @@ class CommerceReleasePreflightTest extends TestCase
         ]);
         $this->safeConfiguration(false, false);
 
-        $missingLegal = $this->preflight();
-        $this->assertSame(1, $missingLegal['exit_code']);
-        $this->assertContains('terms_route_present', $missingLegal['payload']['blockers']);
-        $this->assertContains('privacy_route_present', $missingLegal['payload']['blockers']);
+        config()->set('legal.approved', false);
+        config()->set(
+            'legal.manifest_path',
+            base_path('frontend/app/data/legal/legal-content-manifest.json'),
+        );
+        $draft = $this->preflight();
+        $this->assertSame(1, $draft['exit_code']);
+        $this->assertContains('legal_effective_dates_present', $draft['payload']['blockers']);
+        $this->assertContains('legal_content_approved', $draft['payload']['blockers']);
+        $this->assertNotContains('terms_route_present', $draft['payload']['blockers']);
+        $this->assertNotContains('privacy_route_present', $draft['payload']['blockers']);
 
-        Route::get('/terms', fn () => 'terms');
-        Route::get('/privacy', fn () => 'privacy');
-
+        $this->useApprovedLegalFixture();
         $before = $this->databaseCounts();
         $closed = $this->preflight();
         $this->assertSame(0, $closed['exit_code']);
         $this->assertSame('closed', $closed['payload']['state']);
         $this->assertTrue($closed['payload']['ready_for_activation']);
-        $this->assertSame('/terms', $closed['payload']['legal_routes']['terms']);
-        $this->assertSame('/privacy', $closed['payload']['legal_routes']['privacy']);
+        $this->assertSame('/obshti-usloviya', $closed['payload']['legal_routes']['terms']);
+        $this->assertSame('/politika-za-poveritelnost', $closed['payload']['legal_routes']['privacy']);
+        $this->assertTrue($closed['payload']['checks']['legal_manifest_valid']);
+        $this->assertTrue($closed['payload']['checks']['legal_acceptance_schema_present']);
         $this->assertSame($before, $this->databaseCounts());
 
         $this->safeConfiguration(true, true);
@@ -100,13 +107,21 @@ class CommerceReleasePreflightTest extends TestCase
             ->shouldReceive('availableMethods')
             ->once()
             ->andThrow(new RuntimeException('Sensitive connection details'));
+        Schema::shouldReceive('hasColumn')
+            ->once()
+            ->andThrow(new RuntimeException('Sensitive schema connection details'));
 
         $result = $this->preflight();
 
         $this->assertSame(1, $result['exit_code']);
         $this->assertFalse($result['payload']['ready_for_activation']);
         $this->assertContains('database_accessible', $result['payload']['blockers']);
+        $this->assertContains('legal_acceptance_schema_present', $result['payload']['blockers']);
         $this->assertStringNotContainsString('Sensitive connection details', Artisan::output());
+        $this->assertStringNotContainsString(
+            'Sensitive schema connection details',
+            Artisan::output(),
+        );
     }
 
     private function safeConfiguration(bool $enabled, bool $confirmationEnabled): void
@@ -119,6 +134,15 @@ class CommerceReleasePreflightTest extends TestCase
         config()->set('catalog_sync.update_enabled', false);
         config()->set('catalog_sync.sync_all_enabled', false);
         config()->set('catalog_sync.auto_enabled', false);
+    }
+
+    private function useApprovedLegalFixture(): void
+    {
+        config()->set('legal.approved', true);
+        config()->set(
+            'legal.manifest_path',
+            base_path('tests/Fixtures/Legal/approved-legal-content-manifest.json'),
+        );
     }
 
     /**

@@ -11,6 +11,8 @@
           <NuxtLink to="/about">За нас</NuxtLink>
           <NuxtLink to="/contacts">Контакти</NuxtLink>
           <NuxtLink to="/delivery">Доставка</NuxtLink>
+          <NuxtLink to="/obshti-usloviya">Общи условия</NuxtLink>
+          <NuxtLink to="/politika-za-poveritelnost">Политика за поверителност</NuxtLink>
         </div>
       </div>
       <div>

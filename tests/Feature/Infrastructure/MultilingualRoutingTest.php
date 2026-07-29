@@ -39,7 +39,17 @@ class MultilingualRoutingTest extends TestCase
             $config,
         );
 
-        $this->assertSame(4, substr_count($config, 'absolute_redirect off;'));
+        foreach ([
+            ['/obshti-usloviya/', '/obshti-usloviya'],
+            ['/politika-za-poveritelnost/', '/politika-za-poveritelnost'],
+        ] as [$source, $target]) {
+            $this->assertStringContainsString(
+                "location = {$source} {\n        absolute_redirect off;\n        return 308 {$target}\$is_args\$args;\n    }",
+                $config,
+            );
+        }
+
+        $this->assertSame(6, substr_count($config, 'absolute_redirect off;'));
         $this->assertDoesNotMatchRegularExpression('/^    absolute_redirect\\s+off;/m', $config);
     }
 

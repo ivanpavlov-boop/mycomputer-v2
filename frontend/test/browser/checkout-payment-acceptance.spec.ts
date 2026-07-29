@@ -24,7 +24,7 @@ async function fillCheckout(page: Page) {
   const shippingProvider = page.locator('select').first()
   await expect(shippingProvider.locator('option[value="manual"]')).toHaveCount(1)
   await shippingProvider.selectOption('manual')
-  await page.getByRole('checkbox', { name: 'Приемам общите условия' }).check()
+  await page.getByRole('checkbox', { name: /Приемам.*Общите условия/ }).check()
 }
 
 async function submitWithMethod(page: Page, paymentMethod: string) {
@@ -37,7 +37,7 @@ async function submitWithMethod(page: Page, paymentMethod: string) {
   await page.getByPlaceholder('Адрес за фактуриране').fill('Тестов адрес 1')
   await page.getByPlaceholder('Пощенски код').fill('1000')
   await page.getByPlaceholder('Адрес за доставка').fill('Тестов адрес 2')
-  await page.getByRole('checkbox', { name: 'Приемам общите условия' }).check()
+  await page.getByRole('checkbox', { name: /Приемам.*Общите условия/ }).check()
   await page.getByRole('button', { name: 'Изпрати поръчка' }).click()
   await expect(page).toHaveURL(`${storefrontUrl}/checkout/success`)
 }
@@ -65,6 +65,30 @@ test.describe('checkout payment acceptance', () => {
     expect(state.payment_retry_attempts).toBe(0)
     expect(state.provider_invocations).toBe(0)
     expect(state.notifications_dispatched).toBe(1)
+  })
+
+  test('legal links open separately without toggling or submitting consent', async ({ page }) => {
+    await page.goto('/checkout')
+    const checkbox = page.getByRole('checkbox', { name: /Приемам.*Общите условия/ })
+    const terms = page.getByRole('link', { name: 'Общите условия' })
+    const privacy = page.getByRole('link', { name: 'Политиката за поверителност' })
+
+    await expect(checkbox).not.toBeChecked()
+    await expect(terms).toHaveAttribute('href', '/obshti-usloviya')
+    await expect(terms).toHaveAttribute('target', '_blank')
+    await expect(terms).toHaveAttribute('rel', 'noopener noreferrer')
+    await expect(privacy).toHaveAttribute('href', '/politika-za-poveritelnost')
+    await expect(privacy).toHaveAttribute('target', '_blank')
+    await expect(privacy).toHaveAttribute('rel', 'noopener noreferrer')
+
+    const [legalPage] = await Promise.all([
+      page.waitForEvent('popup'),
+      terms.click(),
+    ])
+    await expect(legalPage).toHaveURL('/obshti-usloviya')
+    await legalPage.close()
+    await expect(checkbox).not.toBeChecked()
+    await expect(page).toHaveURL('/checkout')
   })
 
   test('online continuation is explicit, HTTPS-only, and does not auto-navigate', async ({ page, request }) => {

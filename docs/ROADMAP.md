@@ -99,12 +99,12 @@ Manual selected UPDATE price/stock sync is implemented behind `CATALOG_SYNC_UPDA
   remain unchanged; replay reuses the existing snapshot and rollback removes
   an uncommitted snapshot. CART-020 is remediated.
 - Commerce Phase 1E.1 Controlled Public Commerce Enablement and CART-023
-  Release Gate is complete locally only. Nginx, Nuxt and POST checkout share
-  strict closed, confirmation-only, open and invalid states with false
-  committed defaults. Recovery, English commerce, account/auth, card and
-  leasing remain disabled. CART-022 and CART-023 are remediated locally;
-  CART-023 remains open until the full release lifecycle is verified. Missing
-  real Terms and Privacy routes remain explicit preflight blockers.
+  Release Gate is merged, MySQL CI verified, deployed with flags false and
+  disabled-state staging verified. Nginx, Nuxt and POST checkout share strict
+  closed, confirmation-only, open and invalid states. Recovery, English
+  commerce, account/auth, card and leasing remain disabled. CART-022 is
+  remediated, merged and deployed. CART-023 remains open until legal approval,
+  explicit activation approval and enabled-state staging verification.
 - Commerce Leasing Phase A Manual Leasing Application Module is merged,
   MySQL CI verified, deployed and staging schema/safety verified.
   Leasing remains default-disabled; the implementation records
@@ -733,3 +733,10 @@ commands, jobs, observers, or frontend features.
 - Product specification data quality polish.
 - Supplier XML attribute mapping preview.
 - Frontend attribute filters only after controlled data quality.
+
+Commerce Phase 1E.2A is complete locally only. It provides review-ready
+Bulgarian Terms and Privacy drafts, an explicit legal-content approval gate and
+server-authoritative Order consent versions without activating commerce. A
+separate human/legal review must set final content, versions, effective dates
+and manifest approval before any activation request. CART-023 remains open;
+CART-021 and CART-025 also remain open.

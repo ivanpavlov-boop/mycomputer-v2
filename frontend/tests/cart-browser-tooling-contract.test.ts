@@ -20,12 +20,22 @@ describe('Cart browser tooling contract', () => {
     expect(configSource).toContain("NUXT_PUBLIC_CART_COOKIE_SECURE: 'false'")
     expect(configSource).toContain("NUXT_PUBLIC_COMMERCE_ENABLED: 'true'")
     expect(configSource).toContain("NUXT_PUBLIC_COMMERCE_CONFIRMATION_ENABLED: 'true'")
+    expect(configSource).toContain("NUXT_PUBLIC_LEGAL_CONTENT_APPROVED: 'true'")
+    expect(configSource).toContain('start-storefront.mjs approved')
     expect(configSource).not.toContain('computer2u.eu')
     expect(configSource).not.toContain('mycomputer.bg')
 
     const nuxtConfig = readFileSync(resolve(frontendRoot, 'nuxt.config.ts'), 'utf8')
+    const fixtureLauncher = readFileSync(
+      resolve(frontendRoot, 'test/browser/fixtures/start-storefront.mjs'),
+      'utf8',
+    )
     const cartSession = readFileSync(resolve(frontendRoot, 'app/composables/useCartSession.ts'), 'utf8')
     expect(nuxtConfig).toContain("process.env.NUXT_PUBLIC_CART_COOKIE_SECURE !== 'false'")
+    expect(nuxtConfig).toContain("process.env.PLAYWRIGHT_TEST_BUILD === 'true'")
+    expect(nuxtConfig).toContain("process.env.LEGAL_CONTENT_TEST_FIXTURE === 'approved'")
+    expect(fixtureLauncher).toContain("['approved', 'draft'].includes(fixture)")
+    expect(fixtureLauncher).toContain("PLAYWRIGHT_TEST_BUILD: 'true'")
     expect(cartSession).toContain("String(config.public.cartCookieSecure) !== 'false'")
   })
 
@@ -49,6 +59,7 @@ describe('Cart browser tooling contract', () => {
     expect(nginx).toContain('location = /checkout {')
     expect(nginx).toContain('location ^~ /checkout/ { return 404; }')
     expect(nginx).toContain('if ($public_commerce_enabled != "true") { return 404; }')
+    expect(nginx).toContain('if ($legal_content_approved != "true") { return 404; }')
     expect(nginx).toContain('return 404;')
   })
 

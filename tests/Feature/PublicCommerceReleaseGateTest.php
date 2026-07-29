@@ -125,6 +125,37 @@ class PublicCommerceReleaseGateTest extends TestCase
             ->assertJsonPath('error.code', 'validation_error');
     }
 
+    public function test_open_flags_fail_closed_when_legal_content_is_not_approved(): void
+    {
+        config()->set('commerce.public.enabled', true);
+        config()->set('commerce.public.confirmation_enabled', true);
+        config()->set('legal.approved', false);
+
+        $gate = app(PublicCommerceReleaseGate::class);
+
+        $this->assertSame(PublicCommerceReleaseGate::STATE_INVALID, $gate->state());
+        $this->assertFalse($gate->canStartCheckout());
+        $this->assertFalse($gate->isValidConfiguration());
+
+        $this->postJson('/api/v1/checkout')
+            ->assertNotFound()
+            ->assertHeader('Cache-Control', 'no-store, private')
+            ->assertJsonPath('error.code', 'not_found');
+    }
+
+    public function test_confirmation_only_remains_available_when_current_legal_content_is_unapproved(): void
+    {
+        config()->set('commerce.public.enabled', false);
+        config()->set('commerce.public.confirmation_enabled', true);
+        config()->set('legal.approved', false);
+
+        $gate = app(PublicCommerceReleaseGate::class);
+
+        $this->assertSame(PublicCommerceReleaseGate::STATE_CONFIRMATION_ONLY, $gate->state());
+        $this->assertFalse($gate->canStartCheckout());
+        $this->assertTrue($gate->canShowConfirmation());
+    }
+
     public function test_release_middleware_is_scoped_only_to_new_checkout_creation(): void
     {
         $guardedRoutes = collect(app('router')->getRoutes()->getRoutes())
@@ -152,6 +183,14 @@ class PublicCommerceReleaseGateTest extends TestCase
     {
         $environmentExample = (string) file_get_contents(base_path('.env.example'));
         $commerceConfig = (string) file_get_contents(base_path('config/commerce.php'));
+        $legalConfig = (string) file_get_contents(base_path('config/legal.php'));
+        $legalManifest = json_decode(
+            (string) file_get_contents(
+                base_path('frontend/app/data/legal/legal-content-manifest.json'),
+            ),
+            true,
+            flags: JSON_THROW_ON_ERROR,
+        );
 
         $this->assertStringContainsString('PUBLIC_COMMERCE_ENABLED=false', $environmentExample);
         $this->assertStringContainsString(
@@ -162,6 +201,7 @@ class PublicCommerceReleaseGateTest extends TestCase
             'ABANDONED_CART_RECOVERY_ENABLED=false',
             $environmentExample,
         );
+        $this->assertStringContainsString('LEGAL_CONTENT_APPROVED=false', $environmentExample);
         $this->assertStringContainsString(
             "env('PUBLIC_COMMERCE_ENABLED', false)",
             $commerceConfig,
@@ -174,6 +214,13 @@ class PublicCommerceReleaseGateTest extends TestCase
             "env('ABANDONED_CART_RECOVERY_ENABLED', false)",
             $commerceConfig,
         );
+        $this->assertStringContainsString(
+            "env('LEGAL_CONTENT_APPROVED', false)",
+            $legalConfig,
+        );
+        $this->assertSame('draft', $legalManifest['status']);
+        $this->assertNull($legalManifest['terms']['effective_date']);
+        $this->assertNull($legalManifest['privacy']['effective_date']);
     }
 
     /**

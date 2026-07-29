@@ -206,3 +206,22 @@ When relevant:
   documented recovery step.
 - For Catalog Sync incidents, preserve audit batches/logs and staging data for
   review.
+
+## Public Commerce Legal Gate
+
+Before any public-commerce activation:
+
+- confirm the manifest status is `approved`;
+- confirm both legal versions and effective dates are present;
+- confirm explicit human/legal approval;
+- set `LEGAL_CONTENT_APPROVED=true` only in the approved environment;
+- run `php artisan commerce:release-preflight --json`;
+- verify the Order legal-acceptance migration is applied;
+- verify exact Terms and Privacy routes and trailing-slash redirects;
+- verify English legal routes remain blocked;
+- verify checkout consent links and required checkbox;
+- verify confirmation-only rollback still works.
+
+Draft source files or working routes are not legal approval. Never activate
+public commerce while `legal_content_approved` or
+`legal_effective_dates_present` is blocked.

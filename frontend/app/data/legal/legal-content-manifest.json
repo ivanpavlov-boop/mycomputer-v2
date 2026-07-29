@@ -1,0 +1,14 @@
+{
+  "locale": "bg",
+  "status": "draft",
+  "terms": {
+    "route": "/obshti-usloviya",
+    "version": "draft-1",
+    "effective_date": null
+  },
+  "privacy": {
+    "route": "/politika-za-poveritelnost",
+    "version": "draft-1",
+    "effective_date": null
+  }
+}

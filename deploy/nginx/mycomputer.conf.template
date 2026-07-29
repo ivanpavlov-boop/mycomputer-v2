@@ -21,6 +21,7 @@ server {
 
     set $public_commerce_enabled "${PUBLIC_COMMERCE_ENABLED}";
     set $public_commerce_confirmation_enabled "${PUBLIC_COMMERCE_CONFIRMATION_ENABLED}";
+    set $legal_content_approved "${LEGAL_CONTENT_APPROVED}";
 
     location @frontend {
         proxy_pass http://frontend:3000;
@@ -105,15 +106,35 @@ server {
         expires 30d;
     }
 
+    location = /obshti-usloviya {
+        try_files $uri @frontend;
+    }
+
+    location = /obshti-usloviya/ {
+        absolute_redirect off;
+        return 308 /obshti-usloviya$is_args$args;
+    }
+
+    location = /politika-za-poveritelnost {
+        try_files $uri @frontend;
+    }
+
+    location = /politika-za-poveritelnost/ {
+        absolute_redirect off;
+        return 308 /politika-za-poveritelnost$is_args$args;
+    }
+
     location = /cart {
         if ($public_commerce_enabled != "true") { return 404; }
         if ($public_commerce_confirmation_enabled != "true") { return 404; }
+        if ($legal_content_approved != "true") { return 404; }
         try_files $uri @frontend;
     }
 
     location = /cart/ {
         if ($public_commerce_enabled != "true") { return 404; }
         if ($public_commerce_confirmation_enabled != "true") { return 404; }
+        if ($legal_content_approved != "true") { return 404; }
         absolute_redirect off;
         return 308 /cart$is_args$args;
     }
@@ -121,12 +142,14 @@ server {
     location = /checkout {
         if ($public_commerce_enabled != "true") { return 404; }
         if ($public_commerce_confirmation_enabled != "true") { return 404; }
+        if ($legal_content_approved != "true") { return 404; }
         try_files $uri @frontend;
     }
 
     location = /checkout/ {
         if ($public_commerce_enabled != "true") { return 404; }
         if ($public_commerce_confirmation_enabled != "true") { return 404; }
+        if ($legal_content_approved != "true") { return 404; }
         absolute_redirect off;
         return 308 /checkout$is_args$args;
     }
@@ -150,6 +173,14 @@ server {
     location ^~ /en/cart/ { return 404; }
     location = /en/checkout { return 404; }
     location ^~ /en/checkout/ { return 404; }
+    location = /en/terms { return 404; }
+    location ^~ /en/terms/ { return 404; }
+    location = /en/privacy { return 404; }
+    location ^~ /en/privacy/ { return 404; }
+    location = /en/obshti-usloviya { return 404; }
+    location ^~ /en/obshti-usloviya/ { return 404; }
+    location = /en/politika-za-poveritelnost { return 404; }
+    location ^~ /en/politika-za-poveritelnost/ { return 404; }
     location = /account { return 404; }
     location ^~ /account/ { return 404; }
     location = /login { return 404; }

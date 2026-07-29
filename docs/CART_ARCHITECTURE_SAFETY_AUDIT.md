@@ -1254,7 +1254,8 @@ merge is introduced.
 
 ### Commerce Phase 1E.1 - Controlled Public Commerce Enablement
 
-Commerce Phase 1E.1 is complete locally only and does not activate public
+Commerce Phase 1E.1 is merged, MySQL CI verified, deployed with release flags
+false and disabled-state staging verified. It does not activate public
 commerce. It adds a strict, environment-controlled release state shared by the
 Nginx edge, Nuxt storefront entry points and `POST /api/v1/checkout`:
 
@@ -1271,13 +1272,13 @@ while recovery is disabled. CART-021 and CART-025 remain open.
 
 Shipping already used `CartContextResolver`; focused tests now prove guest and
 authenticated ownership, foreign Cart rejection, cart/session consistency and
-the explicit safe no-Cart calculation. CART-022 is remediated locally only.
+the explicit safe no-Cart calculation. CART-022 is remediated, merged and
+deployed.
 
-CART-023 has `local_remediation_status: remediated_locally` and remains open
-until merge, CI, deployment with false flags, disabled-state staging
-verification, explicit activation approval and enabled-state staging
-verification. The current absence of valid Terms and Privacy storefront routes
-is an explicit preflight blocker. See
+CART-023 has a deployed closed-state gate and remains open until legal approval,
+explicit activation approval and enabled-state staging verification. The
+Bulgarian Terms and Privacy storefront routes now contain review-ready drafts;
+legal approval and effective dates are explicit preflight blockers. See
 [Controlled Public Commerce Release Gate](COMMERCE_PUBLIC_RELEASE_GATE.md).
 
 ## 30. Release Gates
@@ -1312,3 +1313,16 @@ Standing safety boundaries:
 - no UPDATE sync enablement;
 - no Product content, image, category or attribute overwrite;
 - no deployment from an unmerged feature branch.
+
+### Commerce Phase 1E.2A - Public Legal Pages and Consent Audit
+
+This phase is complete locally only. It adds exact Bulgarian draft legal pages,
+a repository-controlled manifest, one explicit legal approval flag, a
+fail-closed release-gate dependency and one server-authoritative legal
+acceptance record per new Order.
+
+The draft is not legally approved. Effective dates are unset, indexing is
+disabled and `LEGAL_CONTENT_APPROVED=false`. Public commerce, confirmation,
+recovery, card and leasing remain disabled. CART-023, CART-021 and CART-025
+remain open. The phase adds no IP, user-agent, fingerprint or raw consent text
+storage and changes no Catalog Sync, Product or Supplier behavior.

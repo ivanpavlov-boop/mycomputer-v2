@@ -23,13 +23,13 @@ export default defineConfig({
     {
       command: 'node test/browser/fixtures/cart-api-server.mjs',
       url: `${fixtureUrl}/health`,
-      reuseExistingServer: !process.env.CI,
+      reuseExistingServer: false,
       timeout: 30_000,
     },
     {
-      command: 'node .output/server/index.mjs',
+      command: 'node test/browser/fixtures/start-storefront.mjs approved',
       url: `${storefrontUrl}/cart`,
-      reuseExistingServer: !process.env.CI,
+      reuseExistingServer: false,
       timeout: 60_000,
       env: {
         HOST: '127.0.0.1',
@@ -40,6 +40,7 @@ export default defineConfig({
         NUXT_PUBLIC_CART_COOKIE_SECURE: 'false',
         NUXT_PUBLIC_COMMERCE_ENABLED: 'true',
         NUXT_PUBLIC_COMMERCE_CONFIRMATION_ENABLED: 'true',
+        NUXT_PUBLIC_LEGAL_CONTENT_APPROVED: 'true',
       },
     },
   ],

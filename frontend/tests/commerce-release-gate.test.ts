@@ -5,6 +5,20 @@ import { resolveCommerceReleaseState } from '../app/composables/useCommerceRelea
 
 const frontendRoot = resolve(import.meta.dirname, '..')
 const repositoryRoot = resolve(frontendRoot, '..')
+const approvedManifest = {
+  locale: 'bg',
+  status: 'approved',
+  terms: {
+    route: '/obshti-usloviya',
+    version: 'terms-test-1',
+    effective_date: '2026-07-29',
+  },
+  privacy: {
+    route: '/politika-za-poveritelnost',
+    version: 'privacy-test-1',
+    effective_date: '2026-07-29',
+  },
+}
 
 function source(path: string) {
   return readFileSync(resolve(frontendRoot, path), 'utf8')
@@ -20,8 +34,10 @@ describe('controlled public commerce release gate', () => {
     expect(resolveCommerceReleaseState('false', 'false')).toBe('closed')
     expect(resolveCommerceReleaseState(false, true)).toBe('confirmation_only')
     expect(resolveCommerceReleaseState('false', 'true')).toBe('confirmation_only')
-    expect(resolveCommerceReleaseState(true, true)).toBe('open')
-    expect(resolveCommerceReleaseState('true', 'true')).toBe('open')
+    expect(resolveCommerceReleaseState(true, true, true, approvedManifest)).toBe('open')
+    expect(resolveCommerceReleaseState('true', 'true', 'true', approvedManifest)).toBe('open')
+    expect(resolveCommerceReleaseState(true, true, false, approvedManifest)).toBe('invalid')
+    expect(resolveCommerceReleaseState(true, true, true)).toBe('invalid')
     expect(resolveCommerceReleaseState(true, false)).toBe('invalid')
     expect(resolveCommerceReleaseState('true', 'false')).toBe('invalid')
     expect(resolveCommerceReleaseState('yes', 'true')).toBe('invalid')
@@ -36,6 +52,7 @@ describe('controlled public commerce release gate', () => {
     expect(gate).not.toContain('analytics')
     expect(gate).not.toContain('dataLayer')
     expect(gate).not.toContain('gtag')
+    expect(gate).not.toContain('cookie')
   })
 
   it('gates cart, checkout, confirmation, English commerce, and recovery routes', () => {
@@ -93,6 +110,13 @@ describe('controlled public commerce release gate', () => {
 
     expect(nginx).toContain('set $public_commerce_enabled "${PUBLIC_COMMERCE_ENABLED}";')
     expect(nginx).toContain('set $public_commerce_confirmation_enabled "${PUBLIC_COMMERCE_CONFIRMATION_ENABLED}";')
+    expect(nginx).toContain('set $legal_content_approved "${LEGAL_CONTENT_APPROVED}";')
+    expect(nginx).toContain('location = /obshti-usloviya {')
+    expect(nginx).toContain('location = /politika-za-poveritelnost {')
+    expect(nginx).toContain('return 308 /obshti-usloviya$is_args$args;')
+    expect(nginx).toContain('return 308 /politika-za-poveritelnost$is_args$args;')
+    expect(nginx).toContain('location = /en/terms { return 404; }')
+    expect(nginx).toContain('location = /en/privacy { return 404; }')
     expect(nginx).toContain('location = /cart {')
     expect(nginx).toContain('location = /checkout {')
     expect(nginx).toContain('location = /checkout/success {')
@@ -108,13 +132,15 @@ describe('controlled public commerce release gate', () => {
     expect(nginx).toContain('return 308 /cart$is_args$args;')
     expect(nginx).toContain('return 308 /checkout$is_args$args;')
     expect(nginx).toContain('return 308 /checkout/success$is_args$args;')
-    expect(compose).toContain("NGINX_ENVSUBST_FILTER: '^(PUBLIC_COMMERCE_ENABLED|PUBLIC_COMMERCE_CONFIRMATION_ENABLED)$'")
+    expect(compose).toContain("NGINX_ENVSUBST_FILTER: '^(PUBLIC_COMMERCE_ENABLED|PUBLIC_COMMERCE_CONFIRMATION_ENABLED|LEGAL_CONTENT_APPROVED)$'")
     expect(compose).toContain('NUXT_PUBLIC_COMMERCE_ENABLED: ${PUBLIC_COMMERCE_ENABLED:-false}')
     expect(compose).toContain('NUXT_PUBLIC_COMMERCE_CONFIRMATION_ENABLED: ${PUBLIC_COMMERCE_CONFIRMATION_ENABLED:-false}')
-    expect(validator).toContain('validate_state closed false false 404 404 404')
-    expect(validator).toContain('validate_state confirmation-only false true 404 404 200')
-    expect(validator).toContain('validate_state open true true 200 200 200')
-    expect(validator).toContain('validate_state invalid true false 404 404 404')
+    expect(compose).toContain('NUXT_PUBLIC_LEGAL_CONTENT_APPROVED: ${LEGAL_CONTENT_APPROVED:-false}')
+    expect(validator).toContain('validate_state closed false false false 404 404 404')
+    expect(validator).toContain('validate_state confirmation-only false true false 404 404 200')
+    expect(validator).toContain('validate_state open true true true 200 200 200')
+    expect(validator).toContain('validate_state legal-unapproved true true false 404 404 200')
+    expect(validator).toContain('validate_state invalid true false true 404 404 404')
     expect(validator).toContain('docker exec "$active_container" nginx -T')
   })
 

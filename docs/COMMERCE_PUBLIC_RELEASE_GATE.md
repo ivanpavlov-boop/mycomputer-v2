@@ -2,8 +2,9 @@
 
 ## Status
 
-Commerce Phase 1E.1 is complete locally only. It adds a reversible,
-fail-closed release mechanism; it does not activate public commerce.
+Commerce Phase 1E.1 is merged, MySQL CI verified, deployed with all release
+flags false, and disabled-state staging verified. It adds a reversible,
+fail-closed release mechanism; public commerce remains disabled.
 
 Committed defaults:
 
@@ -82,14 +83,17 @@ Run:
 php artisan commerce:release-preflight --json
 ```
 
-The command performs no writes and checks configuration validity, required
+The command performs no writes and checks configuration validity, required API
 routes, COD and bank transfer availability, card/leasing disabled state,
 shipping readiness, an active Super Admin, Catalog Sync safety flags,
-abandoned-Cart recovery disabled state, and Terms/Privacy route discovery.
+abandoned-Cart recovery disabled state, and the repository-controlled legal
+manifest/source contract.
 
-This repository currently has no valid public Terms or Privacy routes.
-`terms_route_present` and `privacy_route_present` are therefore explicit launch
-blockers. No placeholder legal route or text is introduced.
+The Bulgarian Terms and Privacy routes now exist as review-ready drafts.
+Activation remains blocked by `legal_content_approved` and
+`legal_effective_dates_present`. Draft source files are not evidence of legal
+approval. See
+[Public Legal Pages and Approval Gate](COMMERCE_PUBLIC_LEGAL_GATE.md).
 
 ## Future Deployment
 

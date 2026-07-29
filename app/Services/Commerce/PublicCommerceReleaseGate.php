@@ -2,6 +2,8 @@
 
 namespace App\Services\Commerce;
 
+use App\Services\Legal\LegalContentRegistry;
+
 final class PublicCommerceReleaseGate
 {
     public const STATE_CLOSED = 'closed';
@@ -11,6 +13,10 @@ final class PublicCommerceReleaseGate
     public const STATE_OPEN = 'open';
 
     public const STATE_INVALID = 'invalid';
+
+    public function __construct(
+        private readonly LegalContentRegistry $legalContent,
+    ) {}
 
     public function state(): string
     {
@@ -22,6 +28,10 @@ final class PublicCommerceReleaseGate
         }
 
         if ($enabled && ! $confirmationEnabled) {
+            return self::STATE_INVALID;
+        }
+
+        if ($enabled && ! $this->legalContent->isApproved()) {
             return self::STATE_INVALID;
         }
 

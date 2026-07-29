@@ -1651,3 +1651,20 @@ Error format:
   }
 }
 ```
+
+### Checkout Legal Acceptance
+
+`POST /api/v1/checkout` continues to require:
+
+```json
+{
+  "terms": true
+}
+```
+
+The client must not submit `terms_version`, `privacy_version`,
+`legal_accepted_at` or `legal_acceptance_locale`. Those values are selected by
+the server from the approved legal manifest and stored atomically only for a
+new canonical Order. Equivalent idempotent replay preserves the original
+values. When legal content is not approved, new checkout fails through the
+generic private `404 not_found` release gate.

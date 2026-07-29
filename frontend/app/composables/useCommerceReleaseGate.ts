@@ -1,3 +1,5 @@
+import legalManifest from '#legal-content-manifest'
+
 export type CommerceReleaseState = 'closed' | 'confirmation_only' | 'open' | 'invalid'
 
 function normalizedFlag(value: unknown): boolean | null {
@@ -15,6 +17,8 @@ function normalizedFlag(value: unknown): boolean | null {
 export function resolveCommerceReleaseState(
   commerceEnabled: unknown,
   confirmationEnabled: unknown,
+  legalContentApproved: unknown = false,
+  manifest: unknown = legalManifest,
 ): CommerceReleaseState {
   const commerce = normalizedFlag(commerceEnabled)
   const confirmation = normalizedFlag(confirmationEnabled)
@@ -24,10 +28,39 @@ export function resolveCommerceReleaseState(
   }
 
   if (commerce) {
-    return 'open'
+    return normalizedFlag(legalContentApproved) === true && isApprovedLegalManifest(manifest)
+      ? 'open'
+      : 'invalid'
   }
 
   return confirmation ? 'confirmation_only' : 'closed'
+}
+
+export function isApprovedLegalManifest(value: unknown): boolean {
+  if (!value || typeof value !== 'object') {
+    return false
+  }
+
+  const candidate = value as Record<string, unknown>
+
+  return candidate.locale === 'bg'
+    && candidate.status === 'approved'
+    && isCompleteDocument(candidate.terms, '/obshti-usloviya')
+    && isCompleteDocument(candidate.privacy, '/politika-za-poveritelnost')
+}
+
+function isCompleteDocument(value: unknown, route: string): boolean {
+  if (!value || typeof value !== 'object') {
+    return false
+  }
+
+  const document = value as Record<string, unknown>
+
+  return document.route === route
+    && typeof document.version === 'string'
+    && document.version.trim() !== ''
+    && typeof document.effective_date === 'string'
+    && document.effective_date.trim() !== ''
 }
 
 export function useCommerceReleaseGate() {
@@ -35,6 +68,8 @@ export function useCommerceReleaseGate() {
   const state = computed(() => resolveCommerceReleaseState(
     config.public.commerceEnabled,
     config.public.commerceConfirmationEnabled,
+    config.public.legalContentApproved,
+    legalManifest,
   ))
   const canStartCheckout = computed(() => state.value === 'open')
   const canShowConfirmation = computed(() => ['confirmation_only', 'open'].includes(state.value))

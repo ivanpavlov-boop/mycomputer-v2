@@ -38,6 +38,10 @@ class Order extends Model
         'shipping_status',
         'status',
         'notes',
+        'legal_accepted_at',
+        'terms_version',
+        'privacy_version',
+        'legal_acceptance_locale',
     ];
 
     protected function casts(): array
@@ -47,6 +51,7 @@ class Order extends Model
             'shipping_price' => 'decimal:2',
             'discount_total' => 'decimal:2',
             'grand_total' => 'decimal:2',
+            'legal_accepted_at' => 'datetime',
         ];
     }
 
