@@ -20,9 +20,18 @@
         @input="clearFeedback"
       >
     </div>
-    <UiBaseButton class="w-full" :disabled="pending || !canAdd" :aria-busy="pending" @click="add">
+    <UiBaseButton
+      v-if="canStartCheckout"
+      class="w-full"
+      :disabled="pending || !canAdd"
+      :aria-busy="pending"
+      @click="add"
+    >
       {{ pending ? 'Добавяне…' : 'Добави комплекта' }}
     </UiBaseButton>
+    <p v-else class="text-sm text-slate-600">
+      Онлайн поръчките ще бъдат активирани скоро.
+    </p>
     <p v-if="message" class="text-sm" :class="error ? 'text-red-700' : 'text-emerald-700'">
       {{ message }}
     </p>
@@ -35,6 +44,7 @@ import type { ProductBundle } from '~/types/api'
 const props = defineProps<{ bundle: ProductBundle; selectedItems: Array<Record<string, unknown>> }>()
 
 const cart = useCartStore()
+const { canStartCheckout } = useCommerceReleaseGate()
 const quantity = ref(1)
 const operationKey = computed(() => `bundle:add:${props.bundle.id}`)
 const pending = computed(() => cart.isOperationPending(operationKey.value))
@@ -59,6 +69,10 @@ function scheduleFeedbackReset() {
 }
 
 async function add() {
+  if (!canStartCheckout.value) {
+    return
+  }
+
   clearFeedback()
   try {
     const confirmed = await cart.addBundle(props.bundle.id, quantity.value, props.selectedItems)

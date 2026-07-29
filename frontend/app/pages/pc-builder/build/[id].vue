@@ -15,6 +15,7 @@
           <section class="surface grid gap-3 p-5">
             <BaseButton @click="saveBuild">Запази</BaseButton>
             <BaseButton
+              v-if="canStartCheckout"
               variant="secondary"
               :disabled="cart.isOperationPending(`pc-build:${buildData.id}`)"
               :aria-busy="cart.isOperationPending(`pc-build:${buildData.id}`)"
@@ -22,6 +23,9 @@
             >
               {{ cart.isOperationPending(`pc-build:${buildData.id}`) ? 'Добавяне…' : 'Добави в количката' }}
             </BaseButton>
+            <p v-else class="text-sm text-slate-600">
+              Онлайн поръчките ще бъдат активирани скоро.
+            </p>
             <p v-if="cart.errorFor(`pc-build:${buildData.id}`)" class="text-sm text-red-700" role="alert">
               {{ cart.errorFor(`pc-build:${buildData.id}`)?.message }}
             </p>
@@ -42,6 +46,7 @@ const router = useRouter()
 const pcBuilder = usePcBuilder()
 const cart = useCartStore()
 const analytics = useAnalytics()
+const { canStartCheckout } = useCommerceReleaseGate()
 
 const loading = ref(true)
 const buildData = ref<PcBuild | null>(null)
@@ -97,7 +102,7 @@ async function duplicateBuild() {
 }
 
 async function addBuildToCart() {
-  if (!buildData.value) return
+  if (!canStartCheckout.value || !buildData.value) return
 
   const build = buildData.value
   const confirmed = await cart.acceptExternalMutation(

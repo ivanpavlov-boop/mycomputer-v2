@@ -14,6 +14,10 @@
 </template>
 
 <script setup lang="ts">
+definePageMeta({
+  middleware: 'cart-recovery-disabled',
+})
+
 const route = useRoute()
 const router = useRouter()
 const cart = useCartStore()

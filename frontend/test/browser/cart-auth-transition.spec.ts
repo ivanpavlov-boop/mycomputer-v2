@@ -72,11 +72,26 @@ test.describe('Authenticated Cart convergence', () => {
 
     await page.getByLabel('Количество').fill('2')
     await page.getByRole('button', { name: 'Обнови', exact: true }).click()
-    await page.getByRole('link', { name: 'Вход', exact: true }).click()
-    await page.getByPlaceholder('Имейл').fill('customer@example.test')
-    await page.getByPlaceholder('Парола').fill('Fixture-Password-123!')
-    await page.getByRole('button', { name: 'Вход', exact: true }).click()
-    await expect(page.getByRole('heading', { name: 'Моят профил' })).toBeVisible()
+    await page.evaluate(async () => {
+      const auth = (document.querySelector('#__nuxt') as HTMLElement & {
+        __vue_app__: {
+          config: {
+            globalProperties: {
+              $pinia: {
+                _s: Map<string, {
+                  login: (payload: Record<string, string>) => Promise<void>
+                }>
+              }
+            }
+          }
+        }
+      }).__vue_app__.config.globalProperties.$pinia._s.get('auth')
+
+      await auth?.login({
+        email: 'customer@example.test',
+        password: 'Fixture-Password-123!',
+      })
+    })
     await page.waitForTimeout(1_100)
 
     expect((await cartCookie(context))?.value).toBe('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa')

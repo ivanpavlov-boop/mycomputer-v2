@@ -585,10 +585,10 @@
       "title": "Checkout updates customer profile by non-unique email",
       "severity": "medium",
       "confidence": "confirmed",
-      "status": "open",
-      "local_remediation_status": "remediated_locally",
+      "status": "remediated",
+      "local_remediation_status": "merged_deployed_staging_verified",
       "current_behavior": "Commerce Phase 1D.4 creates one dedicated Customer contact snapshot for every genuinely new canonical Order. Checkout no longer resolves or mutates an existing Customer by email, phone, VAT number, company or address. Equivalent replay reuses the original Order and customer_id, and authenticated User, profile and saved addresses remain unchanged.",
-      "risk": "The local remediation must remain verified through merge, MySQL CI, deployment and staging before CART-020 can be closed.",
+      "risk": "The approved Customer snapshot boundary must remain covered as public commerce is released.",
       "evidence": [
         {
           "path": "app/Services/Orders/CheckoutCustomerSnapshotService.php",
@@ -654,8 +654,9 @@
       "severity": "low",
       "confidence": "confirmed",
       "status": "open",
-      "current_behavior": "Shipping calculation may load a cart by request identifier without ownership enforcement and use its subtotal for method pricing.",
-      "risk": "A client can probe shipping threshold results derived from another cart, although the endpoint does not expose cart lines.",
+      "local_remediation_status": "remediated_locally",
+      "current_behavior": "Shipping calculation resolves Cart context through CartContextResolver. Guest bearer and authenticated ownership are enforced, mismatched cart_id/session identity is rejected, and the explicit no-Cart calculation contract uses no foreign subtotal.",
+      "risk": "The local ownership regressions still require merge, CI, deployment and staging verification before this finding can be closed.",
       "evidence": [
         {
           "path": "app/Http/Controllers/Api/V1/ShippingController.php",
@@ -664,11 +665,15 @@
         {
           "path": "app/Http/Requests/Api/V1/ShippingCalculateRequest.php",
           "symbol": "rules"
+        },
+        {
+          "path": "tests/Feature/ShippingCartOwnershipTest.php",
+          "symbol": "shipping Cart ownership regression matrix"
         }
       ],
-      "verification": "Submit another cart identifier to shipping calculation and compare the result with an unrelated subtotal.",
-      "recommendation": "Resolve shipping context through the same cart ownership boundary as cart and checkout.",
-      "target_phase": "Commerce Phase 1B",
+      "verification": "Run ShippingCartOwnershipTest and verify guest ownership, authenticated ownership, foreign Cart rejection, cart_id/session consistency and the explicit no-Cart contract.",
+      "recommendation": "Preserve CartContextResolver as the single shipping Cart authority through deployment and staging verification.",
+      "target_phase": "Commerce Phase 1E.1",
       "acceptance_criteria": [
         "Shipping calculation cannot use an unowned cart.",
         "Guest bearer and authenticated ownership rules are consistent.",
@@ -682,25 +687,30 @@
       "severity": "info",
       "confidence": "confirmed",
       "status": "open",
-      "current_behavior": "Nuxt cart and checkout source pages exist, while deployment routing returns not found for those public paths. Laravel API cart endpoints remain routed.",
-      "risk": "Source-code readiness can be mistaken for released storefront readiness unless the release gate remains explicit.",
+      "local_remediation_status": "remediated_locally",
+      "current_behavior": "Nginx, Nuxt and POST checkout share a strict four-state public-commerce gate. Committed defaults keep all commerce pages and new checkout creation closed; confirmation-only rollback preserves existing confirmation and authorized payment retry.",
+      "risk": "The gate is not a public activation. CART-023 remains open until merge, CI, disabled-state deployment verification, explicit approval and enabled-state staging verification.",
       "evidence": [
         {
-          "path": "deploy/nginx/mycomputer.conf",
-          "symbol": "disabled commerce locations"
+          "path": "deploy/nginx/mycomputer.conf.template",
+          "symbol": "exact environment-rendered commerce locations"
         },
         {
           "path": "frontend/app/pages/cart.vue",
           "symbol": "page"
         },
         {
-          "path": "frontend/app/pages/checkout/index.vue",
-          "symbol": "page"
+          "path": "app/Http/Middleware/EnsurePublicCommerceEnabled.php",
+          "symbol": "POST checkout release gate"
+        },
+        {
+          "path": "docs/COMMERCE_PUBLIC_RELEASE_GATE.json",
+          "symbol": "release state matrix"
         }
       ],
-      "verification": "Compare the deployment route map with Nuxt generated routes and Laravel API routes in a disposable environment.",
-      "recommendation": "Keep public commerce routes disabled until the Phase 1B through 1D release gates pass.",
-      "target_phase": "Later",
+      "verification": "Validate all four Nginx/Nuxt/backend states, deploy with flags false, verify disabled staging state, obtain explicit activation approval, then verify enabled staging routes.",
+      "recommendation": "Keep committed defaults false and use the documented preflight, activation and confirmation-only rollback procedures.",
+      "target_phase": "Commerce Phase 1E.1",
       "acceptance_criteria": [
         "Commerce routes remain disabled before explicit release approval.",
         "Enabling requires documented backend, frontend and checkout gates.",
@@ -1084,13 +1094,12 @@
     },
     {
       "phase": "Commerce Phase 1D.4",
-      "status": "complete_locally",
-      "finding_ids": [],
-      "partial_finding_ids": [
+      "status": "merged_deployed_staging_verified",
+      "finding_ids": [
         "CART-020"
       ],
+      "partial_finding_ids": [],
       "open_finding_ids": [
-        "CART-020",
         "CART-023"
       ],
       "notes": [
@@ -1100,7 +1109,7 @@
         "Authenticated checkout preserves User, UserProfile, saved CustomerAddress rows, roles, password and sessions.",
         "Equivalent replay reuses the canonical Order and customer_id; rollback removes an uncommitted snapshot.",
         "No migration, profile merge, Customer deduplication, public commerce route or payment enablement is introduced.",
-        "CART-020 is remediated locally and remains open until merge, MySQL CI, deployment and staging verification. CART-023 remains open."
+        "CART-020 is remediated, merged, MySQL CI verified, deployed and staging verified. CART-023 remains open."
       ]
     },
     {
@@ -1123,6 +1132,31 @@
         "Public Cart and checkout pages remain disabled through Nginx.",
         "CART-008 is remediated locally by Commerce Phase 1D.2B and CART-023 remains open.",
         "Commerce Leasing Phase A is merged, MySQL CI verified, deployed and staging schema/safety verified; leasing remains disabled by default."
+      ]
+    },
+    {
+      "phase": "Commerce Phase 1E.1",
+      "status": "complete_locally_only",
+      "finding_ids": [],
+      "partial_finding_ids": [
+        "CART-022",
+        "CART-023"
+      ],
+      "open_finding_ids": [
+        "CART-021",
+        "CART-022",
+        "CART-023",
+        "CART-025"
+      ],
+      "notes": [
+        "Strict closed, confirmation-only, open and invalid release states are shared by Nginx, Nuxt and POST checkout.",
+        "Committed defaults keep public commerce, confirmation and abandoned-Cart recovery disabled.",
+        "Confirmation-only rollback stops new checkout while preserving capability-protected confirmation and authorized payment retry.",
+        "English commerce, account/auth, wishlist, compare and recovery routes remain blocked.",
+        "CART-022 has focused ownership regression coverage and is remediated locally without changing the shipping implementation.",
+        "CART-023 is remediated locally but remains formally open until merge, CI, disabled-state deployment verification, explicit activation approval and enabled-state staging verification.",
+        "Missing real Terms and Privacy routes are explicit preflight blockers; no placeholder legal content was added.",
+        "CART-021 and CART-025 remain open; recovery processing and email remain default-disabled."
       ]
     }
   ]

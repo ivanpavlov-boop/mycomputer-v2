@@ -6,8 +6,13 @@ Commerce Phase 1D.3 is merged, MySQL CI verified, deployed and staging
 implementation/privacy/release-gate verified.
 
 Commerce Phase 1D.4 Checkout Customer Snapshot and Profile Ownership Safety is
-complete locally only. It has not been pushed, merged, deployed or staging
-verified.
+merged, MySQL CI verified, deployed and staging verified. CART-020 is
+remediated.
+
+Commerce Phase 1E.1 Controlled Public Commerce Enablement is complete locally
+only. It adds a strict, default-disabled release gate and does not activate
+public commerce. CART-023 remains open with
+`local_remediation_status: remediated_locally`.
 
 The acceptance layer reuses the existing checkout, confirmation, payment,
 retry, ownership, capability, redirect and leasing services. It adds a
@@ -24,8 +29,11 @@ not create another checkout or retry path.
 | Card architecture | Accepted with the in-process fake provider | Disabled; no real provider |
 
 `PAYMENT_CARD_ENABLED=false` and `PAYMENT_LEASING_ENABLED=false` remain the
-defaults. Public `/cart`, `/checkout`, and `/checkout/success` remain disabled
-at the routing edge. CART-023 therefore remains open.
+defaults. The committed public-commerce, confirmation and abandoned-recovery
+flags are also false. Public `/cart`, `/checkout`, `/checkout/success`, and new
+checkout creation therefore remain disabled by default. CART-023 remains open
+until merge, CI, disabled-state staging verification, explicit activation
+approval and enabled-state staging verification.
 
 ## Customer Snapshot Ownership
 
@@ -44,8 +52,25 @@ roles, password or sessions. Same-key and different-key equivalent replays
 reuse the original Order and `customer_id`; rollback removes an uncommitted
 snapshot.
 
-CART-020 remains `open` with local remediation status `remediated_locally`.
-Public commerce, card and leasing remain disabled.
+CART-020 is remediated, merged, MySQL CI verified, deployed and staging
+verified. Public commerce, card and leasing remain disabled.
+
+## Controlled Release Gate
+
+The Phase 1E.1 release matrix is documented in
+[`COMMERCE_PUBLIC_RELEASE_GATE.md`](COMMERCE_PUBLIC_RELEASE_GATE.md). Nginx,
+Nuxt and `POST /api/v1/checkout` share strict `closed`,
+`confirmation_only`, `open` and `invalid` semantics. Invalid configuration
+fails closed.
+
+Confirmation-only rollback closes new Cart and checkout entry and new Order
+creation while preserving the existing capability-protected confirmation API
+and authorized guest/account payment retry. English commerce, account/auth,
+wishlist, compare and abandoned-Cart recovery remain blocked.
+
+The read-only `commerce:release-preflight --json` command currently reports
+missing real Terms and Privacy routes as launch blockers. No placeholder legal
+content is introduced.
 
 ## Customer Presentation
 
@@ -91,7 +116,6 @@ same-key/different-key checkout and payment-attempt races, including one
 Customer snapshot per canonical Order. The acceptance tests compose those
 established contracts rather than copying their fork and barrier machinery.
 
-Commerce Phase 1D.2B is merged, MySQL CI verified, deployed and staging
-schema/security verified. CART-008 is remediated, deployed and staging
-verified. This local phase does not change that deployed code or activate
-public commerce.
+Commerce Phase 1D.2B and 1D.4 are merged, MySQL CI verified, deployed and
+staging verified. CART-008 and CART-020 are remediated. Phase 1E.1 does not
+change their checkout contracts or activate public commerce.

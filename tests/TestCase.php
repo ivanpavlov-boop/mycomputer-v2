@@ -6,6 +6,16 @@ use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
 
 abstract class TestCase extends BaseTestCase
 {
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        // Existing checkout suites exercise the enabled contract. Release-gate
+        // tests override these values to cover closed and rollback states.
+        config()->set('commerce.public.enabled', true);
+        config()->set('commerce.public.confirmation_enabled', true);
+    }
+
     protected function cartSession(string $name): string
     {
         $hex = md5($name);

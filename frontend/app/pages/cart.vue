@@ -96,6 +96,7 @@
           </p>
 
           <UiBaseButton
+            v-if="auth.isAuthenticated"
             class="mt-3 w-full"
             variant="secondary"
             :disabled="cart.isMutating"
@@ -116,6 +117,10 @@ const cart = useCartStore()
 const b2b = useB2B()
 const router = useRouter()
 const auth = useAuthStore()
+
+definePageMeta({
+  middleware: 'commerce-entry',
+})
 
 await cart.sync().catch(() => null)
 
@@ -145,12 +150,6 @@ async function clearCart() {
 }
 
 async function requestQuote() {
-  await auth.fetchUser()
-  if (!auth.isAuthenticated) {
-    await router.push('/login')
-    return
-  }
-
   const response = await b2b.requestCartQuote({
     notes: 'Заявка за оферта от количка',
   }) as { data: { id: number } }
@@ -158,4 +157,9 @@ async function requestQuote() {
 }
 
 useSeo().page('Количка', 'Преглед на избраните продукти.', '/cart')
+useHead({
+  meta: [
+    { name: 'robots', content: 'noindex, nofollow, noarchive' },
+  ],
+})
 </script>

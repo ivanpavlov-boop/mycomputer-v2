@@ -6,6 +6,7 @@ const storefrontUrl = 'http://127.0.0.1:3000'
 export default defineConfig({
   testDir: './test/browser',
   outputDir: './test-results',
+  testIgnore: /commerce-release-states\.spec\.ts/,
   fullyParallel: false,
   workers: 1,
   retries: process.env.CI ? 1 : 0,
@@ -37,6 +38,8 @@ export default defineConfig({
         NUXT_PUBLIC_API_BASE_URL: `${fixtureUrl}/api/v1`,
         NUXT_PUBLIC_SITE_URL: storefrontUrl,
         NUXT_PUBLIC_CART_COOKIE_SECURE: 'false',
+        NUXT_PUBLIC_COMMERCE_ENABLED: 'true',
+        NUXT_PUBLIC_COMMERCE_CONFIRMATION_ENABLED: 'true',
       },
     },
   ],

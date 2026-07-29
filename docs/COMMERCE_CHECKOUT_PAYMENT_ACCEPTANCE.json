@@ -3,7 +3,14 @@
   "status": "merged_deployed_verified",
   "customer_snapshot_phase": {
     "phase": "Commerce Phase 1D.4",
-    "status": "complete_locally"
+    "status": "merged_deployed_staging_verified"
+  },
+  "public_release_gate_phase": {
+    "phase": "Commerce Phase 1E.1",
+    "status": "complete_locally_only",
+    "default_state": "closed",
+    "cart_023_status": "open",
+    "cart_023_local_remediation_status": "remediated_locally"
   },
   "public_commerce_enabled": false,
   "real_provider_enabled": false,
@@ -595,8 +602,8 @@
       "expected_leasing_applications": 0,
       "expected_notifications": 0,
       "expected_ui_action": "none",
-      "security_assertions": ["public_cart_disabled", "public_checkout_disabled", "card_and_leasing_disabled"],
-      "test_evidence": ["CommerceAcceptanceDocumentationTest", "deployment route ownership documentation"]
+      "security_assertions": ["strict_four_state_gate", "public_cart_disabled_by_default", "public_checkout_disabled_by_default", "invalid_state_fail_closed", "confirmation_only_rollback", "card_and_leasing_disabled"],
+      "test_evidence": ["PublicCommerceReleaseGateTest", "commerce-release-gate.test.ts", "FrontendDeployWiringTest", "COMMERCE_PUBLIC_RELEASE_GATE.json"]
     }
   ]
 }

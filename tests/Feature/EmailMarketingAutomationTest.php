@@ -28,6 +28,7 @@ class EmailMarketingAutomationTest extends TestCase
 
         config()->set('scout.driver', 'database');
         config()->set('email-marketing.provider', 'log');
+        config()->set('commerce.abandoned_cart_recovery.enabled', true);
         $this->seed();
     }
 

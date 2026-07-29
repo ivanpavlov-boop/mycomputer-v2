@@ -518,7 +518,21 @@ Cart responses include promotion fields:
 
 `POST /api/v1/checkout`
 
-Requires `X-Cart-Session`.
+Requires `X-Cart-Session` and the strict public-commerce release state `open`
+(`PUBLIC_COMMERCE_ENABLED=true` and
+`PUBLIC_COMMERCE_CONFIRMATION_ENABLED=true`).
+
+In `closed`, `confirmation_only`, or `invalid` state, middleware runs before
+checkout validation and returns a generic `404 not_found` response with
+`Cache-Control: no-store, private`. It reveals no configuration, Cart,
+validation, payment, Customer or Order detail and creates no checkout side
+effect.
+
+The release middleware applies only to this new-checkout endpoint. It does not
+gate the existing capability-protected confirmation endpoint, guest
+payment-attempt endpoint, direct-owner account payment-attempt endpoint,
+shipping/payment-method APIs, Cart APIs, webhooks or admin routes. See
+[Controlled Public Commerce Release Gate](COMMERCE_PUBLIC_RELEASE_GATE.md).
 
 ```json
 {

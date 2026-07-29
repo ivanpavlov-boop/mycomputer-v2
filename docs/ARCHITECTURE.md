@@ -2070,7 +2070,7 @@ Deployment templates are maintained in:
 
 - `Dockerfile`
 - `docker-compose.yml`
-- `deploy/nginx/mycomputer.conf`
+- `deploy/nginx/mycomputer.conf.template`
 - `deploy/supervisor/laravel-workers.conf`
 - `.github/workflows/ci.yml`
 

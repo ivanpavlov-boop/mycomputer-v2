@@ -1231,7 +1231,8 @@ leasing, a real provider, automatic retry or automatic redirect. See
 
 ### Commerce Phase 1D.4 - Checkout Customer Snapshot and Profile Ownership Safety
 
-Commerce Phase 1D.4 is complete locally only. The approved ownership model is:
+Commerce Phase 1D.4 is merged, MySQL CI verified, deployed and staging
+verified. The approved ownership model is:
 
 - `User` is authenticated account identity.
 - `Customer` is a per-Order checkout contact snapshot.
@@ -1246,10 +1247,38 @@ Equivalent replay reuses the original Order and `customer_id`. Snapshot
 creation remains inside the existing checkout transaction after idempotency
 reservation; rollback removes it with all other checkout effects.
 
-CART-020 remains open with `local_remediation_status: remediated_locally`.
-CART-023 remains open and public commerce, card and leasing remain disabled.
+CART-020 is remediated. CART-023 remains open and public commerce, card and
+leasing remain disabled.
 No migration, public route, payment behavior, Customer deduplication or profile
 merge is introduced.
+
+### Commerce Phase 1E.1 - Controlled Public Commerce Enablement
+
+Commerce Phase 1E.1 is complete locally only and does not activate public
+commerce. It adds a strict, environment-controlled release state shared by the
+Nginx edge, Nuxt storefront entry points and `POST /api/v1/checkout`:
+
+- `closed` blocks Cart, checkout, confirmation and new checkout creation;
+- `confirmation_only` blocks new commerce while preserving existing
+  confirmation and authorized payment retry;
+- `open` exposes only the approved Bulgarian guest Cart/checkout surface;
+- `invalid` fails closed.
+
+All three new flags default false. English commerce, account/auth, wishlist,
+compare and Cart recovery remain blocked. Card and leasing remain disabled.
+Recovery scheduling, commands, jobs and service entry points perform no action
+while recovery is disabled. CART-021 and CART-025 remain open.
+
+Shipping already used `CartContextResolver`; focused tests now prove guest and
+authenticated ownership, foreign Cart rejection, cart/session consistency and
+the explicit safe no-Cart calculation. CART-022 is remediated locally only.
+
+CART-023 has `local_remediation_status: remediated_locally` and remains open
+until merge, CI, deployment with false flags, disabled-state staging
+verification, explicit activation approval and enabled-state staging
+verification. The current absence of valid Terms and Privacy storefront routes
+is an explicit preflight blocker. See
+[Controlled Public Commerce Release Gate](COMMERCE_PUBLIC_RELEASE_GATE.md).
 
 ## 30. Release Gates
 

@@ -92,12 +92,19 @@ Manual selected UPDATE price/stock sync is implemented behind `CATALOG_SYNC_UPDA
   customer actions and deterministic backend/frontend/browser acceptance
   evidence.
 - Commerce Phase 1D.4 Checkout Customer Snapshot and Profile Ownership Safety
-  is complete locally only. Every genuinely new canonical Order receives one
+  is merged, MySQL CI verified, deployed and staging verified. Every genuinely
+  new canonical Order receives one
   dedicated Customer contact snapshot without resolving or updating existing
   Customers by contact data. Authenticated User, profile and saved addresses
   remain unchanged; replay reuses the existing snapshot and rollback removes
-  an uncommitted snapshot. CART-020 is remediated locally. Public commerce,
-  card and leasing remain disabled; CART-023 remains open.
+  an uncommitted snapshot. CART-020 is remediated.
+- Commerce Phase 1E.1 Controlled Public Commerce Enablement and CART-023
+  Release Gate is complete locally only. Nginx, Nuxt and POST checkout share
+  strict closed, confirmation-only, open and invalid states with false
+  committed defaults. Recovery, English commerce, account/auth, card and
+  leasing remain disabled. CART-022 and CART-023 are remediated locally;
+  CART-023 remains open until the full release lifecycle is verified. Missing
+  real Terms and Privacy routes remain explicit preflight blockers.
 - Commerce Leasing Phase A Manual Leasing Application Module is merged,
   MySQL CI verified, deployed and staging schema/safety verified.
   Leasing remains default-disabled; the implementation records

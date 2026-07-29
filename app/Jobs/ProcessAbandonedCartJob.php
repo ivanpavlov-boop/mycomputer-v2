@@ -27,6 +27,10 @@ class ProcessAbandonedCartJob implements ShouldQueue
 
     public function handle(EmailMarketingService $emailMarketing): void
     {
+        if (config('commerce.abandoned_cart_recovery.enabled') !== true) {
+            return;
+        }
+
         if ($this->recordId) {
             $record = AbandonedCartRecord::query()->find($this->recordId);
             if ($record) {

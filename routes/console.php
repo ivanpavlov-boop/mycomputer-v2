@@ -11,7 +11,11 @@ Artisan::command('inspire', function () {
 
 Schedule::command('suppliers:run-scheduled-imports')->everyFiveMinutes();
 Schedule::command('suppliers:sync-due-feeds')->everyFifteenMinutes();
-Schedule::command('carts:detect-abandoned')->everyFifteenMinutes();
-Schedule::command('carts:process-abandoned')->everyFifteenMinutes();
+
+if (config('commerce.abandoned_cart_recovery.enabled') === true) {
+    Schedule::command('carts:detect-abandoned')->everyFifteenMinutes();
+    Schedule::command('carts:process-abandoned')->everyFifteenMinutes();
+}
+
 Schedule::call(fn () => GenerateFeedJob::dispatch('google_merchant'))->dailyAt('02:00');
 Schedule::call(fn () => GenerateFeedJob::dispatch('facebook_catalog'))->dailyAt('02:15');

@@ -16,20 +16,20 @@
       </nav>
       <SearchBar class="ml-auto hidden max-w-md flex-1 md:block" />
       <LayoutLanguageSwitcher class="hidden sm:flex" />
-      <NuxtLink v-if="!isReadOnlyStorefrontRoute" to="/compare" class="hidden text-sm font-semibold text-slate-700 hover:text-brand-700 sm:block">
+      <NuxtLink v-if="showCustomerNavigation" to="/compare" class="hidden text-sm font-semibold text-slate-700 hover:text-brand-700 sm:block">
         Сравни {{ compare.count ? `(${compare.count})` : '' }}
       </NuxtLink>
-      <NuxtLink v-if="!isReadOnlyStorefrontRoute && auth.isAuthenticated" to="/account/wishlist" class="hidden text-sm font-semibold text-slate-700 hover:text-brand-700 sm:block">
+      <NuxtLink v-if="showCustomerNavigation && auth.isAuthenticated" to="/account/wishlist" class="hidden text-sm font-semibold text-slate-700 hover:text-brand-700 sm:block">
         Любими {{ wishlist.count ? `(${wishlist.count})` : '' }}
       </NuxtLink>
-      <NuxtLink v-if="!isReadOnlyStorefrontRoute && auth.isAuthenticated" to="/account" class="hidden text-sm font-semibold text-slate-700 hover:text-brand-700 sm:block">
+      <NuxtLink v-if="showCustomerNavigation && auth.isAuthenticated" to="/account" class="hidden text-sm font-semibold text-slate-700 hover:text-brand-700 sm:block">
         Профил
       </NuxtLink>
-      <template v-else-if="!isReadOnlyStorefrontRoute">
+      <template v-else-if="showCustomerNavigation">
         <NuxtLink to="/login" class="hidden text-sm font-semibold text-slate-700 hover:text-brand-700 sm:block">Вход</NuxtLink>
         <NuxtLink to="/register" class="hidden text-sm font-semibold text-slate-700 hover:text-brand-700 sm:block">Регистрация</NuxtLink>
       </template>
-      <ClientOnly v-if="!isReadOnlyStorefrontRoute">
+      <ClientOnly v-if="canStartCheckout">
         <CartButton />
         <template #fallback>
           <button
@@ -53,10 +53,17 @@ const compare = useCompareStore()
 const wishlist = useWishlistStore()
 const auth = useAuthStore()
 const isReadOnlyStorefrontRoute = useReadOnlyStorefrontRoute()
+const { canStartCheckout } = useCommerceReleaseGate()
 const localePath = useLocalePath()
+const route = useRoute()
+const isCommerceRoute = computed(() => route.path === '/cart'
+  || route.path.startsWith('/cart/')
+  || route.path === '/checkout'
+  || route.path.startsWith('/checkout/'))
+const showCustomerNavigation = computed(() => !isReadOnlyStorefrontRoute.value && !isCommerceRoute.value)
 onMounted(async () => {
   await auth.fetchUser()
-  if (!isReadOnlyStorefrontRoute.value) {
+  if (showCustomerNavigation.value) {
     await compare.load()
   }
 })

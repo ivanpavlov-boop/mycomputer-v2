@@ -28,7 +28,7 @@ describe('frontend deploy wiring', () => {
   })
 
   it('keeps nginx storefront routing narrow and leaves admin/API on Laravel', () => {
-    const nginx = repoSource('deploy/nginx/mycomputer.conf')
+    const nginx = repoSource('deploy/nginx/mycomputer.conf.template')
 
     expect(nginx).toContain('proxy_pass http://frontend:3000;')
     expect(nginx).toContain('location = /catalog')
@@ -38,8 +38,10 @@ describe('frontend deploy wiring', () => {
     expect(nginx).toContain('location ^~ /_nuxt/')
     expect(nginx).toContain('location ^~ /admin')
     expect(nginx).toContain('location ^~ /api/')
-    expect(nginx).toContain('location = /cart { return 404; }')
-    expect(nginx).toContain('location = /checkout { return 404; }')
+    expect(nginx).toContain('location = /cart {')
+    expect(nginx).toContain('location = /checkout {')
+    expect(nginx).toContain('PUBLIC_COMMERCE_ENABLED')
+    expect(nginx).toContain('PUBLIC_COMMERCE_CONFIRMATION_ENABLED')
   })
 
   it('uses a private SSR API base URL and a browser-safe public API base URL', () => {
