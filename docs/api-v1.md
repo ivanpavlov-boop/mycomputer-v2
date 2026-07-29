@@ -547,7 +547,9 @@ Server behavior:
 - Recalculates all prices.
 - Validates active/published products.
 - Validates stock availability.
-- Creates or updates the customer.
+- Creates one dedicated Customer contact snapshot for a genuinely new
+  canonical Order. Checkout never resolves or updates an existing Customer by
+  email, phone, VAT number, company or address.
 - Creates order and order items.
 - Reduces stock.
 - Clears the cart.
@@ -556,6 +558,11 @@ Server behavior:
 - Returns payment instructions or redirect placeholders when applicable.
 - Marks an abandoned cart as recovered when checkout is completed from a recovered cart session.
 - Applies automatic promotions, coupon promotions, gift products and promotion redemption tracking through `PromotionEngineService`.
+- Preserves authenticated User, profile and saved-address data. `Order.user_id`
+  remains the trusted Cart owner, while Order customer/address fields remain an
+  independent commercial snapshot.
+- Equivalent idempotent replay reuses the original Order and `customer_id`
+  without creating or updating a Customer.
 
 Response:
 

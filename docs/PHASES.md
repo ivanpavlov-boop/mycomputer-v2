@@ -1,8 +1,27 @@
 # Catalog Sync Phases
 
-## Commerce Phase 1D.3 - End-to-end Checkout and Payment Acceptance
+## Commerce Phase 1D.4 - Checkout Customer Snapshot and Profile Ownership Safety
 
 Status: complete locally only.
+
+Checkout now creates one dedicated Customer contact snapshot for each genuinely
+new canonical Order. It never resolves or mutates an existing Customer by
+email, phone, VAT number, company or address. Authenticated checkout preserves
+the Cart owner's User, profile, saved addresses, roles, password and sessions.
+Equivalent replay reuses the Order and its existing `customer_id`.
+
+Customer snapshot creation remains inside the established atomic checkout
+transaction after the idempotency record and before Order creation. Rollback
+removes the snapshot with every other checkout effect. Order customer and
+address fields remain the immutable commercial snapshot. CART-020 remains
+`open` with local remediation status `remediated_locally`; CART-023 remains
+open. This phase adds no migration and does not enable public commerce, card or
+leasing.
+
+## Commerce Phase 1D.3 - End-to-end Checkout and Payment Acceptance
+
+Status: merged, MySQL CI verified, deployed and staging
+implementation/privacy/release-gate verified.
 
 This phase adds a read-only, server-authoritative payment action presentation
 to checkout confirmation and direct-owned account Order detail responses. The
@@ -12,7 +31,7 @@ instructions, approved HTTPS continuation and explicit payment retry.
 The phase reuses existing checkout idempotency, payment availability, retry,
 capability, ownership and redirect authorities. It adds no migration, public
 route, real provider, automatic retry, polling or automatic redirect. Card and
-leasing remain disabled by default. CART-008 is already remediated, deployed
+  leasing remain disabled by default. CART-008 is already remediated, deployed
 and staging verified by Phase 1D.2B; CART-023 remains open.
 
 See
@@ -68,6 +87,8 @@ Phase 8 manual selected UPDATE price/stock sync has been implemented behind a fe
 | Commerce Phase 1D.2A | Payment Launch Policy, Card Gate and Public Initiation Lockdown | Merged, CI verified, deployed and staging verified; card remains fail-closed, payment availability is centralized and the unauthenticated public initiation route is removed without enabling commerce routes. |
 | Commerce Leasing Phase A | Manual Leasing Application Module | Merged, MySQL CI verified, deployed and staging schema/safety verified; leasing remains default-disabled and manual, with no provider integration or automatic decisioning. |
 | Commerce Phase 1D.2B | Order-owned Payment Re-initiation, Attempt Idempotency and Retry Policy | Complete locally; direct-owner or guest-capability authorization, hash-only attempt idempotency, Order locking and explicit online retry policy. Card remains disabled and no real provider is integrated. |
+| Commerce Phase 1D.3 | End-to-end Checkout and Payment Acceptance | Merged, MySQL CI verified, deployed and staging implementation/privacy/release-gate verified; public commerce, card and leasing remain disabled. |
+| Commerce Phase 1D.4 | Checkout Customer Snapshot and Profile Ownership Safety | Complete locally only; one dedicated Customer snapshot per canonical Order, no contact-field ownership lookup, no implicit account/profile/address mutation and no migration. |
 | Phase 9C.1 | Product attributes core foundation | Complete |
 | Phase 9C.2 | Product attributes admin usability and starter structure | Complete |
 | Phase 9C.3 | Category attribute sets | Complete |

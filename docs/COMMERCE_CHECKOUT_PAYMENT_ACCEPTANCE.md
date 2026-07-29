@@ -2,8 +2,12 @@
 
 ## Status
 
-Commerce Phase 1D.3 is complete locally only. It has not been pushed, merged,
-deployed or staging verified.
+Commerce Phase 1D.3 is merged, MySQL CI verified, deployed and staging
+implementation/privacy/release-gate verified.
+
+Commerce Phase 1D.4 Checkout Customer Snapshot and Profile Ownership Safety is
+complete locally only. It has not been pushed, merged, deployed or staging
+verified.
 
 The acceptance layer reuses the existing checkout, confirmation, payment,
 retry, ownership, capability, redirect and leasing services. It adds a
@@ -22,6 +26,26 @@ not create another checkout or retry path.
 `PAYMENT_CARD_ENABLED=false` and `PAYMENT_LEASING_ENABLED=false` remain the
 defaults. Public `/cart`, `/checkout`, and `/checkout/success` remain disabled
 at the routing edge. CART-023 therefore remains open.
+
+## Customer Snapshot Ownership
+
+The approved commerce ownership semantics are:
+
+- `User` is authenticated account identity.
+- `Customer` is a checkout contact snapshot associated with one canonical
+  Order.
+- Order customer and address fields are the immutable commercial snapshot.
+
+Each genuinely new canonical Order creates one dedicated Customer snapshot
+inside the existing checkout transaction. Checkout never searches for or
+updates an existing Customer by email, phone, VAT number, company or address.
+Authenticated checkout does not update the User, UserProfile, saved addresses,
+roles, password or sessions. Same-key and different-key equivalent replays
+reuse the original Order and `customer_id`; rollback removes an uncommitted
+snapshot.
+
+CART-020 remains `open` with local remediation status `remediated_locally`.
+Public commerce, card and leasing remain disabled.
 
 ## Customer Presentation
 
@@ -59,12 +83,13 @@ The checkout success page uses one shared payment action panel:
 The machine-readable matrix is
 [`COMMERCE_CHECKOUT_PAYMENT_ACCEPTANCE.json`](COMMERCE_CHECKOUT_PAYMENT_ACCEPTANCE.json).
 It covers CHECKOUT, PAYMENT-PRESENTATION, PAYMENT-RETRY, OWNERSHIP,
-CAPABILITIES, CONCURRENCY, ROLLBACK, NOTIFICATIONS, BROWSER and RELEASE-GATE.
+CAPABILITIES, CONCURRENCY, ROLLBACK, CUSTOMER-SNAPSHOT, NOTIFICATIONS, BROWSER
+and RELEASE-GATE.
 
 Existing dedicated MySQL process-concurrency suites remain authoritative for
-same-key/different-key checkout and payment-attempt races. The new acceptance
-tests compose those established contracts rather than copying their fork and
-barrier machinery.
+same-key/different-key checkout and payment-attempt races, including one
+Customer snapshot per canonical Order. The acceptance tests compose those
+established contracts rather than copying their fork and barrier machinery.
 
 Commerce Phase 1D.2B is merged, MySQL CI verified, deployed and staging
 schema/security verified. CART-008 is remediated, deployed and staging

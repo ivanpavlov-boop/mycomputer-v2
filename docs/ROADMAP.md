@@ -86,11 +86,18 @@ Manual selected UPDATE price/stock sync is implemented behind `CATALOG_SYNC_UPDA
   schema/security verified. CART-008 is remediated through direct ownership, a
   separate guest capability, hash-only idempotency, Order-level locking and a
   fail-closed retry policy. Card remains disabled and there is no real provider.
-- Commerce Phase 1D.3 End-to-end Checkout and Payment Acceptance is complete
-  locally only. It adds a server-authoritative payment presentation, explicit
-  safe customer actions and deterministic backend/frontend/browser acceptance
-  evidence. Public commerce, card and leasing remain disabled; CART-023 remains
-  open.
+- Commerce Phase 1D.3 End-to-end Checkout and Payment Acceptance is merged,
+  MySQL CI verified, deployed and staging implementation/privacy/release-gate
+  verified. It adds a server-authoritative payment presentation, explicit safe
+  customer actions and deterministic backend/frontend/browser acceptance
+  evidence.
+- Commerce Phase 1D.4 Checkout Customer Snapshot and Profile Ownership Safety
+  is complete locally only. Every genuinely new canonical Order receives one
+  dedicated Customer contact snapshot without resolving or updating existing
+  Customers by contact data. Authenticated User, profile and saved addresses
+  remain unchanged; replay reuses the existing snapshot and rollback removes
+  an uncommitted snapshot. CART-020 is remediated locally. Public commerce,
+  card and leasing remain disabled; CART-023 remains open.
 - Commerce Leasing Phase A Manual Leasing Application Module is merged,
   MySQL CI verified, deployed and staging schema/safety verified.
   Leasing remains default-disabled; the implementation records
