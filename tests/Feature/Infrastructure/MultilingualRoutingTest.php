@@ -39,7 +39,7 @@ class MultilingualRoutingTest extends TestCase
             $config,
         );
 
-        $this->assertSame(1, substr_count($config, 'absolute_redirect off;'));
+        $this->assertSame(4, substr_count($config, 'absolute_redirect off;'));
         $this->assertDoesNotMatchRegularExpression('/^    absolute_redirect\\s+off;/m', $config);
     }
 
@@ -49,13 +49,17 @@ class MultilingualRoutingTest extends TestCase
 
         $this->assertDoesNotMatchRegularExpression('/location\\s+\\^~\\s+\/en\/\\s*\\{/', $config);
 
-        foreach (['/en/admin', '/en/api', '/en/cart', '/en/checkout', '/en/account'] as $path) {
+        foreach (['/en/admin', '/en/api', '/en/account'] as $path) {
             $this->assertDoesNotMatchRegularExpression(
                 '/location\\s+(?:=\\s+|\\^~\\s+)?'.preg_quote($path, '/').'/',
                 $config,
             );
         }
 
+        $this->assertStringContainsString('location = /en/cart { return 404; }', $config);
+        $this->assertStringContainsString('location ^~ /en/cart/ { return 404; }', $config);
+        $this->assertStringContainsString('location = /en/checkout { return 404; }', $config);
+        $this->assertStringContainsString('location ^~ /en/checkout/ { return 404; }', $config);
         $this->assertDoesNotMatchRegularExpression('/computer2u\\.eu|mycomputer\\.bg/', $config);
     }
 
@@ -80,6 +84,6 @@ class MultilingualRoutingTest extends TestCase
 
     private function nginxConfig(): string
     {
-        return (string) file_get_contents(base_path('deploy/nginx/mycomputer.conf'));
+        return (string) file_get_contents(base_path('deploy/nginx/mycomputer.conf.template'));
     }
 }

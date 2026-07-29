@@ -44,6 +44,21 @@
           <section class="surface p-4">
             <p class="text-sm font-semibold text-slate-700">Цена</p>
             <ProductPrice :product="product" />
+            <UiBaseButton
+              v-if="canStartCheckout"
+              class="mt-4 w-full"
+              :disabled="addingToCart"
+              :aria-busy="addingToCart"
+              @click="addProductToCart"
+            >
+              {{ addingToCart ? 'Добавяне…' : 'Добави в количката' }}
+            </UiBaseButton>
+            <p v-else class="mt-4 text-sm text-slate-600">
+              Онлайн поръчките ще бъдат активирани скоро.
+            </p>
+            <p v-if="addToCartError" class="mt-2 text-sm text-red-700" role="alert">
+              {{ addToCartError }}
+            </p>
           </section>
 
           <section class="surface grid gap-3 p-4 text-sm text-slate-700 sm:grid-cols-2">
@@ -79,6 +94,9 @@ const products = useProducts()
 const seo = useSeo()
 const localePath = useLocalePath()
 const { locale } = useI18n()
+const cart = useCartStore()
+const { canStartCheckout } = useCommerceReleaseGate()
+const addToCartError = ref('')
 
 const slug = computed(() => String(route.params.slug || ''))
 const { data, error, pending } = await useAsyncData(
@@ -87,6 +105,24 @@ const { data, error, pending } = await useAsyncData(
   { watch: [slug, locale] },
 )
 const product = computed<ProductDetail | null>(() => resourceData<ProductDetail>(data.value))
+const addingToCart = computed(() => product.value
+  ? cart.isOperationPending(`add:${product.value.id}`)
+  : false)
+
+async function addProductToCart() {
+  if (!canStartCheckout.value || !product.value) {
+    return
+  }
+
+  addToCartError.value = ''
+
+  try {
+    await cart.add(product.value, 1)
+  } catch {
+    addToCartError.value = cart.errorFor(`add:${product.value.id}`)?.message
+      || 'Продуктът не може да бъде добавен в количката.'
+  }
+}
 
 watchEffect(() => {
   if (!product.value) return

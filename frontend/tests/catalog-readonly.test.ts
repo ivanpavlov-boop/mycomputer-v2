@@ -23,12 +23,15 @@ describe('read-only public catalog foundation', () => {
     expect(card).not.toContain('compare.toggle')
   })
 
-  it('keeps product detail read-only with no purchase, quote, review, or analytics actions', () => {
+  it('keeps the product detail purchase action controlled by the release gate', () => {
     const detail = source('app/pages/p/[slug].vue')
 
     expect(detail).toContain('ProductGallery')
     expect(detail).toContain('ProductPrice')
-    expect(detail).not.toContain('useCartStore')
+    expect(detail).toContain('useCartStore')
+    expect(detail).toContain('useCommerceReleaseGate')
+    expect(detail).toContain('v-if="canStartCheckout"')
+    expect(detail).toContain('if (!canStartCheckout.value || !product.value)')
     expect(detail).not.toContain('useWishlistStore')
     expect(detail).not.toContain('useCompareStore')
     expect(detail).not.toContain('useAnalytics')
@@ -48,13 +51,15 @@ describe('read-only public catalog foundation', () => {
     expect(readOnlyRoute).toContain("path.startsWith('/c/')")
     expect(readOnlyRoute).toContain("path.startsWith('/p/')")
     expect(header).toContain('const isReadOnlyStorefrontRoute = useReadOnlyStorefrontRoute()')
-    expect(header).toContain('ClientOnly v-if="!isReadOnlyStorefrontRoute"')
+    expect(header).toContain('const showCustomerNavigation = computed(() => !isReadOnlyStorefrontRoute.value && !isCommerceRoute.value)')
+    expect(header).toContain('ClientOnly v-if="canStartCheckout"')
     expect(header).toContain('<CartButton />')
-    expect(header).toContain('v-if="!isReadOnlyStorefrontRoute" to="/compare"')
-    expect(header).toContain('v-else-if="!isReadOnlyStorefrontRoute"')
-    expect(mobileMenu).toContain('v-if="!isReadOnlyStorefrontRoute" to="/compare"')
-    expect(mobileMenu).toContain('v-if="!isReadOnlyStorefrontRoute" to="/cart"')
-    expect(layout).toContain('CartDrawer v-if="!isReadOnlyStorefrontRoute"')
+    expect(header).toContain('v-if="showCustomerNavigation" to="/compare"')
+    expect(header).toContain('v-else-if="showCustomerNavigation"')
+    expect(mobileMenu).toContain('const showCustomerNavigation = computed(() => !isReadOnlyStorefrontRoute.value && !isCommerceRoute.value)')
+    expect(mobileMenu).toContain('v-if="showCustomerNavigation" to="/compare"')
+    expect(mobileMenu).toContain('v-if="canStartCheckout" to="/cart"')
+    expect(layout).toContain('CartDrawer v-if="canStartCheckout"')
   })
 
   it('hides the global AI assistant on read-only catalog routes', () => {

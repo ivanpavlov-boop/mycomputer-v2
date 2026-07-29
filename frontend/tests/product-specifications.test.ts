@@ -112,12 +112,16 @@ describe('public product specifications', () => {
     expect(component).not.toContain('document.')
   })
 
-  it('does not add commerce comparison filters or supplier data to Product detail', () => {
+  it('keeps specifications independent while Product commerce stays release gated', () => {
     const page = source('app/pages/p/[slug].vue')
     const component = source('app/components/product/ProductSpecifications.vue')
     const combined = `${page}\n${component}`
 
-    expect(combined).not.toContain('useCartStore')
+    expect(page).toContain('useCommerceReleaseGate')
+    expect(page).toContain('v-if="canStartCheckout"')
+    expect(page).toContain('if (!canStartCheckout.value || !product.value)')
+    expect(component).not.toContain('useCartStore')
+    expect(component).not.toContain('useCommerceReleaseGate')
     expect(combined).not.toContain('checkout')
     expect(combined).not.toContain('useCompareStore')
     expect(combined).not.toContain('ProductFilters')

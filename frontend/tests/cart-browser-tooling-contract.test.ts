@@ -18,6 +18,8 @@ describe('Cart browser tooling contract', () => {
     expect(configSource).toContain('http://127.0.0.1:3000')
     expect(configSource).toContain('http://127.0.0.1:4010')
     expect(configSource).toContain("NUXT_PUBLIC_CART_COOKIE_SECURE: 'false'")
+    expect(configSource).toContain("NUXT_PUBLIC_COMMERCE_ENABLED: 'true'")
+    expect(configSource).toContain("NUXT_PUBLIC_COMMERCE_CONFIRMATION_ENABLED: 'true'")
     expect(configSource).not.toContain('computer2u.eu')
     expect(configSource).not.toContain('mycomputer.bg')
 
@@ -39,13 +41,14 @@ describe('Cart browser tooling contract', () => {
     })
   })
 
-  it('keeps public Cart and checkout routes disabled at Nginx', () => {
-    const nginx = readFileSync(resolve(repositoryRoot, 'deploy/nginx/mycomputer.conf'), 'utf8')
+  it('keeps public Cart and checkout routes behind the rendered Nginx gate', () => {
+    const nginx = readFileSync(resolve(repositoryRoot, 'deploy/nginx/mycomputer.conf.template'), 'utf8')
 
-    expect(nginx).toContain('location = /cart { return 404; }')
+    expect(nginx).toContain('location = /cart {')
     expect(nginx).toContain('location ^~ /cart/ { return 404; }')
-    expect(nginx).toContain('location = /checkout { return 404; }')
+    expect(nginx).toContain('location = /checkout {')
     expect(nginx).toContain('location ^~ /checkout/ { return 404; }')
+    expect(nginx).toContain('if ($public_commerce_enabled != "true") { return 404; }')
     expect(nginx).toContain('return 404;')
   })
 

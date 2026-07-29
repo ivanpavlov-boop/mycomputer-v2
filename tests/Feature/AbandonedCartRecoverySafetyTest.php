@@ -31,6 +31,7 @@ class AbandonedCartRecoverySafetyTest extends TestCase
 
         config()->set('scout.driver', 'database');
         config()->set('email-marketing.provider', 'log');
+        config()->set('commerce.abandoned_cart_recovery.enabled', true);
         $this->product = Product::factory()->create([
             'price' => 125,
             'regular_price' => 125,

@@ -74,11 +74,13 @@ describe('product detail page', () => {
     expect(page).toContain('v-else-if="error || !product"')
   })
 
-  it('keeps product detail read-only with no commerce analytics wishlist or compare flows', () => {
+  it('keeps product commerce release gated with no analytics wishlist or compare flows', () => {
     const page = source('app/pages/p/[slug].vue')
 
-    expect(page).not.toContain('useCartStore')
-    expect(page).not.toContain('addToCart')
+    expect(page).toContain('useCartStore')
+    expect(page).toContain('useCommerceReleaseGate')
+    expect(page).toContain('v-if="canStartCheckout"')
+    expect(page).toContain('if (!canStartCheckout.value || !product.value)')
     expect(page).not.toContain('checkout')
     expect(page).not.toContain('/orders')
     expect(page).not.toContain('useWishlistStore')

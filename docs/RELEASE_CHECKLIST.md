@@ -37,6 +37,26 @@ Related docs: [AGENTS](../AGENTS.md), [Deployment](DEPLOYMENT.md), [Testing](TES
 - Do not enable UPDATE sync in production unless the user explicitly requests a
   controlled test and confirms the flag change.
 
+## Public Commerce Gate
+
+For Commerce Phase 1E.1 and later:
+
+- deploy merged code first with public, confirmation and recovery flags false;
+- force-recreate `app`, `queue`, `scheduler`, `frontend`, and `nginx` after
+  `.env` changes;
+- validate the closed route matrix before requesting activation;
+- run `php artisan commerce:release-preflight --json`;
+- treat missing real Terms or Privacy routes as blockers;
+- require explicit human approval before setting public and confirmation true;
+- keep English commerce, account/auth, recovery, card and leasing disabled
+  unless a separate approved phase changes them;
+- use confirmation-only mode for emergency rollback so new checkout stops
+  without disabling existing confirmation and authorized payment retry.
+
+The gate implementation or a successful local test does not mean public
+commerce is activated. See
+[Controlled Public Commerce Release Gate](COMMERCE_PUBLIC_RELEASE_GATE.md).
+
 ## Local Validation
 
 Run the checks relevant to the phase. For broad or risky phases, run the full

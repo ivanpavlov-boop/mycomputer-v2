@@ -51,6 +51,10 @@ const confirmationApi = useCheckoutConfirmation()
 const analytics = useAnalytics()
 const purchaseEmitted = ref(false)
 
+definePageMeta({
+  middleware: 'commerce-confirmation',
+})
+
 const { data, status } = useLazyAsyncData(
   'checkout-confirmation',
   () => confirmationApi.get(),

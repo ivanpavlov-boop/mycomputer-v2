@@ -52,6 +52,8 @@ use App\Http\Controllers\Api\V1\ServiceTicketController;
 use App\Http\Controllers\Api\V1\ShippingController;
 use App\Http\Controllers\Api\V1\SitemapController;
 use App\Http\Controllers\Api\V1\WishlistController;
+use App\Http\Middleware\EnsureAbandonedCartRecoveryEnabled;
+use App\Http\Middleware\EnsurePublicCommerceEnabled;
 use App\Http\Middleware\PrivatePaymentAttemptResponse;
 use Illuminate\Support\Facades\Route;
 
@@ -241,7 +243,10 @@ Route::prefix('v1')->group(function (): void {
 
     Route::get('cart', [CartController::class, 'show']);
     Route::post('cart/email', [CartController::class, 'email'])->middleware('throttle:newsletter');
-    Route::post('cart/recover/{token}', [CartController::class, 'recover'])->middleware('throttle:newsletter');
+    Route::post('cart/recover/{token}', [CartController::class, 'recover'])->middleware([
+        EnsureAbandonedCartRecoveryEnabled::class,
+        'throttle:newsletter',
+    ]);
     Route::post('cart/coupon', [CartController::class, 'applyCoupon'])->middleware('throttle:coupon');
     Route::delete('cart/coupon', [CartController::class, 'removeCoupon'])->middleware('throttle:coupon');
     Route::post('cart/items', [CartController::class, 'store']);
@@ -252,7 +257,10 @@ Route::prefix('v1')->group(function (): void {
     Route::delete('cart/bundles/{bundle}', [CartBundleController::class, 'destroy']);
     Route::delete('cart', [CartController::class, 'clear']);
 
-    Route::post('checkout', CheckoutController::class)->middleware('throttle:checkout');
+    Route::post('checkout', CheckoutController::class)->middleware([
+        EnsurePublicCommerceEnabled::class,
+        'throttle:checkout',
+    ]);
     Route::post(
         'checkout/payment-attempts',
         GuestPaymentAttemptController::class,

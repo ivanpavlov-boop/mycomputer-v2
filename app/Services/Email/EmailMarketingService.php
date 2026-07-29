@@ -155,6 +155,10 @@ class EmailMarketingService
 
     public function recordAbandonedCart(Cart $cart): ?AbandonedCartRecord
     {
+        if (! $this->abandonedCartRecoveryEnabled()) {
+            return null;
+        }
+
         $cart->loadMissing(['items.product', 'user']);
 
         if (
@@ -210,6 +214,10 @@ class EmailMarketingService
 
     public function processAbandonedCart(AbandonedCartRecord $record): ?EmailLog
     {
+        if (! $this->abandonedCartRecoveryEnabled()) {
+            return null;
+        }
+
         if (! $this->canSendAbandonedCartEmail($record)) {
             return null;
         }
@@ -248,6 +256,10 @@ class EmailMarketingService
 
     public function detectAbandonedCarts(?int $thresholdMinutes = null): int
     {
+        if (! $this->abandonedCartRecoveryEnabled()) {
+            return 0;
+        }
+
         $thresholdMinutes ??= (int) config('email-marketing.abandoned_cart.threshold_minutes', 60);
         $cutoff = now()->subMinutes($thresholdMinutes);
         $detected = 0;
@@ -270,6 +282,10 @@ class EmailMarketingService
 
     public function processDueAbandonedCarts(): int
     {
+        if (! $this->abandonedCartRecoveryEnabled()) {
+            return 0;
+        }
+
         $processed = 0;
         $this->expireOldAbandonedCarts();
 
@@ -309,6 +325,10 @@ class EmailMarketingService
 
     public function restoreCartFromToken(string $token, ?string $sessionId = null, ?User $actor = null): Cart
     {
+        if (! $this->abandonedCartRecoveryEnabled()) {
+            throw new CartRecoveryInvalidException;
+        }
+
         return DB::transaction(function () use ($actor, $sessionId, $token): Cart {
             $record = AbandonedCartRecord::query()
                 ->where('recovery_token', $token)
@@ -490,6 +510,11 @@ class EmailMarketingService
         }
 
         return true;
+    }
+
+    private function abandonedCartRecoveryEnabled(): bool
+    {
+        return config('commerce.abandoned_cart_recovery.enabled') === true;
     }
 
     private function isAbandonedCartEmailDue(AbandonedCartRecord $record): bool

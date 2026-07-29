@@ -1,8 +1,28 @@
 # Catalog Sync Phases
 
+## Commerce Phase 1E.1 - Controlled Public Commerce Enablement
+
+Status: complete locally only; public commerce is not activated.
+
+This phase adds one strict release state across the environment-rendered Nginx
+edge, Nuxt entry points and `POST /api/v1/checkout`. Committed public commerce,
+confirmation and abandoned-Cart recovery defaults remain false. Supported
+states are closed, confirmation-only rollback, open and invalid/fail-closed.
+
+Only exact Bulgarian Cart, checkout and confirmation pages can open. English
+commerce, account/auth, wishlist, compare and abandoned-Cart recovery remain
+blocked. Card and leasing remain disabled. The read-only preflight includes
+payment, shipping, Super Admin, Catalog Sync and legal-route checks; missing
+real Terms and Privacy routes are explicit launch blockers.
+
+CART-022 and CART-023 are remediated locally. CART-023 remains formally open
+until merge, CI, disabled-state deployment verification, explicit activation
+approval and enabled-state staging verification. CART-021 and CART-025 remain
+open.
+
 ## Commerce Phase 1D.4 - Checkout Customer Snapshot and Profile Ownership Safety
 
-Status: complete locally only.
+Status: merged, MySQL CI verified, deployed and staging verified.
 
 Checkout now creates one dedicated Customer contact snapshot for each genuinely
 new canonical Order. It never resolves or mutates an existing Customer by
@@ -13,10 +33,9 @@ Equivalent replay reuses the Order and its existing `customer_id`.
 Customer snapshot creation remains inside the established atomic checkout
 transaction after the idempotency record and before Order creation. Rollback
 removes the snapshot with every other checkout effect. Order customer and
-address fields remain the immutable commercial snapshot. CART-020 remains
-`open` with local remediation status `remediated_locally`; CART-023 remains
-open. This phase adds no migration and does not enable public commerce, card or
-leasing.
+address fields remain the immutable commercial snapshot. CART-020 is
+remediated. CART-023 remains open. This phase adds no migration and does not
+enable public commerce, card or leasing.
 
 ## Commerce Phase 1D.3 - End-to-end Checkout and Payment Acceptance
 
@@ -88,7 +107,8 @@ Phase 8 manual selected UPDATE price/stock sync has been implemented behind a fe
 | Commerce Leasing Phase A | Manual Leasing Application Module | Merged, MySQL CI verified, deployed and staging schema/safety verified; leasing remains default-disabled and manual, with no provider integration or automatic decisioning. |
 | Commerce Phase 1D.2B | Order-owned Payment Re-initiation, Attempt Idempotency and Retry Policy | Complete locally; direct-owner or guest-capability authorization, hash-only attempt idempotency, Order locking and explicit online retry policy. Card remains disabled and no real provider is integrated. |
 | Commerce Phase 1D.3 | End-to-end Checkout and Payment Acceptance | Merged, MySQL CI verified, deployed and staging implementation/privacy/release-gate verified; public commerce, card and leasing remain disabled. |
-| Commerce Phase 1D.4 | Checkout Customer Snapshot and Profile Ownership Safety | Complete locally only; one dedicated Customer snapshot per canonical Order, no contact-field ownership lookup, no implicit account/profile/address mutation and no migration. |
+| Commerce Phase 1D.4 | Checkout Customer Snapshot and Profile Ownership Safety | Merged, MySQL CI verified, deployed and staging verified; one dedicated Customer snapshot per canonical Order, no contact-field ownership lookup and no implicit account/profile/address mutation. |
+| Commerce Phase 1E.1 | Controlled Public Commerce Enablement and CART-023 Release Gate | Complete locally only; strict default-disabled Nginx/Nuxt/backend release states, confirmation-only rollback, recovery fail-closed, preflight and no activation. |
 | Phase 9C.1 | Product attributes core foundation | Complete |
 | Phase 9C.2 | Product attributes admin usability and starter structure | Complete |
 | Phase 9C.3 | Category attribute sets | Complete |

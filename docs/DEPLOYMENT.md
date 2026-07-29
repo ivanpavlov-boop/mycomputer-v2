@@ -20,6 +20,38 @@ remain separate, explicitly approved operational work.
 
 Deployment is Docker-based. Deploy only from `origin/main` after PR merge and passing CI. The stack serves Laravel/Filament through `app` and selected read-only Nuxt storefront routes through `frontend`.
 
+## Controlled Public Commerce
+
+The committed Phase 1E.1 defaults are:
+
+```dotenv
+PUBLIC_COMMERCE_ENABLED=false
+PUBLIC_COMMERCE_CONFIRMATION_ENABLED=false
+ABANDONED_CART_RECOVERY_ENABLED=false
+```
+
+The first post-merge deployment must keep those values false. Force-recreate
+`app`, `queue`, `scheduler`, `frontend`, and `nginx`, then verify `/cart`,
+`/checkout`, `/checkout/success`, and `POST /api/v1/checkout` are closed.
+
+Explicit activation requires green CI, disabled-state staging verification,
+successful `commerce:release-preflight --json`, resolved legal-route blockers,
+and separate human approval. Activation sets both public and confirmation
+flags true while recovery remains false, then force-recreates the same five
+services.
+
+Emergency rollback stops new commerce while preserving existing confirmation
+and authorized payment retry:
+
+```dotenv
+PUBLIC_COMMERCE_ENABLED=false
+PUBLIC_COMMERCE_CONFIRMATION_ENABLED=true
+ABANDONED_CART_RECOVERY_ENABLED=false
+```
+
+Force-recreate the same services. No database rollback is required. See
+[Controlled Public Commerce Release Gate](COMMERCE_PUBLIC_RELEASE_GATE.md).
+
 ## Allowed
 
 - Deploy merged `origin/main`.

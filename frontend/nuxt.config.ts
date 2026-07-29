@@ -17,6 +17,8 @@ export default defineNuxtConfig({
       apiBaseUrl: process.env.NUXT_PUBLIC_API_BASE_URL || '/api/v1',
       siteUrl: process.env.NUXT_PUBLIC_SITE_URL || 'http://localhost:3000',
       cartCookieSecure: process.env.NUXT_PUBLIC_CART_COOKIE_SECURE !== 'false',
+      commerceEnabled: process.env.NUXT_PUBLIC_COMMERCE_ENABLED ?? 'false',
+      commerceConfirmationEnabled: process.env.NUXT_PUBLIC_COMMERCE_CONFIRMATION_ENABLED ?? 'false',
       englishLocaleIndexable: process.env.NUXT_PUBLIC_ENGLISH_LOCALE_INDEXABLE === 'true',
       ga4Id: process.env.NUXT_PUBLIC_GA4_ID || '',
       metaPixelId: process.env.NUXT_PUBLIC_META_PIXEL_ID || '',

@@ -1,0 +1,87 @@
+{
+  "phase": "Commerce Phase 1E.1",
+  "status": "complete_locally_only",
+  "public_commerce_activated": false,
+  "flags": {
+    "PUBLIC_COMMERCE_ENABLED": false,
+    "PUBLIC_COMMERCE_CONFIRMATION_ENABLED": false,
+    "ABANDONED_CART_RECOVERY_ENABLED": false
+  },
+  "states": {
+    "closed": {
+      "flags": [false, false],
+      "cart": 404,
+      "checkout": 404,
+      "confirmation": 404,
+      "checkout_api": 404
+    },
+    "confirmation_only": {
+      "flags": [false, true],
+      "cart": 404,
+      "checkout": 404,
+      "confirmation": 200,
+      "checkout_api": 404
+    },
+    "open": {
+      "flags": [true, true],
+      "cart": 200,
+      "checkout": 200,
+      "confirmation": 200,
+      "checkout_api": "existing_contract"
+    },
+    "invalid": {
+      "flags": [true, false],
+      "cart": 404,
+      "checkout": 404,
+      "confirmation": 404,
+      "checkout_api": 404,
+      "preflight": "failure"
+    }
+  },
+  "always_blocked": [
+    "/cart/recover/*",
+    "/cart/*",
+    "/checkout/* except /checkout/success",
+    "/en/cart*",
+    "/en/checkout*",
+    "/account*",
+    "/login",
+    "/register",
+    "/forgot-password",
+    "/reset-password",
+    "/wishlist*",
+    "/compare*"
+  ],
+  "launch_profile": {
+    "locale": "bg",
+    "customer": "guest",
+    "payment_methods": ["cash_on_delivery", "bank_transfer"],
+    "card_enabled": false,
+    "leasing_enabled": false,
+    "recovery_enabled": false
+  },
+  "preflight": {
+    "command": "php artisan commerce:release-preflight --json",
+    "read_only": true,
+    "current_blockers": [
+      "terms_route_present",
+      "privacy_route_present"
+    ]
+  },
+  "cart_findings": {
+    "CART-020": "remediated",
+    "CART-021": "open",
+    "CART-022": "remediated_locally",
+    "CART-023": "open_remediated_locally",
+    "CART-025": "open"
+  },
+  "safety": {
+    "migrations": 0,
+    "catalog_sync_changed": false,
+    "sync_all_added": false,
+    "automatic_sync_enabled": false,
+    "catalog_sync_update_enabled": false,
+    "real_environment_changed": false,
+    "deployed": false
+  }
+}

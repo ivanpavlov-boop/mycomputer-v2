@@ -33,6 +33,7 @@ class AbandonedCartRecoveryTest extends TestCase
 
         config()->set('scout.driver', 'database');
         config()->set('email-marketing.provider', 'log');
+        config()->set('commerce.abandoned_cart_recovery.enabled', true);
         $this->seed();
         $this->product = Product::query()->where('sku', 'MC-LAP-001')->firstOrFail();
         $this->product->update(['price' => 100, 'regular_price' => 100, 'promo_price' => null, 'quantity' => 10]);

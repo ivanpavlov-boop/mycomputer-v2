@@ -5,10 +5,10 @@
       <slot />
     </main>
     <LayoutAppFooter />
-    <CartDrawer v-if="!isReadOnlyStorefrontRoute" />
+    <CartDrawer v-if="canStartCheckout" />
   </div>
 </template>
 
 <script setup lang="ts">
-const isReadOnlyStorefrontRoute = useReadOnlyStorefrontRoute()
+const { canStartCheckout } = useCommerceReleaseGate()
 </script>

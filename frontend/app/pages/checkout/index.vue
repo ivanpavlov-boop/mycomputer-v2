@@ -136,6 +136,11 @@ const payments = usePayments()
 const analytics = useAnalytics()
 const cartAnalytics = useCartAnalytics()
 const checkoutIdempotency = useCheckoutIdempotency()
+
+definePageMeta({
+  middleware: 'commerce-entry',
+})
+
 await cart.sync().catch(() => null)
 
 const error = ref('')
@@ -330,4 +335,9 @@ async function submit() {
 
 await calculateShipping()
 useSeo().page('Поръчка', 'Финализиране на поръчка.', '/checkout')
+useHead({
+  meta: [
+    { name: 'robots', content: 'noindex, nofollow, noarchive' },
+  ],
+})
 </script>

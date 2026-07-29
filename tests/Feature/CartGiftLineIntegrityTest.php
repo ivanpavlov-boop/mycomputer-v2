@@ -25,6 +25,7 @@ class CartGiftLineIntegrityTest extends TestCase
         parent::setUp();
 
         config()->set('scout.driver', 'database');
+        config()->set('commerce.abandoned_cart_recovery.enabled', true);
     }
 
     public function test_reconciliation_is_idempotent_and_logs_only_the_created_gift(): void

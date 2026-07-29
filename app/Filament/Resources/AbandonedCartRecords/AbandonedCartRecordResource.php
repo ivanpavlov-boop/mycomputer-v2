@@ -91,6 +91,7 @@ class AbandonedCartRecordResource extends Resource
                     ->modalSubmitAction(false),
                 Action::make('resend')
                     ->icon(Heroicon::OutlinedEnvelope)
+                    ->visible(fn (): bool => config('commerce.abandoned_cart_recovery.enabled') === true)
                     ->requiresConfirmation()
                     ->action(function (AbandonedCartRecord $record): void {
                         ProcessAbandonedCartEmailJob::dispatch($record->id);

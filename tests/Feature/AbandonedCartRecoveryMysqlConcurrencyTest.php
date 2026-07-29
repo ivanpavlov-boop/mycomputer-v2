@@ -47,6 +47,14 @@ class AbandonedCartRecoveryMysqlConcurrencyTest extends TestCase
             );
         }
 
+        config()->set(
+            'commerce.abandoned_cart_recovery.enabled',
+            true,
+        );
+        $this->assertTrue(
+            config('commerce.abandoned_cart_recovery.enabled') === true,
+        );
+
         $migrationCount = (int) DB::table('migrations')->count();
         $latestMigrationBatch = (int) DB::table('migrations')->max('batch');
         $productId = null;
@@ -122,7 +130,11 @@ class AbandonedCartRecoveryMysqlConcurrencyTest extends TestCase
 
             $results = $this->forkRestoreAttempts($token, $targetSessions);
 
-            $this->assertSame([200, 409], $results->pluck('status')->sort()->values()->all());
+            $this->assertSame(
+                [200, 409],
+                $results->pluck('status')->sort()->values()->all(),
+                'Unexpected recovery child results: '.$results->toJson(),
+            );
             $this->assertSame(
                 ['cart_recovery_consumed'],
                 $results->pluck('code')->filter()->values()->all(),

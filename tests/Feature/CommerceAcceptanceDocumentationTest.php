@@ -34,9 +34,18 @@ class CommerceAcceptanceDocumentationTest extends TestCase
         $this->assertSame(
             [
                 'phase' => 'Commerce Phase 1D.4',
-                'status' => 'complete_locally',
+                'status' => 'merged_deployed_staging_verified',
             ],
             $matrix['customer_snapshot_phase'],
+        );
+        $this->assertSame('Commerce Phase 1E.1', $matrix['public_release_gate_phase']['phase']);
+        $this->assertSame(
+            'complete_locally_only',
+            $matrix['public_release_gate_phase']['status'],
+        );
+        $this->assertSame(
+            'remediated_locally',
+            $matrix['public_release_gate_phase']['cart_023_local_remediation_status'],
         );
         $this->assertFalse($matrix['public_commerce_enabled']);
         $this->assertFalse($matrix['real_provider_enabled']);
@@ -91,21 +100,18 @@ class CommerceAcceptanceDocumentationTest extends TestCase
         );
         $gapRegister = (string) file_get_contents(base_path('docs/CART_GAP_REGISTER.json'));
 
-        $this->assertStringContainsString(
-            'Commerce Phase 1D.2B is merged, MySQL CI verified, deployed',
-            $acceptance,
-        );
-        $this->assertStringContainsString('CART-008 is remediated, deployed', $acceptance);
-        $this->assertStringContainsString('CART-023 therefore remains open', $acceptance);
+        $this->assertStringContainsString('Commerce Phase 1D.2B and 1D.4 are merged', $acceptance);
+        $this->assertStringContainsString('CART-008 and CART-020 are remediated', $acceptance);
+        $this->assertStringContainsString('CART-023 remains open', $acceptance);
+        $this->assertStringContainsString('Commerce Phase 1E.1', $acceptance);
+        $this->assertStringContainsString('confirmation_only', $acceptance);
         $this->assertStringContainsString(
             'Commerce Phase 1D.4 Checkout Customer Snapshot',
             $acceptance,
         );
         $this->assertStringContainsString('"id": "CART-020"', $gapRegister);
-        $this->assertStringContainsString(
-            '"local_remediation_status": "remediated_locally"',
-            $gapRegister,
-        );
+        $this->assertStringContainsString('"id": "CART-023"', $gapRegister);
+        $this->assertStringContainsString('"local_remediation_status": "remediated_locally"', $gapRegister);
         $this->assertStringContainsString('"id": "CART-008"', $gapRegister);
         $this->assertStringContainsString('"status": "remediated"', $gapRegister);
     }

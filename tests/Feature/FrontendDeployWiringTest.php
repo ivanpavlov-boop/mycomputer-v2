@@ -22,7 +22,7 @@ class FrontendDeployWiringTest extends TestCase
 
     public function test_nginx_routes_only_safe_storefront_paths_to_nuxt(): void
     {
-        $config = file_get_contents(base_path('deploy/nginx/mycomputer.conf'));
+        $config = file_get_contents(base_path('deploy/nginx/mycomputer.conf.template'));
 
         foreach ([
             'location = /',
@@ -41,7 +41,7 @@ class FrontendDeployWiringTest extends TestCase
 
     public function test_nginx_keeps_laravel_admin_api_livewire_and_storage_paths_on_laravel(): void
     {
-        $config = file_get_contents(base_path('deploy/nginx/mycomputer.conf'));
+        $config = file_get_contents(base_path('deploy/nginx/mycomputer.conf.template'));
 
         foreach ([
             'location ^~ /admin',
@@ -57,13 +57,21 @@ class FrontendDeployWiringTest extends TestCase
         $this->assertStringContainsString('fastcgi_pass app:9000;', $config);
     }
 
-    public function test_nginx_does_not_expose_disabled_customer_flows_to_nuxt(): void
+    public function test_nginx_gates_commerce_and_keeps_other_customer_flows_disabled(): void
     {
-        $config = file_get_contents(base_path('deploy/nginx/mycomputer.conf'));
+        $config = file_get_contents(base_path('deploy/nginx/mycomputer.conf.template'));
 
         foreach ([
-            'location = /cart { return 404; }',
-            'location = /checkout { return 404; }',
+            'location = /cart {',
+            'location = /checkout {',
+            'location = /checkout/success {',
+            'if ($public_commerce_enabled != "true") { return 404; }',
+            'if ($public_commerce_confirmation_enabled != "true") { return 404; }',
+        ] as $commerceGate) {
+            $this->assertStringContainsString($commerceGate, $config);
+        }
+
+        foreach ([
             'location = /account { return 404; }',
             'location = /login { return 404; }',
             'location = /register { return 404; }',
@@ -72,6 +80,11 @@ class FrontendDeployWiringTest extends TestCase
         ] as $blockedRoute) {
             $this->assertStringContainsString($blockedRoute, $config);
         }
+
+        $this->assertStringContainsString('location ^~ /cart/ { return 404; }', $config);
+        $this->assertStringContainsString('location ^~ /checkout/ { return 404; }', $config);
+        $this->assertStringContainsString('location = /en/cart { return 404; }', $config);
+        $this->assertStringContainsString('location = /en/checkout { return 404; }', $config);
     }
 
     public function test_frontend_container_builds_nuxt_for_node_runtime(): void
