@@ -9,7 +9,6 @@ use App\Exceptions\CartPriceChangedException;
 use App\Jobs\ConversionTrackingJob;
 use App\Models\Cart;
 use App\Models\CartItem;
-use App\Models\Customer;
 use App\Models\Order;
 use App\Services\Bundles\BundleCartService;
 use App\Services\Cart\CartPricingRefreshResult;
@@ -48,6 +47,7 @@ class CheckoutService
         private readonly BundleCartService $bundleCart,
         private readonly CheckoutConfirmationService $checkoutConfirmations,
         private readonly CheckoutIdempotencyService $idempotency,
+        private readonly CheckoutCustomerSnapshotService $customerSnapshots,
         private readonly LeasingApplicationService $leasingApplications,
         private readonly PaymentRetryCapabilityService $paymentRetryCapabilities,
     ) {}
@@ -119,18 +119,7 @@ class CheckoutService
             $this->leasingApplications->assertDownPaymentWithinTotal($data, $grandTotal);
             $idempotencyRecord = $this->idempotency->startRecord($cart, $idempotencyContext);
 
-            $customer = Customer::query()->updateOrCreate(
-                ['email' => $data['email']],
-                [
-                    'first_name' => $data['first_name'],
-                    'last_name' => $data['last_name'],
-                    'phone' => $data['phone'],
-                    'company_name' => $data['company_name'] ?? null,
-                    'vat_number' => $data['vat_number'] ?? null,
-                    'billing_address' => $data['billing_address'],
-                    'shipping_address' => $data['shipping_address'],
-                ],
-            );
+            $customer = $this->customerSnapshots->create($data);
 
             $order = Order::query()->create([
                 'order_number' => $this->orderNumberService->generate(),

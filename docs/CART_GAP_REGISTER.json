@@ -586,24 +586,32 @@
       "severity": "medium",
       "confidence": "confirmed",
       "status": "open",
-      "current_behavior": "Checkout uses updateOrCreate keyed by email and writes submitted customer and address fields, while the customers email column is indexed but not unique.",
-      "risk": "Guest checkout can overwrite an existing customer profile, and duplicate customer rows make update selection ambiguous.",
+      "local_remediation_status": "remediated_locally",
+      "current_behavior": "Commerce Phase 1D.4 creates one dedicated Customer contact snapshot for every genuinely new canonical Order. Checkout no longer resolves or mutates an existing Customer by email, phone, VAT number, company or address. Equivalent replay reuses the original Order and customer_id, and authenticated User, profile and saved addresses remain unchanged.",
+      "risk": "The local remediation must remain verified through merge, MySQL CI, deployment and staging before CART-020 can be closed.",
       "evidence": [
         {
-          "path": "app/Services/Orders/CheckoutService.php",
-          "symbol": "checkout"
+          "path": "app/Services/Orders/CheckoutCustomerSnapshotService.php",
+          "symbol": "create"
         },
         {
-          "path": "database/migrations/2026_06_08_110002_create_customers_table.php",
-          "symbol": "up"
+          "path": "tests/Feature/CheckoutCustomerSnapshotTest.php",
+          "symbol": "checkout customer snapshot ownership regressions"
+        },
+        {
+          "path": "tests/Feature/CheckoutCustomerSnapshotAtomicityTest.php",
+          "symbol": "snapshot rollback regression"
         }
       ],
-      "verification": "Create duplicate-email customer rows and submit changed checkout identity data, then inspect which profile is updated.",
-      "recommendation": "Define customer identity, guest snapshot and profile-update ownership separately.",
-      "target_phase": "Commerce Phase 1D",
+      "verification": "Run the Phase 1D.4 existing-customer, authenticated-account, replay, rollback and MySQL concurrency suites and confirm one dedicated Customer snapshot per canonical Order.",
+      "recommendation": "Preserve the approved User account identity, Customer checkout snapshot and immutable Order commercial snapshot boundaries through the public commerce release gate.",
+      "target_phase": "Commerce Phase 1D.4",
       "acceptance_criteria": [
         "Guest checkout cannot overwrite an unrelated managed profile.",
-        "Customer identity uniqueness is explicit.",
+        "Each canonical Order has exactly one dedicated Customer snapshot.",
+        "Authenticated User, profile and saved addresses remain unchanged.",
+        "Equivalent replay reuses the original customer_id.",
+        "Rollback removes an uncommitted Customer snapshot.",
         "Order address snapshots remain immutable."
       ]
     },
@@ -1057,7 +1065,7 @@
     },
     {
       "phase": "Commerce Phase 1D.3",
-      "status": "complete_locally",
+      "status": "merged_deployed_staging_verified",
       "finding_ids": [
         "CART-008"
       ],
@@ -1071,7 +1079,28 @@
         "The checkout success page renders only explicit continue or retry actions; it performs no automatic redirect, retry or payment polling.",
         "A machine-readable acceptance matrix covers checkout, presentation, retry, ownership, capabilities, concurrency, rollback, notifications, browser behavior and the release gate.",
         "Card and leasing remain disabled by default, no real provider is integrated, and public Cart/checkout routes remain disabled.",
-        "Phase 1D.3 is complete locally only and has not been pushed, merged, deployed or staging verified."
+        "Phase 1D.3 is merged, MySQL CI verified, deployed and staging implementation/privacy/release-gate verified."
+      ]
+    },
+    {
+      "phase": "Commerce Phase 1D.4",
+      "status": "complete_locally",
+      "finding_ids": [],
+      "partial_finding_ids": [
+        "CART-020"
+      ],
+      "open_finding_ids": [
+        "CART-020",
+        "CART-023"
+      ],
+      "notes": [
+        "User remains account identity, Customer is a per-Order checkout contact snapshot, and Order customer/address fields remain the immutable commercial snapshot.",
+        "Every genuinely new canonical Order receives one dedicated Customer snapshot inside the existing transaction after idempotency reservation.",
+        "Checkout does not resolve or mutate existing Customers by email, phone, VAT number, company or address.",
+        "Authenticated checkout preserves User, UserProfile, saved CustomerAddress rows, roles, password and sessions.",
+        "Equivalent replay reuses the canonical Order and customer_id; rollback removes an uncommitted snapshot.",
+        "No migration, profile merge, Customer deduplication, public commerce route or payment enablement is introduced.",
+        "CART-020 is remediated locally and remains open until merge, MySQL CI, deployment and staging verification. CART-023 remains open."
       ]
     },
     {

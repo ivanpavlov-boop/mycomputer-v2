@@ -1222,11 +1222,34 @@ merged, MySQL CI verified and staging schema/security verified. CART-023
 remains open because Nginx continues to disable public Cart and checkout routes. See
 [Manual Leasing Applications](MANUAL_LEASING_APPLICATION.md).
 
-Commerce Phase 1D.3 is complete locally only. It adds a server-authoritative
+Commerce Phase 1D.3 is merged, MySQL CI verified, deployed and staging
+implementation/privacy/release-gate verified. It adds a server-authoritative
 payment presentation, explicit safe checkout-success actions and a
 machine-readable acceptance matrix. It does not enable public routes, card,
 leasing, a real provider, automatic retry or automatic redirect. See
 [Commerce Checkout and Payment Acceptance](COMMERCE_CHECKOUT_PAYMENT_ACCEPTANCE.md).
+
+### Commerce Phase 1D.4 - Checkout Customer Snapshot and Profile Ownership Safety
+
+Commerce Phase 1D.4 is complete locally only. The approved ownership model is:
+
+- `User` is authenticated account identity.
+- `Customer` is a per-Order checkout contact snapshot.
+- Order customer and address fields are the immutable commercial snapshot used
+  for fulfilment, invoicing and audit.
+
+Checkout creates one new Customer snapshot for every genuinely new canonical
+Order and never searches for or mutates an existing Customer by email, phone,
+VAT number, company or address. Authenticated checkout preserves User,
+UserProfile, saved CustomerAddress rows, roles, password and sessions.
+Equivalent replay reuses the original Order and `customer_id`. Snapshot
+creation remains inside the existing checkout transaction after idempotency
+reservation; rollback removes it with all other checkout effects.
+
+CART-020 remains open with `local_remediation_status: remediated_locally`.
+CART-023 remains open and public commerce, card and leasing remain disabled.
+No migration, public route, payment behavior, Customer deduplication or profile
+merge is introduced.
 
 ## 30. Release Gates
 

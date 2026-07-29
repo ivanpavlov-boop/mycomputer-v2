@@ -20,7 +20,9 @@ use App\Models\PaymentProvider;
 use App\Models\Product;
 use App\Models\ShippingMethod;
 use App\Models\ShippingProvider;
+use App\Models\User;
 use App\Services\Orders\IdempotentCheckoutService;
+use App\Services\Payments\Providers\CardPaymentProvider;
 use App\Services\Shipping\ShipmentService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -31,6 +33,7 @@ use Illuminate\Support\Str;
 use Mockery;
 use PDOException;
 use RuntimeException;
+use Tests\Fakes\FakeCardPaymentProvider;
 use Tests\TestCase;
 use Throwable;
 
@@ -172,11 +175,60 @@ class CheckoutIdempotencyMysqlConcurrencyTest extends TestCase
         }
     }
 
-    private function runScenario(string $name, array $attempts, array $referenceFixtures)
+    public function test_mysql_authenticated_checkout_creates_one_customer_snapshot(): void
     {
+        $this->requireMysqlConcurrency();
+        $stateBefore = $this->sharedDatabaseState();
+        $referenceFixtures = [];
+
+        try {
+            $referenceFixtures = $this->createReferenceFixtures('authenticated-snapshot');
+            $results = $this->runScenario('authenticated-snapshot', [
+                ['key' => 'authenticated-snapshot-a', 'overrides' => []],
+                ['key' => 'authenticated-snapshot-b', 'overrides' => []],
+            ], $referenceFixtures, authenticated: true);
+
+            $this->assertSame([201, 201], $results->pluck('status')->sort()->values()->all());
+            $this->assertSame(1, $results->pluck('order_number')->unique()->count());
+        } finally {
+            $this->cleanupReferenceFixtures($referenceFixtures);
+            $this->assertSame($stateBefore, $this->sharedDatabaseState());
+        }
+    }
+
+    public function test_mysql_controlled_fake_card_checkout_creates_one_customer_snapshot(): void
+    {
+        $this->requireMysqlConcurrency();
+        config()->set('payments.methods.card.enabled', true);
+        $this->app->instance(CardPaymentProvider::class, new FakeCardPaymentProvider);
+        $stateBefore = $this->sharedDatabaseState();
+        $referenceFixtures = [];
+
+        try {
+            $referenceFixtures = $this->createReferenceFixtures('card-snapshot', 'card');
+            $results = $this->runScenario('card-snapshot', [
+                ['key' => 'card-snapshot-a', 'overrides' => []],
+                ['key' => 'card-snapshot-b', 'overrides' => []],
+            ], $referenceFixtures);
+
+            $this->assertSame([201, 201], $results->pluck('status')->sort()->values()->all());
+            $this->assertSame(1, $results->pluck('order_number')->unique()->count());
+        } finally {
+            $this->cleanupReferenceFixtures($referenceFixtures);
+            $this->assertSame($stateBefore, $this->sharedDatabaseState());
+        }
+    }
+
+    private function runScenario(
+        string $name,
+        array $attempts,
+        array $referenceFixtures,
+        bool $authenticated = false,
+    ) {
         [$cart, $product, $stockBefore, $checkoutFixture] = $this->cartFixture(
             $name,
             $referenceFixtures,
+            $authenticated,
         );
         $directory = sys_get_temp_dir().DIRECTORY_SEPARATOR.'checkout-idempotency-'.Str::uuid();
         $startFile = $directory.DIRECTORY_SEPARATOR.'start';
@@ -354,6 +406,20 @@ class CheckoutIdempotencyMysqlConcurrencyTest extends TestCase
         $this->assertSame('completed', $record->status);
         $this->assertNotNull($record->order_id);
         $this->assertSame(1, Order::query()->whereKey($record->order_id)->count());
+        $order = Order::query()->findOrFail($record->order_id);
+        $this->assertNotNull($order->customer_id);
+        $this->assertSame(
+            1,
+            Customer::query()
+                ->whereKey($order->customer_id)
+                ->where('email', $checkoutFixture['customer_email'])
+                ->count(),
+        );
+        $this->assertSame(
+            1,
+            Customer::query()->where('email', $checkoutFixture['customer_email'])->count(),
+        );
+        $this->assertSame($checkoutFixture['user_id'], $order->user_id);
         $this->assertSame(1, DB::table('payment_transactions')->where('order_id', $record->order_id)->count());
         $this->assertSame(1, DB::table('order_shipments')->where('order_id', $record->order_id)->count());
         $isLeasing = $checkoutFixture['payment_method'] === 'leasing';
@@ -390,13 +456,23 @@ class CheckoutIdempotencyMysqlConcurrencyTest extends TestCase
         $this->assertSame('converted', $cart->fresh()->status);
     }
 
-    private function cartFixture(string $name, array $referenceFixtures): array
-    {
+    private function cartFixture(
+        string $name,
+        array $referenceFixtures,
+        bool $authenticated = false,
+    ): array {
         $suffix = Str::lower(Str::random(12));
         $product = null;
         $cart = null;
+        $user = null;
 
         try {
+            if ($authenticated) {
+                $user = User::factory()->create([
+                    'email' => "checkout-account-{$suffix}@example.test",
+                ]);
+            }
+
             $product = Product::factory()->create([
                 'category_id' => $referenceFixtures['category_id'],
                 'brand_id' => null,
@@ -419,6 +495,7 @@ class CheckoutIdempotencyMysqlConcurrencyTest extends TestCase
             ]);
             $cart = Cart::query()->create([
                 'session_id' => $this->cartSession('mysql-'.$name.'-'.$suffix),
+                'user_id' => $user?->getKey(),
                 'status' => 'active',
                 'expires_at' => now()->addDay(),
             ]);
@@ -434,6 +511,7 @@ class CheckoutIdempotencyMysqlConcurrencyTest extends TestCase
                 'payment_method' => $referenceFixtures['payment_method_code'],
                 'shipping_method' => $referenceFixtures['shipping_method_code'],
                 'shipping_provider' => $referenceFixtures['shipping_provider_code'],
+                'user_id' => $user?->getKey(),
             ];
 
             return [$cart, $product, 100, $checkoutFixture];
@@ -444,6 +522,10 @@ class CheckoutIdempotencyMysqlConcurrencyTest extends TestCase
 
             if ($product !== null) {
                 Product::withTrashed()->whereKey($product->id)->forceDelete();
+            }
+
+            if ($user !== null) {
+                User::withTrashed()->whereKey($user->id)->forceDelete();
             }
 
             throw $exception;
@@ -464,6 +546,12 @@ class CheckoutIdempotencyMysqlConcurrencyTest extends TestCase
         );
         $request->headers->set('X-Cart-Session', $cartSession ?? $cart->session_id);
         $request->headers->set('Idempotency-Key', $this->checkoutIdempotencyKey($key));
+        if ($checkoutFixture['user_id'] !== null) {
+            $userId = $checkoutFixture['user_id'];
+            $request->setUserResolver(
+                fn (?string $guard = null): ?User => User::query()->find($userId),
+            );
+        }
 
         return $request;
     }
@@ -639,6 +727,9 @@ class CheckoutIdempotencyMysqlConcurrencyTest extends TestCase
             ->delete();
         Cart::query()->whereKey($cart->id)->delete();
         Product::withTrashed()->whereKey($product->id)->forceDelete();
+        if ($checkoutFixture['user_id'] !== null) {
+            User::withTrashed()->whereKey($checkoutFixture['user_id'])->forceDelete();
+        }
 
         $this->assertSame(0, DB::table('checkout_idempotency_records')->where('cart_id', $cart->id)->count());
         $this->assertSame(0, DB::table('checkout_confirmation_capabilities')->whereIn('order_id', $orderIds)->count());

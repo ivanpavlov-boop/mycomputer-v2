@@ -30,10 +30,17 @@ class CommerceAcceptanceDocumentationTest extends TestCase
         ];
 
         $this->assertSame('Commerce Phase 1D.3', $matrix['phase']);
-        $this->assertSame('complete_locally', $matrix['status']);
+        $this->assertSame('merged_deployed_verified', $matrix['status']);
+        $this->assertSame(
+            [
+                'phase' => 'Commerce Phase 1D.4',
+                'status' => 'complete_locally',
+            ],
+            $matrix['customer_snapshot_phase'],
+        );
         $this->assertFalse($matrix['public_commerce_enabled']);
         $this->assertFalse($matrix['real_provider_enabled']);
-        $this->assertCount(25, $matrix['scenarios']);
+        $this->assertCount(32, $matrix['scenarios']);
 
         foreach ($matrix['scenarios'] as $scenario) {
             $this->assertEmpty(array_diff($requiredFields, array_keys($scenario)));
@@ -59,10 +66,22 @@ class CommerceAcceptanceDocumentationTest extends TestCase
             'CAPABILITIES',
             'CONCURRENCY',
             'ROLLBACK',
+            'CUSTOMER-SNAPSHOT',
             'NOTIFICATIONS',
             'BROWSER',
             'RELEASE-GATE',
         ], $groups);
+
+        $customerSnapshotScenarios = collect($matrix['scenarios'])
+            ->filter(fn (array $scenario): bool => str_starts_with(
+                $scenario['id'],
+                'CUSTOMER-SNAPSHOT-',
+            ));
+        $this->assertCount(7, $customerSnapshotScenarios);
+        foreach ($customerSnapshotScenarios as $scenario) {
+            $this->assertArrayHasKey('expected_new_customer_count', $scenario);
+            $this->assertSame(0, $scenario['expected_existing_customer_updates']);
+        }
     }
 
     public function test_documentation_records_deployed_retry_controls_and_closed_release_gate(): void
@@ -78,7 +97,15 @@ class CommerceAcceptanceDocumentationTest extends TestCase
         );
         $this->assertStringContainsString('CART-008 is remediated, deployed', $acceptance);
         $this->assertStringContainsString('CART-023 therefore remains open', $acceptance);
-        $this->assertStringContainsString('"status": "complete_locally"', $gapRegister);
+        $this->assertStringContainsString(
+            'Commerce Phase 1D.4 Checkout Customer Snapshot',
+            $acceptance,
+        );
+        $this->assertStringContainsString('"id": "CART-020"', $gapRegister);
+        $this->assertStringContainsString(
+            '"local_remediation_status": "remediated_locally"',
+            $gapRegister,
+        );
         $this->assertStringContainsString('"id": "CART-008"', $gapRegister);
         $this->assertStringContainsString('"status": "remediated"', $gapRegister);
     }
