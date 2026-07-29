@@ -25,6 +25,7 @@ use App\Services\Orders\IdempotentCheckoutService;
 use App\Services\Payments\Providers\CardPaymentProvider;
 use App\Services\Shipping\ShipmentService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Queue;
@@ -285,6 +286,19 @@ class CheckoutIdempotencyMysqlConcurrencyTest extends TestCase
             });
             $this->purgeDatabaseConnections();
             $successfulResponses = $results->where('status', 201)->count();
+            $safeChildResults = $results
+                ->map(fn (array $result): array => [
+                    'status' => $result['status'] ?? null,
+                    'code' => $result['code'] ?? null,
+                ])
+                ->values()
+                ->all();
+
+            $this->assertGreaterThan(
+                0,
+                $successfulResponses,
+                "Child results:\n".json_encode($safeChildResults, JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR),
+            );
             $this->assertScenarioEffects(
                 $cart,
                 $product,
@@ -331,6 +345,7 @@ class CheckoutIdempotencyMysqlConcurrencyTest extends TestCase
         }
 
         $this->purgeDatabaseConnections();
+        Auth::forgetGuards();
 
         if (($attempt['fail'] ?? false) === true) {
             $mock = Mockery::mock(ShipmentService::class);
@@ -361,6 +376,12 @@ class CheckoutIdempotencyMysqlConcurrencyTest extends TestCase
         $payload = $this->checkoutPayload($checkoutFixture, $overrides);
 
         try {
+            if ($checkoutFixture['user_id'] !== null) {
+                Auth::guard('sanctum')->setUser(
+                    User::query()->findOrFail($checkoutFixture['user_id']),
+                );
+            }
+
             $cart = Cart::query()->findOrFail($cartId);
             $result = app(IdempotentCheckoutService::class)->checkout(
                 $this->checkoutRequest(
@@ -390,6 +411,7 @@ class CheckoutIdempotencyMysqlConcurrencyTest extends TestCase
             $directory.DIRECTORY_SEPARATOR."result-{$index}.json",
             json_encode($response, JSON_THROW_ON_ERROR),
         );
+        Auth::forgetGuards();
         $this->purgeDatabaseConnections();
 
         exit($written === false ? 1 : 0);
@@ -420,6 +442,12 @@ class CheckoutIdempotencyMysqlConcurrencyTest extends TestCase
             Customer::query()->where('email', $checkoutFixture['customer_email'])->count(),
         );
         $this->assertSame($checkoutFixture['user_id'], $order->user_id);
+        if ($checkoutFixture['user_id'] !== null) {
+            $this->assertSame(
+                $checkoutFixture['user_attributes'],
+                User::query()->findOrFail($checkoutFixture['user_id'])->getAttributes(),
+            );
+        }
         $this->assertSame(1, DB::table('payment_transactions')->where('order_id', $record->order_id)->count());
         $this->assertSame(1, DB::table('order_shipments')->where('order_id', $record->order_id)->count());
         $isLeasing = $checkoutFixture['payment_method'] === 'leasing';
@@ -512,6 +540,7 @@ class CheckoutIdempotencyMysqlConcurrencyTest extends TestCase
                 'shipping_method' => $referenceFixtures['shipping_method_code'],
                 'shipping_provider' => $referenceFixtures['shipping_provider_code'],
                 'user_id' => $user?->getKey(),
+                'user_attributes' => $user?->getAttributes(),
             ];
 
             return [$cart, $product, 100, $checkoutFixture];
