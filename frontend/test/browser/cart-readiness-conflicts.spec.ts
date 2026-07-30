@@ -94,7 +94,7 @@ test.describe('Cart readiness and conflicts', () => {
     await page.goto('/checkout')
 
     await expect(page.getByRole('heading', { name: 'Данни за клиента' })).toBeVisible()
-    await expect(page.getByRole('button', { name: 'Изпрати поръчка' })).toBeEnabled()
+    await expect(page.getByRole('button', { name: 'Поръчка със задължение за плащане' })).toBeEnabled()
     expect(page.url()).toBe('http://127.0.0.1:3000/checkout')
 
     const state = await fixtureState(request)
@@ -113,7 +113,7 @@ test.describe('Cart readiness and conflicts', () => {
     await page.goto('/checkout')
 
     await expect(page.getByText('Количката съдържа продукти, които трябва да прегледате.')).toBeVisible()
-    await expect(page.getByRole('button', { name: 'Изпрати поръчка' })).toBeDisabled()
+    await expect(page.getByRole('button', { name: 'Поръчка със задължение за плащане' })).toBeDisabled()
     const state = await fixtureState(request)
     expect(state.orders_created).toBe(0)
     expect(state.payment_attempts).toBe(0)

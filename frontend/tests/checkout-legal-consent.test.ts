@@ -26,4 +26,10 @@ describe('checkout legal consent', () => {
     expect(page).not.toContain('legal_accepted_at')
     expect(page).not.toContain('legal_acceptance_locale')
   })
+
+  it('uses an unambiguous final order label without changing submission behavior', () => {
+    expect(page).toContain('Поръчка със задължение за плащане')
+    expect(page).toContain('@submit.prevent="submit"')
+    expect(page).not.toContain("'Изпрати поръчка'")
+  })
 })

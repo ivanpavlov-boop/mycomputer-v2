@@ -1,0 +1,16 @@
+{
+  "phase": "Legal Content Finalization and Explicit Approval",
+  "locale": "bg",
+  "status": "approved",
+  "approved_by_role": "project_owner",
+  "approved_at": "2026-07-30",
+  "legal_counsel_review": "not_claimed",
+  "terms_version": "bg-terms-v1.0-2026-07-30",
+  "terms_effective_date": "2026-07-30",
+  "terms_source_sha256": "a491ccf7c6bd06c9823768676fb247da7b507fb516134853375180b821379dbc",
+  "privacy_version": "bg-privacy-v1.0-2026-07-30",
+  "privacy_effective_date": "2026-07-30",
+  "privacy_source_sha256": "fdaa2748523b4fb2c66cd8e82f8017f92244f8e2660f671a6fb731b505e68a1c",
+  "base_commit": "df7d59c387d3930560bc49e3fead0e5622881dbe",
+  "notes": "Test-only approved legal content fixture."
+}

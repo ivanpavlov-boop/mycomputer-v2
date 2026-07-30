@@ -62,7 +62,7 @@ test.describe('Checkout idempotency', () => {
       candidate.method() === 'POST'
       && new URL(candidate.url()).pathname === '/api/v1/checkout'
     ))
-    const button = page.getByRole('button', { name: 'Изпрати поръчка' })
+    const button = page.getByRole('button', { name: 'Поръчка със задължение за плащане' })
 
     await button.evaluate((element: HTMLButtonElement) => {
       element.click()
@@ -102,7 +102,7 @@ test.describe('Checkout idempotency', () => {
       lose_next_checkout_response: true,
     })
     await prepareCheckout(page)
-    const button = page.getByRole('button', { name: 'Изпрати поръчка' })
+    const button = page.getByRole('button', { name: 'Поръчка със задължение за плащане' })
 
     await button.click()
     await expect(page.getByText('Възникна проблем. Моля, опитайте отново.')).toBeVisible()

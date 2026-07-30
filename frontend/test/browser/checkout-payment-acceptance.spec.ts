@@ -38,7 +38,7 @@ async function submitWithMethod(page: Page, paymentMethod: string) {
   await page.getByPlaceholder('Пощенски код').fill('1000')
   await page.getByPlaceholder('Адрес за доставка').fill('Тестов адрес 2')
   await page.getByRole('checkbox', { name: /Приемам.*Общите условия/ }).check()
-  await page.getByRole('button', { name: 'Изпрати поръчка' }).click()
+  await page.getByRole('button', { name: 'Поръчка със задължение за плащане' }).click()
   await expect(page).toHaveURL(`${storefrontUrl}/checkout/success`)
 }
 
@@ -67,7 +67,7 @@ test.describe('checkout payment acceptance', () => {
     expect(state.notifications_dispatched).toBe(1)
   })
 
-  test('legal links open separately without toggling or submitting consent', async ({ page }) => {
+  test('legal links open separately without toggling consent or submitting an order', async ({ page, request }) => {
     await page.goto('/checkout')
     const checkbox = page.getByRole('checkbox', { name: /Приемам.*Общите условия/ })
     const terms = page.getByRole('link', { name: 'Общите условия' })
@@ -89,6 +89,11 @@ test.describe('checkout payment acceptance', () => {
     await legalPage.close()
     await expect(checkbox).not.toBeChecked()
     await expect(page).toHaveURL('/checkout')
+    await expect(page.getByRole('button', {
+      name: 'Поръчка със задължение за плащане',
+    })).toBeVisible()
+
+    expect((await fixtureState(request)).orders_created).toBe(0)
   })
 
   test('online continuation is explicit, HTTPS-only, and does not auto-navigate', async ({ page, request }) => {

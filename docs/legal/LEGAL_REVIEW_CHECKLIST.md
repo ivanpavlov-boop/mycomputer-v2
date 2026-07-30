@@ -1,8 +1,10 @@
 # Legal Review Checklist
 
-The Bulgarian Terms and Privacy pages added in Commerce Phase 1E.2A are draft
-structures only. They are not final legal advice and are not approved for
-public commerce activation.
+The Bulgarian Terms and Privacy foundation from Commerce Phase 1E.2A is merged,
+deployed and staging verified in the closed state. The first final Bulgarian
+content is approved by the project owner and bound to exact source hashes in
+`LEGAL_CONTENT_APPROVAL_2026-07-30.json`. Legal-counsel review is not claimed,
+and runtime/public-commerce activation remains a separate decision.
 
 ## Confirmed Operator Facts
 
@@ -14,34 +16,27 @@ public commerce activation.
 - Staging domain: `computer2u.eu`
 - Future production domain: `mycomputer.bg`
 
-## Required Review Before Approval
+## Facts Deliberately Not Invented
 
-- Confirm VAT registration status and number, if applicable.
-- Confirm official telephone and working hours, if they will be published.
-- Confirm authorized representative details, if legally required.
-- Confirm delivery providers, service levels, prices and delivery periods.
-- Confirm the operational return address and return/refund procedure.
-- Confirm warranty and complaint procedures and applicable periods.
-- Confirm payment methods and the exact Order/contract formation process.
-- Confirm withdrawal wording and required model forms.
-- Confirm all personal-data categories, purposes and legal bases.
-- Confirm processors/recipients and any international transfers.
-- Confirm retention periods.
-- Confirm cookie and analytics behavior actually enabled at launch.
-- Confirm data-subject request and complaint procedures.
-- Confirm whether a DPO contact exists and must be published.
-- Confirm the competent dispute-resolution and supervisory authorities.
-- Review accessibility, language and effective-date presentation.
+- VAT registration number, telephone, working hours and legal representative
+  are not published because approved evidence is not present.
+- No DPO is claimed.
+- No courier, bank, payment provider, leasing provider, warehouse or distinct
+  return address is invented.
+- Delivery, recipient and retention wording uses verified categories and
+  transparent criteria where exact operational facts are not configured.
+- Card, leasing, abandoned-Cart recovery and non-essential analytics remain
+  disabled by default.
 
 ## Approval Steps
 
-1. Replace draft text through a dedicated reviewed PR.
-2. Record final Terms and Privacy versions.
-3. Record both effective dates.
-4. Set manifest status to `approved`.
-5. Obtain explicit human/legal approval.
-6. Only then consider `LEGAL_CONTENT_APPROVED=true`.
-7. Public commerce activation remains a separate explicit release decision.
+1. Verify the exact source hashes and approval record after merge/deploy.
+2. Run `php artisan commerce:release-preflight --json`.
+3. Obtain separate explicit operational approval before setting
+   `LEGAL_CONTENT_APPROVED=true`.
+4. Keep public commerce closed until its own separately approved release step.
+5. Keep CART-023 open until that operational release is complete.
 
-Never place placeholder personal data, bank details, secrets or unverified
-business claims in the public pages.
+Project-owner approval is not legal advice, lawyer certification or regulatory
+approval. Never place placeholder personal data, bank details, secrets or
+unverified business claims in the public pages.

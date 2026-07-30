@@ -64,7 +64,7 @@ test.describe('manual leasing checkout', () => {
       candidate.method() === 'POST'
       && new URL(candidate.url()).pathname === '/api/v1/checkout'
     ))
-    await page.getByRole('button', { name: 'Изпрати поръчка' }).click()
+    await page.getByRole('button', { name: 'Поръчка със задължение за плащане' }).click()
 
     const submitted = await checkoutRequest
     expect(submitted.postDataJSON()).toMatchObject({
@@ -105,7 +105,7 @@ test.describe('manual leasing checkout', () => {
     })
     await fillCheckout(page)
     await page.locator('input[type="radio"][value="leasing"]').check()
-    await page.getByRole('button', { name: 'Изпрати поръчка' }).click()
+    await page.getByRole('button', { name: 'Поръчка със задължение за плащане' }).click()
     await expect(page.getByText('Необходимо е съгласие за обработване на заявката.')).toBeVisible()
 
     await page.locator('input[type="radio"][value="cash_on_delivery"]').check()
@@ -113,7 +113,7 @@ test.describe('manual leasing checkout', () => {
       candidate.method() === 'POST'
       && new URL(candidate.url()).pathname === '/api/v1/checkout'
     ))
-    await page.getByRole('button', { name: 'Изпрати поръчка' }).click()
+    await page.getByRole('button', { name: 'Поръчка със задължение за плащане' }).click()
     const submitted = await checkoutRequest
 
     expect(submitted.postDataJSON()).not.toHaveProperty('leasing_application')

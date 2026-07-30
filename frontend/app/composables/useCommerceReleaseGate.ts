@@ -42,11 +42,17 @@ export function isApprovedLegalManifest(value: unknown): boolean {
   }
 
   const candidate = value as Record<string, unknown>
+  const approval = candidate.approval
 
   return candidate.locale === 'bg'
     && candidate.status === 'approved'
     && isCompleteDocument(candidate.terms, '/obshti-usloviya')
     && isCompleteDocument(candidate.privacy, '/politika-za-poveritelnost')
+    && isCompleteApproval(approval)
+    && (candidate.terms as Record<string, unknown>).effective_date
+      === (approval as Record<string, unknown>).approved_at
+    && (candidate.privacy as Record<string, unknown>).effective_date
+      === (approval as Record<string, unknown>).approved_at
 }
 
 function isCompleteDocument(value: unknown, route: string): boolean {
@@ -59,8 +65,34 @@ function isCompleteDocument(value: unknown, route: string): boolean {
   return document.route === route
     && typeof document.version === 'string'
     && document.version.trim() !== ''
-    && typeof document.effective_date === 'string'
-    && document.effective_date.trim() !== ''
+    && isIsoDate(document.effective_date)
+    && typeof document.source_sha256 === 'string'
+    && /^[a-f0-9]{64}$/.test(document.source_sha256)
+}
+
+function isCompleteApproval(value: unknown): boolean {
+  if (!value || typeof value !== 'object') {
+    return false
+  }
+
+  const approval = value as Record<string, unknown>
+
+  return approval.approved_by_role === 'project_owner'
+    && isIsoDate(approval.approved_at)
+    && approval.legal_counsel_review === 'not_claimed'
+}
+
+function isIsoDate(value: unknown): boolean {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return false
+  }
+
+  const [year, month, day] = value.split('-').map(Number)
+  const date = new Date(Date.UTC(year!, month! - 1, day!))
+
+  return date.getUTCFullYear() === year
+    && date.getUTCMonth() === month! - 1
+    && date.getUTCDate() === day
 }
 
 export function useCommerceReleaseGate() {

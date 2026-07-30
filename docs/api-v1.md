@@ -1668,3 +1668,8 @@ the server from the approved legal manifest and stored atomically only for a
 new canonical Order. Equivalent idempotent replay preserves the original
 values. When legal content is not approved, new checkout fails through the
 generic private `404 not_found` release gate.
+
+The committed Bulgarian versions are `bg-terms-v1.0-2026-07-30` and
+`bg-privacy-v1.0-2026-07-30`, both effective `2026-07-30` and bound to exact
+source hashes. Committed `LEGAL_CONTENT_APPROVED=false` means these approved
+repository documents do not by themselves activate checkout.

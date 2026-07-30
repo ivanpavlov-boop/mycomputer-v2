@@ -143,6 +143,39 @@ class PublicCommerceReleaseGateTest extends TestCase
             ->assertJsonPath('error.code', 'not_found');
     }
 
+    public function test_open_flags_fail_closed_when_approved_source_hash_is_invalid(): void
+    {
+        $manifest = json_decode(
+            (string) file_get_contents(
+                base_path('tests/Fixtures/Legal/approved-legal-content-manifest.json'),
+            ),
+            true,
+            flags: JSON_THROW_ON_ERROR,
+        );
+        $manifest['terms']['source_sha256'] = str_repeat('0', 64);
+        $path = tempnam(sys_get_temp_dir(), 'legal-gate-');
+        $this->assertNotFalse($path);
+        file_put_contents($path, json_encode($manifest, JSON_THROW_ON_ERROR));
+
+        try {
+            config()->set('commerce.public.enabled', true);
+            config()->set('commerce.public.confirmation_enabled', true);
+            config()->set('legal.approved', true);
+            config()->set('legal.manifest_path', $path);
+
+            $gate = app(PublicCommerceReleaseGate::class);
+
+            $this->assertSame(PublicCommerceReleaseGate::STATE_INVALID, $gate->state());
+            $this->assertFalse($gate->canStartCheckout());
+
+            $this->postJson('/api/v1/checkout')
+                ->assertNotFound()
+                ->assertJsonPath('error.code', 'not_found');
+        } finally {
+            @unlink($path);
+        }
+    }
+
     public function test_confirmation_only_remains_available_when_current_legal_content_is_unapproved(): void
     {
         config()->set('commerce.public.enabled', false);
@@ -218,9 +251,17 @@ class PublicCommerceReleaseGateTest extends TestCase
             "env('LEGAL_CONTENT_APPROVED', false)",
             $legalConfig,
         );
-        $this->assertSame('draft', $legalManifest['status']);
-        $this->assertNull($legalManifest['terms']['effective_date']);
-        $this->assertNull($legalManifest['privacy']['effective_date']);
+        $this->assertSame('approved', $legalManifest['status']);
+        $this->assertSame('2026-07-30', $legalManifest['terms']['effective_date']);
+        $this->assertSame('2026-07-30', $legalManifest['privacy']['effective_date']);
+        $this->assertMatchesRegularExpression(
+            '/\A[a-f0-9]{64}\z/',
+            $legalManifest['terms']['source_sha256'],
+        );
+        $this->assertMatchesRegularExpression(
+            '/\A[a-f0-9]{64}\z/',
+            $legalManifest['privacy']['source_sha256'],
+        );
     }
 
     /**

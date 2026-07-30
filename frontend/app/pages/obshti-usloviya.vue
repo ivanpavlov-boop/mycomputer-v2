@@ -3,7 +3,6 @@
     :document="termsDocument"
     :version="legalManifest.terms.version"
     :effective-date="legalManifest.terms.effective_date"
-    :is-draft="legalManifest.status === 'draft'"
     :canonical-path="legalManifest.terms.route"
   />
 </template>

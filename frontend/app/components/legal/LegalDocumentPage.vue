@@ -3,17 +3,6 @@
     <LayoutBreadcrumbs :items="[{ label: document.title }]" />
     <main class="container-page">
       <article class="mx-auto max-w-4xl">
-        <div
-          v-if="isDraft"
-          class="mb-6 rounded-md border border-amber-300 bg-amber-50 p-4 text-amber-950"
-          role="status"
-        >
-          <p class="font-semibold">Проект за правен преглед</p>
-          <p class="mt-1 text-sm">
-            Този документ е публикуван в тестова среда за преглед и все още не е одобрен за активиране на онлайн поръчки.
-          </p>
-        </div>
-
         <header class="border-b border-slate-200 pb-6">
           <h1 class="text-3xl font-bold text-slate-950">{{ document.title }}</h1>
           <p class="mt-3 text-slate-700">{{ document.description }}</p>
@@ -29,7 +18,7 @@
           </dl>
         </header>
 
-        <nav class="my-6 rounded-md border border-slate-200 p-4" aria-label="Съдържание">
+        <nav class="legal-toc my-6 rounded-md border border-slate-200 p-4" aria-label="Съдържание">
           <p class="font-semibold text-slate-900">Съдържание</p>
           <ol class="mt-3 grid gap-2 text-sm">
             <li v-for="(section, index) in document.sections" :key="section.title">
@@ -55,6 +44,21 @@
             >
               {{ paragraph }}
             </p>
+            <ul v-if="section.items?.length" class="mt-3 list-disc space-y-2 pl-6 text-slate-700">
+              <li v-for="item in section.items" :key="item">{{ item }}</li>
+            </ul>
+            <div
+              v-if="section.formFields?.length"
+              class="mt-5 break-inside-avoid rounded-md border border-slate-300 p-4"
+            >
+              <h3 class="font-semibold text-slate-950">{{ section.formTitle }}</h3>
+              <p v-if="section.formIntro" class="mt-2 text-sm leading-6 text-slate-700">
+                {{ section.formIntro }}
+              </p>
+              <div class="mt-4 space-y-3 text-sm leading-6 text-slate-800">
+                <p v-for="field in section.formFields" :key="field">{{ field }}</p>
+              </div>
+            </div>
           </section>
         </div>
       </article>
@@ -66,6 +70,10 @@
 interface LegalSection {
   title: string
   paragraphs: readonly string[]
+  items?: readonly string[]
+  formTitle?: string
+  formIntro?: string
+  formFields?: readonly string[]
 }
 
 interface LegalDocument {
@@ -78,14 +86,24 @@ const props = defineProps<{
   document: LegalDocument
   version: string
   effectiveDate: string | null
-  isDraft: boolean
   canonicalPath: string
 }>()
 
 useSeo().page(props.document.title, props.document.description, props.canonicalPath)
 useHead({
-  meta: props.isDraft
-    ? [{ name: 'robots', content: 'noindex, nofollow, noarchive' }]
-    : [],
+  htmlAttrs: { lang: 'bg' },
+  meta: [{ name: 'robots', content: 'index, follow' }],
 })
 </script>
+
+<style scoped>
+@media print {
+  .legal-toc {
+    display: none;
+  }
+
+  article {
+    max-width: none;
+  }
+}
+</style>

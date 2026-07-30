@@ -20,8 +20,12 @@ return [
         'frontend/app/data/legal/legal-content-manifest.json',
     ),
 
+    'approval_record_path' => base_path(
+        'docs/legal/LEGAL_CONTENT_APPROVAL_2026-07-30.json',
+    ),
+
     'source_pages' => [
-        'terms' => base_path('frontend/app/pages/obshti-usloviya.vue'),
-        'privacy' => base_path('frontend/app/pages/politika-za-poveritelnost.vue'),
+        'terms' => base_path('frontend/app/data/legal/terms.bg.ts'),
+        'privacy' => base_path('frontend/app/data/legal/privacy.bg.ts'),
     ],
 ];

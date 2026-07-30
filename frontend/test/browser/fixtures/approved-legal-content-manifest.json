@@ -3,12 +3,19 @@
   "status": "approved",
   "terms": {
     "route": "/obshti-usloviya",
-    "version": "terms-browser-test-1",
-    "effective_date": "2026-07-29"
+    "version": "bg-terms-v1.0-2026-07-30",
+    "effective_date": "2026-07-30",
+    "source_sha256": "8ffb5695c8f1255a15933ca8e05959c2d58c08611b4912863c0cc26e07f91d08"
   },
   "privacy": {
     "route": "/politika-za-poveritelnost",
-    "version": "privacy-browser-test-1",
-    "effective_date": "2026-07-29"
+    "version": "bg-privacy-v1.0-2026-07-30",
+    "effective_date": "2026-07-30",
+    "source_sha256": "f65d9665a0bc5356fa20123e0ae4347abfb404a9067ef7718e4f223bf708fd51"
+  },
+  "approval": {
+    "approved_by_role": "project_owner",
+    "approved_at": "2026-07-30",
+    "legal_counsel_review": "not_claimed"
   }
 }

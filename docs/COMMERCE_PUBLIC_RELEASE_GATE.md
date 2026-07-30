@@ -89,10 +89,9 @@ shipping readiness, an active Super Admin, Catalog Sync safety flags,
 abandoned-Cart recovery disabled state, and the repository-controlled legal
 manifest/source contract.
 
-The Bulgarian Terms and Privacy routes now exist as review-ready drafts.
-Activation remains blocked by `legal_content_approved` and
-`legal_effective_dates_present`. Draft source files are not evidence of legal
-approval. See
+The Bulgarian Terms and Privacy routes now contain project-owner-approved,
+hash-bound content with effective dates. Runtime activation remains blocked by
+`legal_content_approved`; lawyer or regulatory approval is not claimed. See
 [Public Legal Pages and Approval Gate](COMMERCE_PUBLIC_LEGAL_GATE.md).
 
 ## Future Deployment

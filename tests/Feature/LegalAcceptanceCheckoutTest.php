@@ -23,8 +23,8 @@ class LegalAcceptanceCheckoutTest extends TestCase
 
         $order = Order::query()->sole();
         $this->assertNotNull($order->legal_accepted_at);
-        $this->assertSame('terms-test-1', $order->terms_version);
-        $this->assertSame('privacy-test-1', $order->privacy_version);
+        $this->assertSame('bg-terms-v1.0-2026-07-30', $order->terms_version);
+        $this->assertSame('bg-privacy-v1.0-2026-07-30', $order->privacy_version);
         $this->assertSame('bg', $order->legal_acceptance_locale);
     }
 
@@ -65,8 +65,8 @@ class LegalAcceptanceCheckoutTest extends TestCase
         $replayed = Order::query()->sole();
         $this->assertSame($original->getKey(), $replayed->getKey());
         $this->assertSame($acceptedAt, $replayed->legal_accepted_at?->toISOString());
-        $this->assertSame('terms-test-1', $replayed->terms_version);
-        $this->assertSame('privacy-test-1', $replayed->privacy_version);
+        $this->assertSame('bg-terms-v1.0-2026-07-30', $replayed->terms_version);
+        $this->assertSame('bg-privacy-v1.0-2026-07-30', $replayed->privacy_version);
         $this->assertSame('bg', $replayed->legal_acceptance_locale);
     }
 

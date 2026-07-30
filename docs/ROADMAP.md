@@ -734,9 +734,9 @@ commands, jobs, observers, or frontend features.
 - Supplier XML attribute mapping preview.
 - Frontend attribute filters only after controlled data quality.
 
-Commerce Phase 1E.2A is complete locally only. It provides review-ready
-Bulgarian Terms and Privacy drafts, an explicit legal-content approval gate and
-server-authoritative Order consent versions without activating commerce. A
-separate human/legal review must set final content, versions, effective dates
-and manifest approval before any activation request. CART-023 remains open;
-CART-021 and CART-025 also remain open.
+Commerce Phase 1E.2A is merged, CI verified, deployed and staging verified in
+the closed state. Legal Content Finalization and Explicit Approval is complete
+locally only: final Bulgarian Terms and Privacy, exact source hashes, effective
+dates and project-owner approval evidence are committed. No legal-counsel
+review is claimed. Runtime `LEGAL_CONTENT_APPROVED` and public commerce remain
+disabled, so CART-023 remains open; CART-021 and CART-025 also remain open.

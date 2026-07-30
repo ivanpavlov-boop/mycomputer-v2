@@ -19,6 +19,14 @@ abstract class TestCase extends BaseTestCase
             'legal.manifest_path',
             base_path('tests/Fixtures/Legal/approved-legal-content-manifest.json'),
         );
+        config()->set(
+            'legal.approval_record_path',
+            base_path('tests/Fixtures/Legal/approved-legal-content-approval.json'),
+        );
+        config()->set('legal.source_pages', [
+            'terms' => base_path('tests/Fixtures/Legal/approved-terms.bg.ts'),
+            'privacy' => base_path('tests/Fixtures/Legal/approved-privacy.bg.ts'),
+        ]);
     }
 
     protected function cartSession(string $name): string
