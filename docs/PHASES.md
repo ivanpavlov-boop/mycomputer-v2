@@ -110,7 +110,8 @@ Phase 8 manual selected UPDATE price/stock sync has been implemented behind a fe
 | Commerce Phase 1D.3 | End-to-end Checkout and Payment Acceptance | Merged, MySQL CI verified, deployed and staging implementation/privacy/release-gate verified; public commerce, card and leasing remain disabled. |
 | Commerce Phase 1D.4 | Checkout Customer Snapshot and Profile Ownership Safety | Merged, MySQL CI verified, deployed and staging verified; one dedicated Customer snapshot per canonical Order, no contact-field ownership lookup and no implicit account/profile/address mutation. |
 | Commerce Phase 1E.1 | Controlled Public Commerce Enablement and CART-023 Release Gate | Merged, MySQL CI verified, deployed with flags false and disabled-state staging verified; strict Nginx/Nuxt/backend release states remain closed. |
-| Commerce Phase 1E.2A | Public Legal Pages Foundation, Consent Audit and Legal Approval Gate | Complete locally only; Bulgarian legal drafts, fail-closed approval gate and server-owned Order acceptance metadata, with no legal approval or activation. |
+| Commerce Phase 1E.2A | Public Legal Pages Foundation, Consent Audit and Legal Approval Gate | Merged, CI verified, deployed and staging verified in closed state. |
+| Legal Content Finalization | Bulgarian Legal Content and Explicit Project-owner Approval | Complete locally only; final BG content, exact hashes and approval evidence committed, runtime approval and public commerce still disabled. |
 | Phase 9C.1 | Product attributes core foundation | Complete |
 | Phase 9C.2 | Product attributes admin usability and starter structure | Complete |
 | Phase 9C.3 | Category attribute sets | Complete |
@@ -972,16 +973,18 @@ No supplier #2 has been selected, profiled, or imported under these phases.
 
 ## Commerce Phase 1E.2A
 
-Public Legal Pages Foundation, Consent Audit and Legal Approval Gate is
-complete locally only. Commerce Phase 1E.1 is merged, MySQL CI verified,
-deployed with release flags false and disabled-state staging verified.
+Public Legal Pages Foundation, Consent Audit and Legal Approval Gate is merged,
+CI verified, deployed and staging verified with release flags false.
 
-Phase 1E.2A adds Bulgarian Terms and Privacy draft routes, exact Nginx routing,
+Phase 1E.2A adds Bulgarian Terms and Privacy routes, exact Nginx routing,
 footer and checkout links, a legal-content manifest and registry, a fail-closed
 legal approval dependency, server-owned Order acceptance metadata, read-only
 Filament visibility and release-preflight checks.
 
-The manifest remains `draft`, effective dates are null and
-`LEGAL_CONTENT_APPROVED=false`. No legal approval or public activation is
-claimed. CART-023, CART-021 and CART-025 remain open. Catalog Sync and supplier
-data ownership are unchanged.
+Legal Content Finalization and Explicit Approval is complete locally only. The
+Bulgarian manifest is `approved` with versions
+`bg-terms-v1.0-2026-07-30` and `bg-privacy-v1.0-2026-07-30`, effective
+`2026-07-30`, exact source hashes and project-owner approval evidence.
+`legal_counsel_review=not_claimed` and `LEGAL_CONTENT_APPROVED=false`; no
+runtime approval or public activation is claimed. CART-023, CART-021 and
+CART-025 remain open. Catalog Sync and supplier data ownership are unchanged.

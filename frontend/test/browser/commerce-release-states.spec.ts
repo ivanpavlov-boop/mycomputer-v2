@@ -6,15 +6,17 @@ const state = process.env.COMMERCE_TEST_STATE
 const storefrontPort = state === 'closed' ? 3001 : 3002
 const storefrontUrl = `http://127.0.0.1:${storefrontPort}`
 
-test('legal drafts remain available and non-indexable in every release state', async ({ page }) => {
+test('approved legal pages remain available and indexable in every release state', async ({ page }) => {
   for (const path of ['/obshti-usloviya', '/politika-za-poveritelnost']) {
     const response = await page.goto(path)
 
     expect(response?.status(), path).toBe(200)
-    await expect(page.getByText('Проект за правен преглед')).toBeVisible()
+    await expect(page.getByText('Версия', { exact: true })).toBeVisible()
+    await expect(page.getByText('2026-07-30', { exact: true })).toBeVisible()
+    await expect(page.getByText('Проект за правен преглед')).toHaveCount(0)
     await expect(page.locator('meta[name="robots"]')).toHaveAttribute(
       'content',
-      'noindex, nofollow, noarchive',
+      'index, follow',
     )
   }
 

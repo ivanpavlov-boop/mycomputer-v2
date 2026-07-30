@@ -1,29 +1,41 @@
 {
-  "phase": "Commerce Phase 1E.2A",
+  "foundation_phase": {
+    "name": "Commerce Phase 1E.2A",
+    "status": "merged_ci_verified_deployed_staging_verified_closed"
+  },
+  "phase": "Legal Content Finalization and Explicit Approval",
   "status": "complete_locally_only",
-  "legal_content_approved": false,
+  "legal_content_approved_runtime": false,
   "public_commerce_activated": false,
   "manifest": {
     "path": "frontend/app/data/legal/legal-content-manifest.json",
     "locale": "bg",
-    "status": "draft",
+    "status": "approved",
     "terms": {
       "route": "/obshti-usloviya",
-      "version": "draft-1",
-      "effective_date": null
+      "version": "bg-terms-v1.0-2026-07-30",
+      "effective_date": "2026-07-30",
+      "source_sha256": "8ffb5695c8f1255a15933ca8e05959c2d58c08611b4912863c0cc26e07f91d08"
     },
     "privacy": {
       "route": "/politika-za-poveritelnost",
-      "version": "draft-1",
-      "effective_date": null
+      "version": "bg-privacy-v1.0-2026-07-30",
+      "effective_date": "2026-07-30",
+      "source_sha256": "f65d9665a0bc5356fa20123e0ae4347abfb404a9067ef7718e4f223bf708fd51"
+    },
+    "approval": {
+      "approved_by_role": "project_owner",
+      "approved_at": "2026-07-30",
+      "legal_counsel_review": "not_claimed",
+      "record": "docs/legal/LEGAL_CONTENT_APPROVAL_2026-07-30.json"
     }
   },
   "approval_requires": [
-    "LEGAL_CONTENT_APPROVED=true",
-    "manifest status approved",
-    "exact Bulgarian routes",
-    "non-empty versions",
-    "non-empty effective dates"
+    "valid approved manifest",
+    "strict ISO effective and approval dates",
+    "matching source SHA-256 values",
+    "matching project-owner approval record",
+    "LEGAL_CONTENT_APPROVED=true at runtime"
   ],
   "order_acceptance_fields": [
     "legal_accepted_at",
@@ -38,15 +50,17 @@
     "CART-025"
   ],
   "safety": {
-    "draft_only": true,
     "approval_default": false,
     "public_commerce_default": false,
+    "confirmation_default": false,
+    "recovery_default": false,
+    "card_default": false,
+    "leasing_default": false,
     "historical_orders_backfilled": false,
-    "ip_stored": false,
-    "user_agent_stored": false,
     "catalog_sync_changed": false,
     "sync_all_added": false,
     "automatic_sync_enabled": false,
-    "deployed": false
+    "deployed": false,
+    "legal_counsel_review_claimed": false
   }
 }

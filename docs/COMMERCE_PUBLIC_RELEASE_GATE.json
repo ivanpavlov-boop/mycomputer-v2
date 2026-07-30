@@ -66,8 +66,7 @@
     "command": "php artisan commerce:release-preflight --json",
     "read_only": true,
     "current_blockers": [
-      "legal_content_approved",
-      "legal_effective_dates_present"
+      "legal_content_approved"
     ]
   },
   "cart_findings": {

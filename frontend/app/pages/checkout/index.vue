@@ -131,7 +131,7 @@
           <div class="mt-3 flex justify-between text-lg font-bold"><span>Общо</span><span>{{ (cart.subtotal + shippingPrice).toFixed(2) }} EUR</span></div>
         </div>
         <UiBaseButton class="mt-5 w-full" type="submit" :disabled="!cart.canCheckout || submitting">
-          {{ submitting ? 'Изпращане…' : 'Изпрати поръчка' }}
+          {{ submitting ? 'Изпращане…' : 'Поръчка със задължение за плащане' }}
         </UiBaseButton>
         <UiErrorState v-if="error" class="mt-4" :text="error" />
       </aside>

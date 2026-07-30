@@ -9,7 +9,7 @@ function source(path: string) {
 }
 
 describe('Bulgarian legal pages', () => {
-  it('renders structured Terms and Privacy pages through one escaped component', () => {
+  it('renders approved, indexable and safely escaped legal documents', () => {
     const component = source('app/components/legal/LegalDocumentPage.vue')
     const terms = source('app/pages/obshti-usloviya.vue')
     const privacy = source('app/pages/politika-za-poveritelnost.vue')
@@ -17,17 +17,79 @@ describe('Bulgarian legal pages', () => {
     expect(component).toContain('<article')
     expect(component).toContain('<h1')
     expect(component).toContain('<h2')
-    expect(component).toContain('Проект за правен преглед')
-    expect(component).toContain('noindex, nofollow, noarchive')
-    expect(component).toContain('<LayoutBreadcrumbs')
+    expect(component).toContain("htmlAttrs: { lang: 'bg' }")
+    expect(component).toContain("content: 'index, follow'")
+    expect(component).toContain('@media print')
+    expect(component).not.toContain('Проект за правен преглед')
+    expect(component).not.toContain('noindex')
+    expect(component).not.toContain('nofollow')
+    expect(component).not.toContain('noarchive')
     expect(component).not.toContain('v-html')
-    expect(terms).toContain("legalManifest.terms.route")
+    expect(terms).toContain('legalManifest.terms.route')
     expect(terms).toContain("locale.value !== 'bg'")
-    expect(privacy).toContain("legalManifest.privacy.route")
+    expect(privacy).toContain('legalManifest.privacy.route')
     expect(privacy).toContain("locale.value !== 'bg'")
   })
 
-  it('uses only the confirmed operator facts and keeps unverified claims out', () => {
+  it('contains all required Terms sections and a static withdrawal form', () => {
+    const terms = source('app/data/legal/terms.bg.ts')
+
+    for (const heading of [
+      'Търговец и контакти',
+      'Обхват и клиенти',
+      'Информация за продуктите',
+      'Цени и промоции',
+      'Поръчка и сключване на договор',
+      'Начини на плащане',
+      'Доставка',
+      'Право на отказ',
+      'Изключения от правото на отказ',
+      'Съответствие, гаранции и рекламации',
+      'Връщане и възстановяване на суми',
+      'Лични данни',
+      'Интелектуална собственост',
+      'Отговорност',
+      'Жалби и извънсъдебно решаване на спорове',
+      'Приложимо право и компетентност',
+      'Версия и влизане в сила',
+    ]) {
+      expect(terms).toContain(heading)
+    }
+
+    expect(terms).toContain('Стандартен формуляр за отказ')
+    expect(terms).toContain('Номер на поръчка')
+    expect(terms).toContain('Подпис на потребителя (само ако формулярът е на хартия)')
+    expect(terms).toContain('Поръчка със задължение за плащане')
+    expect(terms).not.toMatch(/ec\.europa\.eu\/consumers\/odr/i)
+  })
+
+  it('contains all required Privacy transparency sections', () => {
+    const privacy = source('app/data/legal/privacy.bg.ts')
+
+    for (const heading of [
+      'Администратор на лични данни',
+      'Категории лични данни',
+      'Цели и правни основания',
+      'Получатели',
+      'Международни трансфери',
+      'Срокове за съхранение',
+      'Вашите права',
+      'Задължителни данни',
+      'Автоматизирано вземане на решения',
+      'Бисквитки и анализи',
+      'Сигурност',
+      'Деца',
+      'Промени в политиката',
+      'Версия и влизане в сила',
+    ]) {
+      expect(privacy).toContain(heading)
+    }
+
+    expect(privacy).toContain('не съхранява номера на платежни карти')
+    expect(privacy).toContain('Комисията за защита на личните данни')
+  })
+
+  it('uses only confirmed operator facts and keeps unverified claims out', () => {
     const content = [
       source('app/data/legal/terms.bg.ts'),
       source('app/data/legal/privacy.bg.ts'),
@@ -37,7 +99,7 @@ describe('Bulgarian legal pages', () => {
     expect(content).toContain('202410637')
     expect(content).toContain('sales@mycomputer.bg')
     expect(content).toContain('гр. Перник, ул. „Г. С. Раковски“ №3/6А')
-    expect(content).not.toMatch(/IBAN|ДДС номер|телефон|DPO|длъжностно лице/i)
+    expect(content).not.toMatch(/IBAN|ДДС номер|DPO|длъжностно лице/i)
   })
 
   it('keeps exact Bulgarian footer links available independently of commerce', () => {

@@ -3,7 +3,6 @@
     :document="privacyDocument"
     :version="legalManifest.privacy.version"
     :effective-date="legalManifest.privacy.effective_date"
-    :is-draft="legalManifest.status === 'draft'"
     :canonical-path="legalManifest.privacy.route"
   />
 </template>

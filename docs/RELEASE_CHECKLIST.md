@@ -213,7 +213,11 @@ Before any public-commerce activation:
 
 - confirm the manifest status is `approved`;
 - confirm both legal versions and effective dates are present;
-- confirm explicit human/legal approval;
+- verify both source SHA-256 values against the exact committed legal files;
+- verify the manifest matches the machine-readable project-owner approval
+  record;
+- confirm `legal_counsel_review=not_claimed` unless a separately documented
+  review changes that fact;
 - set `LEGAL_CONTENT_APPROVED=true` only in the approved environment;
 - run `php artisan commerce:release-preflight --json`;
 - verify the Order legal-acceptance migration is applied;
@@ -222,6 +226,7 @@ Before any public-commerce activation:
 - verify checkout consent links and required checkbox;
 - verify confirmation-only rollback still works.
 
-Draft source files or working routes are not legal approval. Never activate
-public commerce while `legal_content_approved` or
-`legal_effective_dates_present` is blocked.
+Committed approval metadata is not runtime activation. Never activate public
+commerce while `legal_content_approved`, `legal_manifest_valid` or
+`legal_effective_dates_present` is blocked. CART-023 remains open until the
+separate operational release is explicitly approved.

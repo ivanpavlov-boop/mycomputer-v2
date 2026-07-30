@@ -33,7 +33,7 @@ async function submitCheckout(page: Page) {
     return response.request().method() === 'POST'
       && new URL(response.url()).pathname === '/api/v1/checkout'
   })
-  await page.getByRole('button', { name: 'Изпрати поръчка' }).click()
+  await page.getByRole('button', { name: 'Поръчка със задължение за плащане' }).click()
 
   const checkout = await checkoutResponse
   await expect(page).toHaveURL(`${storefrontUrl}/checkout/success`)

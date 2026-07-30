@@ -54,7 +54,7 @@ test('does not emit begin_checkout for a readiness-blocked source route', async 
   })
   await setCartCookie(context)
   await page.goto('/checkout')
-  await expect(page.getByRole('button', { name: 'Изпрати поръчка' })).toBeDisabled()
+  await expect(page.getByRole('button', { name: 'Поръчка със задължение за плащане' })).toBeDisabled()
 
   const state = await fixtureState(request)
   expect(state.analytics.filter(event => event.event_name === 'begin_checkout')).toHaveLength(0)

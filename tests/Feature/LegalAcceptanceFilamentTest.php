@@ -37,8 +37,8 @@ class LegalAcceptanceFilamentTest extends TestCase
             ->assertSchemaComponentExists('legal_accepted_at')
             ->assertSchemaComponentExists('legal_acceptance_locale')
             ->assertFormSet([
-                'terms_version' => 'terms-test-1',
-                'privacy_version' => 'privacy-test-1',
+                'terms_version' => 'bg-terms-v1.0-2026-07-30',
+                'privacy_version' => 'bg-privacy-v1.0-2026-07-30',
                 'legal_acceptance_locale' => 'bg',
             ])
             ->fillForm([
@@ -54,8 +54,8 @@ class LegalAcceptanceFilamentTest extends TestCase
         $order->refresh();
         $this->assertSame('confirmed', $order->status);
         $this->assertSame($acceptedAt, $order->legal_accepted_at?->toISOString());
-        $this->assertSame('terms-test-1', $order->terms_version);
-        $this->assertSame('privacy-test-1', $order->privacy_version);
+        $this->assertSame('bg-terms-v1.0-2026-07-30', $order->terms_version);
+        $this->assertSame('bg-privacy-v1.0-2026-07-30', $order->privacy_version);
         $this->assertSame('bg', $order->legal_acceptance_locale);
     }
 

@@ -10,13 +10,20 @@ const approvedManifest = {
   status: 'approved',
   terms: {
     route: '/obshti-usloviya',
-    version: 'terms-test-1',
-    effective_date: '2026-07-29',
+    version: 'bg-terms-v1.0-2026-07-30',
+    effective_date: '2026-07-30',
+    source_sha256: 'a'.repeat(64),
   },
   privacy: {
     route: '/politika-za-poveritelnost',
-    version: 'privacy-test-1',
-    effective_date: '2026-07-29',
+    version: 'bg-privacy-v1.0-2026-07-30',
+    effective_date: '2026-07-30',
+    source_sha256: 'b'.repeat(64),
+  },
+  approval: {
+    approved_by_role: 'project_owner',
+    approved_at: '2026-07-30',
+    legal_counsel_review: 'not_claimed',
   },
 }
 
@@ -37,7 +44,20 @@ describe('controlled public commerce release gate', () => {
     expect(resolveCommerceReleaseState(true, true, true, approvedManifest)).toBe('open')
     expect(resolveCommerceReleaseState('true', 'true', 'true', approvedManifest)).toBe('open')
     expect(resolveCommerceReleaseState(true, true, false, approvedManifest)).toBe('invalid')
-    expect(resolveCommerceReleaseState(true, true, true)).toBe('invalid')
+    expect(resolveCommerceReleaseState(true, true, true)).toBe('open')
+    expect(resolveCommerceReleaseState(true, true, true, {})).toBe('invalid')
+    expect(resolveCommerceReleaseState(true, true, true, {
+      ...approvedManifest,
+      terms: { ...approvedManifest.terms, effective_date: '2026-02-30' },
+    })).toBe('invalid')
+    expect(resolveCommerceReleaseState(true, true, true, {
+      ...approvedManifest,
+      privacy: { ...approvedManifest.privacy, source_sha256: 'INVALID' },
+    })).toBe('invalid')
+    expect(resolveCommerceReleaseState(true, true, true, {
+      ...approvedManifest,
+      approval: { ...approvedManifest.approval, approved_by_role: 'super_admin' },
+    })).toBe('invalid')
     expect(resolveCommerceReleaseState(true, false)).toBe('invalid')
     expect(resolveCommerceReleaseState('true', 'false')).toBe('invalid')
     expect(resolveCommerceReleaseState('yes', 'true')).toBe('invalid')

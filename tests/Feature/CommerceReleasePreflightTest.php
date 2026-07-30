@@ -32,12 +32,20 @@ class CommerceReleasePreflightTest extends TestCase
             'legal.manifest_path',
             base_path('frontend/app/data/legal/legal-content-manifest.json'),
         );
-        $draft = $this->preflight();
-        $this->assertSame(1, $draft['exit_code']);
-        $this->assertContains('legal_effective_dates_present', $draft['payload']['blockers']);
-        $this->assertContains('legal_content_approved', $draft['payload']['blockers']);
-        $this->assertNotContains('terms_route_present', $draft['payload']['blockers']);
-        $this->assertNotContains('privacy_route_present', $draft['payload']['blockers']);
+        config()->set(
+            'legal.approval_record_path',
+            base_path('docs/legal/LEGAL_CONTENT_APPROVAL_2026-07-30.json'),
+        );
+        config()->set('legal.source_pages', [
+            'terms' => base_path('frontend/app/data/legal/terms.bg.ts'),
+            'privacy' => base_path('frontend/app/data/legal/privacy.bg.ts'),
+        ]);
+        $committed = $this->preflight();
+        $this->assertSame(1, $committed['exit_code']);
+        $this->assertSame(['legal_content_approved'], $committed['payload']['blockers']);
+        $this->assertTrue($committed['payload']['checks']['legal_manifest_valid']);
+        $this->assertTrue($committed['payload']['checks']['legal_effective_dates_present']);
+        $this->assertFalse($committed['payload']['checks']['legal_content_approved']);
 
         $this->useApprovedLegalFixture();
         $before = $this->databaseCounts();
@@ -143,6 +151,14 @@ class CommerceReleasePreflightTest extends TestCase
             'legal.manifest_path',
             base_path('tests/Fixtures/Legal/approved-legal-content-manifest.json'),
         );
+        config()->set(
+            'legal.approval_record_path',
+            base_path('tests/Fixtures/Legal/approved-legal-content-approval.json'),
+        );
+        config()->set('legal.source_pages', [
+            'terms' => base_path('tests/Fixtures/Legal/approved-terms.bg.ts'),
+            'privacy' => base_path('tests/Fixtures/Legal/approved-privacy.bg.ts'),
+        ]);
     }
 
     /**
