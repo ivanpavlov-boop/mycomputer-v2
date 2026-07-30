@@ -14,6 +14,7 @@ test('emits authoritative add/remove deltas exactly once and never on reload or 
   })
   await setCartCookie(context)
   await page.goto('/cart')
+  await page.waitForLoadState('networkidle')
 
   const quantity = page.getByLabel('Количество')
   await quantity.fill('3')

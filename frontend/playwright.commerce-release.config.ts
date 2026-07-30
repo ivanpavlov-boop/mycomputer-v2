@@ -12,7 +12,7 @@ const storefrontUrl = `http://127.0.0.1:${storefrontPort}`
 
 export default defineConfig({
   testDir: './test/browser',
-  testMatch: /commerce-release-states\.spec\.ts/,
+  testMatch: /(?:commerce-release-states|pre-launch-navigation)\.spec\.ts/,
   outputDir: './test-results',
   fullyParallel: false,
   workers: 1,

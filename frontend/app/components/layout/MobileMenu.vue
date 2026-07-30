@@ -7,22 +7,29 @@
     <SearchBar class="mt-4" />
     <LayoutLanguageSwitcher class="mt-4" />
     <nav class="mt-5 grid gap-3 text-sm font-medium">
-      <NuxtLink to="/search" @click="ui.mobileMenuOpen = false">Продукти</NuxtLink>
-      <NuxtLink v-if="showCustomerNavigation" to="/compare" @click="ui.mobileMenuOpen = false">Сравнение</NuxtLink>
+      <NuxtLink
+        v-for="item in storefrontPrimaryNavigation"
+        :key="item.key"
+        :to="localePath(item.path)"
+        @click="ui.mobileMenuOpen = false"
+      >
+        {{ navigationItemLabel(item, currentLocale) }}
+      </NuxtLink>
       <NuxtLink v-if="canStartCheckout" to="/cart" @click="ui.mobileMenuOpen = false">Количка</NuxtLink>
-      <NuxtLink to="/contacts" @click="ui.mobileMenuOpen = false">Контакти</NuxtLink>
     </nav>
   </UiBaseModal>
 </template>
 
 <script setup lang="ts">
+import { normalizeStorefrontLocale } from '~/utils/locales'
+import {
+  navigationItemLabel,
+  storefrontPrimaryNavigation,
+} from '~/utils/storefrontRouteAvailability'
+
 const ui = useUiStore()
-const isReadOnlyStorefrontRoute = useReadOnlyStorefrontRoute()
 const { canStartCheckout } = useCommerceReleaseGate()
-const route = useRoute()
-const isCommerceRoute = computed(() => route.path === '/cart'
-  || route.path.startsWith('/cart/')
-  || route.path === '/checkout'
-  || route.path.startsWith('/checkout/'))
-const showCustomerNavigation = computed(() => !isReadOnlyStorefrontRoute.value && !isCommerceRoute.value)
+const localePath = useLocalePath()
+const { locale } = useI18n()
+const currentLocale = computed(() => normalizeStorefrontLocale(locale.value))
 </script>

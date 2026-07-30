@@ -68,6 +68,7 @@ test.describe('Authenticated Cart convergence', () => {
 
   test('suppresses a delayed guest response and its analytics after login changes authority', async ({ context, page, request }) => {
     await page.goto('/cart')
+    await page.waitForLoadState('networkidle')
     await configureFixture(request, { mutation_delay_ms: 1_000 })
 
     await page.getByLabel('Количество').fill('2')

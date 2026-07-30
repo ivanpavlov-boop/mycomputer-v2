@@ -57,6 +57,30 @@ The gate implementation or a successful local test does not mean public
 commerce is activated. See
 [Controlled Public Commerce Release Gate](COMMERCE_PUBLIC_RELEASE_GATE.md).
 
+## Pre-Launch Storefront Navigation
+
+Before releasing storefront navigation changes:
+
+- compare every rendered header, mobile-menu and footer destination with the
+  Nginx edge contract;
+- keep login, registration, account, wishlist and compare links absent while
+  those public routes return 404;
+- keep Cart absent in closed and confirmation-only states;
+- never add a direct global Checkout or checkout-success link;
+- keep both approved Bulgarian legal links available;
+- omit the EN locale link on Bulgarian legal pages until equivalent English
+  content is approved and published;
+- preserve BG/EN switching on the published home, catalog, category and Product
+  routes;
+- verify the server-rendered HTML already has the correct links, without
+  runtime probing or hydration-dependent hiding;
+- run the deterministic unit and browser link audits documented in
+  [Pre-Launch Storefront Navigation](PRE_LAUNCH_STOREFRONT_NAVIGATION.md).
+
+Navigation cleanup does not activate runtime legal approval or public commerce.
+CART-023 remains open until the separate operational release is explicitly
+approved.
+
 ## Local Validation
 
 Run the checks relevant to the phase. For broad or risky phases, run the full

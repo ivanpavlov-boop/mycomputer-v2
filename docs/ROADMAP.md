@@ -734,9 +734,19 @@ commands, jobs, observers, or frontend features.
 - Supplier XML attribute mapping preview.
 - Frontend attribute filters only after controlled data quality.
 
-Commerce Phase 1E.2A is merged, CI verified, deployed and staging verified in
-the closed state. Legal Content Finalization and Explicit Approval is complete
-locally only: final Bulgarian Terms and Privacy, exact source hashes, effective
-dates and project-owner approval evidence are committed. No legal-counsel
-review is claimed. Runtime `LEGAL_CONTENT_APPROVED` and public commerce remain
-disabled, so CART-023 remains open; CART-021 and CART-025 also remain open.
+Commerce Phase 1E.2A and Legal Content Finalization and Explicit Approval are
+merged, CI verified, deployed and staging verified in the closed state. Final
+Bulgarian Terms and Privacy, exact source hashes, effective dates and
+project-owner approval evidence are committed. No legal-counsel review is
+claimed.
+
+Pre-Launch Storefront Navigation Cleanup is complete locally only. Shared
+desktop/mobile navigation, footer links, catalog search and locale switching
+now follow one deterministic edge-aligned route contract. Bulgarian legal
+pages omit unavailable English legal links while real BG/EN catalog routes keep
+their locale switch. No public route, account/auth flow or commerce capability
+was enabled. See
+[Pre-Launch Storefront Navigation](PRE_LAUNCH_STOREFRONT_NAVIGATION.md).
+
+Runtime `LEGAL_CONTENT_APPROVED` and public commerce remain disabled, so
+CART-023 remains open; CART-021 and CART-025 also remain open.

@@ -1,7 +1,7 @@
 <template>
   <section v-if="products.length" class="container-page mt-12">
     <h2 class="section-title">{{ title }}</h2>
-    <ProductGrid class="mt-5" :products="products" />
+    <CatalogProductGrid class="mt-5" :products="products" />
   </section>
 </template>
 
