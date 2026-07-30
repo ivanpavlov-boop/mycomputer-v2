@@ -57,6 +57,27 @@ The gate implementation or a successful local test does not mean public
 commerce is activated. See
 [Controlled Public Commerce Release Gate](COMMERCE_PUBLIC_RELEASE_GATE.md).
 
+### Cart and Checkout SSR API Base
+
+Before any renewed `open` activation:
+
+- keep the public Nuxt API base browser-relative, normally `/api/v1`;
+- keep the private Nuxt server API base separately configured and reachable
+  from the frontend container;
+- verify production-build SSR returns HTTP 200 for `/cart`, `/checkout` and
+  `/checkout/success` in the deterministic `open` fixture;
+- scan rendered HTML and public Nuxt runtime configuration for internal API
+  hosts;
+- verify empty Cart and Checkout states render without hydration or console
+  errors and without Order, payment or Cart mutation requests;
+- if either Cart or Checkout fails, immediately restore
+  `confirmation_only`, where new Cart and Checkout entry remains blocked while
+  confirmation stays available.
+
+The staging incident and local fix are recorded in
+[Cart and Checkout SSR API Base Fix](COMMERCE_CART_CHECKOUT_SSR_API_BASE_FIX.md).
+That local fix does not close CART-023 or activate public commerce.
+
 ## Pre-Launch Storefront Navigation
 
 Before releasing storefront navigation changes:
