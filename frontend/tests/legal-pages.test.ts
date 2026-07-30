@@ -104,10 +104,12 @@ describe('Bulgarian legal pages', () => {
 
   it('keeps exact Bulgarian footer links available independently of commerce', () => {
     const footer = source('app/components/layout/AppFooter.vue')
+    const navigation = source('app/utils/storefrontRouteAvailability.ts')
 
-    expect(footer).toContain('to="/obshti-usloviya"')
-    expect(footer).toContain('to="/politika-za-poveritelnost"')
-    expect(footer).toContain('Общи условия')
-    expect(footer).toContain('Политика за поверителност')
+    expect(footer).toContain('storefrontLegalNavigation')
+    expect(navigation).toContain("path: '/obshti-usloviya'")
+    expect(navigation).toContain("path: '/politika-za-poveritelnost'")
+    expect(navigation).toContain("bg: 'Общи условия'")
+    expect(navigation).toContain("bg: 'Политика за поверителност'")
   })
 })

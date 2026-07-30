@@ -3,6 +3,7 @@ import { fileURLToPath } from 'node:url'
 import {
   FIXTURE_API_URL,
   FIXTURE_BUNDLE,
+  FIXTURE_CATEGORY,
   FIXTURE_ORIGIN,
   FIXTURE_PRODUCT,
   createFixtureState,
@@ -295,6 +296,87 @@ const server = createServer(async (request, response) => {
 
   if (request.method === 'GET' && url.pathname === '/health') {
     send(response, 200, { status: 'ok' }, origin)
+    return
+  }
+
+  if (request.method === 'GET' && url.pathname === '/api/v1/content/homepage') {
+    send(response, 200, { data: null }, origin)
+    return
+  }
+
+  if (request.method === 'GET' && url.pathname === '/api/v1/home') {
+    send(response, 200, {
+      data: {
+        hero_banners: [],
+        featured_categories: [FIXTURE_CATEGORY],
+        featured_products: [FIXTURE_PRODUCT],
+        new_products: [],
+        bestsellers: [],
+        promotional_products: [],
+        latest_articles: [],
+      },
+    }, origin)
+    return
+  }
+
+  if (request.method === 'GET' && url.pathname === '/api/v1/products') {
+    send(response, 200, {
+      data: [FIXTURE_PRODUCT],
+      links: {},
+      meta: {
+        current_page: 1,
+        last_page: 1,
+        per_page: 24,
+        total: 1,
+      },
+      filters: [],
+      active_filters: [],
+      price_filter: null,
+    }, origin)
+    return
+  }
+
+  if (request.method === 'GET' && url.pathname === `/api/v1/products/${FIXTURE_PRODUCT.slug}`) {
+    send(response, 200, {
+      data: {
+        ...FIXTURE_PRODUCT,
+        description: 'Подробно описание на тестовия продукт.',
+        images: [],
+        attributes: [],
+        specification_groups: [],
+        related_products: [],
+        accessory_products: [],
+        seo: {},
+        structured_data: {},
+      },
+    }, origin)
+    return
+  }
+
+  if (request.method === 'GET' && url.pathname === '/api/v1/navigation/categories') {
+    send(response, 200, { data: [FIXTURE_CATEGORY] }, origin)
+    return
+  }
+
+  if (request.method === 'GET' && url.pathname === `/api/v1/categories/${FIXTURE_CATEGORY.slug}`) {
+    send(response, 200, { data: FIXTURE_CATEGORY }, origin)
+    return
+  }
+
+  if (request.method === 'GET' && url.pathname === `/api/v1/categories/${FIXTURE_CATEGORY.slug}/products`) {
+    send(response, 200, {
+      data: [FIXTURE_PRODUCT],
+      links: {},
+      meta: {
+        current_page: 1,
+        last_page: 1,
+        per_page: 24,
+        total: 1,
+      },
+      filters: [],
+      active_filters: [],
+      price_filter: null,
+    }, origin)
     return
   }
 

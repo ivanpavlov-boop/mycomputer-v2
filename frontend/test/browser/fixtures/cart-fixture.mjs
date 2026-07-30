@@ -20,6 +20,16 @@ export const FIXTURE_CART_KEYS = [
   'expires_at',
 ]
 
+export const FIXTURE_CATEGORY = Object.freeze({
+  id: 21,
+  name: 'Лаптопи',
+  slug: 'laptops',
+  description: 'Тестова категория за локалния браузърен fixture.',
+  image: null,
+  icon: null,
+  children: [],
+})
+
 export const FIXTURE_PRODUCT = Object.freeze({
   id: 101,
   sku: 'TEST-LAPTOP-101',
@@ -39,7 +49,7 @@ export const FIXTURE_PRODUCT = Object.freeze({
     show_stock_quantity: true,
   },
   brand: { id: 11, name: 'Fixture Brand', slug: 'fixture-brand' },
-  category: { id: 21, name: 'Лаптопи', slug: 'laptops' },
+  category: FIXTURE_CATEGORY,
   primary_image: null,
 })
 

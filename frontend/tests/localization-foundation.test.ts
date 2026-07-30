@@ -63,7 +63,9 @@ describe('multilingual storefront foundation', () => {
     expect(app).toContain('lang: locale.value')
     expect(switcher).toContain('useSwitchLocalePath()')
     expect(switcher).toContain('storefrontLocales')
-    expect(switcher).toContain('supportedLocale.shortLabel')
+    expect(switcher).toContain('availableStorefrontLocales')
+    expect(switcher).toContain('localeLink.shortLabel')
+    expect(switcher).toContain('v-if="localeLinks.length > 1"')
   })
 
   it('keeps all localized catalog paths in the existing read-only route boundary', () => {

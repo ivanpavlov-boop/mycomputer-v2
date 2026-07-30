@@ -30,7 +30,7 @@
                 <p v-if="block.data.subtitle" :class="subtitleClass(block)" class="font-semibold text-amber-300">{{ block.data.subtitle }}</p>
                 <h2 v-if="block.data.heading" :class="headingClass(block)" class="mt-2 font-extrabold tracking-normal">{{ block.data.heading }}</h2>
                 <p v-if="block.data.text" :class="textClass(block)" class="mt-4 text-white/90">{{ block.data.text }}</p>
-                <div v-if="block.data.button_label && block.data.button_url" :class="buttonGroupClass(block)" class="mt-6">
+                <div v-if="hasAvailableButton(block)" :class="buttonGroupClass(block)" class="mt-6">
                   <NuxtLink :to="block.data.button_url" :class="buttonClass(block)" class="rounded-md bg-brand-600 px-5 py-3 text-sm font-semibold text-white hover:bg-brand-700">
                     {{ block.data.button_label }}
                   </NuxtLink>
@@ -60,7 +60,7 @@
           <h2 v-if="block.data.heading" :class="headingClass(block)" class="font-bold tracking-normal">{{ block.data.heading }}</h2>
           <p v-if="block.data.text" :class="textClass(block)" class="mt-2 text-slate-600">{{ block.data.text }}</p>
           <div class="mt-5 grid" :class="[gridClass(block), spacingClass(block)]">
-            <ProductCard v-for="product in productsForBlock(block)" :key="product.id" :product="product" />
+            <CatalogProductCard v-for="product in productsForBlock(block)" :key="product.id" :product="product" />
           </div>
         </template>
 
@@ -68,14 +68,14 @@
           <h2 v-if="block.data.heading" :class="headingClass(block)" class="font-bold tracking-normal">{{ block.data.heading }}</h2>
           <p v-if="block.data.text" :class="textClass(block)" class="mt-2 text-slate-600">{{ block.data.text }}</p>
           <div class="mt-5 grid" :class="[gridClass(block), spacingClass(block)]">
-            <CategoryCard v-for="category in categoriesForBlock(block)" :key="category.id" :category="category" />
+            <CatalogCategoryCard v-for="category in categoriesForBlock(block)" :key="category.id" :category="category" />
           </div>
         </template>
 
         <template v-else-if="['bundle_grid', 'bundle_carousel'].includes(block.type)">
           <h2 v-if="block.data.heading" :class="headingClass(block)" class="font-bold tracking-normal">{{ block.data.heading }}</h2>
           <div class="mt-5 grid" :class="[gridClass(block), spacingClass(block)]">
-            <BundleCard v-for="bundle in block.resolved?.bundles || []" :key="bundle.id" :bundle="bundle" />
+            <BundlesBundleCard v-for="bundle in block.resolved?.bundles || []" :key="bundle.id" :bundle="bundle" />
           </div>
         </template>
       </div>
@@ -85,6 +85,7 @@
 
 <script setup lang="ts">
 import type { Category, CmsBlock, ProductCard } from '~/types/api'
+import { isStorefrontNavigationTargetAvailable } from '~/utils/storefrontRouteAvailability'
 
 const props = withDefaults(defineProps<{
   content: string | CmsBlock[]
@@ -97,8 +98,14 @@ const props = withDefaults(defineProps<{
 
 const isHtmlContent = computed(() => typeof props.content === 'string')
 const blocks = computed(() => Array.isArray(props.content) ? props.content : [])
+const { state } = useCommerceReleaseGate()
 const visibleBlocks = computed(() => blocks.value.filter((block) => {
-  return ['mobile', 'tablet', 'desktop'].some((deviceName) => setting(block, deviceName as 'mobile' | 'tablet' | 'desktop', 'visible', true))
+  const visibleOnAnyDevice = ['mobile', 'tablet', 'desktop'].some(
+    deviceName => setting(block, deviceName as 'mobile' | 'tablet' | 'desktop', 'visible', true),
+  )
+
+  return visibleOnAnyDevice
+    && !['bundle_grid', 'bundle_carousel'].includes(block.type)
 }))
 
 const device = (block: CmsBlock, key: 'mobile' | 'tablet' | 'desktop') => block.responsive?.[key] || {}
@@ -188,6 +195,14 @@ function buttonGroupClass(block: CmsBlock): string {
 
 function buttonClass(block: CmsBlock): string {
   return setting(block, 'mobile', 'buttons.full_width', false) ? 'block w-full text-center' : 'inline-flex'
+}
+
+function hasAvailableButton(block: CmsBlock): boolean {
+  return Boolean(
+    block.data.button_label
+    && block.data.button_url
+    && isStorefrontNavigationTargetAvailable(block.data.button_url, state.value),
+  )
 }
 
 function orderClass(block: CmsBlock): string {

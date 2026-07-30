@@ -58,7 +58,7 @@ export default defineConfig({
       use: {
         ...devices['iPhone 13'],
       },
-      testMatch: /(?:cart-mobile|checkout-payment-acceptance)\.spec\.ts/,
+      testMatch: /(?:cart-mobile|checkout-payment-acceptance|pre-launch-navigation)\.spec\.ts/,
     },
   ],
 })

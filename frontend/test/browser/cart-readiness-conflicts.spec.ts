@@ -55,6 +55,9 @@ test.describe('Cart readiness and conflicts', () => {
     await page.goto('/cart')
 
     for (const [code, message] of conflicts) {
+      await page.reload()
+      await expect(page.getByLabel('Количество')).toHaveValue('1')
+
       await configureFixture(request, {
         fail_next_mutation: true,
         mutation_error_code: code,

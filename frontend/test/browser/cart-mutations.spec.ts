@@ -19,6 +19,7 @@ test.describe('Cart mutation controls', () => {
 
   test('submits one quantity request, blocks duplicates, and emits one delta event', async ({ page, request }) => {
     await page.goto('/cart')
+    await page.waitForLoadState('networkidle')
     await configureFixture(request, { mutation_delay_ms: 250 })
 
     const quantity = page.getByLabel('Количество')
@@ -57,8 +58,11 @@ test.describe('Cart mutation controls', () => {
 
     await remove.click()
     await expect(page.getByText('Количката е празна')).toBeVisible()
-    state = await fixtureState(request)
-    expect(state.analytics.filter(event => event.event_name === 'remove_from_cart')).toHaveLength(1)
+    await expect.poll(async () => {
+      state = await fixtureState(request)
+
+      return state.analytics.filter(event => event.event_name === 'remove_from_cart')
+    }).toHaveLength(1)
   })
 
   test('preserves the confirmed Cart when clear fails and accepts only a confirmed empty response', async ({ page, request }) => {

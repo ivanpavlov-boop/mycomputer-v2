@@ -10,9 +10,15 @@
 <script setup lang="ts">
 const router = useRouter()
 const route = useRoute()
-const q = ref(String(route.query.q || ''))
+const localePath = useLocalePath()
+const q = ref(String(route.query.search || route.query.q || ''))
 
 function submit() {
-  router.push({ path: '/search', query: { q: q.value } })
+  const search = q.value.trim()
+
+  router.push({
+    path: localePath('/catalog'),
+    query: search ? { search } : {},
+  })
 }
 </script>

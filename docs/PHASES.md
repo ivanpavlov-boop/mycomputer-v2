@@ -111,7 +111,8 @@ Phase 8 manual selected UPDATE price/stock sync has been implemented behind a fe
 | Commerce Phase 1D.4 | Checkout Customer Snapshot and Profile Ownership Safety | Merged, MySQL CI verified, deployed and staging verified; one dedicated Customer snapshot per canonical Order, no contact-field ownership lookup and no implicit account/profile/address mutation. |
 | Commerce Phase 1E.1 | Controlled Public Commerce Enablement and CART-023 Release Gate | Merged, MySQL CI verified, deployed with flags false and disabled-state staging verified; strict Nginx/Nuxt/backend release states remain closed. |
 | Commerce Phase 1E.2A | Public Legal Pages Foundation, Consent Audit and Legal Approval Gate | Merged, CI verified, deployed and staging verified in closed state. |
-| Legal Content Finalization | Bulgarian Legal Content and Explicit Project-owner Approval | Complete locally only; final BG content, exact hashes and approval evidence committed, runtime approval and public commerce still disabled. |
+| Legal Content Finalization | Bulgarian Legal Content and Explicit Project-owner Approval | Merged, CI verified, deployed and staging verified; final BG content, exact hashes and approval evidence are committed while runtime approval and public commerce remain disabled. |
+| Pre-Launch Storefront Navigation Cleanup | Route-aware public navigation and locale availability | Complete locally only; visible links follow the edge route contract, BG legal pages omit unavailable EN counterparts, and commerce remains closed. |
 | Phase 9C.1 | Product attributes core foundation | Complete |
 | Phase 9C.2 | Product attributes admin usability and starter structure | Complete |
 | Phase 9C.3 | Category attribute sets | Complete |
@@ -981,10 +982,18 @@ footer and checkout links, a legal-content manifest and registry, a fail-closed
 legal approval dependency, server-owned Order acceptance metadata, read-only
 Filament visibility and release-preflight checks.
 
-Legal Content Finalization and Explicit Approval is complete locally only. The
-Bulgarian manifest is `approved` with versions
+Legal Content Finalization and Explicit Approval is merged, CI verified,
+deployed and staging verified. The Bulgarian manifest is `approved` with versions
 `bg-terms-v1.0-2026-07-30` and `bg-privacy-v1.0-2026-07-30`, effective
 `2026-07-30`, exact source hashes and project-owner approval evidence.
 `legal_counsel_review=not_claimed` and `LEGAL_CONTENT_APPROVED=false`; no
 runtime approval or public activation is claimed. CART-023, CART-021 and
 CART-025 remain open. Catalog Sync and supplier data ownership are unchanged.
+
+Pre-Launch Storefront Navigation Cleanup is complete locally only. Header,
+mobile menu, footer, search and route-aware locale switching now expose only
+the repository-owned public route matrix. Bulgarian legal pages do not render
+unavailable English legal links. Valid BG/EN catalog, category and Product
+routes remain available. Cart remains visible only in the existing open test
+state; no Checkout, account, auth, wishlist or compare entry point was added.
+See [Pre-Launch Storefront Navigation](PRE_LAUNCH_STOREFRONT_NAVIGATION.md).
