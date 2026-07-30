@@ -131,6 +131,7 @@ and English commerce/account paths are not accidentally forwarded to Nuxt.
 | --- | --- |
 | `/` | Nuxt |
 | `/catalog`, `/categories`, `/c/*`, `/p/*` | Nuxt |
+| `/obshti-usloviya`, `/politika-za-poveritelnost` | Nuxt |
 | `/en`, `/en/catalog`, `/en/categories`, `/en/c/*`, `/en/p/*` | Nuxt |
 | `/admin/*` | Laravel / Filament |
 | `/api/*` | Laravel |
@@ -146,6 +147,12 @@ Laravel remains authoritative for:
 
 Customer cart, checkout, account, wishlist, compare and auth storefront routes are not enabled through nginx in this phase. Keep them blocked until those flows are explicitly approved.
 
+The Bulgarian legal pages remain available while commerce is closed. Their
+committed manifest is draft-only. Keep `LEGAL_CONTENT_APPROVED=false` until a
+separate legal-review change sets final versions, effective dates and approved
+manifest status. Nginx and Nuxt derive their non-secret legal gate from this
+same environment flag.
+
 Nuxt uses the same-origin API base `/api/v1`; no custom CORS header allowlist
 is required for `X-Locale` in this deployment model. Locale-dependent API
 responses include `Content-Language` and `Vary: X-Locale, Accept-Language`,
@@ -160,6 +167,7 @@ Frontend runtime configuration:
 NUXT_PUBLIC_API_BASE_URL=/api/v1
 NUXT_API_SERVER_BASE_URL=http://nginx/api/v1
 NUXT_PUBLIC_SITE_URL=https://computer2u.eu
+NUXT_PUBLIC_LEGAL_CONTENT_APPROVED=false
 ```
 
 `NUXT_PUBLIC_API_BASE_URL` is browser-visible and should usually stay same-origin. `NUXT_API_SERVER_BASE_URL` is private server-side Nuxt configuration used by SSR inside Docker.

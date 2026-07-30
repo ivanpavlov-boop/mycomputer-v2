@@ -14,6 +14,11 @@ abstract class TestCase extends BaseTestCase
         // tests override these values to cover closed and rollback states.
         config()->set('commerce.public.enabled', true);
         config()->set('commerce.public.confirmation_enabled', true);
+        config()->set('legal.approved', true);
+        config()->set(
+            'legal.manifest_path',
+            base_path('tests/Fixtures/Legal/approved-legal-content-manifest.json'),
+        );
     }
 
     protected function cartSession(string $name): string

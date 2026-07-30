@@ -1,0 +1,14 @@
+{
+  "locale": "bg",
+  "status": "approved",
+  "terms": {
+    "route": "/obshti-usloviya",
+    "version": "terms-test-1",
+    "effective_date": "2026-07-29"
+  },
+  "privacy": {
+    "route": "/politika-za-poveritelnost",
+    "version": "privacy-test-1",
+    "effective_date": "2026-07-29"
+  }
+}

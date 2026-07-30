@@ -2,7 +2,8 @@
 
 ## Commerce Phase 1E.1 - Controlled Public Commerce Enablement
 
-Status: complete locally only; public commerce is not activated.
+Status: merged, MySQL CI verified, deployed with release flags false, and
+disabled-state staging verified; public commerce is not activated.
 
 This phase adds one strict release state across the environment-rendered Nginx
 edge, Nuxt entry points and `POST /api/v1/checkout`. Committed public commerce,
@@ -15,10 +16,10 @@ blocked. Card and leasing remain disabled. The read-only preflight includes
 payment, shipping, Super Admin, Catalog Sync and legal-route checks; missing
 real Terms and Privacy routes are explicit launch blockers.
 
-CART-022 and CART-023 are remediated locally. CART-023 remains formally open
-until merge, CI, disabled-state deployment verification, explicit activation
-approval and enabled-state staging verification. CART-021 and CART-025 remain
-open.
+CART-022 is remediated, merged and deployed. The CART-023 release gate is
+deployed in its closed state, but CART-023 remains formally open until legal
+approval, explicit activation approval and enabled-state staging verification.
+CART-021 and CART-025 remain open.
 
 ## Commerce Phase 1D.4 - Checkout Customer Snapshot and Profile Ownership Safety
 
@@ -108,7 +109,8 @@ Phase 8 manual selected UPDATE price/stock sync has been implemented behind a fe
 | Commerce Phase 1D.2B | Order-owned Payment Re-initiation, Attempt Idempotency and Retry Policy | Complete locally; direct-owner or guest-capability authorization, hash-only attempt idempotency, Order locking and explicit online retry policy. Card remains disabled and no real provider is integrated. |
 | Commerce Phase 1D.3 | End-to-end Checkout and Payment Acceptance | Merged, MySQL CI verified, deployed and staging implementation/privacy/release-gate verified; public commerce, card and leasing remain disabled. |
 | Commerce Phase 1D.4 | Checkout Customer Snapshot and Profile Ownership Safety | Merged, MySQL CI verified, deployed and staging verified; one dedicated Customer snapshot per canonical Order, no contact-field ownership lookup and no implicit account/profile/address mutation. |
-| Commerce Phase 1E.1 | Controlled Public Commerce Enablement and CART-023 Release Gate | Complete locally only; strict default-disabled Nginx/Nuxt/backend release states, confirmation-only rollback, recovery fail-closed, preflight and no activation. |
+| Commerce Phase 1E.1 | Controlled Public Commerce Enablement and CART-023 Release Gate | Merged, MySQL CI verified, deployed with flags false and disabled-state staging verified; strict Nginx/Nuxt/backend release states remain closed. |
+| Commerce Phase 1E.2A | Public Legal Pages Foundation, Consent Audit and Legal Approval Gate | Complete locally only; Bulgarian legal drafts, fail-closed approval gate and server-owned Order acceptance metadata, with no legal approval or activation. |
 | Phase 9C.1 | Product attributes core foundation | Complete |
 | Phase 9C.2 | Product attributes admin usability and starter structure | Complete |
 | Phase 9C.3 | Category attribute sets | Complete |
@@ -967,3 +969,19 @@ No supplier #2 has been selected, profiled, or imported under these phases.
 - Exact Phase 8 UI layout.
 - Rollback tooling on top of the Phase 7.6 sync batch/log audit trail.
 - Rollback execution UX.
+
+## Commerce Phase 1E.2A
+
+Public Legal Pages Foundation, Consent Audit and Legal Approval Gate is
+complete locally only. Commerce Phase 1E.1 is merged, MySQL CI verified,
+deployed with release flags false and disabled-state staging verified.
+
+Phase 1E.2A adds Bulgarian Terms and Privacy draft routes, exact Nginx routing,
+footer and checkout links, a legal-content manifest and registry, a fail-closed
+legal approval dependency, server-owned Order acceptance metadata, read-only
+Filament visibility and release-preflight checks.
+
+The manifest remains `draft`, effective dates are null and
+`LEGAL_CONTENT_APPROVED=false`. No legal approval or public activation is
+claimed. CART-023, CART-021 and CART-025 remain open. Catalog Sync and supplier
+data ownership are unchanged.

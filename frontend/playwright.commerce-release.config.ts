@@ -31,7 +31,7 @@ export default defineConfig({
       timeout: 30_000,
     },
     {
-      command: 'node .output/server/index.mjs',
+      command: 'node test/browser/fixtures/start-storefront.mjs draft',
       url: `${storefrontUrl}/catalog`,
       reuseExistingServer: false,
       timeout: 60_000,
@@ -46,6 +46,7 @@ export default defineConfig({
         NUXT_PUBLIC_COMMERCE_CONFIRMATION_ENABLED: state === 'confirmation_only'
           ? 'true'
           : 'false',
+        NUXT_PUBLIC_LEGAL_CONTENT_APPROVED: 'false',
       },
     },
   ],

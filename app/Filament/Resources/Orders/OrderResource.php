@@ -30,6 +30,7 @@ use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
+use Illuminate\Support\Carbon;
 use UnitEnum;
 
 class OrderResource extends Resource
@@ -64,6 +65,34 @@ class OrderResource extends Resource
                 Textarea::make('shipping_address')->rows(2)->columnSpanFull(),
                 Textarea::make('notes')->rows(2)->columnSpanFull(),
             ]),
+            Section::make('Правно приемане')
+                ->description('Данните са записани от сървъра при първоначалното създаване на поръчката.')
+                ->schema([
+                    Grid::make(4)->schema([
+                        TextInput::make('legal_accepted_at')
+                            ->label('Дата на приемане')
+                            ->formatStateUsing(fn ($state): string => filled($state)
+                                ? Carbon::parse((string) $state)->format('d.m.Y H:i:s')
+                                : 'Няма данни')
+                            ->disabled()
+                            ->dehydrated(false),
+                        TextInput::make('terms_version')
+                            ->label('Версия на Общите условия')
+                            ->placeholder('Няма данни')
+                            ->disabled()
+                            ->dehydrated(false),
+                        TextInput::make('privacy_version')
+                            ->label('Версия на Политиката за поверителност')
+                            ->placeholder('Няма данни')
+                            ->disabled()
+                            ->dehydrated(false),
+                        TextInput::make('legal_acceptance_locale')
+                            ->label('Език')
+                            ->placeholder('Няма данни')
+                            ->disabled()
+                            ->dehydrated(false),
+                    ]),
+                ]),
         ]);
     }
 

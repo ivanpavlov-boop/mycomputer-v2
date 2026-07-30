@@ -18,6 +18,7 @@ use App\Services\Cart\CartReadinessService;
 use App\Services\Cart\CartService;
 use App\Services\Email\EmailMarketingService;
 use App\Services\Leasing\LeasingApplicationService;
+use App\Services\Legal\LegalContentRegistry;
 use App\Services\Loyalty\LoyaltyService;
 use App\Services\Payments\PaymentRetryCapabilityService;
 use App\Services\Payments\PaymentService;
@@ -50,6 +51,7 @@ class CheckoutService
         private readonly CheckoutCustomerSnapshotService $customerSnapshots,
         private readonly LeasingApplicationService $leasingApplications,
         private readonly PaymentRetryCapabilityService $paymentRetryCapabilities,
+        private readonly LegalContentRegistry $legalContent,
     ) {}
 
     public function checkout(
@@ -57,6 +59,8 @@ class CheckoutService
         array $data,
         CheckoutIdempotencyContext $idempotencyContext,
     ): CheckoutResult {
+        abort_unless($this->legalContent->isApproved(), 404);
+
         $outcome = DB::transaction(function () use ($cart, $data, $idempotencyContext): CheckoutResult|CartPricingRefreshResult|CartReadinessResult {
             $cart = Cart::query()->lockForUpdate()->findOrFail($cart->id);
             $completedReplay = $this->idempotency->lockCompletedReplay($cart, $idempotencyContext);
@@ -142,6 +146,10 @@ class CheckoutService
                 'shipping_status' => 'pending',
                 'status' => 'pending',
                 'notes' => Str::limit(strip_tags((string) ($data['notes'] ?? '')), 1000, ''),
+                'legal_accepted_at' => now(),
+                'terms_version' => $this->legalContent->termsVersion(),
+                'privacy_version' => $this->legalContent->privacyVersion(),
+                'legal_acceptance_locale' => 'bg',
             ]);
 
             $cart->items->each(fn (CartItem $item) => $order->items()->create([

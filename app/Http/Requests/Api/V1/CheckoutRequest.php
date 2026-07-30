@@ -33,6 +33,10 @@ class CheckoutRequest extends FormRequest
             'reward_code' => ['nullable', 'string', 'max:255'],
             'notes' => ['nullable', 'string', 'max:1000'],
             'terms' => ['accepted'],
+            'terms_version' => ['prohibited'],
+            'privacy_version' => ['prohibited'],
+            'legal_accepted_at' => ['prohibited'],
+            'legal_acceptance_locale' => ['prohibited'],
         ];
     }
 }

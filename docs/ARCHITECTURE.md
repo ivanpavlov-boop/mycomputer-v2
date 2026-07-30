@@ -2157,3 +2157,19 @@ Operational validation:
 - run product sync
 - run `php artisan search:reindex`
 - test `/api/v1/products`, `/api/v1/search`, cart add and checkout with purchasable/non-purchasable statuses
+
+## Public Commerce Legal Authority
+
+Commerce Phase 1E.2A adds `LegalContentRegistry` as the server authority for the
+repository-controlled Bulgarian legal manifest. The public commerce release
+gate may enter `open` only when the two commerce flags are valid and the legal
+registry is approved. Draft, malformed or incomplete manifests fail closed.
+
+New Orders persist one server-controlled legal acceptance timestamp, Terms
+version, Privacy version and locale inside the existing checkout transaction.
+The client cannot supply these values. Idempotent replay preserves them and
+rollback removes them with the Order. Historical Orders remain nullable.
+
+Nuxt owns only the exact Bulgarian legal pages and Nginx exposes them in every
+commerce state. Draft pages remain non-indexable. See
+[Public Commerce Legal Approval Gate](COMMERCE_PUBLIC_LEGAL_GATE.md).

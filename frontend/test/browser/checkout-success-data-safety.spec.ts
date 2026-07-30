@@ -26,7 +26,7 @@ async function submitCheckout(page: Page) {
   await page.getByPlaceholder('Име', { exact: true }).fill('Тест')
   await page.getByPlaceholder('Фамилия').fill('Клиент')
   await email.fill('customer@example.test')
-  await page.getByRole('checkbox', { name: 'Приемам общите условия' }).check()
+  await page.getByRole('checkbox', { name: /Приемам.*Общите условия/ }).check()
   await expect(email).toHaveValue('customer@example.test')
 
   const checkoutResponse = page.waitForResponse((response) => {

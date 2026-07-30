@@ -93,7 +93,27 @@
             :errors="leasingErrors"
           />
           <textarea v-model="form.notes" class="mt-4 w-full rounded-md border border-slate-300 p-3 text-sm" rows="3" placeholder="Бележки към поръчката" />
-          <label class="mt-4 flex items-center gap-2 text-sm"><input v-model="form.terms" type="checkbox" required> Приемам общите условия</label>
+          <div class="mt-4 flex items-start gap-2 text-sm">
+            <input id="checkout-legal-consent" v-model="form.terms" class="mt-1" type="checkbox" required>
+            <label for="checkout-legal-consent">
+              Приемам
+              <NuxtLink
+                class="font-semibold text-brand-700 underline"
+                to="/obshti-usloviya"
+                target="_blank"
+                rel="noopener noreferrer"
+                @click.stop
+              >Общите условия</NuxtLink>
+              и потвърждавам, че съм запознат/а с
+              <NuxtLink
+                class="font-semibold text-brand-700 underline"
+                to="/politika-za-poveritelnost"
+                target="_blank"
+                rel="noopener noreferrer"
+                @click.stop
+              >Политиката за поверителност</NuxtLink>.
+            </label>
+          </div>
         </section>
       </div>
 

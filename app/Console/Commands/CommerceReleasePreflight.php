@@ -5,10 +5,12 @@ namespace App\Console\Commands;
 use App\Models\ShippingMethod;
 use App\Models\User;
 use App\Services\Commerce\PublicCommerceReleaseGate;
+use App\Services\Legal\LegalContentRegistry;
 use App\Services\Payments\PaymentMethodAvailabilityService;
 use Illuminate\Console\Command;
 use Illuminate\Routing\Route as IlluminateRoute;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\Schema;
 use Throwable;
 
 class CommerceReleasePreflight extends Command
@@ -19,6 +21,7 @@ class CommerceReleasePreflight extends Command
 
     public function handle(
         PublicCommerceReleaseGate $releaseGate,
+        LegalContentRegistry $legalContent,
         PaymentMethodAvailabilityService $paymentMethods,
     ): int {
         $availablePaymentCodes = $this->readSafely(
@@ -28,7 +31,13 @@ class CommerceReleasePreflight extends Command
         $activeSuperAdminPresent = $this->readSafely(
             fn (): bool => $this->activeSuperAdminPresent(),
         );
-        $legalRoutes = $this->legalRoutes();
+        $legalAcceptanceSchemaPresent = $this->readSafely(
+            fn (): bool => $this->legalAcceptanceSchemaPresent(),
+        );
+        $legalRoutes = [
+            'terms' => $legalContent->termsRoute(),
+            'privacy' => $legalContent->privacyRoute(),
+        ];
 
         $checks = [
             'configuration_valid' => $releaseGate->isValidConfiguration(),
@@ -52,8 +61,16 @@ class CommerceReleasePreflight extends Command
                 && config('catalog_sync.sync_all_enabled') === false
                 && config('catalog_sync.auto_enabled') === false,
             'abandoned_cart_recovery_disabled' => config('commerce.abandoned_cart_recovery.enabled') === false,
-            'terms_route_present' => $legalRoutes['terms'] !== null,
-            'privacy_route_present' => $legalRoutes['privacy'] !== null,
+            'legal_manifest_valid' => $legalContent->isManifestValid(),
+            'terms_route_present' => $legalRoutes['terms'] === '/obshti-usloviya'
+                && $this->legalSourcePresent('terms'),
+            'privacy_route_present' => $legalRoutes['privacy'] === '/politika-za-poveritelnost'
+                && $this->legalSourcePresent('privacy'),
+            'terms_version_present' => $legalContent->termsVersion() !== '',
+            'privacy_version_present' => $legalContent->privacyVersion() !== '',
+            'legal_effective_dates_present' => $legalContent->effectiveDatesPresent(),
+            'legal_content_approved' => $legalContent->isApproved(),
+            'legal_acceptance_schema_present' => $legalAcceptanceSchemaPresent ?? false,
         ];
 
         $blockers = collect($checks)
@@ -124,43 +141,20 @@ class CommerceReleasePreflight extends Command
             ->contains(fn (User $user): bool => $user->isActiveAdminAccount() && $user->isSuperAdmin());
     }
 
-    /**
-     * @return array{terms: ?string, privacy: ?string}
-     */
-    private function legalRoutes(): array
+    private function legalSourcePresent(string $document): bool
     {
-        $publicGetRoutes = collect(Route::getRoutes()->getRoutes())
-            ->filter(fn (IlluminateRoute $route): bool => in_array('GET', $route->methods(), true))
-            ->map(fn (IlluminateRoute $route): string => '/'.ltrim($route->uri(), '/'))
-            ->all();
+        $path = config("legal.source_pages.{$document}");
 
-        return [
-            'terms' => $this->firstRoute($publicGetRoutes, [
-                '/terms',
-                '/terms-and-conditions',
-                '/obshti-usloviya',
-                '/obsti-usloviya',
-            ]),
-            'privacy' => $this->firstRoute($publicGetRoutes, [
-                '/privacy',
-                '/privacy-policy',
-                '/politika-za-poveritelnost',
-            ]),
-        ];
+        return is_string($path) && $path !== '' && is_file($path);
     }
 
-    /**
-     * @param  array<int, string>  $routes
-     * @param  array<int, string>  $candidates
-     */
-    private function firstRoute(array $routes, array $candidates): ?string
+    private function legalAcceptanceSchemaPresent(): bool
     {
-        foreach ($candidates as $candidate) {
-            if (in_array($candidate, $routes, true)) {
-                return $candidate;
-            }
-        }
-
-        return null;
+        return collect([
+            'legal_accepted_at',
+            'terms_version',
+            'privacy_version',
+            'legal_acceptance_locale',
+        ])->every(fn (string $column): bool => Schema::hasColumn('orders', $column));
     }
 }

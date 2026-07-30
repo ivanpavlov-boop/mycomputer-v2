@@ -22,7 +22,7 @@ async function prepareCheckout(page: Page) {
   await page.getByPlaceholder('Адрес за фактуриране').fill('Тестов адрес 1')
   await page.getByPlaceholder('Пощенски код').fill('1000')
   await page.getByPlaceholder('Адрес за доставка').fill('Тестов адрес 2')
-  await page.getByRole('checkbox', { name: 'Приемам общите условия' }).check()
+  await page.getByRole('checkbox', { name: /Приемам.*Общите условия/ }).check()
 }
 
 function checkoutPayload(overrides: Record<string, unknown> = {}) {

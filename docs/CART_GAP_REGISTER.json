@@ -653,10 +653,10 @@
       "title": "Shipping calculation accepts an unowned cart identifier",
       "severity": "low",
       "confidence": "confirmed",
-      "status": "open",
-      "local_remediation_status": "remediated_locally",
+      "status": "remediated",
+      "local_remediation_status": "merged_deployed",
       "current_behavior": "Shipping calculation resolves Cart context through CartContextResolver. Guest bearer and authenticated ownership are enforced, mismatched cart_id/session identity is rejected, and the explicit no-Cart calculation contract uses no foreign subtotal.",
-      "risk": "The local ownership regressions still require merge, CI, deployment and staging verification before this finding can be closed.",
+      "risk": "The deployed ownership boundary must remain covered while public commerce is released.",
       "evidence": [
         {
           "path": "app/Http/Controllers/Api/V1/ShippingController.php",
@@ -672,7 +672,7 @@
         }
       ],
       "verification": "Run ShippingCartOwnershipTest and verify guest ownership, authenticated ownership, foreign Cart rejection, cart_id/session consistency and the explicit no-Cart contract.",
-      "recommendation": "Preserve CartContextResolver as the single shipping Cart authority through deployment and staging verification.",
+      "recommendation": "Preserve CartContextResolver as the single shipping Cart authority.",
       "target_phase": "Commerce Phase 1E.1",
       "acceptance_criteria": [
         "Shipping calculation cannot use an unowned cart.",
@@ -687,9 +687,9 @@
       "severity": "info",
       "confidence": "confirmed",
       "status": "open",
-      "local_remediation_status": "remediated_locally",
+      "local_remediation_status": "gate_merged_deployed_closed_state_verified",
       "current_behavior": "Nginx, Nuxt and POST checkout share a strict four-state public-commerce gate. Committed defaults keep all commerce pages and new checkout creation closed; confirmation-only rollback preserves existing confirmation and authorized payment retry.",
-      "risk": "The gate is not a public activation. CART-023 remains open until merge, CI, disabled-state deployment verification, explicit approval and enabled-state staging verification.",
+      "risk": "The deployed closed-state gate is not a public activation. CART-023 remains open until legal approval, explicit activation approval and enabled-state staging verification.",
       "evidence": [
         {
           "path": "deploy/nginx/mycomputer.conf.template",
@@ -1136,15 +1136,15 @@
     },
     {
       "phase": "Commerce Phase 1E.1",
-      "status": "complete_locally_only",
-      "finding_ids": [],
+      "status": "merged_ci_verified_deployed_closed_staging_verified",
+      "finding_ids": [
+        "CART-022"
+      ],
       "partial_finding_ids": [
-        "CART-022",
         "CART-023"
       ],
       "open_finding_ids": [
         "CART-021",
-        "CART-022",
         "CART-023",
         "CART-025"
       ],
@@ -1153,10 +1153,30 @@
         "Committed defaults keep public commerce, confirmation and abandoned-Cart recovery disabled.",
         "Confirmation-only rollback stops new checkout while preserving capability-protected confirmation and authorized payment retry.",
         "English commerce, account/auth, wishlist, compare and recovery routes remain blocked.",
-        "CART-022 has focused ownership regression coverage and is remediated locally without changing the shipping implementation.",
-        "CART-023 is remediated locally but remains formally open until merge, CI, disabled-state deployment verification, explicit activation approval and enabled-state staging verification.",
-        "Missing real Terms and Privacy routes are explicit preflight blockers; no placeholder legal content was added.",
+        "CART-022 has focused ownership regression coverage and is remediated, merged and deployed without changing the shipping implementation.",
+        "CART-023 has a merged and deployed closed-state gate but remains formally open until legal approval, explicit activation approval and enabled-state staging verification.",
+        "The Bulgarian legal routes now contain review-ready drafts; legal approval and effective dates remain explicit preflight blockers.",
         "CART-021 and CART-025 remain open; recovery processing and email remain default-disabled."
+      ]
+    },
+    {
+      "phase": "Commerce Phase 1E.2A",
+      "status": "complete_locally_only",
+      "finding_ids": [],
+      "partial_finding_ids": [
+        "CART-023"
+      ],
+      "open_finding_ids": [
+        "CART-021",
+        "CART-023",
+        "CART-025"
+      ],
+      "notes": [
+        "Bulgarian Terms and Privacy routes contain review-ready drafts and remain noindex while the manifest status is draft.",
+        "LEGAL_CONTENT_APPROVED defaults false and public commerce cannot open without an approved complete manifest.",
+        "New canonical Orders record server-owned legal acceptance timestamp, versions and locale inside the existing checkout transaction.",
+        "No legal approval or public-commerce activation is claimed.",
+        "CART-023, CART-021 and CART-025 remain open."
       ]
     }
   ]

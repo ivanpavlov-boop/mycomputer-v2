@@ -1,10 +1,23 @@
+import { fileURLToPath } from 'node:url'
 import { storefrontLocales } from './app/utils/locales'
+
+const useApprovedLegalTestFixture = process.env.PLAYWRIGHT_TEST_BUILD === 'true'
+  && process.env.LEGAL_CONTENT_TEST_FIXTURE === 'approved'
+const legalManifestPath = fileURLToPath(new URL(
+  useApprovedLegalTestFixture
+    ? './test/browser/fixtures/approved-legal-content-manifest.json'
+    : './app/data/legal/legal-content-manifest.json',
+  import.meta.url,
+))
 
 export default defineNuxtConfig({
   compatibilityDate: '2026-06-08',
   ssr: true,
   srcDir: 'app',
   modules: ['@pinia/nuxt', '@nuxtjs/tailwindcss', '@nuxt/image', '@nuxtjs/i18n'],
+  alias: {
+    '#legal-content-manifest': legalManifestPath,
+  },
   css: ['~/assets/css/main.css'],
   nitro: {
     externals: {
@@ -19,6 +32,7 @@ export default defineNuxtConfig({
       cartCookieSecure: process.env.NUXT_PUBLIC_CART_COOKIE_SECURE !== 'false',
       commerceEnabled: process.env.NUXT_PUBLIC_COMMERCE_ENABLED ?? 'false',
       commerceConfirmationEnabled: process.env.NUXT_PUBLIC_COMMERCE_CONFIRMATION_ENABLED ?? 'false',
+      legalContentApproved: process.env.NUXT_PUBLIC_LEGAL_CONTENT_APPROVED ?? 'false',
       englishLocaleIndexable: process.env.NUXT_PUBLIC_ENGLISH_LOCALE_INDEXABLE === 'true',
       ga4Id: process.env.NUXT_PUBLIC_GA4_ID || '',
       metaPixelId: process.env.NUXT_PUBLIC_META_PIXEL_ID || '',

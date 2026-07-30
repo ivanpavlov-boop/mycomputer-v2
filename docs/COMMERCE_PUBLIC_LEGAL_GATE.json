@@ -1,0 +1,52 @@
+{
+  "phase": "Commerce Phase 1E.2A",
+  "status": "complete_locally_only",
+  "legal_content_approved": false,
+  "public_commerce_activated": false,
+  "manifest": {
+    "path": "frontend/app/data/legal/legal-content-manifest.json",
+    "locale": "bg",
+    "status": "draft",
+    "terms": {
+      "route": "/obshti-usloviya",
+      "version": "draft-1",
+      "effective_date": null
+    },
+    "privacy": {
+      "route": "/politika-za-poveritelnost",
+      "version": "draft-1",
+      "effective_date": null
+    }
+  },
+  "approval_requires": [
+    "LEGAL_CONTENT_APPROVED=true",
+    "manifest status approved",
+    "exact Bulgarian routes",
+    "non-empty versions",
+    "non-empty effective dates"
+  ],
+  "order_acceptance_fields": [
+    "legal_accepted_at",
+    "terms_version",
+    "privacy_version",
+    "legal_acceptance_locale"
+  ],
+  "client_authoritative_fields": [],
+  "open_findings": [
+    "CART-021",
+    "CART-023",
+    "CART-025"
+  ],
+  "safety": {
+    "draft_only": true,
+    "approval_default": false,
+    "public_commerce_default": false,
+    "historical_orders_backfilled": false,
+    "ip_stored": false,
+    "user_agent_stored": false,
+    "catalog_sync_changed": false,
+    "sync_all_added": false,
+    "automatic_sync_enabled": false,
+    "deployed": false
+  }
+}
