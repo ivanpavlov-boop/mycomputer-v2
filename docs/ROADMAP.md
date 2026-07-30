@@ -105,6 +105,14 @@ Manual selected UPDATE price/stock sync is implemented behind `CATALOG_SYNC_UPDA
   commerce, account/auth, card and leasing remain disabled. CART-022 is
   remediated, merged and deployed. CART-023 remains open until legal approval,
   explicit activation approval and enabled-state staging verification.
+- Public Commerce SSR Cart API Base URL Fix is complete locally only. The first
+  controlled staging `open` smoke exposed `/cart` and `/checkout` HTTP 500
+  responses because the Cart API used the browser-relative public base during
+  SSR. Staging was immediately rolled back to `confirmation_only` with no
+  Order, Customer or payment attempt created. The local fix separates private
+  SSR and public browser API bases; public commerce remains disabled and
+  CART-023 remains open pending merge, deployment and renewed staging
+  activation.
 - Commerce Leasing Phase A Manual Leasing Application Module is merged,
   MySQL CI verified, deployed and staging schema/safety verified.
   Leasing remains default-disabled; the implementation records

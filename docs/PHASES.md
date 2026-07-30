@@ -1,5 +1,21 @@
 # Catalog Sync Phases
 
+## Public Commerce SSR Cart API Base URL Fix
+
+Status: complete locally only; not pushed, merged, deployed or staging verified.
+
+The first controlled staging `open` smoke exposed HTTP 500 responses from
+`/cart` and `/checkout`, while `/checkout/success` remained available. Staging
+was immediately returned to the verified `confirmation_only` state. No Order,
+Customer or payment attempt was created.
+
+The Cart API client now uses the private Nuxt server runtime API base during
+SSR and the public `/api/v1` base in the browser. This preserves SSR, Cart
+session propagation and the four-state release gate without exposing the
+internal Docker URL publicly. Public commerce remains disabled pending merge,
+deployment and renewed staging activation. CART-023 remains open. See
+[Cart and Checkout SSR API Base Fix](COMMERCE_CART_CHECKOUT_SSR_API_BASE_FIX.md).
+
 ## Commerce Phase 1E.1 - Controlled Public Commerce Enablement
 
 Status: merged, MySQL CI verified, deployed with release flags false, and

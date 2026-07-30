@@ -25,7 +25,9 @@ function responseSession(response: unknown): { present: boolean, value: unknown 
 
 export function useCartApi() {
   const config = useRuntimeConfig()
-  const baseURL = config.public.apiBaseUrl
+  const baseURL = import.meta.server
+    ? String(config.apiServerBaseUrl || config.public.apiBaseUrl)
+    : config.public.apiBaseUrl
   const auth = useAuthStore()
   const cartSession = useCartSession()
 
