@@ -79,22 +79,52 @@ class CheckoutIdempotencyReplayAuthorizationTest extends TestCase
     public function test_guest_completed_cart_with_changed_checkout_fields_returns_conflicts(): void
     {
         $changes = [
-            'email' => 'changed@example.test',
-            'billing_address' => 'Plovdiv, Bulgaria',
-            'shipping_address' => 'Varna, Bulgaria',
-            'payment_method' => 'bank_transfer',
-            'shipping_method' => 'manual',
-            'notes' => 'Changed note',
+            'email' => [
+                'initial' => [],
+                'changed' => ['email' => 'changed@example.test'],
+            ],
+            'company_billing_address' => [
+                'initial' => [
+                    'is_company' => true,
+                    'company_name' => 'Example Company',
+                    'billing_address' => 'Sofia, Bulgaria',
+                ],
+                'changed' => [
+                    'is_company' => true,
+                    'company_name' => 'Example Company',
+                    'billing_address' => 'Plovdiv, Bulgaria',
+                ],
+            ],
+            'shipping_address' => [
+                'initial' => [],
+                'changed' => ['shipping_address' => 'Varna, Bulgaria'],
+            ],
+            'payment_method' => [
+                'initial' => [],
+                'changed' => ['payment_method' => 'bank_transfer'],
+            ],
+            'shipping_method' => [
+                'initial' => [],
+                'changed' => ['shipping_method' => 'manual'],
+            ],
+            'notes' => [
+                'initial' => [],
+                'changed' => ['notes' => 'Changed note'],
+            ],
         ];
 
-        foreach ($changes as $field => $value) {
+        foreach ($changes as $field => $payloads) {
             $cart = $this->prepareCheckoutCart('changed-'.$field);
-            $this->submitCheckout($cart, 'changed-'.$field)->assertCreated();
+            $this->submitCheckout(
+                $cart,
+                'changed-'.$field,
+                $payloads['initial'],
+            )->assertCreated();
 
             $this->submitCheckout(
                 $cart,
                 'changed-'.$field,
-                [$field => $value],
+                $payloads['changed'],
             )
                 ->assertConflict()
                 ->assertJsonPath('error.code', 'checkout_idempotency_conflict');

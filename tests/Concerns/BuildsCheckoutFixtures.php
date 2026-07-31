@@ -68,6 +68,7 @@ trait BuildsCheckoutFixtures
             'last_name' => 'Petrov',
             'email' => 'checkout@example.test',
             'phone' => '0888123456',
+            'is_company' => false,
             'billing_address' => 'Sofia, Bulgaria',
             'shipping_address' => 'Sofia, Bulgaria',
             'payment_method' => 'cash_on_delivery',

@@ -275,3 +275,28 @@ Committed approval metadata is not runtime activation. Never activate public
 commerce while `legal_content_approved`, `legal_manifest_valid` or
 `legal_effective_dates_present` is blocked. CART-023 remains open until the
 separate operational release is explicitly approved.
+
+## Checkout Billing Incident Gate
+
+Before any future controlled Order attempt:
+
+- confirm the individual Checkout default does not render company name, VAT or
+  a separate billing-address field;
+- confirm individual requests send `is_company=false` and derive the billing
+  snapshot from the validated shipping address;
+- confirm explicit company mode requires company name and billing address;
+- confirm switching back to individual mode clears stale company fields and
+  the Checkout idempotency key;
+- confirm server-side normalization ignores stale company data for individual
+  requests;
+- confirm address and office delivery retain their existing shipping snapshot
+  format;
+- confirm COD, legal acceptance and duplicate-submit behavior remain intact;
+- confirm card, leasing and abandoned-Cart recovery remain disabled;
+- run the closed, `confirmation_only`, open-fixture and invalid route matrices;
+- keep public commerce disabled until merge, deployment and staging
+  verification are explicitly approved.
+
+The incident attempt submitted no Order. Staging was returned to
+`confirmation_only`; this repository change does not claim staging
+verification or close `CART-023`.

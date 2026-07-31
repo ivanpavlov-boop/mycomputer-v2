@@ -1013,3 +1013,21 @@ unavailable English legal links. Valid BG/EN catalog, category and Product
 routes remain available. Cart remains visible only in the existing open test
 state; no Checkout, account, auth, wishlist or compare entry point was added.
 See [Pre-Launch Storefront Navigation](PRE_LAUNCH_STOREFRONT_NAVIGATION.md).
+
+## Checkout Individual And Company Billing Fix
+
+The first controlled staging Order attempt found that individual Checkout
+still displayed and required a separate billing address. No Order was
+submitted, and staging was returned to the verified `confirmation_only` state.
+
+The local fix makes individual Checkout the default, hides and clears all
+company-only fields, sends an explicit `is_company=false`, and derives the
+existing non-null Order and Customer billing snapshots from the validated
+shipping address. Explicit company mode requires company name and company
+billing address while preserving the existing nullable VAT contract.
+Server-side normalization is authoritative and prevents hidden stale company
+data from being persisted.
+
+Public commerce remains disabled pending merge, deployment and staging
+verification. `CART-023` remains open. See
+[Checkout Individual And Company Billing Fix](CHECKOUT_INDIVIDUAL_COMPANY_BILLING_FIX.md).

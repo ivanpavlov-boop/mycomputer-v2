@@ -39,12 +39,17 @@
 
         <section class="surface p-5">
           <h2 class="font-semibold">Фактуриране</h2>
-          <label class="mt-4 flex items-center gap-2 text-sm"><input v-model="isCompany" type="checkbox"> Фирма</label>
-          <div v-if="isCompany" class="mt-4 grid gap-4 sm:grid-cols-2">
-            <UiBaseInput v-model="form.company_name" placeholder="Име на фирма" />
-            <UiBaseInput v-model="form.vat_number" placeholder="ДДС номер" />
+          <label class="mt-4 flex items-center gap-2 text-sm">
+            <input v-model="isCompany" type="checkbox">
+            Желая фактура на фирма
+          </label>
+          <div v-if="isCompany" class="mt-4 grid gap-4">
+            <div class="grid gap-4 sm:grid-cols-2">
+              <UiBaseInput v-model="form.company_name" placeholder="Име на фирма" required />
+              <UiBaseInput v-model="form.vat_number" placeholder="ЕИК / ДДС номер" />
+            </div>
+            <textarea v-model="form.billing_address" class="w-full rounded-md border border-slate-300 p-3 text-sm" rows="3" placeholder="Адрес за фактуриране" required />
           </div>
-          <textarea v-model="form.billing_address" class="mt-4 w-full rounded-md border border-slate-300 p-3 text-sm" rows="3" placeholder="Адрес за фактуриране" required />
         </section>
 
         <section class="surface p-5">
@@ -142,6 +147,7 @@
 <script setup lang="ts">
 import type { ShippingOffice } from '~/types/api'
 import { normalizeApiError } from '~/utils/apiError'
+import { checkoutBillingPayload, clearCompanyBilling } from '~/utils/checkoutBilling'
 import {
   applyLeasingOptions,
   createLeasingApplicationForm,
@@ -240,7 +246,13 @@ watch(leasingApplication, () => {
   checkoutIdempotency.clear()
 }, { deep: true })
 watch(form, () => checkoutIdempotency.clear(), { deep: true })
-watch(isCompany, () => checkoutIdempotency.clear())
+watch(isCompany, (company) => {
+  if (!company) {
+    clearCompanyBilling(form)
+  }
+
+  checkoutIdempotency.clear()
+})
 watch(cartCheckoutIdentity, (current, previous) => {
   if (previous !== undefined && current !== previous) {
     checkoutIdempotency.clear()
@@ -327,7 +339,10 @@ async function submit() {
     const api = useCartApi()
     const idempotencyKey = checkoutIdempotency.keyForAttempt()
     const checkoutPayload = withLeasingApplication(
-      form,
+      {
+        ...form,
+        ...checkoutBillingPayload(form, isCompany.value),
+      },
       form.payment_method,
       leasingApplication.value,
     )
