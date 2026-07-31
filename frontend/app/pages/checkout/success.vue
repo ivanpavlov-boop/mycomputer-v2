@@ -14,8 +14,8 @@
           <div class="mt-5 grid gap-2 text-sm text-slate-700">
             <p>Номер на поръчка: <strong>{{ confirmation.order_number }}</strong></p>
             <p>Обща сума: <strong>{{ confirmation.grand_total }} {{ confirmation.currency }}</strong></p>
-            <p>Статус: <strong>{{ confirmation.order_status }}</strong></p>
-            <p>Плащане: <strong>{{ confirmation.payment_method.name }} · {{ confirmation.payment_status }}</strong></p>
+            <p>Статус на поръчката: <strong>{{ presentedOrderStatus }}</strong></p>
+            <p>Начин на плащане: <strong>{{ presentedPaymentMethod }}</strong></p>
             <p>Потвърждението е изпратено до <strong>{{ confirmation.customer_email_masked }}</strong>.</p>
           </div>
 
@@ -45,6 +45,11 @@
 </template>
 
 <script setup lang="ts">
+import {
+  orderStatusLabel,
+  paymentMethodLabel,
+} from '~/utils/checkoutConfirmationPresentation'
+
 const route = useRoute()
 const router = useRouter()
 const confirmationApi = useCheckoutConfirmation()
@@ -60,6 +65,11 @@ const { data, status } = useLazyAsyncData(
   () => confirmationApi.get(),
 )
 const confirmation = computed(() => data.value?.data ?? null)
+const presentedOrderStatus = computed(() => orderStatusLabel(confirmation.value?.order_status))
+const presentedPaymentMethod = computed(() => paymentMethodLabel(
+  confirmation.value?.payment_method.code,
+  confirmation.value?.payment_method.name,
+))
 
 watch(confirmation, async (value) => {
   if (!import.meta.client || !value || purchaseEmitted.value) {

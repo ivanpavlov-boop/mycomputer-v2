@@ -69,6 +69,16 @@ test.describe('Checkout success data safety', () => {
     })
     await expect(page.getByText('MC-FIXTURE-0001')).toBeVisible()
     await expect(page.getByText('c***@example.test')).toBeVisible()
+    await expect(page.getByText('Статус на поръчката: Очаква обработка')).toBeVisible()
+    await expect(page.getByText('Начин на плащане: Наложен платеж')).toBeVisible()
+    await expect(page.getByText('Плащане при доставка')).toBeVisible()
+    await expect(page.getByText('Ще заплатите сумата при получаване на поръчката.')).toBeVisible()
+
+    const visibleConfirmation = await page.locator('main').innerText()
+    expect(visibleConfirmation).not.toContain('Статус: pending')
+    expect(visibleConfirmation).not.toMatch(/\bpending\b/)
+    expect(visibleConfirmation).not.toContain('cash_on_delivery')
+    expect(visibleConfirmation).not.toContain('Наложен платеж · pending')
 
     const historyUrls = await page.evaluate(() => {
       return performance.getEntriesByType('navigation').map(entry => entry.name)

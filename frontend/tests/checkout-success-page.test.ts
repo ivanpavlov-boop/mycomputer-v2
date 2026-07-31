@@ -19,9 +19,9 @@ describe('Checkout success page', () => {
       'confirmation.order_number',
       'confirmation.grand_total',
       'confirmation.currency',
-      'confirmation.order_status',
-      'confirmation.payment_status',
-      'confirmation.payment_method.name',
+      'confirmation.value?.order_status',
+      'confirmation.value?.payment_method.code',
+      'confirmation.value?.payment_method.name',
       'confirmation.payment.presentation',
       'confirmation.customer_email_masked',
     ]) {
@@ -29,6 +29,12 @@ describe('Checkout success page', () => {
     }
 
     expect(page).toContain('PaymentsPaymentActionPanel')
+    expect(page).toContain('orderStatusLabel')
+    expect(page).toContain('paymentMethodLabel')
+    expect(page).toContain('Статус на поръчката:')
+    expect(page).toContain('Начин на плащане:')
+    expect(page).not.toContain('confirmation.payment_status')
+    expect(page).not.toContain('Плащане: <strong>')
 
     for (const forbidden of [
       'customer_phone',

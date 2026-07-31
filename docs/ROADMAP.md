@@ -767,3 +767,13 @@ no Order and staging was returned to `confirmation_only`. Public commerce
 remains disabled, deployment and staging verification remain pending, and
 `CART-023` remains open. See
 [Checkout Individual And Company Billing Fix](CHECKOUT_INDIVIDUAL_COMPANY_BILLING_FIX.md).
+
+Checkout Confirmation Bulgarian Status Presentation Fix is complete locally
+only. It removes raw Order/payment status presentation from the confirmation
+summary, adds deterministic Bulgarian Order-status and payment-method labels,
+and preserves the existing payment action panel as the payment-state authority.
+Internal API values and all Checkout behavior remain unchanged. The controlled
+staging COD Order succeeded and was audited, staging was returned to
+`confirmation_only`, public commerce remains disabled, and `CART-023` remains
+open pending merge, deployment and final confirmation-page verification. See
+[Checkout Confirmation Localization Fix](CHECKOUT_CONFIRMATION_LOCALIZATION_FIX.md).
