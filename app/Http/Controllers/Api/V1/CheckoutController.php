@@ -20,7 +20,7 @@ class CheckoutController extends Controller
 
     public function __invoke(CheckoutRequest $request): JsonResponse
     {
-        $result = $this->checkoutService->checkout($request, $request->validated());
+        $result = $this->checkoutService->checkout($request, $request->checkoutData());
 
         $response = CheckoutResponseResource::make($result)
             ->response()

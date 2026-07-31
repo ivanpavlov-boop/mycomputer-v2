@@ -20,7 +20,6 @@ async function submitCheckout(page: Page) {
 
   const email = page.getByPlaceholder('Имейл')
   await page.getByPlaceholder('Телефон').fill('+359888123456')
-  await page.getByPlaceholder('Адрес за фактуриране').fill('Тестов адрес 1')
   await page.getByPlaceholder('Пощенски код').fill('1000')
   await page.getByPlaceholder('Адрес за доставка').fill('Тестов адрес 2')
   await page.getByPlaceholder('Име', { exact: true }).fill('Тест')

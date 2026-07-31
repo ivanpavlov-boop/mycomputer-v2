@@ -758,3 +758,12 @@ was enabled. See
 
 Runtime `LEGAL_CONTENT_APPROVED` and public commerce remain disabled, so
 CART-023 remains open; CART-021 and CART-025 also remain open.
+
+Checkout Individual And Company Billing Fix is complete locally only. It
+separates the default individual flow from explicit company invoicing,
+normalizes individual billing snapshots from shipping data, and rejects
+incomplete company billing server-side. The controlled staging attempt created
+no Order and staging was returned to `confirmation_only`. Public commerce
+remains disabled, deployment and staging verification remain pending, and
+`CART-023` remains open. See
+[Checkout Individual And Company Billing Fix](CHECKOUT_INDIVIDUAL_COMPANY_BILLING_FIX.md).
