@@ -53,7 +53,9 @@ test.describe('checkout payment acceptance', () => {
   test('offline checkout has a Bulgarian status and no payment action', async ({ page, request }) => {
     await submitWithMethod(page, 'cash_on_delivery')
 
-    await expect(page.getByText('Плащането ще бъде извършено при доставката.')).toBeVisible()
+    await expect(page.getByText('Начин на плащане: Наложен платеж')).toBeVisible()
+    await expect(page.getByText('Плащане при доставка')).toBeVisible()
+    await expect(page.getByText('Ще заплатите сумата при получаване на поръчката.')).toBeVisible()
     await expect(page.getByRole('link', { name: 'Продължи към плащане' })).toHaveCount(0)
     await expect(page.getByRole('button', { name: 'Опитай плащането отново' })).toHaveCount(0)
 
@@ -63,6 +65,31 @@ test.describe('checkout payment acceptance', () => {
     expect(state.payment_retry_attempts).toBe(0)
     expect(state.provider_invocations).toBe(0)
     expect(state.notifications_dispatched).toBe(1)
+  })
+
+  test('bank transfer keeps its localized method and server presentation', async ({ page }) => {
+    await submitWithMethod(page, 'bank_transfer')
+
+    await expect(page.getByText('Начин на плащане: Банков превод')).toBeVisible()
+    await expect(page.getByText('Очаква се банков превод')).toBeVisible()
+    await expect(page.getByText('Ще получите данни за банковия превод по имейл.')).toBeVisible()
+    expect(await page.locator('main').innerText()).not.toContain('bank_transfer')
+  })
+
+  test('paid card confirmation keeps the method summary separate from payment state', async ({ page, request }) => {
+    await resetFixture(request, {
+      preset: 'product',
+      seed_session_id: seededSession,
+      next_checkout_error: null,
+      card_enabled: true,
+      card_payment_state: 'paid',
+    })
+    await submitWithMethod(page, 'card')
+
+    await expect(page.getByText('Начин на плащане: Плащане с карта')).toBeVisible()
+    await expect(page.getByText('Платено', { exact: true })).toBeVisible()
+    await expect(page.getByText('Плащането е потвърдено.')).toBeVisible()
+    expect(await page.locator('main').innerText()).not.toMatch(/\bcard\b/)
   })
 
   test('legal links open separately without toggling consent or submitting an order', async ({ page, request }) => {
@@ -105,6 +132,8 @@ test.describe('checkout payment acceptance', () => {
     })
     await submitWithMethod(page, 'card')
 
+    await expect(page.getByText('Начин на плащане: Плащане с карта')).toBeVisible()
+    await expect(page.getByText('Очаква плащане')).toBeVisible()
     const action = page.getByRole('link', { name: 'Продължи към плащане' })
     await expect(action).toBeVisible()
     await expect(action).toHaveAttribute('href', 'https://payments.example.test/continue')
@@ -133,6 +162,8 @@ test.describe('checkout payment acceptance', () => {
     })
     await submitWithMethod(page, 'card')
 
+    await expect(page.getByText('Начин на плащане: Плащане с карта')).toBeVisible()
+    await expect(page.getByText('Плащането е неуспешно')).toBeVisible()
     const retry = page.getByRole('button', { name: 'Опитай плащането отново' })
     await expect(retry).toBeVisible()
     await retry.click()

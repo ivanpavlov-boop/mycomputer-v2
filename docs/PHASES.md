@@ -1031,3 +1031,19 @@ data from being persisted.
 Public commerce remains disabled pending merge, deployment and staging
 verification. `CART-023` remains open. See
 [Checkout Individual And Company Billing Fix](CHECKOUT_INDIVIDUAL_COMPANY_BILLING_FIX.md).
+
+## Checkout Confirmation Bulgarian Status Presentation Fix
+
+A controlled staging COD Order succeeded and its Order/Customer snapshots,
+single item, legal acceptance, idempotency and confirmation capability were
+verified. COD created no payment attempt, and no Product or
+`supplier_products` row changed. The confirmation summary nevertheless exposed
+the internal `pending` Order and payment values.
+
+The local fix is presentation-only: Nuxt maps Order statuses and payment methods
+to safe Bulgarian labels, fails closed for unknown values, and leaves the
+existing payment action panel responsible for payment state and actions. The
+backend contract and machine values are unchanged. Staging remains documented
+as `confirmation_only`; public commerce remains disabled and `CART-023` remains
+open pending merge, deployment and final verification. See
+[Checkout Confirmation Localization Fix](CHECKOUT_CONFIRMATION_LOCALIZATION_FIX.md).

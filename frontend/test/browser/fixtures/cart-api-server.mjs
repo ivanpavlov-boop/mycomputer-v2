@@ -182,7 +182,13 @@ function paymentPresentation(method, state, redirectUrl = null, instructions = n
     ? redirectUrl
     : null
   const labels = {
-    pending: 'Очаква плащане',
+    pending: method === 'bank_transfer'
+      ? 'Очаква се банков превод'
+      : method === 'leasing'
+        ? 'Заявката е получена'
+        : method === 'cash_on_delivery'
+          ? 'Плащане при доставка'
+          : 'Очаква плащане',
     authorized: 'Плащането е разрешено',
     failed: 'Плащането е неуспешно',
     cancelled: 'Плащането е отказано',
@@ -197,7 +203,7 @@ function paymentPresentation(method, state, redirectUrl = null, instructions = n
       : method === 'leasing'
         ? 'Получихме заявката Ви за покупка на изплащане.'
         : method === 'cash_on_delivery'
-          ? 'Плащането ще бъде извършено при доставката.'
+          ? 'Ще заплатите сумата при получаване на поръчката.'
           : 'Завършете плащането само чрез изричното действие.',
     authorized: 'Плащането е разрешено и очаква окончателно потвърждение.',
     failed: 'Плащането не беше прието.',

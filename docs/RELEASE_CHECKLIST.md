@@ -300,3 +300,31 @@ Before any future controlled Order attempt:
 The incident attempt submitted no Order. Staging was returned to
 `confirmation_only`; this repository change does not claim staging
 verification or close `CART-023`.
+
+## Checkout Confirmation Localization Gate
+
+Before final confirmation-page verification:
+
+- confirm the summary shows `Статус на поръчката: Очаква обработка` for a
+  pending Order and never displays the raw `pending` value;
+- confirm the summary shows a localized payment method without a duplicate
+  payment-status line or raw payment code;
+- confirm the existing COD, bank-transfer, card and leasing action-panel
+  presentations remain unchanged;
+- confirm unknown Order and payment-method values fail closed to the documented
+  Bulgarian fallbacks;
+- confirm the Order number, total, currency and masked email remain present;
+- confirm confirmation capabilities, no-store/private responses, URL cleanup,
+  analytics and unavailable-confirmation handling remain intact;
+- run the closed, `confirmation_only`, open-fixture and invalid release-state
+  matrices;
+- confirm no Order, Customer, Product, Supplier or `supplier_products` mutation
+  occurs from viewing the confirmation;
+- keep public commerce, card, leasing and abandoned-Cart recovery disabled;
+- keep Catalog Sync UPDATE, Sync All and automatic sync disabled.
+
+The controlled staging COD Order and its snapshots, legal acceptance,
+idempotency and confirmation capability were verified before this local fix;
+COD created no payment attempt. Staging is documented as `confirmation_only`.
+This presentation-only change does not claim deployment or final staging
+verification, and `CART-023` remains open.
