@@ -9,10 +9,11 @@ Commerce Phase 1D.4 Checkout Customer Snapshot and Profile Ownership Safety is
 merged, MySQL CI verified, deployed and staging verified. CART-020 is
 remediated.
 
-Commerce Phase 1E.1 Controlled Public Commerce Enablement is complete locally
-only. It adds a strict, default-disabled release gate and does not activate
-public commerce. CART-023 remains open with
-`local_remediation_status: remediated_locally`.
+At completion of this acceptance phase, Commerce Phase 1E.1 Controlled Public
+Commerce Enablement was local only. It added a strict, default-disabled release
+gate without activating public commerce, and CART-023 remained open at that
+point. Phase 1E.1 was subsequently merged, deployed and controlled-staging
+verified; CART-023 is now remediated after safe rollback.
 
 The acceptance layer reuses the existing checkout, confirmation, payment,
 retry, ownership, capability, redirect and leasing services. It adds a
@@ -31,9 +32,10 @@ not create another checkout or retry path.
 `PAYMENT_CARD_ENABLED=false` and `PAYMENT_LEASING_ENABLED=false` remain the
 defaults. The committed public-commerce, confirmation and abandoned-recovery
 flags are also false. Public `/cart`, `/checkout`, `/checkout/success`, and new
-checkout creation therefore remain disabled by default. CART-023 remains open
-until merge, CI, disabled-state staging verification, explicit activation
-approval and enabled-state staging verification.
+checkout creation therefore remain disabled by default. The required merge,
+CI, legal approval, controlled enabled-state verification and safe rollback
+were subsequently completed for CART-023; permanent launch remains separately
+gated.
 
 ## Customer Snapshot Ownership
 

@@ -2,9 +2,9 @@
 
 ## Status
 
-Complete locally only. The fix has not been pushed, merged, deployed or
-verified on staging. Public commerce remains disabled and CART-023 remains
-open.
+Merged, CI verified, deployed and staging verified. The fix passed the renewed
+controlled open-state smoke and contributed to the remediation of CART-023.
+Public commerce remains disabled after rollback to `confirmation_only`.
 
 The current public staging state is `confirmation_only`:
 

@@ -1,10 +1,9 @@
 # Public Commerce Legal Approval Gate
 
-Commerce Phase 1E.2A is merged, CI verified, deployed and staging verified in
-the closed release state. Legal Content Finalization and Explicit Approval is
-complete locally only. It finalizes the Bulgarian legal documents and records
-project-owner approval of their exact source bytes; it does not activate legal
-approval or public commerce at runtime.
+Commerce Phase 1E.2A and Legal Content Finalization and Explicit Approval are
+merged, CI verified, deployed and staging verified. The final Bulgarian legal
+documents and project-owner approval of their exact source bytes passed the
+controlled runtime preflight. Public commerce was not permanently activated.
 
 ## Committed Legal Content
 
@@ -38,7 +37,7 @@ strict ISO dates, exact routes, source files, source hashes, approval metadata
 and approval audit record all agree. Editing a source file, version or date
 without updating the reviewed evidence invalidates the manifest.
 
-Operational approval remains separate:
+Committed defaults remain fail-closed:
 
 ```text
 LEGAL_CONTENT_APPROVED=false
@@ -53,6 +52,20 @@ PAYMENT_LEASING_ENABLED=false
 and `LEGAL_CONTENT_APPROVED=true`. Committed defaults therefore leave the
 preflight in `closed` state with only `legal_content_approved` blocked when
 other operational checks pass.
+
+For the controlled staging verification, runtime legal approval was set true,
+the preflight returned `ready_for_activation: true` with no blockers, and the
+open Checkout flow passed. Staging was then safely returned to:
+
+```text
+LEGAL_CONTENT_APPROVED=true
+PUBLIC_COMMERCE_ENABLED=false
+PUBLIC_COMMERCE_CONFIRMATION_ENABLED=true
+ABANDONED_CART_RECOVERY_ENABLED=false
+```
+
+These staging values do not change committed defaults or authorize permanent
+public activation.
 
 ## Consent Audit
 
@@ -75,10 +88,11 @@ The Filament Order form keeps legal acceptance read-only.
 
 ## Activation Boundary
 
-A later explicit operational step may set `LEGAL_CONTENT_APPROVED=true` only
-after merge, deployment and review of the committed hashes. Public commerce
-still requires a separate decision to enable both public-commerce flags.
+A future permanent launch still requires a separate explicit operational
+decision, a valid preflight and the fail-closed release procedure. Runtime
+legal approval alone never enables public commerce.
 
-CART-023, CART-021 and CART-025 remain open. This phase adds no migration and
-changes no Product, Supplier, `supplier_products`, Catalog Sync, payment,
-shipping or recovery behavior.
+CART-023 is remediated after controlled activation, COD Checkout, confirmation
+localization and safe rollback verification. CART-021 and CART-025 remain open.
+This phase adds no migration and changes no Product, Supplier,
+`supplier_products`, Catalog Sync, payment, shipping or recovery behavior.

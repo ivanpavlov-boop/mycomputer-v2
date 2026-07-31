@@ -686,10 +686,10 @@
       "title": "Public commerce pages are intentionally disabled at the routing edge",
       "severity": "info",
       "confidence": "confirmed",
-      "status": "open",
-      "local_remediation_status": "gate_merged_deployed_closed_state_verified",
-      "current_behavior": "Nginx, Nuxt and POST checkout share a strict four-state public-commerce gate. Committed defaults keep all commerce pages and new checkout creation closed; confirmation-only rollback preserves existing confirmation and authorized payment retry.",
-      "risk": "The deployed closed-state gate is not a public activation. CART-023 remains open until legal approval, explicit activation approval and enabled-state staging verification.",
+      "status": "remediated",
+      "local_remediation_status": "merged_deployed_staging_verified",
+      "current_behavior": "Nginx, Nuxt and POST checkout share a strict four-state public-commerce gate. Legal approval and release preflight passed, controlled open-state routing was verified, and one controlled cash-on-delivery Order completed successfully. Billing normalization, legal acceptance, idempotency, the confirmation capability and localized confirmation presentation were audited. Staging was safely returned to confirmation_only; committed defaults and current staging do not permanently open commerce.",
+      "risk": "Residual risk is operational: any future launch change must continue to use the fail-closed gate and requires a separate explicit release decision. Card, leasing and abandoned-Cart recovery remain separately disabled capabilities.",
       "evidence": [
         {
           "path": "deploy/nginx/mycomputer.conf.template",
@@ -708,8 +708,8 @@
           "symbol": "release state matrix"
         }
       ],
-      "verification": "Validate all four Nginx/Nuxt/backend states, deploy with flags false, verify disabled staging state, obtain explicit activation approval, then verify enabled staging routes.",
-      "recommendation": "Keep committed defaults false and use the documented preflight, activation and confirmation-only rollback procedures.",
+      "verification": "Verified the four-state Nginx/Nuxt/backend route matrices, successful release preflight, controlled open-state routes, one controlled cash-on-delivery Checkout, canonical Order and dedicated Customer snapshot, no duplicate Order, no payment attempt, legal acceptance, individual billing normalization, localized confirmation over HTTP 200, temporary capability deletion, and rollback to confirmation_only.",
+      "recommendation": "Keep committed defaults fail-closed, require separate explicit approval for any later public launch, and preserve the preflight, route gate, idempotency, legal and confirmation safeguards.",
       "target_phase": "Commerce Phase 1E.1",
       "acceptance_criteria": [
         "Commerce routes remain disabled before explicit release approval.",
@@ -1177,6 +1177,47 @@
         "New canonical Orders record server-owned legal acceptance timestamp, versions and locale inside the existing checkout transaction.",
         "No legal approval or public-commerce activation is claimed.",
         "CART-023, CART-021 and CART-025 remain open."
+      ]
+    },
+    {
+      "phase": "CART-023 Controlled Commerce Verification Closure",
+      "status": "merged_deployed_staging_verified",
+      "finding_ids": [
+        "CART-023"
+      ],
+      "partial_finding_ids": [],
+      "open_finding_ids": [
+        "CART-001",
+        "CART-002",
+        "CART-003",
+        "CART-004",
+        "CART-005",
+        "CART-006",
+        "CART-007",
+        "CART-009",
+        "CART-010",
+        "CART-011",
+        "CART-012",
+        "CART-013",
+        "CART-014",
+        "CART-015",
+        "CART-016",
+        "CART-017",
+        "CART-018",
+        "CART-019",
+        "CART-021",
+        "CART-024",
+        "CART-025",
+        "CART-026"
+      ],
+      "notes": [
+        "Controlled open-state route verification passed for Cart, checkout and checkout confirmation.",
+        "One controlled cash-on-delivery Order completed with canonical Order uniqueness, a dedicated Customer snapshot, one Order Item, idempotency, billing normalization and legal acceptance verified.",
+        "Localized confirmation verification passed over HTTP 200 without raw customer-facing machine values.",
+        "The temporary verification confirmation capability was deleted and final verification created no additional Order or Customer.",
+        "Staging was returned to confirmation_only; public commerce remains disabled.",
+        "Card, leasing and abandoned-Cart recovery remain disabled.",
+        "CART-023 is remediated after merged, deployed and controlled staging verification; this closure is not public launch authorization."
       ]
     }
   ]

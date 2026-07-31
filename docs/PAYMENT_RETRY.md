@@ -89,7 +89,9 @@ gateway phase must separately design network-call recovery, reconciliation,
 credentials, provider-specific idempotency and webhook verification. This
 local phase does not authorize a real card or leasing integration.
 
-CART-008 is remediated, deployed and staging verified. CART-023 remains open.
+CART-008 is remediated, deployed and staging verified. This payment-retry phase
+did not close CART-023; CART-023 was subsequently remediated through the
+separate controlled commerce verification. Card remains disabled.
 
 Commerce Phase 1D.3 adds a read-only server-authoritative customer presentation
 and explicit frontend actions. The presentation reuses this retry policy,

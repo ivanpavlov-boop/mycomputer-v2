@@ -35,7 +35,12 @@ and runtime/public-commerce activation remains a separate decision.
 3. Obtain separate explicit operational approval before setting
    `LEGAL_CONTENT_APPROVED=true`.
 4. Keep public commerce closed until its own separately approved release step.
-5. Keep CART-023 open until that operational release is complete.
+5. Record controlled enabled-state verification and safe rollback before
+   remediating CART-023.
+
+These steps were completed for the controlled staging verification and
+CART-023 is remediated. Staging is `confirmation_only`; permanent public
+activation still requires a separate explicit release decision.
 
 Project-owner approval is not legal advice, lawyer certification or regulatory
 approval. Never place placeholder personal data, bank details, secrets or

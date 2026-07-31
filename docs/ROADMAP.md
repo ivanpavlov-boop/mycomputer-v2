@@ -99,20 +99,29 @@ Manual selected UPDATE price/stock sync is implemented behind `CATALOG_SYNC_UPDA
   remain unchanged; replay reuses the existing snapshot and rollback removes
   an uncommitted snapshot. CART-020 is remediated.
 - Commerce Phase 1E.1 Controlled Public Commerce Enablement and CART-023
-  Release Gate is merged, MySQL CI verified, deployed with flags false and
-  disabled-state staging verified. Nginx, Nuxt and POST checkout share strict
+  Release Gate is merged, MySQL CI verified, deployed and controlled-open
+  staging verified. Nginx, Nuxt and POST checkout share strict
   closed, confirmation-only, open and invalid states. Recovery, English
   commerce, account/auth, card and leasing remain disabled. CART-022 is
-  remediated, merged and deployed. CART-023 remains open until legal approval,
-  explicit activation approval and enabled-state staging verification.
-- Public Commerce SSR Cart API Base URL Fix is complete locally only. The first
+  remediated, merged and deployed. CART-023 is remediated after successful
+  legal preflight, one controlled COD Checkout, localized confirmation and
+  safe rollback to `confirmation_only`. Permanent activation remains a future
+  separately approved milestone.
+- Public Commerce SSR Cart API Base URL Fix is merged, CI verified, deployed
+  and staging verified. The first
   controlled staging `open` smoke exposed `/cart` and `/checkout` HTTP 500
   responses because the Cart API used the browser-relative public base during
   SSR. Staging was immediately rolled back to `confirmation_only` with no
   Order, Customer or payment attempt created. The local fix separates private
-  SSR and public browser API bases; public commerce remains disabled and
-  CART-023 remains open pending merge, deployment and renewed staging
-  activation.
+  SSR and public browser API bases; the later controlled verification passed
+  and public commerce remains disabled after rollback.
+- CART-023 Controlled Commerce Verification Closure is complete. The release
+  preflight returned ready with no blockers, controlled `/cart`, `/checkout`
+  and `/checkout/success` routing passed, one canonical COD Order and dedicated
+  Customer snapshot were audited, confirmation localization passed, and the
+  temporary verification capability was deleted. Staging is
+  `confirmation_only`; this is technical readiness for a later explicit launch,
+  not launch authorization.
 - Commerce Leasing Phase A Manual Leasing Application Module is merged,
   MySQL CI verified, deployed and staging schema/safety verified.
   Leasing remains default-disabled; the implementation records
@@ -756,24 +765,29 @@ their locale switch. No public route, account/auth flow or commerce capability
 was enabled. See
 [Pre-Launch Storefront Navigation](PRE_LAUNCH_STOREFRONT_NAVIGATION.md).
 
-Runtime `LEGAL_CONTENT_APPROVED` and public commerce remain disabled, so
-CART-023 remains open; CART-021 and CART-025 also remain open.
+Runtime legal approval passed for the controlled staging verification. Public
+commerce was then disabled and staging returned to `confirmation_only`.
+CART-023 is remediated; CART-021 and CART-025 remain open. Permanent public
+activation remains a separate roadmap milestone.
 
-Checkout Individual And Company Billing Fix is complete locally only. It
+Checkout Individual And Company Billing Fix is merged, CI verified, deployed
+and staging verified. It
 separates the default individual flow from explicit company invoicing,
 normalizes individual billing snapshots from shipping data, and rejects
-incomplete company billing server-side. The controlled staging attempt created
-no Order and staging was returned to `confirmation_only`. Public commerce
-remains disabled, deployment and staging verification remain pending, and
-`CART-023` remains open. See
+incomplete company billing server-side. The later controlled COD Checkout
+verified null individual company fields and matching billing/shipping
+snapshots. Public commerce remains disabled after rollback to
+`confirmation_only`. See
 [Checkout Individual And Company Billing Fix](CHECKOUT_INDIVIDUAL_COMPANY_BILLING_FIX.md).
 
-Checkout Confirmation Bulgarian Status Presentation Fix is complete locally
-only. It removes raw Order/payment status presentation from the confirmation
+Checkout Confirmation Bulgarian Status Presentation Fix is merged, CI
+verified, deployed and staging verified. It removes raw Order/payment status
+presentation from the confirmation
 summary, adds deterministic Bulgarian Order-status and payment-method labels,
 and preserves the existing payment action panel as the payment-state authority.
 Internal API values and all Checkout behavior remain unchanged. The controlled
-staging COD Order succeeded and was audited, staging was returned to
-`confirmation_only`, public commerce remains disabled, and `CART-023` remains
-open pending merge, deployment and final confirmation-page verification. See
+staging COD Order succeeded and was audited; final HTTP 200 verification found
+the required Bulgarian labels and no raw machine values. The temporary
+capability was deleted, staging was returned to `confirmation_only`, public
+commerce remains disabled, and `CART-023` is remediated. See
 [Checkout Confirmation Localization Fix](CHECKOUT_CONFIRMATION_LOCALIZATION_FIX.md).
