@@ -9,7 +9,7 @@ const source = (path: string) => readFileSync(resolve(frontendRoot, path), 'utf8
 describe('Cart notifications', () => {
   it('uses Bulgarian loading, retry, success, and readiness copy', () => {
     const production = [
-      source('app/pages/cart.vue'),
+      source('app/pages/cart/index.vue'),
       source('app/components/cart/CartDrawer.vue'),
       source('app/components/cart/CartItem.vue'),
       source('app/components/bundles/BundlePriceBox.vue'),

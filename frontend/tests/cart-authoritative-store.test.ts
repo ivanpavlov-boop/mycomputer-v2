@@ -62,7 +62,7 @@ describe('authoritative Cart store', () => {
     const combined = [
       source('app/components/cart/CartDrawer.vue'),
       source('app/components/cart/CartItem.vue'),
-      source('app/pages/cart.vue'),
+      source('app/pages/cart/index.vue'),
       source('app/pages/checkout/index.vue'),
     ].join('\n')
 

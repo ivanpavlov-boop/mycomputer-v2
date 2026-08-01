@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { resolveCommerceReleaseState } from '../app/composables/useCommerceReleaseGate'
@@ -78,11 +78,11 @@ describe('controlled public commerce release gate', () => {
   it('gates cart, checkout, confirmation, English commerce, and recovery routes', () => {
     const entry = source('app/middleware/commerce-entry.ts')
     const confirmation = source('app/middleware/commerce-confirmation.ts')
-    const recovery = source('app/middleware/cart-recovery-disabled.ts')
-    const cart = source('app/pages/cart.vue')
+    const recovery = source('app/middleware/cart-recovery.ts')
+    const cart = source('app/pages/cart/index.vue')
     const checkout = source('app/pages/checkout/index.vue')
     const success = source('app/pages/checkout/success.vue')
-    const recoveryPage = source('app/pages/cart/recover/[token].vue')
+    const recoveryPage = source('app/pages/cart/recover/index.vue')
 
     expect(entry).toContain('!canStartCheckout.value')
     expect(entry).toContain("to.path === '/en/cart'")
@@ -90,11 +90,15 @@ describe('controlled public commerce release gate', () => {
     expect(entry).toContain('statusCode: 404')
     expect(confirmation).toContain('!canShowConfirmation.value')
     expect(confirmation).toContain("to.path === '/en/checkout/success'")
+    expect(recovery).toContain("to.path !== '/cart/recover'")
+    expect(recovery).toContain('!recoveryEnabled')
+    expect(recovery).toContain('!canStartCheckout.value')
     expect(recovery).toContain('statusCode: 404')
     expect(cart).toContain("middleware: 'commerce-entry'")
     expect(checkout).toContain("middleware: 'commerce-entry'")
     expect(success).toContain("middleware: 'commerce-confirmation'")
-    expect(recoveryPage).toContain("middleware: 'cart-recovery-disabled'")
+    expect(recoveryPage).toContain("middleware: 'cart-recovery'")
+    expect(existsSync(resolve(frontendRoot, 'app/pages/cart.vue'))).toBe(false)
   })
 
   it('keeps all visible cart writers behind canStartCheckout', () => {
@@ -104,7 +108,7 @@ describe('controlled public commerce release gate', () => {
     const product = source('app/pages/p/[slug].vue')
     const bundle = source('app/components/bundles/BundlePriceBox.vue')
     const builder = source('app/pages/pc-builder/build/[id].vue')
-    const cart = source('app/pages/cart.vue')
+    const cart = source('app/pages/cart/index.vue')
 
     expect(header).toContain('ClientOnly v-if="canStartCheckout"')
     expect(header).not.toContain('to="/compare"')
@@ -132,6 +136,7 @@ describe('controlled public commerce release gate', () => {
 
     expect(nginx).toContain('set $public_commerce_enabled "${PUBLIC_COMMERCE_ENABLED}";')
     expect(nginx).toContain('set $public_commerce_confirmation_enabled "${PUBLIC_COMMERCE_CONFIRMATION_ENABLED}";')
+    expect(nginx).toContain('set $abandoned_cart_recovery_enabled "${ABANDONED_CART_RECOVERY_ENABLED}";')
     expect(nginx).toContain('set $legal_content_approved "${LEGAL_CONTENT_APPROVED}";')
     expect(nginx).toContain('location = /obshti-usloviya {')
     expect(nginx).toContain('location = /politika-za-poveritelnost {')
@@ -142,6 +147,7 @@ describe('controlled public commerce release gate', () => {
     expect(nginx).toContain('location = /cart {')
     expect(nginx).toContain('location = /checkout {')
     expect(nginx).toContain('location = /checkout/success {')
+    expect(nginx).toContain('location = /cart/recover {')
     expect(nginx).toContain('location ^~ /cart/ { return 404; }')
     expect(nginx).toContain('location ^~ /checkout/ { return 404; }')
     expect(nginx).toContain('location = /en/cart { return 404; }')
@@ -154,21 +160,23 @@ describe('controlled public commerce release gate', () => {
     expect(nginx).toContain('return 308 /cart$is_args$args;')
     expect(nginx).toContain('return 308 /checkout$is_args$args;')
     expect(nginx).toContain('return 308 /checkout/success$is_args$args;')
-    expect(compose).toContain("NGINX_ENVSUBST_FILTER: '^(PUBLIC_COMMERCE_ENABLED|PUBLIC_COMMERCE_CONFIRMATION_ENABLED|LEGAL_CONTENT_APPROVED)$'")
+    expect(compose).toContain("NGINX_ENVSUBST_FILTER: '^(PUBLIC_COMMERCE_ENABLED|PUBLIC_COMMERCE_CONFIRMATION_ENABLED|ABANDONED_CART_RECOVERY_ENABLED|LEGAL_CONTENT_APPROVED)$'")
     expect(compose).toContain('NUXT_PUBLIC_COMMERCE_ENABLED: ${PUBLIC_COMMERCE_ENABLED:-false}')
     expect(compose).toContain('NUXT_PUBLIC_COMMERCE_CONFIRMATION_ENABLED: ${PUBLIC_COMMERCE_CONFIRMATION_ENABLED:-false}')
+    expect(compose).toContain('NUXT_PUBLIC_ABANDONED_CART_RECOVERY_ENABLED: ${ABANDONED_CART_RECOVERY_ENABLED:-false}')
     expect(compose).toContain('NUXT_PUBLIC_LEGAL_CONTENT_APPROVED: ${LEGAL_CONTENT_APPROVED:-false}')
-    expect(validator).toContain('validate_state closed false false false 404 404 404')
-    expect(validator).toContain('validate_state confirmation-only false true false 404 404 200')
-    expect(validator).toContain('validate_state open true true true 200 200 200')
-    expect(validator).toContain('validate_state legal-unapproved true true false 404 404 200')
-    expect(validator).toContain('validate_state invalid true false true 404 404 404')
+    expect(validator).toContain('validate_state closed false false false false 404 404 404 404')
+    expect(validator).toContain('validate_state confirmation-only false true false false 404 404 200 404')
+    expect(validator).toContain('validate_state open true true true false 200 200 200 404')
+    expect(validator).toContain('validate_state open-recovery true true true true 200 200 200 200')
+    expect(validator).toContain('validate_state legal-unapproved true true false true 404 404 200 404')
+    expect(validator).toContain('validate_state invalid-recovery true true true yes 200 200 200 404')
     expect(validator).toContain('docker exec "$active_container" nginx -T')
   })
 
   it('keeps commerce pages private and non-indexable', () => {
     for (const path of [
-      'app/pages/cart.vue',
+      'app/pages/cart/index.vue',
       'app/pages/checkout/index.vue',
       'app/pages/checkout/success.vue',
     ]) {

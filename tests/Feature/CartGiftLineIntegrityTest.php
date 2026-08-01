@@ -9,6 +9,7 @@ use App\Models\Product;
 use App\Models\Promotion;
 use App\Models\User;
 use App\Services\Cart\CartLifecycleService;
+use App\Services\CartRecovery\CartRecoveryCapabilityService;
 use App\Services\Email\EmailMarketingService;
 use App\Services\Promotions\PromotionEngineService;
 use Carbon\CarbonImmutable;
@@ -252,9 +253,10 @@ class CartGiftLineIntegrityTest extends TestCase
         $promotion = $this->sameProductGiftPromotion($product);
         app(PromotionEngineService::class)->applyAutomaticGifts($cart);
         $record = app(EmailMarketingService::class)->recordAbandonedCart($cart->fresh());
+        $capability = app(CartRecoveryCapabilityService::class)->issue($record)->value();
 
-        $restored = app(EmailMarketingService::class)->restoreCartFromToken(
-            $record->recovery_token,
+        $restored = app(EmailMarketingService::class)->restoreCartFromCapability(
+            $capability,
             $this->cartSession('restored-paid-gift'),
         );
 

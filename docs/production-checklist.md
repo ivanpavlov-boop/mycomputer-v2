@@ -13,7 +13,11 @@
 - Run `php artisan search:reindex`.
 - Configure Supervisor or Horizon for `default,emails,loyalty,imports,exports,sync,analytics,search`.
 - Verify abandoned cart scheduler commands: `php artisan carts:detect-abandoned` and `php artisan carts:process-abandoned`.
-- Set `ABANDONED_CART_THRESHOLD_MINUTES`, `ABANDONED_CART_RECOVERY_TOKEN_DAYS`, `FRONTEND_URL` and `SUPPORT_CONTACT_EMAIL`.
+- Keep `ABANDONED_CART_RECOVERY_ENABLED=false` unless a separately approved
+  controlled release explicitly enables it. Set
+  `ABANDONED_CART_THRESHOLD_MINUTES`,
+  `ABANDONED_CART_RECOVERY_CAPABILITY_DAYS`, `FRONTEND_URL` and
+  `SUPPORT_CONTACT_EMAIL` before that release.
 - Configure daily feed generation and verify `/feeds/google-merchant.xml`.
 - Configure backups and perform a restore drill.
 - Configure Sentry or equivalent exception monitoring.
@@ -91,7 +95,8 @@ php artisan queue:restart
 - Checkout success
 - Feed XML validity
 - Abandoned cart detection command
-- Abandoned cart recovery token restore
+- Abandoned-Cart hash-only capability restore, one-time consumption, neutral
+  failure response, and legacy-path rejection
 - Abandoned cart email queue processing
 - B2B company application and admin approval
 - Quote request creation from account, product and cart

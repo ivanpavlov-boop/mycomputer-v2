@@ -375,8 +375,8 @@ export const useCartStore = defineStore('cart', () => {
     return accepted?.cart ?? null
   }
 
-  async function recover(token: string) {
-    const accepted = await runMutation('recover', () => useCartApi().recover(token))
+  async function recover(capability: string) {
+    const accepted = await runMutation('recover', () => useCartApi().recover(capability))
 
     return accepted?.cart ?? null
   }

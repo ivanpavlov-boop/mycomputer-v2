@@ -59,7 +59,7 @@ describe('Cart readiness UI', () => {
   })
 
   it('renders an actionable Cart summary and keeps invalid paid lines removable', () => {
-    const page = source('app/pages/cart.vue')
+    const page = source('app/pages/cart/index.vue')
     const item = source('app/components/cart/CartItem.vue')
     const bundle = source('app/components/cart/CartBundleItem.vue')
 

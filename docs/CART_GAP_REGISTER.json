@@ -133,7 +133,7 @@
           "symbol": "useCartStore"
         },
         {
-          "path": "frontend/app/pages/cart.vue",
+          "path": "frontend/app/pages/cart/index.vue",
           "symbol": "template"
         }
       ],
@@ -530,7 +530,7 @@
       "risk": "Customers can repeat actions, navigate to an invalid checkout, or see misleading totals and blank fallback components.",
       "evidence": [
         {
-          "path": "frontend/app/pages/cart.vue",
+          "path": "frontend/app/pages/cart/index.vue",
           "symbol": "template"
         },
         {
@@ -622,25 +622,30 @@
       "severity": "medium",
       "confidence": "confirmed",
       "status": "open",
-      "current_behavior": "A high-entropy recovery value is stored directly in abandoned_cart_records and used in a frontend route path.",
-      "risk": "Database readers, browser history, reverse-proxy logs or referrer handling can expose a reusable cart-recovery capability.",
+      "local_remediation_status": "remediated_locally",
+      "current_behavior": "Commerce Recovery Phase A stores only a unique SHA-256 capability hash, invalidates legacy plaintext values, sends the raw 43-character capability only in an email URL fragment, removes it before browser network work, accepts it only in a clean POST body, and consumes it once. Recovery remains disabled by default.",
+      "risk": "Formal remediation still requires PR review, CI, merge, deployment, migration verification and controlled staging security verification. CART-025 recovery fidelity remains separately open.",
       "evidence": [
         {
-          "path": "app/Services/Email/EmailMarketingService.php",
-          "symbol": "recordAbandonedCart"
+          "path": "app/Services/CartRecovery/CartRecoveryCapabilityService.php",
+          "symbol": "issue, resolveForRestore and revoke"
         },
         {
-          "path": "database/migrations/2026_06_09_000000_create_email_marketing_tables.php",
+          "path": "database/migrations/2026_08_01_090000_replace_plaintext_abandoned_cart_recovery_token_with_hash.php",
           "symbol": "up"
         },
         {
-          "path": "frontend/app/pages/cart/recover/[token].vue",
-          "symbol": "route token"
+          "path": "frontend/app/pages/cart/recover/index.vue",
+          "symbol": "fragment-only recovery page"
+        },
+        {
+          "path": "tests/Feature/CartRecoveryCapabilitySecurityTest.php",
+          "symbol": "capability and leakage regression matrix"
         }
       ],
-      "verification": "Inspect persisted recovery records and sanitized request-log configuration, then test whether navigation emits a referrer containing the capability.",
-      "recommendation": "Store a hash, consume the capability once and minimize propagation through logs, metadata and referrers.",
-      "target_phase": "Commerce Phase 1B",
+      "verification": "Run capability, migration, leakage, API, browser and MySQL concurrency suites; then verify the migration and clean-route security contract in a controlled disabled-by-default staging release.",
+      "recommendation": "Preserve the hash-only, fragment-only, body-only, one-time and neutral-failure contract through release verification.",
+      "target_phase": "Commerce Recovery Phase A",
       "acceptance_criteria": [
         "A database leak does not disclose usable recovery capabilities.",
         "Recovery capability reuse is prevented.",
@@ -696,7 +701,7 @@
           "symbol": "exact environment-rendered commerce locations"
         },
         {
-          "path": "frontend/app/pages/cart.vue",
+          "path": "frontend/app/pages/cart/index.vue",
           "symbol": "page"
         },
         {
@@ -766,7 +771,7 @@
         },
         {
           "path": "app/Services/Email/EmailMarketingService.php",
-          "symbol": "restoreAbandonedCart"
+          "symbol": "restoreCartFromCapability"
         }
       ],
       "verification": "Create bundle-only and mixed carts with coupon and gift state, run detection, inspect snapshots, and restore into a fresh session.",
@@ -1177,6 +1182,28 @@
         "New canonical Orders record server-owned legal acceptance timestamp, versions and locale inside the existing checkout transaction.",
         "No legal approval or public-commerce activation is claimed.",
         "CART-023, CART-021 and CART-025 remain open."
+      ]
+    },
+    {
+      "phase": "Commerce Recovery Phase A - Recovery Capability Security",
+      "status": "complete_locally_only",
+      "finding_ids": [],
+      "partial_finding_ids": [
+        "CART-021"
+      ],
+      "open_finding_ids": [
+        "CART-021",
+        "CART-025"
+      ],
+      "notes": [
+        "The plaintext recovery_token column is removed and every legacy capability is invalidated rather than preserved.",
+        "New reminders rotate a 256-bit capability, persist only its SHA-256 hash and send the raw value only in an in-memory fragment URL.",
+        "The browser removes the fragment before a body-only clean API request; old token paths and all English recovery routes remain unavailable.",
+        "Successful restore consumes the hash atomically and unavailable states share one neutral no-store response.",
+        "Sensitive abandoned-Cart HTML and data are excluded from EmailLog, provider logs, queue payloads and events.",
+        "Recovery, public commerce, card and leasing remain disabled by default.",
+        "CART-021 remains formally open pending PR, CI, merge, deployment, migration verification and controlled staging security verification.",
+        "CART-025 remains open; bundle, coupon and gift snapshot fidelity was not redesigned."
       ]
     },
     {

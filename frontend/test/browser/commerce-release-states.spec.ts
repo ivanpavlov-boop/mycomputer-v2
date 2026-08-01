@@ -37,6 +37,7 @@ test('closed mode returns real 404 responses and exposes no Cart entry', async (
     '/cart',
     '/checkout',
     '/checkout/success',
+    '/cart/recover',
     '/cart/recover/historical-token',
     '/en/cart',
     '/en/checkout',
@@ -60,6 +61,7 @@ test('confirmation-only mode preserves missing and valid confirmation behavior',
 
   expect((await page.goto('/cart'))?.status()).toBe(404)
   expect((await page.goto('/checkout'))?.status()).toBe(404)
+  expect((await page.goto('/cart/recover'))?.status()).toBe(404)
   expect((await page.goto('/en/checkout/success'))?.status()).toBe(404)
 
   const missing = await page.goto('/checkout/success')

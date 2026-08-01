@@ -19,10 +19,12 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Laravel\Sanctum\Sanctum;
 use Spatie\Permission\PermissionRegistrar;
+use Tests\Concerns\InteractsWithCartRecoveryCapabilities;
 use Tests\TestCase;
 
 class AbandonedCartRecoveryTest extends TestCase
 {
+    use InteractsWithCartRecoveryCapabilities;
     use RefreshDatabase;
 
     protected Product $product;
@@ -53,7 +55,9 @@ class AbandonedCartRecoveryTest extends TestCase
             'items_count' => 1,
             'status' => 'pending',
         ]);
-        $this->assertNotNull(AbandonedCartRecord::query()->firstOrFail()->recovery_token);
+        $record = AbandonedCartRecord::query()->firstOrFail();
+        $this->assertNull($record->recovery_capability_hash);
+        $this->assertNull($record->recovery_capability_expires_at);
     }
 
     public function test_authenticated_cart_becomes_abandoned_after_inactivity(): void
@@ -126,41 +130,54 @@ class AbandonedCartRecoveryTest extends TestCase
         $this->assertSame('suppressed', AbandonedCartRecord::query()->firstOrFail()->status);
     }
 
-    public function test_recovery_token_restores_cart(): void
+    public function test_recovery_capability_restores_cart(): void
     {
         $this->staleCart('recover-cart', 'recover@example.com');
         app(EmailMarketingService::class)->detectAbandonedCarts();
         $record = AbandonedCartRecord::query()->firstOrFail();
+        $capability = $this->issueRecoveryCapability($record);
 
         Cart::query()->where('session_id', 'recover-cart')->firstOrFail()->items()->delete();
 
-        $response = $this->postJson("/api/v1/cart/recover/{$record->recovery_token}")
+        $response = $this->postJson('/api/v1/cart/recover', $this->recoveryRequest($capability))
             ->assertOk()
+            ->assertHeader('Cache-Control', 'max-age=0, no-store, private')
+            ->assertHeader('Pragma', 'no-cache')
             ->assertJsonPath('data.items_count', 1);
 
         $this->assertNotSame('recover-cart', $response->json('data.cart_session_id'));
         $this->assertSame('restored', $record->fresh()->status);
     }
 
-    public function test_expired_recovery_token_fails(): void
+    public function test_expired_recovery_capability_fails_neutrally(): void
     {
         $this->staleCart('expired-cart', 'expired@example.com');
         app(EmailMarketingService::class)->detectAbandonedCarts();
         $record = AbandonedCartRecord::query()->firstOrFail();
-        $record->update(['recovery_token_expires_at' => now()->subMinute()]);
+        $capability = $this->issueRecoveryCapability($record);
+        $record->forceFill(['recovery_capability_expires_at' => now()->subMinute()])->save();
 
-        $this->postJson("/api/v1/cart/recover/{$record->recovery_token}")
-            ->assertUnprocessable()
-            ->assertJsonPath('error.code', 'cart_recovery_invalid')
-            ->assertJsonPath('error.message', 'Recovery link has expired or is invalid.');
+        $this->postJson('/api/v1/cart/recover', $this->recoveryRequest($capability))
+            ->assertNotFound()
+            ->assertHeader('Cache-Control', 'max-age=0, no-store, private')
+            ->assertHeader('Pragma', 'no-cache')
+            ->assertJsonPath('error.code', 'cart_recovery_unavailable')
+            ->assertJsonPath('error.message', 'Recovery link is unavailable.');
+
+        $this->assertNull($record->fresh()->recovery_capability_hash);
+        $this->assertNull($record->fresh()->recovery_capability_expires_at);
+        $this->assertSame('pending', $record->fresh()->status);
+
+        $this->assertNotNull(app(EmailMarketingService::class)->processAbandonedCart($record->fresh()));
+        $this->assertNotNull($record->fresh()->recovery_capability_hash);
     }
 
-    public function test_invalid_recovery_token_fails(): void
+    public function test_invalid_recovery_capability_fails_neutrally(): void
     {
-        $this->postJson('/api/v1/cart/recover/not-a-real-token')
-            ->assertUnprocessable()
-            ->assertJsonPath('error.code', 'cart_recovery_invalid')
-            ->assertJsonPath('error.message', 'Recovery link has expired or is invalid.');
+        $this->postJson('/api/v1/cart/recover', $this->recoveryRequest('not-a-real-capability'))
+            ->assertNotFound()
+            ->assertJsonPath('error.code', 'cart_recovery_unavailable')
+            ->assertJsonPath('error.message', 'Recovery link is unavailable.');
     }
 
     public function test_no_email_is_sent_after_recovery(): void
@@ -180,8 +197,9 @@ class AbandonedCartRecoveryTest extends TestCase
         $this->staleCart($this->cartSession('checkout-recover-cart'), 'recover-checkout@example.com');
         app(EmailMarketingService::class)->detectAbandonedCarts();
         $record = AbandonedCartRecord::query()->firstOrFail();
+        $capability = $this->issueRecoveryCapability($record);
 
-        $recoverySession = $this->postJson("/api/v1/cart/recover/{$record->recovery_token}")
+        $recoverySession = $this->postJson('/api/v1/cart/recover', $this->recoveryRequest($capability))
             ->assertOk()
             ->json('data.cart_session_id');
 

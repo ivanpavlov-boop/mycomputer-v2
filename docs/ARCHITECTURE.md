@@ -1866,7 +1866,8 @@ php artisan carts:detect-abandoned
 php artisan carts:process-abandoned
 ```
 
-Both commands are scheduled every 15 minutes in `routes/console.php`.
+The commands and their schedule remain fail-closed while
+`ABANDONED_CART_RECOVERY_ENABLED=false`.
 
 Recovery flow:
 
@@ -1876,15 +1877,17 @@ sequenceDiagram
     participant Scheduler as "Scheduler"
     participant Record as "abandoned_cart_records"
     participant Email as "Email Queue"
-    participant Frontend as "Nuxt /cart/recover/{token}"
+    participant Frontend as "Nuxt /cart/recover#capability"
     participant Checkout as "Checkout"
 
     Scheduler->>Cart: detect inactive carts
-    Scheduler->>Record: create/update snapshot and recovery token
+    Scheduler->>Record: create/update snapshot without a capability
     Scheduler->>Record: find due reminders
-    Scheduler->>Email: queue/send recovery email
+    Scheduler->>Record: rotate and store SHA-256 capability hash
+    Scheduler->>Email: send fragment-only link in memory
     Email->>Frontend: recovery link
-    Frontend->>Record: POST /api/v1/cart/recover/{token}
+    Frontend->>Frontend: remove fragment before network work
+    Frontend->>Record: POST /api/v1/cart/recover with JSON body
     Record->>Cart: restore product snapshot
     Checkout->>Record: mark recovered with order and revenue
 ```
@@ -1897,12 +1900,24 @@ Email sequence timing:
 
 Timing is read from enabled `EmailAutomation` rows when configured. If not configured, sane defaults from `config/email-marketing.php` are used.
 
-Recovery token rules:
+Recovery capability rules:
 
-- Tokens are random and unique.
-- Tokens expire after `ABANDONED_CART_RECOVERY_TOKEN_DAYS`, default 14 days.
-- Tokens restore cart contents without exposing cart IDs.
-- Expired, suppressed and recovered records cannot be restored.
+- Capabilities are 32 random bytes encoded as exactly 43 unpadded Base64URL
+  characters.
+- Only a unique lowercase SHA-256 hash and bounded expiry are persisted.
+- Detection creates no capability; each reminder rotates it immediately before
+  sending, and a definitive provider failure revokes it.
+- Links use `/cart/recover#<capability>`. The browser removes the fragment
+  synchronously and sends the capability only in the clean API JSON body.
+- Successful restore consumes the capability atomically with the existing
+  restored audit. Expired, suppressed, restored and recovered records retain
+  no active hash.
+- Every unavailable or ownership-invalid state returns one neutral no-store
+  404 response.
+- Sensitive reminder HTML and data are excluded from EmailLog and application
+  provider logs.
+
+See [Abandoned Cart Recovery Capability Security](ABANDONED_CART_RECOVERY_CAPABILITY_SECURITY.md).
 
 Admin workflow:
 

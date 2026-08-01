@@ -23,6 +23,7 @@ use App\Exceptions\PaymentProviderIndeterminateException;
 use App\Exceptions\PaymentRetryNotAllowedException;
 use App\Exceptions\PaymentRetryUnavailableException;
 use App\Http\Middleware\ResolveApiLocale;
+use App\Support\Api\CartRecoveryResponse;
 use App\Support\Api\ErrorResponse;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Auth\AuthenticationException;
@@ -122,20 +123,20 @@ return Application::configure(basePath: dirname(__DIR__))
                 return ErrorResponse::make('cart_promotion_changed', $exception->getMessage(), 409);
             }
 
-            if ($exception instanceof CartRecoveryConsumedException) {
-                return ErrorResponse::make('cart_recovery_consumed', $exception->getMessage(), 409);
+            if (
+                $exception instanceof CartRecoveryConsumedException
+                || $exception instanceof CartRecoveryInvalidException
+                || $exception instanceof CartRecoveryForbiddenException
+                || $exception instanceof CartRecoveryRequiresReviewException
+            ) {
+                return CartRecoveryResponse::unavailable();
             }
 
-            if ($exception instanceof CartRecoveryInvalidException) {
-                return ErrorResponse::make('cart_recovery_invalid', $exception->getMessage(), 422);
-            }
-
-            if ($exception instanceof CartRecoveryForbiddenException) {
-                return ErrorResponse::make('cart_recovery_forbidden', $exception->getMessage(), 403);
-            }
-
-            if ($exception instanceof CartRecoveryRequiresReviewException) {
-                return ErrorResponse::make('cart_recovery_requires_review', $exception->getMessage(), 409);
+            if (
+                $request->is('api/v1/cart/recover/*')
+                && $exception instanceof HttpExceptionInterface
+            ) {
+                return CartRecoveryResponse::unavailable();
             }
 
             if ($exception instanceof CheckoutIdempotencyKeyInvalidException) {

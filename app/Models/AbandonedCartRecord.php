@@ -26,8 +26,7 @@ class AbandonedCartRecord extends Model
         'cart_total',
         'items_count',
         'last_cart_activity_at',
-        'recovery_token',
-        'recovery_token_expires_at',
+        'recovery_capability_expires_at',
         'status',
         'last_email_sent_at',
         'first_email_sent_at',
@@ -41,13 +40,17 @@ class AbandonedCartRecord extends Model
         'recovered_revenue',
     ];
 
+    protected $hidden = [
+        'recovery_capability_hash',
+    ];
+
     protected function casts(): array
     {
         return [
             'cart_snapshot' => 'array',
             'cart_total' => 'decimal:2',
             'last_cart_activity_at' => 'datetime',
-            'recovery_token_expires_at' => 'datetime',
+            'recovery_capability_expires_at' => 'immutable_datetime',
             'last_email_sent_at' => 'datetime',
             'first_email_sent_at' => 'datetime',
             'second_email_sent_at' => 'datetime',
@@ -71,14 +74,5 @@ class AbandonedCartRecord extends Model
     public function restoredCart(): BelongsTo
     {
         return $this->belongsTo(Cart::class, 'restored_cart_id');
-    }
-
-    public function recoveryUrl(): string
-    {
-        return str_replace(
-            '{token}',
-            (string) $this->recovery_token,
-            (string) config('email-marketing.abandoned_cart.frontend_recovery_url'),
-        );
     }
 }

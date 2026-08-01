@@ -243,9 +243,9 @@ Route::prefix('v1')->group(function (): void {
 
     Route::get('cart', [CartController::class, 'show']);
     Route::post('cart/email', [CartController::class, 'email'])->middleware('throttle:newsletter');
-    Route::post('cart/recover/{token}', [CartController::class, 'recover'])->middleware([
+    Route::post('cart/recover', [CartController::class, 'recover'])->middleware([
         EnsureAbandonedCartRecoveryEnabled::class,
-        'throttle:newsletter',
+        'throttle:cart-recovery',
     ]);
     Route::post('cart/coupon', [CartController::class, 'applyCoupon'])->middleware('throttle:coupon');
     Route::delete('cart/coupon', [CartController::class, 'removeCoupon'])->middleware('throttle:coupon');

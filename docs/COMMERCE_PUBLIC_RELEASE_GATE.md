@@ -45,10 +45,12 @@ commerce flags, preserving Nginx variables such as `$host`, `$uri`,
 `$query_string`, `$remote_addr`, `$scheme`, and `$realpath_root`.
 
 Only exact Bulgarian `/cart`, `/checkout`, and `/checkout/success` locations
-can open. Trailing slashes redirect with 308. Broad Cart/checkout subpaths,
-`/cart/recover/*`, English commerce, account/auth, wishlist, and compare remain
-blocked. Nuxt applies the same four-state rules as defence in depth and does
-not persist or send the release state to analytics.
+can open. Exact `/cart/recover` additionally requires the recovery flag; its
+default remains false. Trailing slashes redirect with 308. Broad
+Cart/checkout subpaths, old `/cart/recover/*` token paths, English commerce,
+account/auth, wishlist, and compare remain blocked. Nuxt applies the same
+fail-closed rules as defence in depth and does not persist or send the release
+state to analytics.
 
 ## Storefront Entry Points
 
@@ -67,8 +69,14 @@ headers.
 
 Abandoned-Cart recovery remains default-disabled. Scheduled commands are not
 registered while disabled; direct command, job, and service invocation performs
-no recovery write or email. Existing records and historical tokens are not
-changed. CART-021 and CART-025 remain open.
+no recovery write or email. Commerce Recovery Phase A removes plaintext
+capability storage locally, invalidates legacy values, uses hash-only one-time
+capabilities and fragment-only links, and prevents sensitive EmailLog/provider
+logging. The clean page and body-only API remain behind both the recovery flag
+and open public-commerce authority. `CART-021` remains formally open with local
+remediation pending PR, CI, merge, deployment, migration verification and
+controlled staging security verification. `CART-025` remains open. See
+[Abandoned Cart Recovery Capability Security](ABANDONED_CART_RECOVERY_CAPABILITY_SECURITY.md).
 
 Shipping calculation already resolves Cart authority through
 `CartContextResolver`. Regression coverage confirms guest and authenticated

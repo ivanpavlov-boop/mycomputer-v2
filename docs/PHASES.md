@@ -1,5 +1,30 @@
 # Catalog Sync Phases
 
+## Commerce Recovery Phase A - Recovery Capability Security
+
+Status: complete locally only; `CART-021` remains formally open pending PR,
+CI, merge, deployment, migration verification and controlled staging security
+verification.
+
+This phase removes the plaintext abandoned-Cart recovery token column and
+invalidates every legacy capability. Detection stores no capability. Reminder
+sending rotates an exact 256-bit Base64URL capability, persists only its unique
+SHA-256 hash, and keeps the fragment-only email URL in provider memory. A
+definitive send failure revokes the new hash.
+
+The storefront now uses clean `/cart/recover`, removes the fragment before any
+network work, and submits the capability only in the JSON body of clean
+`POST /api/v1/cart/recover`. Successful restore consumes the hash atomically.
+Unavailable and ownership-invalid states share one neutral no-store 404. The
+sensitive email policy prevents capability-bearing HTML/data from entering
+EmailLog or provider logs.
+
+Recovery, public commerce, card and leasing remain disabled. The phase does
+not activate email processing or scheduling and changes no Checkout, payment,
+Product, Supplier or Catalog Sync behavior. `CART-025` remains open; bundle,
+coupon and gift snapshot fidelity was not redesigned. See
+[Abandoned Cart Recovery Capability Security](ABANDONED_CART_RECOVERY_CAPABILITY_SECURITY.md).
+
 ## CART-023 Controlled Commerce Verification Closure
 
 Status: remediated after merge, CI, deployment and controlled staging
@@ -709,8 +734,9 @@ receive no further reminder email, survive authenticated Cart convergence
 through `restored_cart_id` remapping, and become `recovered` only after a later
 Order.
 
-CART-021 remains open because recovery tokens are still stored in plaintext
-and the recovery URL format is unchanged. CART-025 remains open because no
+At the Commerce Phase 1B.6 snapshot, CART-021 remained open because recovery
+tokens were still stored in plaintext and the recovery URL format was
+unchanged. CART-025 remains open because no
 versioned bundle/coupon snapshot fidelity was added. Public Cart and checkout
 pages remain disabled. This phase adds no Product or stock mutation during
 recovery, supplier behavior, Catalog Sync behavior, Sync All, automatic sync

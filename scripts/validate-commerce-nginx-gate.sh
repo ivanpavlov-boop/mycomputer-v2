@@ -62,9 +62,11 @@ validate_state() {
     commerce_enabled="$2"
     confirmation_enabled="$3"
     legal_approved="$4"
-    expected_cart="$5"
-    expected_checkout="$6"
-    expected_confirmation="$7"
+    recovery_enabled="$5"
+    expected_cart="$6"
+    expected_checkout="$7"
+    expected_confirmation="$8"
+    expected_recovery="$9"
     active_container="commerce-nginx-${state}-$$"
 
     docker run --rm -d \
@@ -73,8 +75,9 @@ validate_state() {
         --add-host app:127.0.0.1 \
         -e "PUBLIC_COMMERCE_ENABLED=${commerce_enabled}" \
         -e "PUBLIC_COMMERCE_CONFIRMATION_ENABLED=${confirmation_enabled}" \
+        -e "ABANDONED_CART_RECOVERY_ENABLED=${recovery_enabled}" \
         -e "LEGAL_CONTENT_APPROVED=${legal_approved}" \
-        -e 'NGINX_ENVSUBST_FILTER=^(PUBLIC_COMMERCE_ENABLED|PUBLIC_COMMERCE_CONFIRMATION_ENABLED|LEGAL_CONTENT_APPROVED)$' \
+        -e 'NGINX_ENVSUBST_FILTER=^(PUBLIC_COMMERCE_ENABLED|PUBLIC_COMMERCE_CONFIRMATION_ENABLED|ABANDONED_CART_RECOVERY_ENABLED|LEGAL_CONTENT_APPROVED)$' \
         -v "${template}:/etc/nginx/templates/default.conf.template:ro" \
         -v "${mock_frontend}:/etc/nginx/conf.d/frontend-mock.conf:ro" \
         nginx:1.27-alpine >/dev/null
@@ -86,6 +89,7 @@ validate_state() {
     grep -F 'fastcgi_param SCRIPT_FILENAME $realpath_root$fastcgi_script_name;' "$output" >/dev/null
     grep -F "set \$public_commerce_enabled \"${commerce_enabled}\";" "$output" >/dev/null
     grep -F "set \$public_commerce_confirmation_enabled \"${confirmation_enabled}\";" "$output" >/dev/null
+    grep -F "set \$abandoned_cart_recovery_enabled \"${recovery_enabled}\";" "$output" >/dev/null
     grep -F "set \$legal_content_approved \"${legal_approved}\";" "$output" >/dev/null
 
     if grep -F '${PUBLIC_COMMERCE_' "$output" >/dev/null; then
@@ -96,6 +100,10 @@ validate_state() {
     assert_status /cart "$expected_cart"
     assert_status /checkout "$expected_checkout"
     assert_status /checkout/success "$expected_confirmation"
+    assert_status /cart/recover "$expected_recovery"
+    assert_status /cart/recover/ 404
+    assert_status /cart/recover/fixture-capability 404
+    assert_status /en/cart/recover 404
     assert_status /obshti-usloviya 200
     assert_status /politika-za-poveritelnost 200
     assert_status /obshti-usloviya/ 308
@@ -111,8 +119,10 @@ validate_state() {
     echo "Nginx ${state} state: syntax and route matrix valid"
 }
 
-validate_state closed false false false 404 404 404
-validate_state confirmation-only false true false 404 404 200
-validate_state open true true true 200 200 200
-validate_state legal-unapproved true true false 404 404 200
-validate_state invalid true false true 404 404 404
+validate_state closed false false false false 404 404 404 404
+validate_state confirmation-only false true false false 404 404 200 404
+validate_state open true true true false 200 200 200 404
+validate_state open-recovery true true true true 200 200 200 200
+validate_state legal-unapproved true true false true 404 404 200 404
+validate_state invalid true false true true 404 404 404 404
+validate_state invalid-recovery true true true yes 200 200 200 404

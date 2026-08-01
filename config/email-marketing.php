@@ -5,9 +5,9 @@ return [
 
     'abandoned_cart' => [
         'threshold_minutes' => (int) env('ABANDONED_CART_THRESHOLD_MINUTES', 60),
-        'recovery_token_days' => (int) env('ABANDONED_CART_RECOVERY_TOKEN_DAYS', 14),
+        'recovery_capability_days' => (int) env('ABANDONED_CART_RECOVERY_CAPABILITY_DAYS', 14),
         'expire_after_days' => (int) env('ABANDONED_CART_EXPIRE_AFTER_DAYS', 14),
-        'frontend_recovery_url' => env('FRONTEND_URL', env('APP_URL', 'http://localhost:3000')).'/cart/recover/{token}',
+        'frontend_recovery_url' => env('FRONTEND_URL', env('APP_URL', 'http://localhost:3000')).'/cart/recover',
         'support_contact' => env('SUPPORT_CONTACT_EMAIL', 'support@mycomputer.bg'),
         'sequence' => [
             1 => ['template' => 'abandoned_cart_1', 'delay_hours' => 1],

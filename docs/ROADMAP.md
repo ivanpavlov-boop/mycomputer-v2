@@ -10,6 +10,12 @@ Related docs: [Phases](PHASES.md), [Sync Safety](SYNC_SAFETY.md), [Architecture]
 
 Manual selected UPDATE price/stock sync is implemented behind `CATALOG_SYNC_UPDATE_ENABLED`. Broader sync work remains paused until rollback tooling and additional ownership designs are complete.
 
+Commerce Recovery Phase A is complete locally only. `CART-021` has a hash-only,
+fragment-only, body-only, one-time capability implementation but remains
+formally open until PR, CI, merge, deployment, migration verification and
+controlled staging security verification. Recovery and public commerce remain
+disabled. `CART-025` remains open.
+
 ## Completed
 
 - Supplier import.
@@ -531,8 +537,8 @@ historical target Carts remain unchanged and recovery returns a fresh Cart.
 Restored records stop reminder processing, follow the Cart through canonical
 merge, and become `recovered` only when that Cart creates an Order.
 
-CART-021 remains open: tokens are still plaintext and recovery URLs are
-unchanged. CART-025 remains open: bundle and coupon snapshot fidelity was not
+At the Commerce Phase 1B.6 snapshot, CART-021 remained open: tokens were still
+plaintext and recovery URLs were unchanged. CART-025 remains open: bundle and coupon snapshot fidelity was not
 redesigned. Public Cart and checkout pages remain disabled. No Product,
 supplier or Catalog Sync behavior changed.
 

@@ -463,15 +463,26 @@ Payload:
 }
 ```
 
-`POST /api/v1/cart/recover/{token}`
+`POST /api/v1/cart/recover`
 
-Restores a cart from a secure abandoned cart recovery token. The token does not expose cart IDs and expires according to `ABANDONED_CART_RECOVERY_TOKEN_DAYS`.
+Restores a Cart from a one-time abandoned-Cart recovery capability. The
+capability is accepted only in the JSON body, is never placed in the route, and
+expires according to `ABANDONED_CART_RECOVERY_CAPABILITY_DAYS`.
 
 Optional headers:
 
 - `X-Cart-Session: {cart_session_id}`
 
-Returns the restored cart.
+Payload:
+
+```json
+{
+  "capability": "43-character Base64URL value"
+}
+```
+
+Returns the restored Cart on success. Every unavailable capability state uses
+the same no-store 404 response. The legacy token-path endpoint is unavailable.
 
 `POST /api/v1/cart/coupon`
 

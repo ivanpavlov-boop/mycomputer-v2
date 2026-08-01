@@ -14,10 +14,12 @@ use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
+use Tests\Concerns\InteractsWithCartRecoveryCapabilities;
 use Tests\TestCase;
 
 class AbandonedCartRecoveryGateTest extends TestCase
 {
+    use InteractsWithCartRecoveryCapabilities;
     use RefreshDatabase;
 
     public function test_disabled_recovery_commands_services_and_jobs_make_zero_writes(): void
@@ -46,10 +48,9 @@ class AbandonedCartRecoveryGateTest extends TestCase
             'cart_total' => 0,
             'items_count' => 0,
             'last_cart_activity_at' => now()->subHours(2),
-            'recovery_token' => str_repeat('a', 64),
-            'recovery_token_expires_at' => now()->addDay(),
             'status' => 'pending',
         ]);
+        $capability = $this->issueRecoveryCapability($record);
 
         $before = $this->recoveryState();
         $service = app(EmailMarketingService::class);
@@ -59,14 +60,15 @@ class AbandonedCartRecoveryGateTest extends TestCase
         $this->assertNull($service->recordAbandonedCart($cart));
         $this->assertNull($service->processAbandonedCart($record));
         $this->assertThrows(
-            fn () => $service->restoreCartFromToken($record->recovery_token),
+            fn () => $service->restoreCartFromCapability($capability),
             CartRecoveryInvalidException::class,
         );
 
-        $this->postJson('/api/v1/cart/recover/'.$record->recovery_token)
+        $this->postJson('/api/v1/cart/recover', $this->recoveryRequest($capability))
             ->assertNotFound()
-            ->assertHeader('Cache-Control', 'no-store, private')
-            ->assertJsonPath('error.code', 'not_found');
+            ->assertHeader('Cache-Control', 'max-age=0, no-store, private')
+            ->assertHeader('Pragma', 'no-cache')
+            ->assertJsonPath('error.code', 'cart_recovery_unavailable');
 
         $this->assertSame(0, Artisan::call('carts:detect-abandoned'));
         $this->assertStringContainsString('disabled', Artisan::output());
