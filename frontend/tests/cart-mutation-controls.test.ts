@@ -42,7 +42,7 @@ describe('Cart mutation controls', () => {
       source('app/components/cart/CartBundleItem.vue'),
       source('app/components/promotions/CouponInput.vue'),
       source('app/components/bundles/BundlePriceBox.vue'),
-      source('app/pages/cart.vue'),
+      source('app/pages/cart/index.vue'),
       source('app/pages/pc-builder/build/[id].vue'),
     ].join('\n')
 

@@ -90,6 +90,8 @@ use App\Services\Erp\ErpService;
 use App\Services\Search\Contracts\SearchServiceInterface;
 use App\Services\Search\MeilisearchSearchService;
 use App\Support\Api\ApiCache;
+use App\Support\Api\CartRecoveryResponse;
+use App\Support\Api\ErrorResponse;
 use Filament\Auth\Notifications\ResetPassword as FilamentResetPasswordNotification;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
@@ -211,6 +213,15 @@ class AppServiceProvider extends ServiceProvider
 
         RateLimiter::for('newsletter', function (Request $request): Limit {
             return Limit::perMinute(10)->by($request->user()?->id ?: $request->ip());
+        });
+
+        RateLimiter::for('cart-recovery', function (Request $request): Limit {
+            return Limit::perMinute(10)
+                ->by((string) $request->ip())
+                ->response(fn (Request $request, array $headers) => CartRecoveryResponse::privateResponse(
+                    ErrorResponse::make('too_many_requests', 'Too Many Requests.', 429)
+                        ->withHeaders($headers),
+                ));
         });
 
         RateLimiter::for('coupon', function (Request $request): Limit {

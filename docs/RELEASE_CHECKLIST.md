@@ -139,6 +139,30 @@ It did not close CART-023 by itself; the finding was subsequently remediated by
 the controlled verification recorded above. Permanent activation still
 requires a separate explicit release decision.
 
+## Abandoned Cart Recovery Capability
+
+Before any separately approved recovery activation:
+
+- confirm the plaintext `recovery_token` column is absent and legacy values
+  were invalidated by the Recovery Phase A migration;
+- confirm only a unique SHA-256 capability hash and bounded expiry are stored;
+- verify reminder links use `/cart/recover#<capability>` and the browser removes
+  the fragment before the body-only API request;
+- verify `POST /api/v1/cart/recover` is the only recovery endpoint and all old
+  token paths return 404;
+- verify unavailable states share one neutral no-store response;
+- verify EmailLog, application logs, queue payloads, events, HTML, browser
+  storage, Nuxt payloads, analytics, referrers, and console output contain no
+  raw capability or hash;
+- verify recovery is additionally blocked unless the public-commerce and legal
+  release authority is open;
+- run the SQLite migration tests and MySQL 8.4 concurrency test;
+- keep `CART-025` open until bundle/coupon/gift fidelity has its own approved
+  design and verification.
+
+Local implementation alone does not authorize recovery, abandoned-Cart email
+processing, scheduler activation, public commerce, card, or leasing.
+
 ## Local Validation
 
 Run the checks relevant to the phase. For broad or risky phases, run the full

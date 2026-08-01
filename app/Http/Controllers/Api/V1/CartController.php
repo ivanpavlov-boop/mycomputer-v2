@@ -18,6 +18,8 @@ use App\Services\Cart\CartReadinessService;
 use App\Services\Cart\CartService;
 use App\Services\Email\EmailMarketingService;
 use App\Services\Promotions\PromotionEngineService;
+use App\Support\Api\CartRecoveryResponse;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
@@ -105,15 +107,17 @@ class CartController extends Controller
         return CartResource::make($this->ready($cart));
     }
 
-    public function recover(Request $request, string $token): CartResource
+    public function recover(Request $request): JsonResponse
     {
-        $cart = $this->emailMarketing->restoreCartFromToken(
-            $token,
+        $cart = $this->emailMarketing->restoreCartFromCapability(
+            $request->json()->get('capability'),
             $this->cartContext->sessionId($request),
             Auth::guard('sanctum')->user(),
         );
 
-        return CartResource::make($this->readiness->assess($cart)->cart);
+        return CartRecoveryResponse::privateResponse(
+            CartResource::make($this->readiness->assess($cart)->cart)->response(),
+        );
     }
 
     private function ready(Cart $cart): Cart

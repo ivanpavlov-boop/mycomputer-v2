@@ -32,6 +32,7 @@ export default defineNuxtConfig({
       cartCookieSecure: process.env.NUXT_PUBLIC_CART_COOKIE_SECURE !== 'false',
       commerceEnabled: process.env.NUXT_PUBLIC_COMMERCE_ENABLED ?? 'false',
       commerceConfirmationEnabled: process.env.NUXT_PUBLIC_COMMERCE_CONFIRMATION_ENABLED ?? 'false',
+      abandonedCartRecoveryEnabled: process.env.NUXT_PUBLIC_ABANDONED_CART_RECOVERY_ENABLED ?? 'false',
       legalContentApproved: process.env.NUXT_PUBLIC_LEGAL_CONTENT_APPROVED ?? 'false',
       englishLocaleIndexable: process.env.NUXT_PUBLIC_ENGLISH_LOCALE_INDEXABLE === 'true',
       ga4Id: process.env.NUXT_PUBLIC_GA4_ID || '',

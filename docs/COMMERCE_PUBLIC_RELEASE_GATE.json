@@ -41,6 +41,18 @@
       "preflight": "failure"
     }
   },
+  "conditional_routes": {
+    "/cart/recover": {
+      "requires": [
+        "PUBLIC_COMMERCE_ENABLED=true",
+        "PUBLIC_COMMERCE_CONFIRMATION_ENABLED=true",
+        "LEGAL_CONTENT_APPROVED=true",
+        "ABANDONED_CART_RECOVERY_ENABLED=true"
+      ],
+      "committed_default_status": 404,
+      "security": "clean fragment-entry page; old token subpaths remain blocked"
+    }
+  },
   "always_blocked": [
     "/cart/recover/*",
     "/cart/*",
@@ -71,7 +83,7 @@
   },
   "cart_findings": {
     "CART-020": "remediated",
-    "CART-021": "open",
+    "CART-021": "open_remediated_locally_pending_release_verification",
     "CART-022": "remediated_merged_deployed",
     "CART-023": "remediated_merged_deployed_staging_verified",
     "CART-025": "open"
@@ -85,6 +97,21 @@
     "controlled_staging_runtime_changed_and_rolled_back": true,
     "deployed": true,
     "deployed_state": "confirmation_only"
+  },
+  "recovery_capability_security": {
+    "phase": "Commerce Recovery Phase A",
+    "status": "complete_locally_only",
+    "plaintext_column_removed": true,
+    "legacy_capabilities_invalidated": true,
+    "persistence": "sha256_hash_only",
+    "email_link": "/cart/recover#<capability>",
+    "api": "POST /api/v1/cart/recover with JSON body",
+    "one_time": true,
+    "neutral_failure": true,
+    "email_and_application_log_redaction": true,
+    "runtime_enabled": false,
+    "CART-021": "open_remediated_locally",
+    "CART-025": "open"
   },
   "staging_runtime": {
     "state": "confirmation_only",

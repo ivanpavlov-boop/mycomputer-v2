@@ -117,7 +117,10 @@ export function useCartApi() {
     applyCoupon: (code: string) => cartRequest('/cart/coupon', { method: 'POST', body: { code } }),
     removeCoupon: () => cartRequest('/cart/coupon', { method: 'DELETE' }),
     email: (email: string) => cartRequest('/cart/email', { method: 'POST', body: { email } }),
-    recover: (token: string) => cartRequest(`/cart/recover/${token}`, { method: 'POST' }),
+    recover: (capability: string) => cartRequest('/cart/recover', {
+      method: 'POST',
+      body: { capability },
+    }),
     update: (itemId: number, quantity: number) => cartRequest(`/cart/items/${itemId}`, {
       method: 'PATCH',
       body: { quantity },

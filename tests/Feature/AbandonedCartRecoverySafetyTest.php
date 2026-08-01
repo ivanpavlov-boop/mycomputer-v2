@@ -17,10 +17,12 @@ use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Laravel\Sanctum\Sanctum;
 use RuntimeException;
+use Tests\Concerns\InteractsWithCartRecoveryCapabilities;
 use Tests\TestCase;
 
 class AbandonedCartRecoverySafetyTest extends TestCase
 {
+    use InteractsWithCartRecoveryCapabilities;
     use RefreshDatabase;
 
     private Product $product;
@@ -40,11 +42,12 @@ class AbandonedCartRecoverySafetyTest extends TestCase
         ]);
     }
 
-    public function test_valid_token_restores_once_and_replay_is_non_destructive(): void
+    public function test_valid_capability_restores_once_and_replay_is_non_destructive(): void
     {
         $record = $this->record([$this->snapshotLine()]);
+        $capability = $this->recoveryCapability($record);
 
-        $response = $this->postJson("/api/v1/cart/recover/{$record->recovery_token}")
+        $response = $this->postJson('/api/v1/cart/recover', $this->recoveryRequest($capability))
             ->assertOk()
             ->assertJsonPath('data.items_count', 1);
 
@@ -62,7 +65,7 @@ class AbandonedCartRecoverySafetyTest extends TestCase
         $eventPayload = (string) DB::table('marketing_events')
             ->where('event_name', 'abandoned_cart_restored')
             ->value('payload');
-        $this->assertStringNotContainsString($record->recovery_token, $eventPayload);
+        $this->assertStringNotContainsString($capability, $eventPayload);
         $this->assertStringNotContainsString((string) $record->email, $eventPayload);
         $this->assertStringNotContainsString($record->session_id, $eventPayload);
         $this->assertNull(app(EmailMarketingService::class)->recordAbandonedCart($restored->fresh('items.product')));
@@ -75,10 +78,10 @@ class AbandonedCartRecoverySafetyTest extends TestCase
             'total_price',
         ])->all();
 
-        $this->postJson("/api/v1/cart/recover/{$record->recovery_token}")
-            ->assertConflict()
-            ->assertJsonPath('error.code', 'cart_recovery_consumed')
-            ->assertJsonPath('error.message', 'This recovery link has already been used.');
+        $this->postJson('/api/v1/cart/recover', $this->recoveryRequest($capability))
+            ->assertNotFound()
+            ->assertJsonPath('error.code', 'cart_recovery_unavailable')
+            ->assertJsonPath('error.message', 'Recovery link is unavailable.');
 
         $this->assertSame($before, $restored->fresh()->items()->get()->map->only([
             'product_id',
@@ -90,20 +93,22 @@ class AbandonedCartRecoverySafetyTest extends TestCase
         $this->assertSame(1, DB::table('marketing_events')->where('event_name', 'abandoned_cart_restored')->count());
     }
 
-    public function test_unknown_expired_and_suppressed_tokens_share_generic_unavailable_contract(): void
+    public function test_unknown_expired_and_suppressed_capabilities_share_neutral_contract(): void
     {
         $expired = $this->record([$this->snapshotLine()], expiresAt: now()->subMinute());
         $suppressed = $this->record([$this->snapshotLine()], status: 'suppressed');
 
         foreach ([
-            'unknown-token',
-            $expired->recovery_token,
-            $suppressed->recovery_token,
-        ] as $token) {
-            $this->postJson("/api/v1/cart/recover/{$token}")
-                ->assertUnprocessable()
-                ->assertJsonPath('error.code', 'cart_recovery_invalid')
-                ->assertJsonPath('error.message', 'Recovery link has expired or is invalid.');
+            str_repeat('A', 43),
+            $this->recoveryCapability($expired),
+            $this->recoveryCapability($suppressed),
+        ] as $capability) {
+            $this->postJson('/api/v1/cart/recover', $this->recoveryRequest($capability))
+                ->assertNotFound()
+                ->assertHeader('Cache-Control', 'max-age=0, no-store, private')
+                ->assertHeader('Pragma', 'no-cache')
+                ->assertJsonPath('error.code', 'cart_recovery_unavailable')
+                ->assertJsonPath('error.message', 'Recovery link is unavailable.');
         }
 
         $this->assertNull($expired->fresh()->restored_at);
@@ -115,7 +120,9 @@ class AbandonedCartRecoverySafetyTest extends TestCase
         $owner = User::factory()->create();
         $guestRecord = $this->record([$this->snapshotLine()], user: $owner);
 
-        $guestResponse = $this->postJson("/api/v1/cart/recover/{$guestRecord->recovery_token}")
+        $guestResponse = $this->postJson('/api/v1/cart/recover', $this->recoveryRequest(
+            $this->recoveryCapability($guestRecord),
+        ))
             ->assertOk();
         $guestCart = Cart::query()
             ->where('session_id', $guestResponse->json('data.cart_session_id'))
@@ -124,7 +131,9 @@ class AbandonedCartRecoverySafetyTest extends TestCase
 
         $ownedRecord = $this->record([$this->snapshotLine()], user: $owner);
         Sanctum::actingAs($owner);
-        $ownedResponse = $this->postJson("/api/v1/cart/recover/{$ownedRecord->recovery_token}")
+        $ownedResponse = $this->postJson('/api/v1/cart/recover', $this->recoveryRequest(
+            $this->recoveryCapability($ownedRecord),
+        ))
             ->assertOk();
 
         $this->assertSame(
@@ -142,9 +151,11 @@ class AbandonedCartRecoverySafetyTest extends TestCase
         $record = $this->record([$this->snapshotLine()], user: $owner);
         Sanctum::actingAs($other);
 
-        $this->postJson("/api/v1/cart/recover/{$record->recovery_token}")
-            ->assertForbidden()
-            ->assertJsonPath('error.code', 'cart_recovery_forbidden');
+        $this->postJson('/api/v1/cart/recover', $this->recoveryRequest(
+            $this->recoveryCapability($record),
+        ))
+            ->assertNotFound()
+            ->assertJsonPath('error.code', 'cart_recovery_unavailable');
         $this->assertNull($record->fresh()->restored_at);
 
         Auth::forgetGuards();
@@ -153,9 +164,11 @@ class AbandonedCartRecoverySafetyTest extends TestCase
         $secondRecord = $this->record([$this->snapshotLine()], user: $owner);
 
         $this->withHeader('X-Cart-Session', $foreignCart->session_id)
-            ->postJson("/api/v1/cart/recover/{$secondRecord->recovery_token}")
-            ->assertForbidden()
-            ->assertJsonPath('error.code', 'cart_recovery_forbidden');
+            ->postJson('/api/v1/cart/recover', $this->recoveryRequest(
+                $this->recoveryCapability($secondRecord),
+            ))
+            ->assertNotFound()
+            ->assertJsonPath('error.code', 'cart_recovery_unavailable');
         $this->assertSame(0, $foreignCart->items()->count());
         $this->assertNull($secondRecord->fresh()->restored_at);
     }
@@ -166,7 +179,9 @@ class AbandonedCartRecoverySafetyTest extends TestCase
         $record = $this->record([$this->snapshotLine()]);
         Sanctum::actingAs($actor);
 
-        $response = $this->postJson("/api/v1/cart/recover/{$record->recovery_token}")
+        $response = $this->postJson('/api/v1/cart/recover', $this->recoveryRequest(
+            $this->recoveryCapability($record),
+        ))
             ->assertOk();
 
         $this->assertSame(
@@ -182,14 +197,18 @@ class AbandonedCartRecoverySafetyTest extends TestCase
         $empty = $this->cart('empty-recovery-target');
         $emptyRecord = $this->record([$this->snapshotLine()]);
         $this->withHeader('X-Cart-Session', $empty->session_id)
-            ->postJson("/api/v1/cart/recover/{$emptyRecord->recovery_token}")
+            ->postJson('/api/v1/cart/recover', $this->recoveryRequest(
+                $this->recoveryCapability($emptyRecord),
+            ))
             ->assertOk()
             ->assertJsonPath('data.cart_session_id', $empty->session_id);
 
         $unknownSession = $this->cartSession('unknown-recovery-target');
         $unknownRecord = $this->record([$this->snapshotLine()]);
         $this->withHeader('X-Cart-Session', $unknownSession)
-            ->postJson("/api/v1/cart/recover/{$unknownRecord->recovery_token}")
+            ->postJson('/api/v1/cart/recover', $this->recoveryRequest(
+                $this->recoveryCapability($unknownRecord),
+            ))
             ->assertOk()
             ->assertJsonPath('data.cart_session_id', $unknownSession);
 
@@ -199,7 +218,9 @@ class AbandonedCartRecoverySafetyTest extends TestCase
             $record = $this->record([$this->snapshotLine()]);
 
             $response = $this->withHeader('X-Cart-Session', $target->session_id)
-                ->postJson("/api/v1/cart/recover/{$record->recovery_token}")
+                ->postJson('/api/v1/cart/recover', $this->recoveryRequest(
+                    $this->recoveryCapability($record),
+                ))
                 ->assertOk();
 
             $this->assertNotSame($target->session_id, $response->json('data.cart_session_id'));
@@ -215,7 +236,9 @@ class AbandonedCartRecoverySafetyTest extends TestCase
         $record = $this->record([$this->snapshotLine()]);
 
         $response = $this->withHeader('X-Cart-Session', $historical->session_id)
-            ->postJson("/api/v1/cart/recover/{$record->recovery_token}")
+            ->postJson('/api/v1/cart/recover', $this->recoveryRequest(
+                $this->recoveryCapability($record),
+            ))
             ->assertOk();
 
         $this->assertNotSame($historical->session_id, $response->json('data.cart_session_id'));
@@ -223,7 +246,9 @@ class AbandonedCartRecoverySafetyTest extends TestCase
 
         $invalidRecord = $this->record([$this->snapshotLine()]);
         $this->withHeader('X-Cart-Session', 'not-a-canonical-uuid')
-            ->postJson("/api/v1/cart/recover/{$invalidRecord->recovery_token}")
+            ->postJson('/api/v1/cart/recover', $this->recoveryRequest(
+                $this->recoveryCapability($invalidRecord),
+            ))
             ->assertUnprocessable()
             ->assertJsonPath('error.code', 'invalid_cart_session');
         $this->assertNull($invalidRecord->fresh()->restored_at);
@@ -247,7 +272,9 @@ class AbandonedCartRecoverySafetyTest extends TestCase
             $this->snapshotLine(isGift: true, promotionId: $promotion->id),
         ]);
 
-        $response = $this->postJson("/api/v1/cart/recover/{$record->recovery_token}")
+        $response = $this->postJson('/api/v1/cart/recover', $this->recoveryRequest(
+            $this->recoveryCapability($record),
+        ))
             ->assertOk();
         $cart = Cart::query()
             ->where('session_id', $response->json('data.cart_session_id'))
@@ -264,7 +291,7 @@ class AbandonedCartRecoverySafetyTest extends TestCase
         $this->assertSame(0.0, (float) $lines[1]->total_price);
     }
 
-    public function test_duplicate_snapshot_fails_without_target_or_token_consumption(): void
+    public function test_duplicate_snapshot_fails_without_target_or_capability_consumption(): void
     {
         $record = $this->record([
             $this->snapshotLine(),
@@ -272,15 +299,18 @@ class AbandonedCartRecoverySafetyTest extends TestCase
         ]);
         $cartCount = Cart::query()->count();
 
-        $this->postJson("/api/v1/cart/recover/{$record->recovery_token}")
-            ->assertConflict()
-            ->assertJsonPath('error.code', 'cart_recovery_requires_review')
-            ->assertJsonPath('error.message', 'The saved cart cannot be restored automatically.');
+        $this->postJson('/api/v1/cart/recover', $this->recoveryRequest(
+            $this->recoveryCapability($record),
+        ))
+            ->assertNotFound()
+            ->assertJsonPath('error.code', 'cart_recovery_unavailable')
+            ->assertJsonPath('error.message', 'Recovery link is unavailable.');
 
         $this->assertSame($cartCount, Cart::query()->count());
         $this->assertSame('pending', $record->fresh()->status);
         $this->assertNull($record->fresh()->restored_at);
         $this->assertNull($record->fresh()->restored_cart_id);
+        $this->assertNotNull($record->fresh()->recovery_capability_hash);
     }
 
     public function test_unavailable_products_follow_skip_policy_and_restored_records_receive_no_email(): void
@@ -292,7 +322,9 @@ class AbandonedCartRecoverySafetyTest extends TestCase
             'is_gift' => false,
         ]], email: 'restored-no-email@example.test');
 
-        $this->postJson("/api/v1/cart/recover/{$record->recovery_token}")
+        $this->postJson('/api/v1/cart/recover', $this->recoveryRequest(
+            $this->recoveryCapability($record),
+        ))
             ->assertOk()
             ->assertJsonPath('data.items_count', 0);
 
@@ -338,7 +370,9 @@ class AbandonedCartRecoverySafetyTest extends TestCase
         $unrelated = $this->record([$this->snapshotLine()]);
         Sanctum::actingAs($user);
 
-        $restoredSession = $this->postJson("/api/v1/cart/recover/{$record->recovery_token}")
+        $restoredSession = $this->postJson('/api/v1/cart/recover', $this->recoveryRequest(
+            $this->recoveryCapability($record),
+        ))
             ->assertOk()
             ->json('data.cart_session_id');
         $restored = Cart::query()->where('session_id', $restoredSession)->firstOrFail();
@@ -377,7 +411,7 @@ class AbandonedCartRecoverySafetyTest extends TestCase
         mixed $expiresAt = null,
         ?string $email = null,
     ): AbandonedCartRecord {
-        return AbandonedCartRecord::query()->create([
+        $record = AbandonedCartRecord::query()->create([
             'user_id' => $user?->id,
             'session_id' => $this->cartSession('abandoned-'.Str::random(10)),
             'email' => $email ?? $user?->email ?? 'recovery@example.test',
@@ -385,10 +419,16 @@ class AbandonedCartRecoverySafetyTest extends TestCase
             'cart_total' => 125,
             'items_count' => collect($items)->sum('quantity'),
             'last_cart_activity_at' => now()->subHours(2),
-            'recovery_token' => Str::random(64),
-            'recovery_token_expires_at' => $expiresAt ?? now()->addDay(),
             'status' => $status,
         ]);
+
+        $this->issueRecoveryCapability($record);
+
+        if ($expiresAt !== null) {
+            $record->forceFill(['recovery_capability_expires_at' => $expiresAt])->save();
+        }
+
+        return $record->fresh();
     }
 
     private function snapshotLine(

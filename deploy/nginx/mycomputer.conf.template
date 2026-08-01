@@ -1,8 +1,14 @@
 map $uri $commerce_cache_control {
     default "";
     /cart "no-store, private";
+    /cart/recover "private, no-store, max-age=0";
     /checkout "no-store, private";
     /checkout/success "no-store, private";
+}
+
+map $uri $commerce_referrer_policy {
+    default "strict-origin-when-cross-origin";
+    /cart/recover "no-referrer";
 }
 
 server {
@@ -15,12 +21,13 @@ server {
 
     add_header X-Frame-Options "SAMEORIGIN" always;
     add_header X-Content-Type-Options "nosniff" always;
-    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+    add_header Referrer-Policy $commerce_referrer_policy always;
     add_header Permissions-Policy "camera=(), microphone=(), geolocation=()" always;
     add_header Cache-Control $commerce_cache_control always;
 
     set $public_commerce_enabled "${PUBLIC_COMMERCE_ENABLED}";
     set $public_commerce_confirmation_enabled "${PUBLIC_COMMERCE_CONFIRMATION_ENABLED}";
+    set $abandoned_cart_recovery_enabled "${ABANDONED_CART_RECOVERY_ENABLED}";
     set $legal_content_approved "${LEGAL_CONTENT_APPROVED}";
 
     location @frontend {
@@ -137,6 +144,14 @@ server {
         if ($legal_content_approved != "true") { return 404; }
         absolute_redirect off;
         return 308 /cart$is_args$args;
+    }
+
+    location = /cart/recover {
+        if ($public_commerce_enabled != "true") { return 404; }
+        if ($public_commerce_confirmation_enabled != "true") { return 404; }
+        if ($legal_content_approved != "true") { return 404; }
+        if ($abandoned_cart_recovery_enabled != "true") { return 404; }
+        try_files $uri @frontend;
     }
 
     location = /checkout {

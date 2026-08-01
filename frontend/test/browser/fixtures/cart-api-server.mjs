@@ -614,6 +614,32 @@ const server = createServer(async (request, response) => {
     return
   }
 
+  if (request.method === 'POST' && url.pathname === '/api/v1/cart/recover') {
+    const input = await bodyOf(request)
+
+    if (input.capability !== 'A'.repeat(43)) {
+      send(response, 404, {
+        success: false,
+        error: {
+          code: 'cart_recovery_unavailable',
+          message: 'Recovery link is unavailable.',
+          details: null,
+        },
+      }, origin, {
+        'Cache-Control': 'private, no-store, max-age=0',
+        Pragma: 'no-cache',
+      })
+      return
+    }
+
+    const resolved = currentCart(request, true)
+    send(response, 200, { data: resolved.entry.cart }, origin, {
+      'Cache-Control': 'private, no-store, max-age=0',
+      Pragma: 'no-cache',
+    })
+    return
+  }
+
   if (request.method === 'POST' && url.pathname === '/api/v1/auth/login') {
     const input = await bodyOf(request)
     const selectedToken = input.email === 'customer-b@example.test'

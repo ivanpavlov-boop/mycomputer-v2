@@ -213,7 +213,7 @@ All paths below use the `/api/v1` prefix.
 | `POST /cart/coupon` | `CartController@applyCoupon` | Optional | Header | Coupon code | Same controller boundary | Coupon limiter | Updates coupon | Cart resource; coupon error |
 | `DELETE /cart/coupon` | `CartController@removeCoupon` | Optional | Header | None | Same controller boundary | Coupon limiter | Clears coupon | Cart resource |
 | `POST /cart/email` | `CartController@email` | Optional | Header | Contact value | Same controller boundary | Newsletter limiter | Cart/subscription context | Generic response |
-| `POST /cart/recover/{token}` | `CartController@recover` | Optional | Recovery capability and optional header | Route capability | Recovery service rules; no user match | Newsletter limiter | Clears/rebuilds regular lines | Cart resource; invalid/expired errors |
+| `POST /cart/recover` | `CartController@recover` | Optional | JSON-body recovery capability and optional Cart header | Hash-only one-time capability plus existing Cart authority | Recovery service rules; no user match | Dedicated IP-only recovery limiter | Restores supported lines without clearing a populated target | Cart resource; one neutral no-store unavailable response |
 | `POST /cart/bundles` | `CartBundleController@store` | Optional | Header | Bundle/options/quantity | No authenticated owner boundary equivalent | API only | Bundle line | Cart resource; inventory errors |
 | `PATCH /cart/bundles/{item}` | `CartBundleController@update` | Optional | Header + item | Quantity/options | Item cart match | API only | Bundle line | Cart resource; 404/inventory |
 | `DELETE /cart/bundles/{item}` | `CartBundleController@destroy` | Optional | Header + item | Route model | Item cart match | API only | Deletes bundle line | Cart resource; 404 |
@@ -984,8 +984,8 @@ pricing once. Restored records receive no more reminder email. Their
 `restored_cart_id` follows authenticated Cart merge and later checkout changes
 the record to `recovered` with the Order and revenue.
 
-CART-021 remains open because token hashing and recovery URL changes are
-outside this phase. CART-025 remains open because versioned bundle/coupon
+At the Commerce Phase 1B.6 snapshot, CART-021 remained open because token
+hashing and recovery URL changes were outside that phase. CART-025 remains open because versioned bundle/coupon
 snapshot fidelity was not added. Public Cart and checkout pages remain
 disabled. No Product mutation during recovery, stock reservation, frontend
 production change, supplier behavior, Catalog Sync behavior, Sync All,
@@ -1280,6 +1280,32 @@ explicit activation approval and enabled-state staging verification. The
 Bulgarian Terms and Privacy storefront routes now contain review-ready drafts;
 legal approval and effective dates are explicit preflight blockers. See
 [Controlled Public Commerce Release Gate](COMMERCE_PUBLIC_RELEASE_GATE.md).
+
+## Commerce Recovery Phase A Addendum
+
+`CART-021` is remediated locally by a hash-only recovery capability boundary
+but remains formally open pending PR, CI, merge, deployment, migration
+verification and controlled staging security verification.
+
+The new migration removes the plaintext `recovery_token` column, invalidates
+legacy values without deleting abandoned-Cart audit/snapshot history, adds one
+nullable unique SHA-256 hash field, and refuses lossy rollback. Detection
+creates no capability. Each actual reminder preparation rotates a 256-bit
+capability; only its hash and bounded expiry are stored. Provider failure,
+suppression, expiry and successful restore clear the active hash.
+
+The email URL uses `/cart/recover#<capability>`. The clean Nuxt page removes the
+fragment synchronously before posting it in the JSON body of clean
+`POST /api/v1/cart/recover`. Legacy token paths and English routes remain
+blocked. Every unavailable and ownership-invalid state shares one neutral
+no-store 404. EmailLog, provider logs, queue payloads and marketing events do
+not receive capability-bearing HTML or data.
+
+The established row lock, one-time restore, Cart ownership, non-destructive
+target selection, current pricing, paid/gift safety and later recovered audit
+remain in place. Recovery, public commerce, card and leasing remain disabled.
+`CART-025` remains open and no bundle/coupon/gift fidelity redesign is claimed.
+See [Abandoned Cart Recovery Capability Security](ABANDONED_CART_RECOVERY_CAPABILITY_SECURITY.md).
 
 ## 30. Release Gates
 

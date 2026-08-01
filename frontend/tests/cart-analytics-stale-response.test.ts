@@ -41,7 +41,7 @@ describe('Cart analytics stale-response protection', () => {
       source('app/components/cart/CartBundleItem.vue'),
       source('app/components/bundles/BundlePriceBox.vue'),
       source('app/components/promotions/CouponInput.vue'),
-      source('app/pages/cart.vue'),
+      source('app/pages/cart/index.vue'),
     ].join('\n')
 
     expect(components).not.toContain('useCartAnalytics')

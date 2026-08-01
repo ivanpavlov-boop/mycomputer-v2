@@ -23,7 +23,7 @@ describe('Cart conflict UI', () => {
 
   it('summarizes important conflicts without discarding a confirmed Cart', () => {
     const store = source('app/stores/cart.ts')
-    const page = source('app/pages/cart.vue')
+    const page = source('app/pages/cart/index.vue')
 
     expect(store).toContain("'cart_price_changed'")
     expect(store).toContain("'cart_promotion_changed'")

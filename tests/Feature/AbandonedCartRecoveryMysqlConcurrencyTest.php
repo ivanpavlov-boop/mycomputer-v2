@@ -2,11 +2,12 @@
 
 namespace Tests\Feature;
 
-use App\Exceptions\CartRecoveryConsumedException;
+use App\Exceptions\CartRecoveryInvalidException;
 use App\Models\AbandonedCartRecord;
 use App\Models\Cart;
 use App\Models\Product;
 use App\Models\Supplier;
+use App\Services\CartRecovery\CartRecoveryCapabilityService;
 use App\Services\Email\EmailMarketingService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -17,7 +18,7 @@ use Throwable;
 
 class AbandonedCartRecoveryMysqlConcurrencyTest extends TestCase
 {
-    public function test_mysql_recovery_token_restores_exactly_one_cart_under_concurrent_replay(): void
+    public function test_mysql_recovery_capability_restores_exactly_one_cart_under_concurrent_replay(): void
     {
         if (DB::getDriverName() !== 'mysql') {
             $this->markTestSkipped('Requires MySQL.');
@@ -117,26 +118,24 @@ class AbandonedCartRecoveryMysqlConcurrencyTest extends TestCase
                 'cart_total' => 125,
                 'items_count' => 1,
                 'last_cart_activity_at' => now()->subHours(2),
-                'recovery_token' => Str::random(64),
-                'recovery_token_expires_at' => now()->addDay(),
                 'status' => 'pending',
             ]);
             $recordId = $record->id;
-            $token = $record->recovery_token;
+            $capability = app(CartRecoveryCapabilityService::class)->issue($record)->value();
 
             foreach (array_keys(DB::getConnections()) as $connectionName) {
                 $this->assertSame(0, DB::connection($connectionName)->transactionLevel());
             }
 
-            $results = $this->forkRestoreAttempts($token, $targetSessions);
+            $results = $this->forkRestoreAttempts($capability, $targetSessions);
 
             $this->assertSame(
-                [200, 409],
+                [200, 404],
                 $results->pluck('status')->sort()->values()->all(),
                 'Unexpected recovery child results: '.$results->toJson(),
             );
             $this->assertSame(
-                ['cart_recovery_consumed'],
+                ['cart_recovery_unavailable'],
                 $results->pluck('code')->filter()->values()->all(),
             );
 
@@ -212,7 +211,7 @@ class AbandonedCartRecoveryMysqlConcurrencyTest extends TestCase
         }
     }
 
-    private function forkRestoreAttempts(string $token, array $targetSessions)
+    private function forkRestoreAttempts(string $capability, array $targetSessions)
     {
         $directory = sys_get_temp_dir().DIRECTORY_SEPARATOR.'abandoned-recovery-'.Str::uuid();
         $startFile = $directory.DIRECTORY_SEPARATOR.'start';
@@ -234,7 +233,7 @@ class AbandonedCartRecoveryMysqlConcurrencyTest extends TestCase
                 }
 
                 if ($pid === 0) {
-                    $this->runRestoreChild($index, $token, $sessionId, $startFile, $directory);
+                    $this->runRestoreChild($index, $capability, $sessionId, $startFile, $directory);
                 }
 
                 $children[] = $pid;
@@ -277,7 +276,7 @@ class AbandonedCartRecoveryMysqlConcurrencyTest extends TestCase
 
     private function runRestoreChild(
         int $index,
-        string $token,
+        string $capability,
         string $sessionId,
         string $startFile,
         string $directory,
@@ -289,10 +288,10 @@ class AbandonedCartRecoveryMysqlConcurrencyTest extends TestCase
         $this->purgeDatabaseConnections();
 
         try {
-            $cart = app(EmailMarketingService::class)->restoreCartFromToken($token, $sessionId);
+            $cart = app(EmailMarketingService::class)->restoreCartFromCapability($capability, $sessionId);
             $result = ['status' => 200, 'code' => null, 'cart_id' => $cart->id];
-        } catch (CartRecoveryConsumedException) {
-            $result = ['status' => 409, 'code' => 'cart_recovery_consumed', 'cart_id' => null];
+        } catch (CartRecoveryInvalidException) {
+            $result = ['status' => 404, 'code' => 'cart_recovery_unavailable', 'cart_id' => null];
         } catch (Throwable $exception) {
             fwrite(STDERR, 'Abandoned-Cart recovery child failed: '.get_class($exception).PHP_EOL);
             $result = ['status' => 500, 'code' => get_class($exception), 'cart_id' => null];

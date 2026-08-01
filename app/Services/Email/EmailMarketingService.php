@@ -3,7 +3,6 @@
 namespace App\Services\Email;
 
 use App\Enums\CartStatus;
-use App\Exceptions\CartRecoveryConsumedException;
 use App\Exceptions\CartRecoveryForbiddenException;
 use App\Exceptions\CartRecoveryInvalidException;
 use App\Exceptions\CartRecoveryRequiresReviewException;
@@ -22,13 +21,16 @@ use App\Models\User;
 use App\Services\Cart\CartLifecycleService;
 use App\Services\Cart\CartPricingRefreshService;
 use App\Services\Cart\CartService;
+use App\Services\CartRecovery\CartRecoveryCapabilityService;
 use App\Services\Email\Contracts\EmailProviderInterface;
 use App\Services\Marketing\MarketingEventService;
 use App\Services\Promotions\PromotionEngineService;
-use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\View;
 use Illuminate\Support\Str;
+use RuntimeException;
+use SensitiveParameter;
+use Throwable;
 
 class EmailMarketingService
 {
@@ -37,6 +39,8 @@ class EmailMarketingService
         private readonly MarketingEventService $events,
         private readonly PromotionEngineService $promotions,
         private readonly CartPricingRefreshService $cartPricing,
+        private readonly CartRecoveryCapabilityService $recoveryCapabilities,
+        private readonly SensitiveEmailPayloadPolicy $sensitiveEmailPayloads,
     ) {}
 
     public function subscribe(array $data, ?User $user = null): EmailSubscriber
@@ -108,13 +112,19 @@ class EmailMarketingService
             ]);
         }
 
-        $payload = [
-            'view' => $view,
-            'html' => View::exists($view) ? View::make($view, $data)->render() : null,
-            'data' => Arr::except($data, ['password', 'token']),
-        ];
-
-        $result = $this->provider->send($email, $subject, $view, $data, ['type' => $type]);
+        $result = $this->provider->send(
+            $email,
+            $subject,
+            $view,
+            $data,
+            $this->sensitiveEmailPayloads->providerMetadata($type, $data),
+        );
+        $payload = $this->sensitiveEmailPayloads->persistedPayload(
+            $type,
+            $view,
+            $data,
+            $result,
+        );
 
         $log = EmailLog::query()->create([
             'email' => strtolower($email),
@@ -122,15 +132,24 @@ class EmailMarketingService
             'type' => $type,
             'subject' => $subject,
             'status' => $result['status'] === 'sent' ? 'sent' : ($result['status'] ?? 'failed'),
-            'payload' => $payload + ['provider_result' => $result],
+            'payload' => $payload,
             'sent_at' => ($result['status'] ?? null) === 'sent' ? now() : null,
         ]);
 
-        $this->events->log('email sent', 'internal', [
-            'email' => strtolower($email),
-            'type' => $type,
-            'status' => $log->status,
-        ]);
+        $this->events->log(
+            'email sent',
+            'internal',
+            $this->sensitiveEmailPayloads->isSensitive($type)
+                ? [
+                    'type' => $type,
+                    'status' => $log->status,
+                ]
+                : [
+                    'email' => strtolower($email),
+                    'type' => $type,
+                    'status' => $log->status,
+                ],
+        );
 
         return $log;
     }
@@ -183,8 +202,6 @@ class EmailMarketingService
 
         $record ??= new AbandonedCartRecord([
             'session_id' => $cart->session_id,
-            'recovery_token' => $this->newRecoveryToken(),
-            'recovery_token_expires_at' => now()->addDays((int) config('email-marketing.abandoned_cart.recovery_token_days', 14)),
             'status' => 'pending',
         ]);
 
@@ -218,21 +235,67 @@ class EmailMarketingService
             return null;
         }
 
-        if (! $this->canSendAbandonedCartEmail($record)) {
+        $result = Cache::lock(
+            'abandoned-cart-reminder:'.(int) $record->getKey(),
+            300,
+        )->get(fn (): ?EmailLog => $this->processAbandonedCartLocked((int) $record->getKey()));
+
+        return $result instanceof EmailLog ? $result : null;
+    }
+
+    private function processAbandonedCartLocked(int $recordId): ?EmailLog
+    {
+        $record = AbandonedCartRecord::query()->find($recordId);
+
+        if ($record === null || ! $this->canSendAbandonedCartEmail($record)) {
             return null;
         }
 
         $stage = min($record->emails_sent + 1, 3);
         $type = $this->sequence()[$stage]['template'] ?? "abandoned_cart_{$stage}";
-
-        $log = $this->send($record->email, $type, [
-            'record' => $record,
+        $issued = $this->recoveryCapabilities->issue($record);
+        $data = [
+            'record' => $record->fresh(['user']),
             'items' => $record->cart_snapshot['items'] ?? [],
             'cartTotal' => $record->cart_total,
-            'recoveryUrl' => $record->recoveryUrl(),
+            'recoveryUrl' => $issued->url(),
             'supportContact' => config('email-marketing.abandoned_cart.support_contact'),
             'unsubscribeUrl' => url('/unsubscribe?email='.urlencode($record->email)),
-        ]);
+        ];
+
+        try {
+            $log = $this->send($record->email, $type, $data);
+        } catch (Throwable) {
+            $this->recoveryCapabilities->revokeIssued($recordId, $issued);
+            $template = config("email-marketing.templates.{$type}", []);
+            EmailLog::query()->create([
+                'email' => strtolower((string) $record->email),
+                'provider' => $this->provider->name(),
+                'type' => $type,
+                'subject' => $template['subject'] ?? str($type)->replace('_', ' ')->title()->toString(),
+                'status' => 'failed',
+                'payload' => $this->sensitiveEmailPayloads->persistedPayload(
+                    $type,
+                    $template['view'] ?? 'emails.marketing.generic',
+                    [],
+                    [
+                        'provider' => $this->provider->name(),
+                        'status' => 'failed',
+                        'reason' => 'provider_exception',
+                    ],
+                ),
+            ]);
+
+            throw new RuntimeException('Abandoned Cart reminder provider failed.');
+        } finally {
+            unset($data);
+        }
+
+        if ($log->status !== 'sent') {
+            $this->recoveryCapabilities->revokeIssued($recordId, $issued);
+
+            return $log;
+        }
 
         $timestampColumn = match ($stage) {
             1 => 'first_email_sent_at',
@@ -323,31 +386,32 @@ class EmailMarketingService
         return $cart->fresh(['items.product.brand', 'items.product.category', 'items.product.images']);
     }
 
-    public function restoreCartFromToken(string $token, ?string $sessionId = null, ?User $actor = null): Cart
-    {
+    public function restoreCartFromCapability(
+        #[SensitiveParameter] mixed $capability,
+        ?string $sessionId = null,
+        ?User $actor = null,
+    ): Cart {
         if (! $this->abandonedCartRecoveryEnabled()) {
             throw new CartRecoveryInvalidException;
         }
 
-        return DB::transaction(function () use ($actor, $sessionId, $token): Cart {
-            $record = AbandonedCartRecord::query()
-                ->where('recovery_token', $token)
-                ->lockForUpdate()
-                ->first();
+        $capabilityHash = $this->recoveryCapabilities->validatedHash($capability);
+        unset($capability);
 
-            if ($record === null) {
-                throw new CartRecoveryInvalidException;
-            }
-
-            if (in_array($record->status, ['restored', 'recovered'], true)) {
-                throw new CartRecoveryConsumedException;
-            }
+        $cart = DB::transaction(function () use ($actor, $sessionId, $capabilityHash): ?Cart {
+            $record = $this->recoveryCapabilities->resolveHashForUpdate($capabilityHash);
 
             if (
-                in_array($record->status, ['expired', 'suppressed'], true)
-                || $record->recovery_token_expires_at?->isPast()
+                in_array($record->status, ['restored', 'recovered', 'expired', 'suppressed'], true)
+                || $record->recovery_capability_expires_at === null
             ) {
                 throw new CartRecoveryInvalidException;
+            }
+
+            if ($record->recovery_capability_expires_at->isPast()) {
+                $this->recoveryCapabilities->revoke($record);
+
+                return null;
             }
 
             if (
@@ -379,11 +443,13 @@ class EmailMarketingService
                 ->refreshLocked($cart, refreshAutomaticGifts: false)
                 ->cart;
 
-            $record->update([
+            $record->forceFill([
                 'status' => 'restored',
                 'restored_at' => now(),
                 'restored_cart_id' => $cart->getKey(),
-            ]);
+                'recovery_capability_hash' => null,
+                'recovery_capability_expires_at' => null,
+            ])->save();
 
             $recordId = (int) $record->getKey();
             DB::afterCommit(fn () => $this->events->log(
@@ -394,6 +460,12 @@ class EmailMarketingService
 
             return $cart;
         }, 3);
+
+        if ($cart === null) {
+            throw new CartRecoveryInvalidException;
+        }
+
+        return $cart;
     }
 
     public function markCartRecovered(Cart $cart, Order $order): void
@@ -425,6 +497,8 @@ class EmailMarketingService
                 'recovered_at' => now(),
                 'recovered_order_id' => $order->id,
                 'recovered_revenue' => $order->grand_total,
+                'recovery_capability_hash' => null,
+                'recovery_capability_expires_at' => null,
             ]);
 
         $orderId = (int) $order->getKey();
@@ -437,12 +511,20 @@ class EmailMarketingService
 
     public function suppress(AbandonedCartRecord $record): void
     {
-        $record->update(['status' => 'suppressed']);
+        $record->forceFill([
+            'status' => 'suppressed',
+            'recovery_capability_hash' => null,
+            'recovery_capability_expires_at' => null,
+        ])->save();
     }
 
     public function markExpired(AbandonedCartRecord $record): void
     {
-        $record->update(['status' => 'expired']);
+        $record->forceFill([
+            'status' => 'expired',
+            'recovery_capability_hash' => null,
+            'recovery_capability_expires_at' => null,
+        ])->save();
     }
 
     public function triggerPriceDrop(Product $product): int
@@ -497,14 +579,25 @@ class EmailMarketingService
             return false;
         }
 
-        if ($record->recovery_token_expires_at?->isPast()) {
-            $record->update(['status' => 'expired']);
+        $lifecycleStart = $record->last_cart_activity_at ?? $record->created_at;
+        $lifecycleExpired = $lifecycleStart !== null
+            && $lifecycleStart->copy()
+                ->addDays(max(1, (int) config('email-marketing.abandoned_cart.expire_after_days', 14)))
+                ->isPast();
+
+        if ($lifecycleExpired) {
+            $this->markExpired($record);
 
             return false;
         }
 
+        if ($record->recovery_capability_expires_at?->isPast()) {
+            $this->recoveryCapabilities->revoke($record);
+            $record->refresh();
+        }
+
         if ($this->isSuppressed($record->email, 'abandoned_cart_1')) {
-            $record->update(['status' => 'suppressed']);
+            $this->suppress($record);
 
             return false;
         }
@@ -540,10 +633,23 @@ class EmailMarketingService
     private function expireOldAbandonedCarts(): void
     {
         AbandonedCartRecord::query()
+            ->whereNotNull('recovery_capability_hash')
+            ->where('recovery_capability_expires_at', '<=', now())
+            ->update([
+                'recovery_capability_hash' => null,
+                'recovery_capability_expires_at' => null,
+            ]);
+
+        AbandonedCartRecord::query()
             ->whereNotIn('status', ['restored', 'recovered', 'expired', 'suppressed'])
-            ->whereNotNull('recovery_token_expires_at')
-            ->where('recovery_token_expires_at', '<=', now())
-            ->update(['status' => 'expired']);
+            ->where('last_cart_activity_at', '<=', now()->subDays(
+                max(1, (int) config('email-marketing.abandoned_cart.expire_after_days', 14)),
+            ))
+            ->update([
+                'status' => 'expired',
+                'recovery_capability_hash' => null,
+                'recovery_capability_expires_at' => null,
+            ]);
     }
 
     private function sequence(): array
@@ -569,15 +675,6 @@ class EmailMarketingService
             ->all();
 
         return array_replace($defaults, $automations);
-    }
-
-    private function newRecoveryToken(): string
-    {
-        do {
-            $token = Str::random(64);
-        } while (AbandonedCartRecord::query()->where('recovery_token', $token)->exists());
-
-        return $token;
     }
 
     /**

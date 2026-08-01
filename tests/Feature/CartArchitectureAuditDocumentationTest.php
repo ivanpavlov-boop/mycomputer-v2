@@ -86,6 +86,7 @@ final class CartArchitectureAuditDocumentationTest extends TestCase
             'Commerce Phase 1D.2B',
             'Commerce Phase 1D.4',
             'Commerce Phase 1E.1',
+            'Commerce Recovery Phase A',
             'Later',
         ];
         $ids = [];
@@ -130,6 +131,9 @@ final class CartArchitectureAuditDocumentationTest extends TestCase
             if ($finding['id'] === 'CART-023') {
                 $this->assertSame('merged_deployed_staging_verified', $finding['local_remediation_status'] ?? null);
             }
+            if ($finding['id'] === 'CART-021') {
+                $this->assertSame('remediated_locally', $finding['local_remediation_status'] ?? null);
+            }
             $this->assertContains($finding['target_phase'] ?? null, $allowedTargets);
             $this->assertNotEmpty($finding['acceptance_criteria'] ?? []);
             $this->assertNotEmpty($finding['evidence'] ?? []);
@@ -158,7 +162,7 @@ final class CartArchitectureAuditDocumentationTest extends TestCase
 
         $progress = $register['remediation_progress'] ?? [];
 
-        $this->assertCount(19, $progress);
+        $this->assertCount(20, $progress);
         $this->assertSame('Commerce Phase 1B.1', $progress[0]['phase'] ?? null);
         $this->assertSame('merged_deployed_staging_verified', $progress[0]['status'] ?? null);
         $this->assertSame(['CART-001', 'CART-022'], $progress[0]['finding_ids'] ?? null);
@@ -287,16 +291,25 @@ final class CartArchitectureAuditDocumentationTest extends TestCase
         );
         $this->assertNotEmpty($progress[17]['notes'] ?? []);
         $this->assertSame(
-            'CART-023 Controlled Commerce Verification Closure',
+            'Commerce Recovery Phase A - Recovery Capability Security',
             $progress[18]['phase'] ?? null,
         );
-        $this->assertSame('merged_deployed_staging_verified', $progress[18]['status'] ?? null);
-        $this->assertSame(['CART-023'], $progress[18]['finding_ids'] ?? null);
-        $this->assertSame([], $progress[18]['partial_finding_ids'] ?? null);
-        $this->assertNotContains('CART-023', $progress[18]['open_finding_ids'] ?? []);
-        $this->assertContains('CART-021', $progress[18]['open_finding_ids'] ?? []);
-        $this->assertContains('CART-025', $progress[18]['open_finding_ids'] ?? []);
+        $this->assertSame('complete_locally_only', $progress[18]['status'] ?? null);
+        $this->assertSame([], $progress[18]['finding_ids'] ?? null);
+        $this->assertSame(['CART-021'], $progress[18]['partial_finding_ids'] ?? null);
+        $this->assertSame(['CART-021', 'CART-025'], $progress[18]['open_finding_ids'] ?? null);
         $this->assertNotEmpty($progress[18]['notes'] ?? []);
+        $this->assertSame(
+            'CART-023 Controlled Commerce Verification Closure',
+            $progress[19]['phase'] ?? null,
+        );
+        $this->assertSame('merged_deployed_staging_verified', $progress[19]['status'] ?? null);
+        $this->assertSame(['CART-023'], $progress[19]['finding_ids'] ?? null);
+        $this->assertSame([], $progress[19]['partial_finding_ids'] ?? null);
+        $this->assertNotContains('CART-023', $progress[19]['open_finding_ids'] ?? []);
+        $this->assertContains('CART-021', $progress[19]['open_finding_ids'] ?? []);
+        $this->assertContains('CART-025', $progress[19]['open_finding_ids'] ?? []);
+        $this->assertNotEmpty($progress[19]['notes'] ?? []);
 
         $cart008 = collect($register['findings'])->firstWhere('id', 'CART-008');
         $this->assertSame('remediated', $cart008['status'] ?? null);

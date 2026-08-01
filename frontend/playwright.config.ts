@@ -40,6 +40,7 @@ export default defineConfig({
         NUXT_PUBLIC_CART_COOKIE_SECURE: 'false',
         NUXT_PUBLIC_COMMERCE_ENABLED: 'true',
         NUXT_PUBLIC_COMMERCE_CONFIRMATION_ENABLED: 'true',
+        NUXT_PUBLIC_ABANDONED_CART_RECOVERY_ENABLED: 'true',
         NUXT_PUBLIC_LEGAL_CONTENT_APPROVED: 'true',
       },
     },
@@ -58,7 +59,7 @@ export default defineConfig({
       use: {
         ...devices['iPhone 13'],
       },
-      testMatch: /(?:cart-mobile|checkout-payment-acceptance|pre-launch-navigation)\.spec\.ts/,
+      testMatch: /(?:cart-mobile|cart-recovery-capability|checkout-payment-acceptance|pre-launch-navigation)\.spec\.ts/,
     },
   ],
 })
