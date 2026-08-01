@@ -57,6 +57,40 @@ The gate implementation or a successful local test does not mean public
 commerce is activated. See
 [Controlled Public Commerce Release Gate](COMMERCE_PUBLIC_RELEASE_GATE.md).
 
+### CART-023 Controlled Verification Closure
+
+The following controlled-release evidence is complete:
+
+- [x] Legal manifest valid and runtime legal approval confirmed.
+- [x] Release preflight ready with no blockers.
+- [x] Controlled open route matrix passed for Cart, Checkout and confirmation.
+- [x] One controlled cash-on-delivery Checkout passed.
+- [x] Exactly one canonical Order and one dedicated Customer snapshot were
+  verified.
+- [x] Checkout idempotency and individual billing normalization were verified.
+- [x] Legal acceptance timestamp, versions and Bulgarian locale were verified.
+- [x] Cash on delivery created no payment attempt.
+- [x] Localized confirmation returned HTTP 200 with required Bulgarian labels
+  and without raw machine values.
+- [x] Temporary verification capability was deleted.
+- [x] Final verification created no additional Order or Customer.
+- [x] Rollback to `confirmation_only` was verified: `/cart` and `/checkout`
+  return 404 and `/checkout/success` returns 200.
+- [x] Catalog Sync safety and one active Super Admin were verified.
+
+The following future launch decisions remain incomplete and separately gated:
+
+- [ ] Permanent public-commerce activation.
+- [ ] Production-domain cutover.
+- [ ] Card-provider activation.
+- [ ] Leasing-provider activation.
+- [ ] Abandoned-Cart recovery activation.
+- [ ] Public launch announcement.
+- [ ] Production traffic approval.
+
+`CART-023` remediation records controlled technical verification and safe
+rollback. It does not authorize permanent commerce activation.
+
 ### Cart and Checkout SSR API Base
 
 Before any renewed `open` activation:
@@ -76,7 +110,9 @@ Before any renewed `open` activation:
 
 The staging incident and local fix are recorded in
 [Cart and Checkout SSR API Base Fix](COMMERCE_CART_CHECKOUT_SSR_API_BASE_FIX.md).
-That local fix does not close CART-023 or activate public commerce.
+That local fix alone did not close CART-023 or activate public commerce. The
+finding was subsequently remediated only after controlled activation, COD
+Checkout, confirmation localization and safe rollback verification.
 
 ## Pre-Launch Storefront Navigation
 
@@ -99,8 +135,9 @@ Before releasing storefront navigation changes:
   [Pre-Launch Storefront Navigation](PRE_LAUNCH_STOREFRONT_NAVIGATION.md).
 
 Navigation cleanup does not activate runtime legal approval or public commerce.
-CART-023 remains open until the separate operational release is explicitly
-approved.
+It did not close CART-023 by itself; the finding was subsequently remediated by
+the controlled verification recorded above. Permanent activation still
+requires a separate explicit release decision.
 
 ## Local Validation
 
@@ -273,8 +310,9 @@ Before any public-commerce activation:
 
 Committed approval metadata is not runtime activation. Never activate public
 commerce while `legal_content_approved`, `legal_manifest_valid` or
-`legal_effective_dates_present` is blocked. CART-023 remains open until the
-separate operational release is explicitly approved.
+`legal_effective_dates_present` is blocked. CART-023 was remediated only after
+runtime approval, a blocker-free preflight, controlled Checkout verification
+and safe rollback. A future permanent launch remains separately gated.
 
 ## Checkout Billing Incident Gate
 
@@ -298,8 +336,9 @@ Before any future controlled Order attempt:
   verification are explicitly approved.
 
 The incident attempt submitted no Order. Staging was returned to
-`confirmation_only`; this repository change does not claim staging
-verification or close `CART-023`.
+`confirmation_only`; that repository change alone did not claim staging
+verification or close `CART-023`. The later controlled COD Checkout verified
+the correction and contributed to the documented closure.
 
 ## Checkout Confirmation Localization Gate
 
@@ -326,5 +365,7 @@ Before final confirmation-page verification:
 The controlled staging COD Order and its snapshots, legal acceptance,
 idempotency and confirmation capability were verified before this local fix;
 COD created no payment attempt. Staging is documented as `confirmation_only`.
-This presentation-only change does not claim deployment or final staging
-verification, and `CART-023` remains open.
+The presentation-only change is now merged, CI verified, deployed and verified
+over HTTP 200. Required Bulgarian labels were present, raw machine values were
+absent, the temporary capability was deleted, and `CART-023` is remediated.
+Public commerce remains disabled.

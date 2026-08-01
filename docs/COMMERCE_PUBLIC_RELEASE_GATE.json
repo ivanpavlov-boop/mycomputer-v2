@@ -1,7 +1,8 @@
 {
   "phase": "Commerce Phase 1E.1",
-  "status": "merged_ci_verified_deployed_closed_staging_verified",
+  "status": "merged_deployed_staging_verified",
   "public_commerce_activated": false,
+  "flag_scope": "committed_defaults",
   "flags": {
     "PUBLIC_COMMERCE_ENABLED": false,
     "PUBLIC_COMMERCE_CONFIRMATION_ENABLED": false,
@@ -65,15 +66,14 @@
   "preflight": {
     "command": "php artisan commerce:release-preflight --json",
     "read_only": true,
-    "current_blockers": [
-      "legal_content_approved"
-    ]
+    "last_controlled_staging_ready_for_activation": true,
+    "current_blockers": []
   },
   "cart_findings": {
     "CART-020": "remediated",
     "CART-021": "open",
     "CART-022": "remediated_merged_deployed",
-    "CART-023": "open_gate_deployed_closed",
+    "CART-023": "remediated_merged_deployed_staging_verified",
     "CART-025": "open"
   },
   "safety": {
@@ -82,8 +82,19 @@
     "sync_all_added": false,
     "automatic_sync_enabled": false,
     "catalog_sync_update_enabled": false,
-    "real_environment_changed": false,
+    "controlled_staging_runtime_changed_and_rolled_back": true,
     "deployed": true,
-    "deployed_state": "closed"
+    "deployed_state": "confirmation_only"
+  },
+  "staging_runtime": {
+    "state": "confirmation_only",
+    "LEGAL_CONTENT_APPROVED": true,
+    "PUBLIC_COMMERCE_ENABLED": false,
+    "PUBLIC_COMMERCE_CONFIRMATION_ENABLED": true,
+    "ABANDONED_CART_RECOVERY_ENABLED": false,
+    "cart": 404,
+    "checkout": 404,
+    "confirmation": 200,
+    "permanent_activation_authorized": false
   }
 }

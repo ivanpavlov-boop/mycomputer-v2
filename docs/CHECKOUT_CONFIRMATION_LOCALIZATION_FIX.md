@@ -38,13 +38,23 @@ confirmation API contract are unchanged.
 
 ## Safety And Release State
 
-- The change is frontend presentation and test/documentation only.
+- The change is merged, CI verified, deployed and staging verified.
+- Final confirmation verification returned HTTP 200 with the required
+  Bulgarian Order-status, payment-method and cash-on-delivery presentations.
+- Raw `pending`, raw `cash_on_delivery` and duplicated payment status were
+  absent.
+- The temporary verification capability was deleted immediately after the
+  successful final check.
+- Final verification created no additional Order or Customer.
+- The change remains frontend presentation and test/documentation only.
 - No backend production code or migration is changed.
 - No Order, Customer, Product, Supplier or `supplier_products` row is written.
 - Public commerce, card, leasing and abandoned-Cart recovery committed defaults
   remain disabled.
 - Catalog Sync behavior and flags are unchanged; UPDATE, Sync All and automatic
   sync remain disabled.
-- `CART-023` remains open pending merge, deployment and final staging
-  confirmation-page verification.
-- This change does not authorize staging access, VPS access or deployment.
+- Staging was returned to `confirmation_only`; public commerce remains
+  disabled.
+- `CART-023` is remediated after the complete controlled release verification.
+- This closure does not authorize permanent public activation or require
+  another staging/VPS deployment.

@@ -1,8 +1,27 @@
 # Catalog Sync Phases
 
+## CART-023 Controlled Commerce Verification Closure
+
+Status: remediated after merge, CI, deployment and controlled staging
+verification.
+
+The strict closed, `confirmation_only`, open and invalid release states were
+verified across Nginx, Nuxt and POST Checkout. Runtime legal approval and the
+release preflight passed with no blockers. Controlled open-state routing and
+one real cash-on-delivery Checkout passed, including Order uniqueness, the
+dedicated Customer snapshot, idempotency, individual billing normalization,
+legal acceptance and localized confirmation presentation.
+
+The temporary verification capability was deleted and final verification
+created no additional Order or Customer. Staging was safely returned to
+`confirmation_only`: `/cart` and `/checkout` return 404 while
+`/checkout/success` remains available. Public commerce, card, leasing and
+abandoned-Cart recovery remain disabled. This closure is not permanent public
+activation. See [CART-023 Closure](CART_023_CLOSURE.md).
+
 ## Public Commerce SSR Cart API Base URL Fix
 
-Status: complete locally only; not pushed, merged, deployed or staging verified.
+Status: merged, CI verified, deployed and staging verified.
 
 The first controlled staging `open` smoke exposed HTTP 500 responses from
 `/cart` and `/checkout`, while `/checkout/success` remained available. Staging
@@ -12,14 +31,16 @@ Customer or payment attempt was created.
 The Cart API client now uses the private Nuxt server runtime API base during
 SSR and the public `/api/v1` base in the browser. This preserves SSR, Cart
 session propagation and the four-state release gate without exposing the
-internal Docker URL publicly. Public commerce remains disabled pending merge,
-deployment and renewed staging activation. CART-023 remains open. See
+internal Docker URL publicly. The fix passed the later controlled open-state
+verification. Public commerce remains disabled after safe rollback, and
+CART-023 is remediated. See
 [Cart and Checkout SSR API Base Fix](COMMERCE_CART_CHECKOUT_SSR_API_BASE_FIX.md).
 
 ## Commerce Phase 1E.1 - Controlled Public Commerce Enablement
 
-Status: merged, MySQL CI verified, deployed with release flags false, and
-disabled-state staging verified; public commerce is not activated.
+Status: merged, MySQL CI verified, deployed, and verified in closed and
+controlled open states before safe rollback to `confirmation_only`; public
+commerce is not activated.
 
 This phase adds one strict release state across the environment-rendered Nginx
 edge, Nuxt entry points and `POST /api/v1/checkout`. Committed public commerce,
@@ -32,10 +53,10 @@ blocked. Card and leasing remain disabled. The read-only preflight includes
 payment, shipping, Super Admin, Catalog Sync and legal-route checks; missing
 real Terms and Privacy routes are explicit launch blockers.
 
-CART-022 is remediated, merged and deployed. The CART-023 release gate is
-deployed in its closed state, but CART-023 remains formally open until legal
-approval, explicit activation approval and enabled-state staging verification.
-CART-021 and CART-025 remain open.
+CART-022 is remediated, merged and deployed. CART-023 is remediated after legal
+approval, successful preflight, controlled enabled-state Checkout verification
+and safe rollback. CART-021 and CART-025 remain open. Permanent public
+activation still requires a separate explicit release decision.
 
 ## Commerce Phase 1D.4 - Checkout Customer Snapshot and Profile Ownership Safety
 
@@ -125,9 +146,9 @@ Phase 8 manual selected UPDATE price/stock sync has been implemented behind a fe
 | Commerce Phase 1D.2B | Order-owned Payment Re-initiation, Attempt Idempotency and Retry Policy | Complete locally; direct-owner or guest-capability authorization, hash-only attempt idempotency, Order locking and explicit online retry policy. Card remains disabled and no real provider is integrated. |
 | Commerce Phase 1D.3 | End-to-end Checkout and Payment Acceptance | Merged, MySQL CI verified, deployed and staging implementation/privacy/release-gate verified; public commerce, card and leasing remain disabled. |
 | Commerce Phase 1D.4 | Checkout Customer Snapshot and Profile Ownership Safety | Merged, MySQL CI verified, deployed and staging verified; one dedicated Customer snapshot per canonical Order, no contact-field ownership lookup and no implicit account/profile/address mutation. |
-| Commerce Phase 1E.1 | Controlled Public Commerce Enablement and CART-023 Release Gate | Merged, MySQL CI verified, deployed with flags false and disabled-state staging verified; strict Nginx/Nuxt/backend release states remain closed. |
+| Commerce Phase 1E.1 | Controlled Public Commerce Enablement and CART-023 Release Gate | Merged, MySQL CI verified, deployed and controlled-open staging verified; CART-023 is remediated after safe rollback to `confirmation_only`, with public commerce still disabled. |
 | Commerce Phase 1E.2A | Public Legal Pages Foundation, Consent Audit and Legal Approval Gate | Merged, CI verified, deployed and staging verified in closed state. |
-| Legal Content Finalization | Bulgarian Legal Content and Explicit Project-owner Approval | Merged, CI verified, deployed and staging verified; final BG content, exact hashes and approval evidence are committed while runtime approval and public commerce remain disabled. |
+| Legal Content Finalization | Bulgarian Legal Content and Explicit Project-owner Approval | Merged, CI verified, deployed and staging verified; final BG content, exact hashes and approval evidence are committed. Runtime approval passed for controlled verification, while public commerce remains disabled after rollback. |
 | Pre-Launch Storefront Navigation Cleanup | Route-aware public navigation and locale availability | Complete locally only; visible links follow the edge route contract, BG legal pages omit unavailable EN counterparts, and commerce remains closed. |
 | Phase 9C.1 | Product attributes core foundation | Complete |
 | Phase 9C.2 | Product attributes admin usability and starter structure | Complete |
@@ -1002,9 +1023,10 @@ Legal Content Finalization and Explicit Approval is merged, CI verified,
 deployed and staging verified. The Bulgarian manifest is `approved` with versions
 `bg-terms-v1.0-2026-07-30` and `bg-privacy-v1.0-2026-07-30`, effective
 `2026-07-30`, exact source hashes and project-owner approval evidence.
-`legal_counsel_review=not_claimed` and `LEGAL_CONTENT_APPROVED=false`; no
-runtime approval or public activation is claimed. CART-023, CART-021 and
-CART-025 remain open. Catalog Sync and supplier data ownership are unchanged.
+`legal_counsel_review=not_claimed`. Runtime approval passed in staging for the
+controlled verification, but public activation is not authorized and staging
+is `confirmation_only`. CART-023 is remediated; CART-021 and CART-025 remain
+open. Catalog Sync and supplier data ownership are unchanged.
 
 Pre-Launch Storefront Navigation Cleanup is complete locally only. Header,
 mobile menu, footer, search and route-aware locale switching now expose only
@@ -1028,8 +1050,10 @@ billing address while preserving the existing nullable VAT contract.
 Server-side normalization is authoritative and prevents hidden stale company
 data from being persisted.
 
-Public commerce remains disabled pending merge, deployment and staging
-verification. `CART-023` remains open. See
+The fix is merged, CI verified, deployed and staging verified through the
+controlled COD Checkout. Public commerce remains disabled after rollback to
+`confirmation_only`; the verified billing normalization contributed to the
+remediation of `CART-023`. See
 [Checkout Individual And Company Billing Fix](CHECKOUT_INDIVIDUAL_COMPANY_BILLING_FIX.md).
 
 ## Checkout Confirmation Bulgarian Status Presentation Fix
@@ -1040,10 +1064,12 @@ verified. COD created no payment attempt, and no Product or
 `supplier_products` row changed. The confirmation summary nevertheless exposed
 the internal `pending` Order and payment values.
 
-The local fix is presentation-only: Nuxt maps Order statuses and payment methods
+The presentation-only fix maps Order statuses and payment methods
 to safe Bulgarian labels, fails closed for unknown values, and leaves the
 existing payment action panel responsible for payment state and actions. The
-backend contract and machine values are unchanged. Staging remains documented
-as `confirmation_only`; public commerce remains disabled and `CART-023` remains
-open pending merge, deployment and final verification. See
+backend contract and machine values are unchanged. It is merged, CI verified,
+deployed and verified over HTTP 200 with the required Bulgarian labels present
+and raw machine values absent. The temporary verification capability was
+deleted, staging was returned to `confirmation_only`, and `CART-023` is
+remediated. Public commerce remains disabled. See
 [Checkout Confirmation Localization Fix](CHECKOUT_CONFIRMATION_LOCALIZATION_FIX.md).

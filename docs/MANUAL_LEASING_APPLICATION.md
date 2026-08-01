@@ -130,4 +130,6 @@ This phase does not:
 - add Sync All, automatic sync or Catalog Sync UPDATE enablement;
 - call a financing provider or download remote content.
 
-CART-008 is remediated locally by Commerce Phase 1D.2B. CART-023 remains open.
+CART-008 was remediated locally by Commerce Phase 1D.2B. This leasing phase did
+not close CART-023; CART-023 was subsequently remediated through the separate
+controlled commerce verification. Leasing remains disabled.

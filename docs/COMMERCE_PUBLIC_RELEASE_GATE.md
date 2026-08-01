@@ -2,9 +2,10 @@
 
 ## Status
 
-Commerce Phase 1E.1 is merged, MySQL CI verified, deployed with all release
-flags false, and disabled-state staging verified. It adds a reversible,
-fail-closed release mechanism; public commerce remains disabled.
+Commerce Phase 1E.1 is merged, MySQL CI verified, deployed and verified in the
+closed and controlled open states. One controlled cash-on-delivery Checkout
+passed and staging was safely returned to `confirmation_only`. The reversible,
+fail-closed release mechanism is verified; public commerce remains disabled.
 
 Committed defaults:
 
@@ -89,22 +90,40 @@ shipping readiness, an active Super Admin, Catalog Sync safety flags,
 abandoned-Cart recovery disabled state, and the repository-controlled legal
 manifest/source contract.
 
-The Bulgarian Terms and Privacy routes now contain project-owner-approved,
-hash-bound content with effective dates. Runtime activation remains blocked by
-`legal_content_approved`; lawyer or regulatory approval is not claimed. See
+The Bulgarian Terms and Privacy routes contain project-owner-approved,
+hash-bound content with effective dates. Runtime legal approval passed for the
+controlled staging verification and the preflight returned ready with no
+blockers. Committed approval defaults remain false; lawyer or regulatory
+approval is not claimed. See
 [Public Legal Pages and Approval Gate](COMMERCE_PUBLIC_LEGAL_GATE.md).
 
-## Future Deployment
+## Controlled Verification Closure
+
+The controlled `open` route matrix returned HTTP 200 for `/cart`, `/checkout`
+and `/checkout/success`. One canonical cash-on-delivery Order, one dedicated
+Customer snapshot and one Order Item were verified with idempotency, billing
+normalization and legal acceptance. COD created no payment attempt. The
+localized confirmation passed the final HTTP 200 checks, and the temporary
+verification capability was deleted without creating another Order or
+Customer.
+
+Staging was then returned to `confirmation_only`: `/cart` and `/checkout`
+return 404 while `/checkout/success` returns 200. `CART-023` is remediated.
+This is controlled technical verification, not permanent public activation.
+See [CART-023 Closure](CART_023_CLOSURE.md).
+
+## Future Permanent Launch
 
 Do not execute these steps from a feature branch.
 
-1. Merge with green CI.
-2. Deploy first with all three flags false.
-3. Force-recreate `app`, `queue`, `scheduler`, `frontend`, and `nginx`.
-4. Verify the closed route matrix and generic checkout 404.
-5. Resolve all preflight blockers and obtain explicit human activation approval.
-6. Set public and confirmation flags true; keep recovery false.
-7. Force-recreate the same services and run the approved smoke matrix.
+1. Obtain a separate explicit permanent-launch decision.
+2. Confirm the legal manifest, runtime approval and blocker-free preflight.
+3. Re-run the closed and `confirmation_only` matrices before activation.
+4. Set public and confirmation flags true only for the approved environment;
+   keep recovery false.
+5. Force-recreate `app`, `queue`, `scheduler`, `frontend`, and `nginx`.
+6. Run the approved route, Checkout and monitoring smoke matrix.
+7. Use `confirmation_only` immediately if any launch check fails.
 
 ## Emergency Rollback
 

@@ -1326,3 +1326,13 @@ disabled and `LEGAL_CONTENT_APPROVED=false`. Public commerce, confirmation,
 recovery, card and leasing remain disabled. CART-023, CART-021 and CART-025
 remain open. The phase adds no IP, user-agent, fingerprint or raw consent text
 storage and changes no Catalog Sync, Product or Supplier behavior.
+
+### Subsequent CART-023 Closure
+
+The preceding sections preserve their point-in-time audit and phase status.
+CART-023 was subsequently remediated after the release gate and legal approval
+were merged and deployed, the preflight passed without blockers, a controlled
+open-state COD Checkout and localized confirmation were verified, and staging
+was safely returned to `confirmation_only`. Public commerce remains disabled;
+CART-021 and CART-025 remain open. See
+[CART-023 Closure](CART_023_CLOSURE.md).

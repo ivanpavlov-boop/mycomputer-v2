@@ -6,8 +6,11 @@ Pre-Launch Storefront Navigation Cleanup is complete locally only.
 
 The preceding Legal Content Finalization and Explicit Approval phase is merged,
 CI verified, deployed and staging verified. The committed legal manifest is
-approved. Runtime `LEGAL_CONTENT_APPROVED=false`, public commerce is disabled,
-and CART-023 remains open.
+approved. At completion of this navigation phase, runtime legal approval and
+public commerce remained disabled and CART-023 remained open. CART-023 was
+subsequently remediated through controlled activation, COD Checkout,
+confirmation localization and safe rollback verification; public commerce is
+still disabled.
 
 This phase changes presentation only. It adds no route, redirect, migration,
 database write, Nginx rule, runtime flag, account feature or commerce feature.
@@ -109,6 +112,7 @@ Order or mutate application data.
 - `PUBLIC_COMMERCE_CONFIRMATION_ENABLED=false`.
 - `ABANDONED_CART_RECOVERY_ENABLED=false`.
 - card and leasing remain disabled.
-- CART-023 remains open.
+- This phase did not close CART-023; it was subsequently remediated by the
+  separately controlled verification.
 - Catalog Sync defaults and behavior are unchanged.
 - no Sync All or automatic sync is added.

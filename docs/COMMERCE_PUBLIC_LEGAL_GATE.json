@@ -4,8 +4,8 @@
     "status": "merged_ci_verified_deployed_staging_verified_closed"
   },
   "phase": "Legal Content Finalization and Explicit Approval",
-  "status": "complete_locally_only",
-  "legal_content_approved_runtime": false,
+  "status": "merged_deployed_staging_verified",
+  "legal_content_approved_runtime": true,
   "public_commerce_activated": false,
   "manifest": {
     "path": "frontend/app/data/legal/legal-content-manifest.json",
@@ -46,9 +46,16 @@
   "client_authoritative_fields": [],
   "open_findings": [
     "CART-021",
-    "CART-023",
     "CART-025"
   ],
+  "staging_runtime": {
+    "state": "confirmation_only",
+    "ready_for_activation": true,
+    "blockers": [],
+    "public_commerce_enabled": false,
+    "public_commerce_confirmation_enabled": true,
+    "permanent_activation_authorized": false
+  },
   "safety": {
     "approval_default": false,
     "public_commerce_default": false,
@@ -60,7 +67,7 @@
     "catalog_sync_changed": false,
     "sync_all_added": false,
     "automatic_sync_enabled": false,
-    "deployed": false,
+    "deployed": true,
     "legal_counsel_review_claimed": false
   }
 }

@@ -53,9 +53,13 @@ The route matrix remains:
 | open test fixture | 200 | 200 | 200 |
 | invalid | fail closed | fail closed | fail closed |
 
-Public commerce remains disabled pending merge, deployment and explicit staging
-verification. This local change does not claim a successful real Order,
-staging verification, public launch or closure of `CART-023`.
+At local completion, public commerce remained disabled pending merge,
+deployment and explicit staging verification; the local change alone did not
+claim a successful real Order, staging verification, public launch or closure
+of `CART-023`. It was subsequently merged, CI verified, deployed and verified
+through the controlled COD Checkout. The billing correction contributed to
+CART-023 remediation, and staging was returned to `confirmation_only` without
+authorizing a public launch.
 
 No migration, Product mutation, Supplier mutation, `supplier_products`
 mutation, Catalog Sync behavior change, Sync All, automatic sync, card
