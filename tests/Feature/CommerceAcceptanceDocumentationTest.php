@@ -93,27 +93,39 @@ class CommerceAcceptanceDocumentationTest extends TestCase
         }
     }
 
-    public function test_documentation_records_deployed_retry_controls_and_closed_release_gate(): void
+    public function test_documentation_records_deployed_retry_controls_and_verified_release_gate(): void
     {
         $acceptance = (string) file_get_contents(
             base_path('docs/COMMERCE_CHECKOUT_PAYMENT_ACCEPTANCE.md'),
         );
-        $gapRegister = (string) file_get_contents(base_path('docs/CART_GAP_REGISTER.json'));
+        $gapRegisterContents = (string) file_get_contents(base_path('docs/CART_GAP_REGISTER.json'));
+        $gapRegister = json_decode($gapRegisterContents, true, flags: JSON_THROW_ON_ERROR);
+        $cart023 = collect($gapRegister['findings'])->firstWhere('id', 'CART-023');
+        $normalizedAcceptance = preg_replace('/\s+/', ' ', $acceptance);
+
+        $this->assertIsString($normalizedAcceptance);
 
         $this->assertStringContainsString('Commerce Phase 1D.2B and 1D.4 are merged', $acceptance);
         $this->assertStringContainsString('CART-008 and CART-020 are remediated', $acceptance);
-        $this->assertStringContainsString('CART-023 remains open', $acceptance);
+        $this->assertStringContainsString('CART-023 is now remediated after safe rollback', $acceptance);
+        $this->assertStringContainsString(
+            'permanent launch remains separately gated',
+            $normalizedAcceptance,
+        );
         $this->assertStringContainsString('Commerce Phase 1E.1', $acceptance);
         $this->assertStringContainsString('confirmation_only', $acceptance);
         $this->assertStringContainsString(
             'Commerce Phase 1D.4 Checkout Customer Snapshot',
             $acceptance,
         );
-        $this->assertStringContainsString('"id": "CART-020"', $gapRegister);
-        $this->assertStringContainsString('"id": "CART-023"', $gapRegister);
-        $this->assertStringContainsString('"local_remediation_status": "remediated_locally"', $gapRegister);
-        $this->assertStringContainsString('"id": "CART-008"', $gapRegister);
-        $this->assertStringContainsString('"status": "remediated"', $gapRegister);
+        $this->assertStringContainsString('"id": "CART-020"', $gapRegisterContents);
+        $this->assertStringContainsString('"id": "CART-008"', $gapRegisterContents);
+        $this->assertIsArray($cart023);
+        $this->assertSame('remediated', $cart023['status'] ?? null);
+        $this->assertSame(
+            'merged_deployed_staging_verified',
+            $cart023['local_remediation_status'] ?? null,
+        );
     }
 
     public function test_payment_and_catalog_sync_launch_flags_remain_fail_closed(): void
