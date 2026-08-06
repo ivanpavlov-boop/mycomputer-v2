@@ -15,6 +15,15 @@ class ProductSpecificationQualityResult
     public const STATUS_NO_CATEGORY_TEMPLATE = 'no_category_template';
 
     /**
+     * @var array<int, string>
+     */
+    public const INCOMPLETE_STATUSES = [
+        self::STATUS_MISSING_REQUIRED,
+        self::STATUS_NEEDS_DATA,
+        self::STATUS_NO_CATEGORY_TEMPLATE,
+    ];
+
+    /**
      * @param  Collection<int, array<string, mixed>>  $expectedAttributes
      * @param  Collection<int, array<string, mixed>>  $filledAttributes
      * @param  Collection<int, array<string, mixed>>  $missingAttributes
@@ -73,6 +82,11 @@ class ProductSpecificationQualityResult
             self::STATUS_NO_CATEGORY_TEMPLATE => 'warning',
             default => 'gray',
         };
+    }
+
+    public function isIncomplete(): bool
+    {
+        return in_array($this->status, self::INCOMPLETE_STATUSES, true);
     }
 
     public function scoreLabel(): string

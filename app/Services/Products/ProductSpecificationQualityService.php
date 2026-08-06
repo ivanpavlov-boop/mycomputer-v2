@@ -82,6 +82,22 @@ final class ProductSpecificationQualityService
         });
     }
 
+    public function productHasIncompleteSpecifications(Product $product): bool
+    {
+        return $this->evaluate($product)->isIncomplete();
+    }
+
+    public function applyIncompleteQuery(Builder $query): Builder
+    {
+        return $query->where(function (Builder $query): void {
+            foreach (ProductSpecificationQualityResult::INCOMPLETE_STATUSES as $status) {
+                $query->orWhere(function (Builder $query) use ($status): void {
+                    $this->applyStateQuery($query, $status);
+                });
+            }
+        });
+    }
+
     /**
      * @return array{good: int, needs_data: int, missing_required: int, no_category_template: int}
      */

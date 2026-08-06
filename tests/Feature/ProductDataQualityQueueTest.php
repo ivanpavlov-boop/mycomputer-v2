@@ -4,15 +4,24 @@ namespace Tests\Feature;
 
 use App\Filament\Resources\ProductDataQualityQueue\Pages\ListProductDataQualityQueue;
 use App\Filament\Resources\ProductDataQualityQueue\ProductDataQualityQueueResource;
+use App\Filament\Resources\ProductDataQualityQueue\Widgets\ProductDataQualityQueueStats;
 use App\Filament\Resources\Products\ProductResource;
+use App\Models\AttributeValue;
+use App\Models\Category;
+use App\Models\CategoryProductAttribute;
 use App\Models\Product;
+use App\Models\ProductAttribute;
+use App\Models\ProductAttributeValue;
 use App\Models\ProductImage;
 use App\Models\ProductQualityFlag;
 use App\Models\ProductQualityFlagAssignment;
 use App\Models\User;
 use App\Services\Products\ProductDataQualityScanner;
+use App\Services\Products\ProductSpecificationQualityResult;
+use App\Services\Products\ProductSpecificationQualityService;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Livewire\Livewire;
 use Tests\TestCase;
 
@@ -355,6 +364,181 @@ class ProductDataQualityQueueTest extends TestCase
         $this->assertFalse((bool) config('catalog_sync.auto_enabled'));
     }
 
+    public function test_missing_attributes_uses_exact_authoritative_specification_states_for_models_and_queries(): void
+    {
+        $scenario = $this->specificationQueueScenario();
+        $scanner = app(ProductDataQualityScanner::class);
+        $quality = app(ProductSpecificationQualityService::class);
+        $expectedStatuses = [
+            'missing_required' => ProductSpecificationQualityResult::STATUS_MISSING_REQUIRED,
+            'needs_data' => ProductSpecificationQualityResult::STATUS_NEEDS_DATA,
+            'inherited_missing' => ProductSpecificationQualityResult::STATUS_MISSING_REQUIRED,
+            'invalid_select' => ProductSpecificationQualityResult::STATUS_MISSING_REQUIRED,
+            'invalid_multiselect' => ProductSpecificationQualityResult::STATUS_MISSING_REQUIRED,
+            'no_template' => ProductSpecificationQualityResult::STATUS_NO_CATEGORY_TEMPLATE,
+            'no_category' => ProductSpecificationQualityResult::STATUS_NO_CATEGORY_TEMPLATE,
+            'good' => ProductSpecificationQualityResult::STATUS_GOOD,
+            'unrelated_issue' => ProductSpecificationQualityResult::STATUS_GOOD,
+            'flag_only' => ProductSpecificationQualityResult::STATUS_GOOD,
+        ];
+
+        foreach ($expectedStatuses as $key => $status) {
+            $product = $scenario[$key];
+            $result = $quality->evaluate($product);
+
+            $this->assertSame($status, $result->status, "Unexpected specification state for {$key}.");
+            $this->assertSame(
+                $result->isIncomplete(),
+                $scanner->productHasIssue($product, ProductDataQualityScanner::ISSUE_MISSING_ATTRIBUTES),
+                "Model issue evaluation diverged for {$key}.",
+            );
+        }
+
+        $incomplete = collect([
+            $scenario['missing_required'],
+            $scenario['needs_data'],
+            $scenario['inherited_missing'],
+            $scenario['invalid_select'],
+            $scenario['invalid_multiselect'],
+            $scenario['no_template'],
+            $scenario['no_category'],
+        ]);
+        $allProducts = collect($scenario)->filter(fn (mixed $value): bool => $value instanceof Product);
+        $issueIds = $scanner
+            ->applyIssueQuery(
+                Product::query()->whereKey($allProducts->pluck('id')),
+                ProductDataQualityScanner::ISSUE_MISSING_ATTRIBUTES,
+            )
+            ->orderBy('id')
+            ->pluck('id')
+            ->all();
+
+        $this->assertSame($incomplete->pluck('id')->sort()->values()->all(), $issueIds);
+        $this->assertTrue($scenario['missing_required']->attributeValues()->exists());
+        $this->assertNotEmpty($scenario['missing_required']->specifications);
+        $this->assertSame(
+            'Непълни характеристики',
+            ProductDataQualityScanner::issueOptions()[ProductDataQualityScanner::ISSUE_MISSING_ATTRIBUTES],
+        );
+
+        $queueIds = $scanner->applyQueueScope(Product::query()->whereKey($allProducts->pluck('id')))
+            ->orderBy('id')
+            ->pluck('id')
+            ->all();
+        $expectedQueueIds = $incomplete
+            ->push($scenario['unrelated_issue'])
+            ->push($scenario['flag_only'])
+            ->pluck('id')
+            ->sort()
+            ->values()
+            ->all();
+
+        $this->assertSame($expectedQueueIds, $queueIds);
+        $this->assertNotContains($scenario['good']->id, $queueIds);
+    }
+
+    public function test_queue_filters_and_statistics_keep_specification_states_exact_and_non_overlapping(): void
+    {
+        $this->actingAsRole(User::ROLE_SUPER_ADMIN);
+        $scenario = $this->specificationQueueScenario();
+        $incomplete = collect([
+            $scenario['missing_required'],
+            $scenario['needs_data'],
+            $scenario['inherited_missing'],
+            $scenario['invalid_select'],
+            $scenario['invalid_multiselect'],
+            $scenario['no_template'],
+            $scenario['no_category'],
+        ]);
+
+        Livewire::test(ListProductDataQualityQueue::class)
+            ->filterTable('issue_type', ProductDataQualityScanner::ISSUE_MISSING_ATTRIBUTES)
+            ->assertCanSeeTableRecords($incomplete)
+            ->assertCanNotSeeTableRecords([
+                $scenario['good'],
+                $scenario['unrelated_issue'],
+                $scenario['flag_only'],
+            ])
+            ->assertSee('Непълни характеристики');
+
+        Livewire::test(ListProductDataQualityQueue::class)
+            ->filterTable('issue_type', ProductDataQualityScanner::ISSUE_MISSING_ATTRIBUTES)
+            ->filterTable('specification_quality_state', ProductSpecificationQualityResult::STATUS_NEEDS_DATA)
+            ->assertCanSeeTableRecords([$scenario['needs_data']])
+            ->assertCanNotSeeTableRecords($incomplete->reject(
+                fn (Product $product): bool => $product->is($scenario['needs_data']),
+            ));
+
+        Livewire::test(ListProductDataQualityQueue::class)
+            ->filterTable('specification_quality_state', ProductSpecificationQualityResult::STATUS_GOOD)
+            ->assertCanSeeTableRecords([$scenario['unrelated_issue'], $scenario['flag_only']])
+            ->assertCanNotSeeTableRecords([$scenario['good'], ...$incomplete]);
+
+        $scanner = app(ProductDataQualityScanner::class);
+        $quality = app(ProductSpecificationQualityService::class);
+        $allProductIds = collect($scenario)
+            ->filter(fn (mixed $value): bool => $value instanceof Product)
+            ->pluck('id');
+        $queueScope = $scanner->applyQueueScope(Product::query()->whereKey($allProductIds));
+        $counts = $quality->countsFor($queueScope);
+
+        $this->assertSame(4, $counts[ProductSpecificationQualityResult::STATUS_MISSING_REQUIRED]);
+        $this->assertSame(1, $counts[ProductSpecificationQualityResult::STATUS_NEEDS_DATA]);
+        $this->assertSame(2, $counts[ProductSpecificationQualityResult::STATUS_NO_CATEGORY_TEMPLATE]);
+        $this->assertSame(2, $counts[ProductSpecificationQualityResult::STATUS_GOOD]);
+        $this->assertSame((clone $queueScope)->count(), array_sum($counts));
+
+        Livewire::test(ProductDataQualityQueueStats::class)
+            ->assertSee('Липсват задължителни характеристики')
+            ->assertSee('Непълни препоръчителни характеристики')
+            ->assertSee('Няма шаблон за категорията');
+    }
+
+    public function test_specification_queue_evaluation_rendering_stats_and_filters_are_read_only_with_bounded_queries(): void
+    {
+        $this->actingAsRole(User::ROLE_VIEWER_AUDITOR);
+        $scenario = $this->specificationQueueScenario();
+        $before = $this->protectedQualitySnapshot();
+        $scanner = app(ProductDataQualityScanner::class);
+        $this->assertTrue($scanner->productHasIssue(
+            $scenario['invalid_multiselect'],
+            ProductDataQualityScanner::ISSUE_MISSING_ATTRIBUTES,
+        ));
+        $scanner->applyIssueQuery(
+            Product::query(),
+            ProductDataQualityScanner::ISSUE_MISSING_ATTRIBUTES,
+        )->count();
+
+        $queryCount = 0;
+
+        DB::listen(function () use (&$queryCount): void {
+            $queryCount++;
+        });
+
+        Livewire::test(ListProductDataQualityQueue::class)
+            ->filterTable('issue_type', ProductDataQualityScanner::ISSUE_MISSING_ATTRIBUTES)
+            ->filterTable('specification_quality_state', ProductSpecificationQualityResult::STATUS_MISSING_REQUIRED)
+            ->assertCanSeeTableRecords([
+                $scenario['missing_required'],
+                $scenario['inherited_missing'],
+                $scenario['invalid_select'],
+                $scenario['invalid_multiselect'],
+            ]);
+
+        $queueRenderQueryCount = $queryCount;
+
+        Livewire::test(ProductDataQualityQueueStats::class)
+            ->assertSee('Продукти за преглед');
+
+        $this->assertLessThanOrEqual(70, $queueRenderQueryCount);
+        $this->assertContains(DB::connection()->getDriverName(), ['sqlite', 'mysql', 'mariadb']);
+        $this->assertSame($before, $this->protectedQualitySnapshot());
+        $this->assertTrue(ProductDataQualityQueueResource::canViewAny());
+        $this->assertFalse(ProductDataQualityQueueResource::canCreate());
+        $this->assertFalse(ProductDataQualityQueueResource::canEdit($scenario['missing_required']));
+        $this->assertFalse(ProductDataQualityQueueResource::canDelete($scenario['missing_required']));
+    }
+
     private function actingAsRole(string $role): User
     {
         $user = User::factory()->create([
@@ -398,5 +582,194 @@ class ProductDataQualityQueueTest extends TestCase
         }
 
         return $product;
+    }
+
+    /**
+     * @return array<string, Product>
+     */
+    private function specificationQueueScenario(): array
+    {
+        $parent = Category::factory()->create(['name' => 'Компютри']);
+        $child = Category::factory()->create(['name' => 'Лаптопи', 'parent_id' => $parent->id]);
+        $selectCategory = Category::factory()->create(['name' => 'Монитори']);
+        $multiselectCategory = Category::factory()->create(['name' => 'Докинг станции']);
+        $noTemplateCategory = Category::factory()->create(['name' => 'Без шаблон']);
+        $ram = $this->qualityAttribute('RAM', ProductAttribute::TYPE_TEXT);
+        $color = $this->qualityAttribute('Цвят', ProductAttribute::TYPE_TEXT);
+        $panel = $this->qualityAttribute('Панел', ProductAttribute::TYPE_SELECT);
+        $ports = $this->qualityAttribute('Портове', ProductAttribute::TYPE_MULTISELECT);
+        $unrelated = $this->qualityAttribute('Друг атрибут', ProductAttribute::TYPE_SELECT);
+        AttributeValue::factory()->create(['product_attribute_id' => $panel->id, 'value' => 'IPS']);
+        $usb = AttributeValue::factory()->create(['product_attribute_id' => $ports->id, 'value' => 'USB']);
+        $wrong = AttributeValue::factory()->create(['product_attribute_id' => $unrelated->id, 'value' => 'Невалидна']);
+
+        $this->qualityAssignment($parent, $ram, required: true, order: 1);
+        $this->qualityAssignment($parent, $color, required: false, order: 2);
+        $this->qualityAssignment($selectCategory, $panel, required: true);
+        $this->qualityAssignment($multiselectCategory, $ports, required: true);
+
+        $missingRequired = $this->specificationQualityReadyProduct($parent, 'Missing required');
+        $this->qualityTextValue($missingRequired, $color, 'Черен');
+        $needsData = $this->specificationQualityReadyProduct($parent, 'Needs data');
+        $this->qualityTextValue($needsData, $ram, '16 GB');
+        $inheritedMissing = $this->specificationQualityReadyProduct($child, 'Inherited missing');
+        $this->qualityTextValue($inheritedMissing, $color, 'Сребрист');
+        $invalidSelect = $this->specificationQualityReadyProduct($selectCategory, 'Invalid select');
+        ProductAttributeValue::factory()->create([
+            'product_id' => $invalidSelect->id,
+            'product_attribute_id' => $panel->id,
+            'attribute_value_id' => $wrong->id,
+            'value_text' => null,
+            'custom_value' => 'Невалидна',
+        ]);
+        $invalidMultiselect = $this->specificationQualityReadyProduct($multiselectCategory, 'Invalid multiselect');
+        ProductAttributeValue::factory()->create([
+            'product_id' => $invalidMultiselect->id,
+            'product_attribute_id' => $ports->id,
+            'value_json' => ['attribute_value_ids' => [$usb->id, $wrong->id]],
+            'value_text' => null,
+            'custom_value' => null,
+        ]);
+        $noTemplate = $this->specificationQualityReadyProduct($noTemplateCategory, 'No template');
+        $noCategory = $this->specificationQualityReadyProduct(null, 'No category');
+        $good = $this->specificationQualityReadyProduct($parent, 'Complete specification');
+        $this->qualityTextValue($good, $ram, '32 GB');
+        $this->qualityTextValue($good, $color, 'Черен');
+        $unrelatedIssue = $this->specificationQualityReadyProduct($parent, 'Unrelated issue', ['ean' => null]);
+        $this->qualityTextValue($unrelatedIssue, $ram, '32 GB');
+        $this->qualityTextValue($unrelatedIssue, $color, 'Черен');
+        $flagOnly = $this->specificationQualityReadyProduct($parent, 'Flag only');
+        $this->qualityTextValue($flagOnly, $ram, '64 GB');
+        $this->qualityTextValue($flagOnly, $color, 'Сив');
+        $flag = ProductQualityFlag::query()->create([
+            'code' => 'specification_queue_manual_review',
+            'label_bg' => 'Ръчен преглед',
+            'label_en' => 'Manual review',
+            'severity' => ProductQualityFlag::SEVERITY_MEDIUM,
+            'responsible_role' => User::ROLE_PRODUCT_EDITOR,
+            'type' => ProductQualityFlag::TYPE_DATA,
+            'is_active' => true,
+            'sort_order' => 1,
+        ]);
+        ProductQualityFlagAssignment::query()->create([
+            'product_id' => $flagOnly->id,
+            'product_quality_flag_id' => $flag->id,
+            'status' => ProductQualityFlagAssignment::STATUS_ACTIVE,
+        ]);
+
+        return [
+            'missing_required' => $missingRequired,
+            'needs_data' => $needsData,
+            'inherited_missing' => $inheritedMissing,
+            'invalid_select' => $invalidSelect,
+            'invalid_multiselect' => $invalidMultiselect,
+            'no_template' => $noTemplate,
+            'no_category' => $noCategory,
+            'good' => $good,
+            'unrelated_issue' => $unrelatedIssue,
+            'flag_only' => $flagOnly,
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $overrides
+     */
+    private function specificationQualityReadyProduct(?Category $category, string $name, array $overrides = []): Product
+    {
+        $product = Product::factory()->create(array_merge([
+            'category_id' => $category?->id,
+            'name' => $name,
+            'description' => str_repeat('Подробно продуктово описание за проверка на качеството. ', 3),
+            'short_description' => 'Кратко описание с достатъчно подробности.',
+            'meta_title' => $name,
+            'meta_description' => 'Пълно SEO описание за продуктовата опашка.',
+            'name_translations' => ['en' => $name],
+            'description_translations' => ['en' => 'Detailed English product description.'],
+            'meta_title_translations' => ['en' => $name],
+            'specifications' => ['legacy' => 'preserved'],
+        ], $overrides));
+
+        ProductImage::query()->create([
+            'product_id' => $product->id,
+            'path' => "products/specification-queue-{$product->id}.jpg",
+            'alt_text' => $name,
+            'sort_order' => 1,
+            'is_primary' => true,
+        ]);
+
+        return $product;
+    }
+
+    private function qualityAttribute(string $label, string $type): ProductAttribute
+    {
+        return ProductAttribute::factory()->create([
+            'code' => str($label)->ascii()->slug('_')->append('_', fake()->unique()->numberBetween(1000, 9999))->toString(),
+            'name' => $label,
+            'name_bg' => $label,
+            'type' => $type,
+            'is_active' => true,
+            'is_required' => false,
+            'is_required_by_default' => false,
+            'is_visible_on_product' => false,
+            'is_filterable' => false,
+            'is_comparable' => false,
+        ]);
+    }
+
+    private function qualityAssignment(
+        Category $category,
+        ProductAttribute $attribute,
+        bool $required,
+        int $order = 0,
+    ): CategoryProductAttribute {
+        return CategoryProductAttribute::factory()->create([
+            'category_id' => $category->id,
+            'product_attribute_id' => $attribute->id,
+            'is_required' => $required,
+            'is_visible_on_product' => ! $required,
+            'sort_order' => $order,
+        ]);
+    }
+
+    private function qualityTextValue(Product $product, ProductAttribute $attribute, string $value): ProductAttributeValue
+    {
+        return ProductAttributeValue::factory()->create([
+            'product_id' => $product->id,
+            'product_attribute_id' => $attribute->id,
+            'value_text' => $value,
+            'custom_value' => $value,
+        ]);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function protectedQualitySnapshot(): array
+    {
+        $tables = [
+            'products',
+            'categories',
+            'brands',
+            'product_images',
+            'product_attributes',
+            'attribute_values',
+            'product_attribute_values',
+            'category_product_attributes',
+            'product_quality_flags',
+            'product_quality_flag_assignments',
+            'supplier_products',
+            'product_supplier_offers',
+            'users',
+            'roles',
+            'permissions',
+        ];
+
+        return collect($tables)->mapWithKeys(fn (string $table): array => [
+            $table => DB::table($table)
+                ->orderBy('id')
+                ->get()
+                ->map(fn (object $row): array => (array) $row)
+                ->all(),
+        ])->all();
     }
 }

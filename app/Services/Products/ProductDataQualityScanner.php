@@ -28,6 +28,10 @@ class ProductDataQualityScanner
 
     public const MIN_SHORT_DESCRIPTION_LENGTH = 30;
 
+    public function __construct(
+        private readonly ProductSpecificationQualityService $specificationQuality,
+    ) {}
+
     /**
      * @return array<string, string>
      */
@@ -40,7 +44,7 @@ class ProductDataQualityScanner
             self::ISSUE_MISSING_SEO => 'Липсва SEO',
             self::ISSUE_MISSING_EN_TRANSLATION => 'Липсва EN превод',
             self::ISSUE_WEAK_DESCRIPTION => 'Слабо описание',
-            self::ISSUE_MISSING_ATTRIBUTES => 'Липсват атрибути',
+            self::ISSUE_MISSING_ATTRIBUTES => 'Непълни характеристики',
             self::ISSUE_MISSING_EAN => 'Липсва EAN',
         ];
     }
@@ -103,7 +107,8 @@ class ProductDataQualityScanner
             self::ISSUE_MISSING_SEO => blank($product->meta_title) || blank($product->meta_description),
             self::ISSUE_MISSING_EN_TRANSLATION => $this->missingEnglishTranslation($product),
             self::ISSUE_WEAK_DESCRIPTION => $this->hasWeakDescription($product),
-            self::ISSUE_MISSING_ATTRIBUTES => $this->missingAttributes($product),
+            self::ISSUE_MISSING_ATTRIBUTES => $this->specificationQuality
+                ->productHasIncompleteSpecifications($product),
             self::ISSUE_MISSING_EAN => blank($product->ean),
             default => false,
         };
@@ -154,16 +159,7 @@ class ProductDataQualityScanner
                     ->orWhere('short_description', '')
                     ->orWhereRaw('LENGTH(short_description) < ?', [self::MIN_SHORT_DESCRIPTION_LENGTH]);
             }),
-            self::ISSUE_MISSING_ATTRIBUTES => $query->where(function (Builder $query): void {
-                $query
-                    ->doesntHave('attributes')
-                    ->where(function (Builder $query): void {
-                        $query
-                            ->whereNull('specifications')
-                            ->orWhere('specifications', '[]')
-                            ->orWhere('specifications', '{}');
-                    });
-            }),
+            self::ISSUE_MISSING_ATTRIBUTES => $this->specificationQuality->applyIncompleteQuery($query),
             self::ISSUE_MISSING_EAN => $query->where(fn (Builder $query): Builder => $query->whereNull('ean')->orWhere('ean', '')),
             default => $query,
         };
@@ -197,14 +193,5 @@ class ProductDataQualityScanner
 
         return mb_strlen($description) < self::MIN_DESCRIPTION_LENGTH
             || mb_strlen($shortDescription) < self::MIN_SHORT_DESCRIPTION_LENGTH;
-    }
-
-    private function missingAttributes(Product $product): bool
-    {
-        $hasAssignedAttributes = $product->relationLoaded('attributes')
-            ? $product->attributes->isNotEmpty()
-            : $product->attributes()->exists();
-
-        return ! $hasAssignedAttributes && blank($product->specifications);
     }
 }
