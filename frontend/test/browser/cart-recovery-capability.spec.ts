@@ -69,15 +69,16 @@ test('clears the fragment before body-only recovery and redirects safely', async
   expect(browserErrors).toEqual([])
 })
 
-test('uses one neutral state for unavailable and malformed fragments', async ({ page }) => {
+test('uses one neutral state for an unavailable recovery capability', async ({ page }) => {
   const unavailable = await page.goto(`/cart/recover#${unavailableCapability}`)
 
   expect(unavailable?.status()).toBe(200)
   await expect(page).toHaveURL(/\/cart\/recover$/)
   await expect(page.getByText('Линкът за възстановяване не е наличен или е изтекъл.')).toBeVisible()
   expect(await page.content()).not.toContain(unavailableCapability)
+})
 
-  await page.goto('/cart')
+test('uses one neutral state for a malformed recovery fragment', async ({ page }) => {
   const malformed = await page.goto('/cart/recover#not-valid')
 
   expect(malformed?.status()).toBe(200)
