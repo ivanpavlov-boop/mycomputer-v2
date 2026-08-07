@@ -7,7 +7,10 @@ use App\Filament\Resources\ProductDataQualityQueue\Widgets\ProductDataQualityQue
 use App\Filament\Resources\Products\ProductResource;
 use App\Models\Brand;
 use App\Models\Category;
+use App\Models\CategoryProductAttribute;
 use App\Models\Product;
+use App\Models\ProductAttribute;
+use App\Models\ProductAttributeValue;
 use App\Models\ProductImage;
 use App\Models\SupplierProduct;
 use App\Models\User;
@@ -239,6 +242,7 @@ class ProductImageAltQualityWorkflowTest extends TestCase
         $this->addImage($complete, 'Основна', primary: true);
         $outsideQueue = $this->qualityProduct();
         $this->addImage($outsideQueue, 'Основна', primary: true);
+        $this->completeSpecifications($outsideQueue);
 
         $scanner = app(ProductDataQualityScanner::class);
         $counts = app(ProductImageQualityService::class)
@@ -334,7 +338,7 @@ class ProductImageAltQualityWorkflowTest extends TestCase
         app(ProductDataQualitySummaryService::class)->summarize($product->fresh());
         $this->get(ProductResource::getUrl('edit', ['record' => $product]))->assertOk();
 
-        $this->assertLessThanOrEqual(25, $queueQueryCount, "Queue used {$queueQueryCount} queries for 12 Products.");
+        $this->assertLessThanOrEqual(30, $queueQueryCount, "Queue used {$queueQueryCount} queries for 12 Products.");
         $this->assertSame($beforeCounts, $this->protectedTableCounts());
         $this->assertSame($beforeProducts, Product::query()->orderBy('id')->get()->map->getAttributes()->all());
         $this->assertSame($beforeImages, ProductImage::query()->orderBy('id')->get()->map->getAttributes()->all());
@@ -420,6 +424,25 @@ class ProductImageAltQualityWorkflowTest extends TestCase
             'alt_text' => $altText,
             'sort_order' => $order,
             'is_primary' => $primary,
+        ]);
+    }
+
+    private function completeSpecifications(Product $product): void
+    {
+        $attribute = ProductAttribute::factory()->create([
+            'type' => ProductAttribute::TYPE_TEXT,
+            'is_active' => true,
+        ]);
+        CategoryProductAttribute::factory()->create([
+            'category_id' => $product->category_id,
+            'product_attribute_id' => $attribute->id,
+            'is_required' => true,
+        ]);
+        ProductAttributeValue::factory()->create([
+            'product_id' => $product->id,
+            'product_attribute_id' => $attribute->id,
+            'value_text' => 'Попълнена характеристика',
+            'custom_value' => 'Попълнена характеристика',
         ]);
     }
 

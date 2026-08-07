@@ -82,6 +82,22 @@ final class ProductSpecificationQualityService
         });
     }
 
+    public function productHasIncompleteSpecifications(Product $product): bool
+    {
+        return $this->evaluate($product)->isIncomplete();
+    }
+
+    public function applyIncompleteQuery(Builder $query): Builder
+    {
+        return $query->where(function (Builder $query): void {
+            foreach (ProductSpecificationQualityResult::INCOMPLETE_STATUSES as $status) {
+                $query->orWhere(function (Builder $query) use ($status): void {
+                    $this->applyStateQuery($query, $status);
+                });
+            }
+        });
+    }
+
     /**
      * @return array{good: int, needs_data: int, missing_required: int, no_category_template: int}
      */
@@ -600,13 +616,21 @@ final class ProductSpecificationQualityService
 
     private function whereJsonFilled(Builder $query): void
     {
+        $column = 'product_attribute_values.value_json';
+
         if (in_array($query->getConnection()->getDriverName(), ['mysql', 'mariadb'], true)) {
-            $query->whereRaw('JSON_LENGTH(product_attribute_values.value_json) > 0');
+            $query
+                ->whereRaw("JSON_TYPE({$column}) IN ('ARRAY', 'OBJECT')")
+                ->whereRaw("JSON_LENGTH({$column}) > 0");
 
             return;
         }
 
-        $query->whereRaw('EXISTS (SELECT 1 FROM json_each(product_attribute_values.value_json))');
+        $safeJson = "CASE WHEN json_valid({$column}) = 1 THEN {$column} ELSE NULL END";
+
+        $query
+            ->whereRaw("json_type({$safeJson}) IN ('array', 'object')")
+            ->whereRaw("EXISTS (SELECT 1 FROM json_each({$safeJson}))");
     }
 
     private function attributeLabel(ProductAttribute $attribute): string

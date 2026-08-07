@@ -149,11 +149,12 @@ Phase 8 manual selected UPDATE price/stock sync has been implemented behind a fe
 | Phase 8.5B | Product workflow and configurable quality flags | Complete |
 | Phase 8.6A | Multilingual foundation | Complete |
 | Phase 9A | Product data quality and enrichment queue | Complete |
-| Product Data Quality 2A | Unified Product edit quality summary | Complete locally; read-only warning presentation combining scanner issues, specification quality and active manual flags. |
-| Product Data Quality 2B | Category and brand quality workflow | Complete locally; read-only queue triage, filters, counts and Product edit summary state with manual remediation through the existing form. |
-| Product Data Quality 2C | Image and ALT-text quality workflow | Complete locally; read-only image metadata states, queue triage, counts and Product edit summary with manual remediation through existing image controls. |
-| Product Data Quality 2D | SEO and description quality workflow | Complete locally; read-only SEO, Bulgarian description and English-localization completeness states, queue triage, counts and Product edit summary with manual remediation through existing fields. |
-| Product Data Quality 2E | Category-template and specification completion | Complete locally; shared read-only template inheritance resolution, exact specification completion states, queue/category triage and Product edit summary with manual remediation through existing editors. |
+| Product Data Quality 2A | Unified Product edit quality summary | Merged; read-only warning presentation combining scanner issues, specification quality and active manual flags. |
+| Product Data Quality 2B | Category and brand quality workflow | Merged; read-only queue triage, filters, counts and Product edit summary state with manual remediation through the existing form. |
+| Product Data Quality 2C | Image and ALT-text quality workflow | Merged; read-only image metadata states, queue triage, counts and Product edit summary with manual remediation through existing image controls. |
+| Product Data Quality 2D | SEO and description quality workflow | Merged; read-only SEO, Bulgarian description and English-localization completeness states, queue triage, counts and Product edit summary with manual remediation through existing fields. |
+| Product Data Quality 2E | Category-template and specification completion | Merged; shared read-only template inheritance resolution, exact specification completion states, queue/category triage and Product edit summary with manual remediation through existing editors. |
+| Phase 9C.8 | Product specification data quality polish | Complete locally; specification-aware queue eligibility reuses the existing exact quality states and remains read-only. |
 | Commerce Phase 1A | Cart Architecture, Safety and Gap Audit | Complete locally; read-only architecture report, machine-readable gap register and phased remediation plan. No Cart or checkout implementation changed. |
 | Commerce Phase 1B.1 | Unified Cart Identity and Ownership Boundary | Merged, deployed and staging verified; shared request-level UUID and ownership resolver, atomic anonymous-Cart claim, checkout cross-user rejection and session-authorized shipping subtotal. |
 | Commerce Phase 1B.2 | Cart Lifecycle and Guest-to-User Policy | Merged, deployed and staging verified; deterministic active/expired/converted/merged lifecycle, 14-day expiry renewal, authenticated Cart convergence, conflict-safe guest-to-user merge and dry-run-first stale expiration. |
@@ -253,7 +254,6 @@ Phase 8 manual selected UPDATE price/stock sync has been implemented behind a fe
 | Phase 9C.6.6 | Multi-Supplier Category Mapping Review | Review mappings in batches using the full multi-supplier picture. |
 | Phase 9C.6.7 | Multi-Supplier Identifier Overlap Review | Review exact and possible overlaps before future offer grouping. |
 | Phase 9C.7 | Supplier Attribute Mapping Foundation | Preview/planning foundation only until a later explicit approval/write phase. |
-| Phase 9C.8 | Product specification data quality polish | Improve admin ergonomics after real queue usage. |
 | Phase 9 | Rollback support | Required before broad writes. |
 | Phase 10 | Manual Sync All eligible CREATE | Later, after stronger audit controls. |
 | Phase 11 | Scheduled preview generation | Preview only before scheduled writes. |
@@ -364,6 +364,28 @@ Products, categories, templates, attributes, values, quality flags or supplier
 records. It does not block Product saves or workflow transitions, change public
 visibility, import images, overwrite category or attribute ownership, or alter
 supplier import or Catalog Sync behavior.
+
+## Phase 9C.8 Scope
+
+The Product Data Quality Queue previously treated `missing_attributes` as the
+coarse combination of no Product Attribute Value rows and empty legacy
+`products.specifications` JSON. That could omit Products which already had one
+value but were still incomplete against their effective direct or inherited
+Category specification template.
+
+The stable `missing_attributes` issue now delegates both Product evaluation and
+database filtering to the existing `ProductSpecificationQualityService`. It
+includes exactly `missing_required`, `needs_data` and
+`no_category_template`; `good` is excluded unless another scanner issue or an
+active manual quality flag independently keeps the Product in the Queue. The
+existing exact specification-state filter, compact completion columns and
+distinct Product statistics remain in place.
+
+This polish is read-only and performs no automatic repair or assignment. It
+does not create or modify Products, templates, attributes, values, flags or
+supplier records. Product edit remains the only remediation path under existing
+authorization, and no workflow, public visibility, supplier import or Catalog
+Sync behavior changes.
 
 ## Phase 9C.9 Scope
 

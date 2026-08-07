@@ -7,7 +7,10 @@ use App\Filament\Resources\ProductDataQualityQueue\Widgets\ProductDataQualityQue
 use App\Filament\Resources\Products\ProductResource;
 use App\Models\Brand;
 use App\Models\Category;
+use App\Models\CategoryProductAttribute;
 use App\Models\Product;
+use App\Models\ProductAttribute;
+use App\Models\ProductAttributeValue;
 use App\Models\ProductImage;
 use App\Models\SupplierProduct;
 use App\Models\User;
@@ -189,6 +192,7 @@ class ProductCategoryBrandQualityWorkflowTest extends TestCase
         $this->actingAsRole(User::ROLE_CATALOG_MANAGER);
         $queueProduct = $this->queueProduct();
         $completeOutsideQueue = $this->queueProduct([], withImage: true);
+        $this->completeSpecifications($completeOutsideQueue);
         $deleted = $this->queueProduct();
         $deleted->delete();
 
@@ -206,7 +210,8 @@ class ProductCategoryBrandQualityWorkflowTest extends TestCase
         $this->queueProduct(['category_id' => $category->id, 'brand_id' => null]);
         $this->queueProduct(['category_id' => null, 'brand_id' => null]);
         $this->queueProduct(['category_id' => $category->id, 'brand_id' => $brand->id]);
-        $this->queueProduct([], withImage: true);
+        $outsideQueue = $this->queueProduct([], withImage: true);
+        $this->completeSpecifications($outsideQueue);
 
         $scanner = app(ProductDataQualityScanner::class);
         $counts = app(ProductCategoryBrandQualityService::class)
@@ -373,6 +378,29 @@ class ProductCategoryBrandQualityWorkflowTest extends TestCase
         }
 
         return $product;
+    }
+
+    private function completeSpecifications(Product $product): void
+    {
+        if (! $product->category_id) {
+            return;
+        }
+
+        $attribute = ProductAttribute::factory()->create([
+            'type' => ProductAttribute::TYPE_TEXT,
+            'is_active' => true,
+        ]);
+        CategoryProductAttribute::factory()->create([
+            'category_id' => $product->category_id,
+            'product_attribute_id' => $attribute->id,
+            'is_required' => true,
+        ]);
+        ProductAttributeValue::factory()->create([
+            'product_id' => $product->id,
+            'product_attribute_id' => $attribute->id,
+            'value_text' => 'Попълнена характеристика',
+            'custom_value' => 'Попълнена характеристика',
+        ]);
     }
 
     /**
