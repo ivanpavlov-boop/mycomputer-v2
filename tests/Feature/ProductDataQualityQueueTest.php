@@ -364,6 +364,169 @@ class ProductDataQualityQueueTest extends TestCase
         $this->assertFalse((bool) config('catalog_sync.auto_enabled'));
     }
 
+    public function test_json_specification_completeness_matches_for_models_queries_filters_counts_and_queue_scope(): void
+    {
+        $this->actingAsRole(User::ROLE_SUPER_ADMIN);
+
+        $category = Category::factory()->create(['name' => 'JSON specifications']);
+        $attribute = $this->qualityAttribute('JSON configuration', ProductAttribute::TYPE_JSON);
+        $this->qualityAssignment($category, $attribute, required: true);
+
+        $cases = [
+            'database_null' => [null, false, 'null'],
+            'json_null' => ['null', false, 'null'],
+            'empty_string' => ['""', false, 'string'],
+            'string_scalar' => ['"ready"', false, 'string'],
+            'number_scalar' => ['42', false, 'int'],
+            'boolean_false' => ['false', false, 'bool'],
+            'boolean_true' => ['true', false, 'bool'],
+            'empty_array' => ['[]', false, 'array'],
+            'empty_object' => ['{}', false, 'stdClass'],
+            'non_empty_array' => ['["ready"]', true, 'array'],
+            'non_empty_object' => ['{"state":"ready"}', true, 'stdClass'],
+        ];
+
+        if (DB::connection()->getDriverName() === 'sqlite') {
+            $cases['malformed_json'] = ['not-json', false, 'malformed'];
+        }
+
+        $products = collect();
+        $valueIds = collect();
+
+        foreach ($cases as $key => [$storedJson, $filled, $rootType]) {
+            $product = $this->specificationQualityReadyProduct($category, "JSON {$key}");
+            $value = ProductAttributeValue::factory()->create([
+                'product_id' => $product->id,
+                'product_attribute_id' => $attribute->id,
+                'custom_value' => null,
+                'value_text' => null,
+                'value_json' => null,
+            ]);
+
+            if ($storedJson !== null) {
+                DB::table('product_attribute_values')
+                    ->where('id', $value->id)
+                    ->update(['value_json' => $storedJson]);
+            }
+
+            $rawValue = DB::table('product_attribute_values')->where('id', $value->id)->value('value_json');
+
+            if ($rootType === 'malformed') {
+                json_decode((string) $rawValue);
+                $this->assertNotSame(JSON_ERROR_NONE, json_last_error(), "Malformed JSON was normalized for {$key}.");
+            } else {
+                $decoded = $rawValue === null
+                    ? null
+                    : json_decode((string) $rawValue, flags: JSON_THROW_ON_ERROR);
+
+                $this->assertSame($rootType, get_debug_type($decoded), "Stored JSON root changed for {$key}.");
+            }
+
+            $products->put($key, $product->fresh());
+            $valueIds->push($value->id);
+        }
+
+        $productIds = $products->pluck('id');
+        $before = [
+            'products' => DB::table('products')->whereIn('id', $productIds)->orderBy('id')->get()->map(fn (object $row): array => (array) $row)->all(),
+            'values' => DB::table('product_attribute_values')->whereIn('id', $valueIds)->orderBy('id')->get()->map(fn (object $row): array => (array) $row)->all(),
+        ];
+        $scanner = app(ProductDataQualityScanner::class);
+        $quality = app(ProductSpecificationQualityService::class);
+        $incomplete = collect();
+        $complete = collect();
+
+        foreach ($cases as $key => [, $filled]) {
+            /** @var Product $product */
+            $product = $products[$key];
+            $result = $quality->evaluate($product);
+            $expectedStatus = $filled
+                ? ProductSpecificationQualityResult::STATUS_GOOD
+                : ProductSpecificationQualityResult::STATUS_MISSING_REQUIRED;
+
+            $this->assertSame($expectedStatus, $result->status, "Model status diverged for {$key}.");
+            $this->assertSame(
+                ! $filled,
+                $scanner->productHasIssue($product, ProductDataQualityScanner::ISSUE_MISSING_ATTRIBUTES),
+                "Model issue evaluation diverged for {$key}.",
+            );
+            $this->assertSame(
+                ! $filled,
+                $scanner->applyIssueQuery(
+                    Product::query()->whereKey($product->id),
+                    ProductDataQualityScanner::ISSUE_MISSING_ATTRIBUTES,
+                )->exists(),
+                "Database issue query diverged for {$key}.",
+            );
+            $this->assertSame(
+                ! $filled,
+                $quality->applyStateQuery(
+                    Product::query()->whereKey($product->id),
+                    ProductSpecificationQualityResult::STATUS_MISSING_REQUIRED,
+                )->exists(),
+                "Missing-required query diverged for {$key}.",
+            );
+            $this->assertSame(
+                $filled,
+                $quality->applyStateQuery(
+                    Product::query()->whereKey($product->id),
+                    ProductSpecificationQualityResult::STATUS_GOOD,
+                )->exists(),
+                "Good-state query diverged for {$key}.",
+            );
+
+            ($filled ? $complete : $incomplete)->push($product);
+        }
+
+        $expectedIncompleteIds = $incomplete->pluck('id')->sort()->values()->all();
+        $expectedCompleteIds = $complete->pluck('id')->sort()->values()->all();
+        $issueIds = $scanner->applyIssueQuery(
+            Product::query()->whereKey($productIds),
+            ProductDataQualityScanner::ISSUE_MISSING_ATTRIBUTES,
+        )->orderBy('id')->pluck('id')->all();
+        $queueIds = $scanner->applyQueueScope(Product::query()->whereKey($productIds))
+            ->orderBy('id')
+            ->pluck('id')
+            ->all();
+        $counts = $quality->countsFor(Product::query()->whereKey($productIds));
+
+        $this->assertSame($expectedIncompleteIds, $issueIds);
+        $this->assertSame($expectedIncompleteIds, $queueIds);
+        $this->assertSame($incomplete->count(), $counts[ProductSpecificationQualityResult::STATUS_MISSING_REQUIRED]);
+        $this->assertSame(0, $counts[ProductSpecificationQualityResult::STATUS_NEEDS_DATA]);
+        $this->assertSame(0, $counts[ProductSpecificationQualityResult::STATUS_NO_CATEGORY_TEMPLATE]);
+        $this->assertSame($complete->count(), $counts[ProductSpecificationQualityResult::STATUS_GOOD]);
+
+        Livewire::test(ListProductDataQualityQueue::class)
+            ->filterTable('issue_type', ProductDataQualityScanner::ISSUE_MISSING_ATTRIBUTES)
+            ->filterTable('specification_quality_state', ProductSpecificationQualityResult::STATUS_MISSING_REQUIRED)
+            ->assertCanSeeTableRecords($incomplete)
+            ->assertCanNotSeeTableRecords($complete);
+
+        $this->assertSame(
+            $expectedCompleteIds,
+            $quality->applyStateQuery(
+                Product::query()->whereKey($productIds),
+                ProductSpecificationQualityResult::STATUS_GOOD,
+            )->orderBy('id')->pluck('id')->all(),
+        );
+
+        foreach ($products as $product) {
+            $quality->evaluate($product);
+            $scanner->applyIssueQuery(
+                Product::query()->whereKey($product->id),
+                ProductDataQualityScanner::ISSUE_MISSING_ATTRIBUTES,
+            )->exists();
+        }
+
+        $after = [
+            'products' => DB::table('products')->whereIn('id', $productIds)->orderBy('id')->get()->map(fn (object $row): array => (array) $row)->all(),
+            'values' => DB::table('product_attribute_values')->whereIn('id', $valueIds)->orderBy('id')->get()->map(fn (object $row): array => (array) $row)->all(),
+        ];
+
+        $this->assertSame($before, $after);
+    }
+
     public function test_missing_attributes_uses_exact_authoritative_specification_states_for_models_and_queries(): void
     {
         $scenario = $this->specificationQueueScenario();
