@@ -320,15 +320,19 @@ Product specification quality, queue filters/counts, Category admin coverage
 and the Product edit summary share one read-only inheritance and validation
 path. No staging verification is claimed here.
 
-Phase 9C.8 Product Specification Data Quality Queue polish is complete locally.
-The stable `missing_attributes` issue now uses the authoritative specification
-states for Product evaluation and database filtering: `missing_required`,
-`needs_data` and `no_category_template` are included, while `good` is excluded
-unless another issue or active manual flag applies. The previous coarse check
-could miss Products with some existing values. The Queue remains read-only;
-manual Product edit is the remediation path, and there is no automatic repair,
-Product or supplier mutation, migration, public-visibility change or Catalog
-Sync behavior change.
+Phase 9C.8 Product Specification Data Quality Queue polish is implemented,
+tested, merged through PR #205, deployed at commit
+`4fbf2d7eeba3571b699cef05f689e9abf6aadc35`, technically verified and manually
+verified in the staging admin. The stable `missing_attributes` issue uses the
+authoritative specification states for Product evaluation and database
+filtering: `missing_required`, `needs_data` and `no_category_template` are
+included, while `good` is excluded unless another issue or active manual flag
+applies. The verified queue counters were 873 complete Products, 991 Products
+with issues and 1,864 total Products. The Queue remains read-only; manual
+Product edit is the remediation path, and there is no automatic repair, Product
+or supplier mutation, migration, public-visibility change or Catalog Sync
+behavior change. Phase 9C.8 is complete on staging, not deployed to
+`mycomputer.bg` and not a public-launch claim.
 
 Phase 9C.9 Storefront Specification Display is complete locally. The public
 Product detail response and Nuxt Characteristics tab now present only valid,

@@ -154,7 +154,7 @@ Phase 8 manual selected UPDATE price/stock sync has been implemented behind a fe
 | Product Data Quality 2C | Image and ALT-text quality workflow | Merged; read-only image metadata states, queue triage, counts and Product edit summary with manual remediation through existing image controls. |
 | Product Data Quality 2D | SEO and description quality workflow | Merged; read-only SEO, Bulgarian description and English-localization completeness states, queue triage, counts and Product edit summary with manual remediation through existing fields. |
 | Product Data Quality 2E | Category-template and specification completion | Merged; shared read-only template inheritance resolution, exact specification completion states, queue/category triage and Product edit summary with manual remediation through existing editors. |
-| Phase 9C.8 | Product specification data quality polish | Complete locally; specification-aware queue eligibility reuses the existing exact quality states and remains read-only. |
+| Phase 9C.8 | Product specification data quality polish | Merged through PR #205, deployed and staging verified on 2026-08-07; specification-aware queue eligibility reuses the existing exact quality states and remains read-only. |
 | Commerce Phase 1A | Cart Architecture, Safety and Gap Audit | Complete locally; read-only architecture report, machine-readable gap register and phased remediation plan. No Cart or checkout implementation changed. |
 | Commerce Phase 1B.1 | Unified Cart Identity and Ownership Boundary | Merged, deployed and staging verified; shared request-level UUID and ownership resolver, atomic anonymous-Cart claim, checkout cross-user rejection and session-authorized shipping subtotal. |
 | Commerce Phase 1B.2 | Cart Lifecycle and Guest-to-User Policy | Merged, deployed and staging verified; deterministic active/expired/converted/merged lifecycle, 14-day expiry renewal, authenticated Cart convergence, conflict-safe guest-to-user merge and dry-run-first stale expiration. |
@@ -386,6 +386,23 @@ does not create or modify Products, templates, attributes, values, flags or
 supplier records. Product edit remains the only remediation path under existing
 authorization, and no workflow, public visibility, supplier import or Catalog
 Sync behavior changes.
+
+PR #205 was deployed to COMPUTER2U staging at commit
+`4fbf2d7eeba3571b699cef05f689e9abf6aadc35` on 2026-08-07. Technical
+verification confirmed all migrations in `Ran` status, loaded admin routes, one
+active Super Admin, all required containers `Up`, defined healthchecks healthy,
+HTTP 200 for the local app and storefront, the expected `/admin` HTTP 302
+redirect and `/admin/login` HTTP 200 response, and no error indicators in the
+app, queue, scheduler or Nginx logs.
+
+Manual Filament verification confirmed that the Product Data Quality Queue
+renders its counters, Product table, search, filters and quality indicators for
+read-only inspection. The displayed counts were internally consistent: 873
+complete Products plus 991 Products with issues equalled 1,864 total Products.
+Catalog Sync CREATE remained enabled while UPDATE, Sync All and automatic sync
+remained disabled, and no Product or Catalog Sync mutation was triggered. This
+closes Phase 9C.8 on staging only; it does not claim deployment to
+`mycomputer.bg` or public launch.
 
 ## Phase 9C.9 Scope
 
