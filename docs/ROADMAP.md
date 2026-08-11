@@ -696,10 +696,13 @@ by Phase 1D.2B and CART-023 remains open. Operational boundaries are documented 
    `b2b4fb95f1d2bfe2382fe6cab9a8462fa6f7e277`, CI #322 succeeded, and VPS was
    synced and verified. APCOM schedule remains disabled; Catalog Sync UPDATE,
    Sync All, and automatic sync remain disabled.
-4. Review the local/in-review C3D synthetic missing-offer lifecycle policy.
-   It does not authorize operational lifecycle preview, offer writes,
-   storefront visibility, sitemap/noindex behavior, retention cleanup,
-   persistence, schedule enablement, import, or Catalog Sync.
+4. Review the C3D input-driven operational evidence contract and lifecycle/
+   archival semantics alongside the local synthetic policy tooling. The
+   contract is CLI-only, deterministic, non-persistent, and zero-mutation. It
+   does not authorize operational preview implementation, offer writes,
+   storefront/search/sitemap/noindex behavior, retention cleanup, persistence,
+   schedule enablement, import, or Catalog Sync. C3D remains before Supplier #3
+   selection.
 5. Select Supplier #3 only after a reviewed readiness matrix and explicit human
    decision; ASBIS remains Supplier #2.
 6. Phase 9C.6.6 Multi-Supplier Category Mapping Review.

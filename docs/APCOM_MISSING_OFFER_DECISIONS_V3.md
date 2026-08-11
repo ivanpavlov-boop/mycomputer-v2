@@ -13,7 +13,10 @@ contracts. They explicitly supersede/reference v2 and do not rewrite
 `APCOM-STAGING-ONLY-001` is confirmed for policy interpretation only: one
 source absence is not EOL. Three qualified consecutive missing snapshots plus
 48 hours can make only the APCOM offer future-deactivation eligible. Execution
-in this phase is prohibited.
+in this phase is prohibited. The first operational preview must consume an
+immutable, versioned evidence bundle supplied at runtime. It must not infer the
+three-snapshot history from `received_at` or `last_seen_at`, and it must not
+persist lifecycle state or preview results.
 
 ## Confirmed Linked Staging-Only Policy
 
@@ -26,15 +29,17 @@ all valid supplier offers.
 `APCOM-MISSING-OFFER-REAPPEARANCE-001` is confirmed for preview: a valid,
 exact-SKU, qualified reappearance resets missing tracking and may be future
 reactivation eligible. Zero-price reappearance is review-only. Identifier
-conflicts are blocked.
+conflicts are blocked. A present zero-price or out-of-stock offer is not
+missing and does not advance the missing counter or product archival clock.
 
 ## Pending Or Review-Only Decisions
 
 `APCOM-SOURCE-ONLY-001` remains pending; no automatic CREATE is authorized.
 `APCOM-MPN-001` remains pending. `APCOM-ZERO-PRICE-001` remains review-only.
 General stock/price snapshot freshness is pending and is distinct from the
-48-hour missing-offer duration. Cart maximum quantity remains outside this
-phase.
+48-hour missing-offer duration. No universal freshness fallback is approved,
+and APCOM-specific semantics must not be reused for another supplier. Cart
+maximum quantity remains outside this phase.
 
 ## Approval Gate And Execution
 
@@ -42,4 +47,6 @@ The v3 gate is `blocked_pending_implementation_approvals`. It has no approval
 for import, profile persistence, supplier-offer lifecycle writes, product
 visibility writes, schedules, Catalog Sync, retention cleanup, storefront
 visibility, or sitemap/noindex implementation. No execution authorization is
-granted.
+granted. The documented evidence and semantic contract is ready for review,
+but the implementation gate remains closed until this documentation change is
+reviewed, committed, and merged separately.

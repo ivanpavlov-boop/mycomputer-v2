@@ -346,8 +346,12 @@ Phase 9C.6.5C.3D is local/in-review synthetic tooling. It defines qualified
 full-snapshot absence tracking, three consecutive observations plus a 48-hour
 duration, reappearance validation, multi-supplier offer aggregation, future
 visibility/archival policy, deletion prohibition, and retention planning. It
-does not read real supplier XML, modify any database table, use a scheduler,
-alter the storefront, Scout, sitemap, robots, or Catalog Sync. See
+also has a documented input-driven operational evidence contract for review:
+immutable versioned evidence, explicit `evaluated_at`, CLI-only evaluation,
+stable deterministic output, no persistence, and fail-closed import
+concurrency checks. Operational preview implementation remains unapproved. The
+current tooling does not read real supplier XML, modify any database table, use
+a scheduler, alter the storefront, Scout, sitemap, robots, or Catalog Sync. See
 [Supplier Offer Missing Lifecycle Policy](SUPPLIER_OFFER_MISSING_LIFECYCLE_POLICY.md),
 [Catalog Product Visibility And Archival Policy](CATALOG_PRODUCT_VISIBILITY_ARCHIVAL_POLICY.md),
 and [Supplier Technical Retention Policy](SUPPLIER_TECHNICAL_RETENTION_POLICY.md).

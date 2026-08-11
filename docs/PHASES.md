@@ -224,7 +224,7 @@ Phase 8 manual selected UPDATE price/stock sync has been implemented behind a fe
 
 | Phase | Name | Status |
 | --- | --- | --- |
-| Phase 9C.6.5C.3D | Missing Supplier Offer Lifecycle and Catalog Archival Policy Preview | Tooling implemented locally/in review. Operational lifecycle preview has not run; offer deactivation/reactivation, storefront visibility, sitemap/noindex behavior, retention cleanup, and persistence remain unimplemented. Approval gate is blocked. |
+| Phase 9C.6.5C.3D | Missing Supplier Offer Lifecycle and Catalog Archival Policy Preview | Synthetic tooling remains in review. The input-driven operational evidence contract and lifecycle/archival semantics are documented for review, with explicit deterministic, CLI-only, zero-persistence and zero-mutation boundaries. No operational preview, lifecycle write, storefront/search/sitemap/noindex behavior, retention cleanup, or persistence is implemented. The implementation gate remains blocked. |
 
 ## Completed Documentation Closeout
 
@@ -238,7 +238,7 @@ Phase 8 manual selected UPDATE price/stock sync has been implemented behind a fe
 
 | Phase | Name | Status |
 | --- | --- | --- |
-| Phase 9C.6.5C.3D | Missing Supplier Offer Lifecycle and Catalog Archival Policy Preview | Local synthetic policy tooling is in review only. No operational preview, source read, persistence, lifecycle write, storefront visibility, sitemap/noindex behavior, or retention cleanup is authorized. |
+| Phase 9C.6.5C.3D | Missing Supplier Offer Lifecycle and Catalog Archival Policy Preview | Evidence and semantic policy contract documented for review. Local synthetic tooling remains preview-only; no operational preview, persistence, lifecycle write, storefront/search/sitemap/noindex behavior, retention cleanup, or automatic execution is authorized. Documentation review and merge are required before any implementation request. |
 
 ## Paused / Partial Phases
 
