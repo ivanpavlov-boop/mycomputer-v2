@@ -987,3 +987,12 @@ not deactivate or reactivate offers, change product visibility or workflow,
 run Scout or sitemap behavior, create links, or alter `supplier_products`.
 UPDATE remains disabled, Sync All remains disabled, automatic sync remains
 disabled, and the APCOM schedule remains disabled.
+
+The documented operational evidence contract remains input-driven and CLI-only.
+It requires an immutable, versioned snapshot evidence bundle and an explicit
+`evaluated_at`; it must not reconstruct history from `received_at` or
+`last_seen_at` alone. It permits no lifecycle persistence, cache/filesystem
+write, audit-row write, job/event dispatch, Filament surface, source fetch,
+supplier import, or Catalog Sync action. `SupplierImportActivityInspector`
+must abort evaluation fail-closed when a relevant import is active or cannot be
+assessed safely. Operational preview implementation remains unapproved.
