@@ -271,3 +271,8 @@ reappearance, multi-supplier aggregation, product-visibility archival, and
 retention planning layer. No real APCOM feed, source record, operational
 preview, import, offer write, product visibility write, retention cleanup,
 schedule, or Catalog Sync action is authorized.
+
+[APCOM Missing Offer Decisions V4](APCOM_MISSING_OFFER_DECISIONS_V4.md) is the
+current decision-closure register. It approves documentation semantics for the
+four owner-decided source-only, MPN, zero-price, and APCOM snapshot-freshness
+questions while leaving runtime implementation and every write path blocked.

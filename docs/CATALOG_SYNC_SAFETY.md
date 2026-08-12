@@ -996,3 +996,12 @@ write, audit-row write, job/event dispatch, Filament surface, source fetch,
 supplier import, or Catalog Sync action. `SupplierImportActivityInspector`
 must abort evaluation fail-closed when a relevant import is active or cannot be
 assessed safely. Operational preview implementation remains unapproved.
+
+[APCOM Missing Offer Decisions V4](APCOM_MISSING_OFFER_DECISIONS_V4.md) is the
+current documentation-only decision closure. It approves preview semantics for
+source-only `potential_create`, supplier-SKU-only `partno`, zero-price
+`manual_review`, and APCOM-specific 24-hour snapshot freshness. None authorizes
+CREATE implementation or execution, matching/linking, UPDATE, lifecycle or
+visibility writes, Sync All, automatic sync, schedule enablement, import,
+persistence, or Catalog Sync. The implementation gate remains closed after
+documentation merge.

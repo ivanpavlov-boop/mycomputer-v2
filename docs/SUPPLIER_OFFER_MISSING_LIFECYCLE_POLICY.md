@@ -41,6 +41,14 @@ freshness rules must not become defaults for another supplier. A supplier with
 no approved freshness rule is skipped or classified `manual_review` with a
 stable reason code; no universal fallback is authorized.
 
+For APCOM only, [APCOM Missing Offer Decisions V4](APCOM_MISSING_OFFER_DECISIONS_V4.md)
+approves the latest successful, complete, validated stock/price snapshot as
+fresh through 24 hours inclusive. After 24 hours it is stale. Freshness uses
+explicit `evaluated_at` and the authoritative evidence-snapshot timestamp,
+never `received_at` or `last_seen_at`. A stale offer is excluded from sellable-
+offer selection and price calculation but is not missing, does not advance a
+missing counter, and cannot trigger a write or archival action.
+
 ## Three-Snapshot Threshold
 
 The threshold is three consecutive qualified snapshots in which the exact
@@ -72,6 +80,11 @@ start a product archival clock. A present out-of-stock offer is also not
 missing and resets the missing sequence. Out-of-stock may affect a sellability
 or availability recommendation, but does not start an archival clock by
 itself.
+
+For APCOM, `fd_price = 0` is specifically `manual_review`, never a free Product
+or zero catalog/selling price. It is excluded from valid offer selection and
+price calculations and cannot authorize CREATE, UPDATE, publication,
+reactivation, deactivation, archival, hiding, deletion, or unlinking.
 
 Duplicate or conflicting offers are ambiguous, are not counted twice, and are
 classified `manual_review`.

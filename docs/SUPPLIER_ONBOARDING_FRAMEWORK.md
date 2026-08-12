@@ -355,3 +355,10 @@ a scheduler, alter the storefront, Scout, sitemap, robots, or Catalog Sync. See
 [Supplier Offer Missing Lifecycle Policy](SUPPLIER_OFFER_MISSING_LIFECYCLE_POLICY.md),
 [Catalog Product Visibility And Archival Policy](CATALOG_PRODUCT_VISIBILITY_ARCHIVAL_POLICY.md),
 and [Supplier Technical Retention Policy](SUPPLIER_TECHNICAL_RETENTION_POLICY.md).
+
+[APCOM Missing Offer Decisions V4](APCOM_MISSING_OFFER_DECISIONS_V4.md) is the
+current documentation-only decision register for this phase. It closes only
+source-only preview classification, supplier-SKU-only `partno`, zero-price
+review, and APCOM-specific 24-hour freshness semantics. Documentation merge is
+a prerequisite only; the implementation gate remains closed and the current
+tooling and supplier onboarding flow remain non-persistent and non-executable.

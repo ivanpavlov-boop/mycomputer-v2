@@ -696,13 +696,15 @@ by Phase 1D.2B and CART-023 remains open. Operational boundaries are documented 
    `b2b4fb95f1d2bfe2382fe6cab9a8462fa6f7e277`, CI #322 succeeded, and VPS was
    synced and verified. APCOM schedule remains disabled; Catalog Sync UPDATE,
    Sync All, and automatic sync remain disabled.
-4. Review the C3D input-driven operational evidence contract and lifecycle/
-   archival semantics alongside the local synthetic policy tooling. The
-   contract is CLI-only, deterministic, non-persistent, and zero-mutation. It
-   does not authorize operational preview implementation, offer writes,
-   storefront/search/sitemap/noindex behavior, retention cleanup, persistence,
-   schedule enablement, import, or Catalog Sync. C3D remains before Supplier #3
-   selection.
+4. Review the C3D V4 decision closure and input-driven operational evidence
+   contract alongside the local synthetic policy tooling. V4 closes only the
+   owner-approved source-only, MPN, zero-price, and APCOM-specific 24-hour
+   freshness decisions. The contract remains CLI-only, deterministic, non-
+   persistent, and zero-mutation. Documentation merge does not authorize
+   operational preview implementation, offer writes, storefront/search/
+   sitemap/noindex behavior, retention cleanup, persistence, schedule
+   enablement, import, or Catalog Sync. A separate explicit implementation
+   request is required, and C3D remains before Supplier #3 selection.
 5. Select Supplier #3 only after a reviewed readiness matrix and explicit human
    decision; ASBIS remains Supplier #2.
 6. Phase 9C.6.6 Multi-Supplier Category Mapping Review.
