@@ -104,3 +104,11 @@ the schedule, or call Catalog Sync. See [APCOM Preview Feed Profile V2](APCOM_PR
 v3 decision register and retained v2 business semantics, records the missing
 offer and reappearance policy keys, and cannot persist a profile, import,
 write offers, change visibility, alter a schedule, or call Catalog Sync.
+
+## V4 Decision Closure Addendum
+
+[APCOM Missing Offer Decisions V4](APCOM_MISSING_OFFER_DECISIONS_V4.md) is now
+the current documentation decision reference for source-only, MPN, zero-price,
+and APCOM-specific 24-hour snapshot freshness semantics. It does not make
+`apcom-preview-feed-profile-v3` executable or authorize a new runtime profile.
+The implementation gate remains closed after documentation merge.

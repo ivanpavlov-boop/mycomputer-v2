@@ -10,6 +10,13 @@ valid active offer. The confirmed-missing offer may receive
 `would_deactivate_offer`, while the product recommendation remains
 `keep_active`.
 
+For APCOM, a stale offer and a present `fd_price = 0` offer are excluded from
+valid sellable-offer selection. Neither state is missing, increments a missing
+counter, nor starts an archival clock. When another fresh and valid offer
+exists, the Product continues to depend on that offer. These are preview
+semantics only and authorize no Product visibility mutation. See
+[APCOM Missing Offer Decisions V4](APCOM_MISSING_OFFER_DECISIONS_V4.md).
+
 ## Zero Active Offers
 
 `catalog-product-visibility-lifecycle-policy-v1` starts when no valid active

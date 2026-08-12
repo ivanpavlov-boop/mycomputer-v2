@@ -114,3 +114,13 @@ Phase 9C.6.5C.3D adds `apcom-human-decisions-v3`, which supersedes v2 without
 rewriting v1 or v2. It confirms staging-only missing-offer and linked-offer
 policy interpretation plus reappearance preview semantics; source-only and MPN
 remain pending, zero-price remains review-only, and execution remains blocked.
+
+## V4 Decision Closure Addendum
+
+[APCOM Missing Offer Decisions V4](APCOM_MISSING_OFFER_DECISIONS_V4.md) is the
+current documentation-only decision-closure register. It preserves V1, V2, and
+V3 as historical evidence and closes only `APCOM-SOURCE-ONLY-001`,
+`APCOM-MPN-001`, `APCOM-ZERO-PRICE-001`, and
+`APCOM-SNAPSHOT-FRESHNESS-001`. The runtime profile and implementation gate
+remain blocked; documentation merge does not authorize implementation, import,
+persistence, schedule enablement, Catalog Sync, or any catalog mutation.
