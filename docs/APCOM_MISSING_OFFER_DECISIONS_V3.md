@@ -47,6 +47,6 @@ The v3 gate is `blocked_pending_implementation_approvals`. It has no approval
 for import, profile persistence, supplier-offer lifecycle writes, product
 visibility writes, schedules, Catalog Sync, retention cleanup, storefront
 visibility, or sitemap/noindex implementation. No execution authorization is
-granted. The documented evidence and semantic contract is ready for review,
-but the implementation gate remains closed until this documentation change is
-reviewed, committed, and merged separately.
+granted. Documentation review and merge are necessary prerequisites only. The
+implementation gate remains closed after merge until a separate, explicitly
+approved implementation request resolves all pending approvals.
