@@ -42,7 +42,7 @@ final class SupplierOfferLifecyclePreviewService
         $partial = $this->qualification($supplierKey, 'synthetic-snapshot-partial', $base->addHours(2), isFullSnapshot: false);
         $malformed = $this->qualification($supplierKey, 'synthetic-snapshot-malformed', $base->addHours(3), isSchemaValid: false);
         $truncated = $this->qualification($supplierKey, 'synthetic-snapshot-truncated', $base->addHours(3)->addMinutes(30), isTruncated: true);
-        $anomalousDrop = $this->qualification($supplierKey, 'synthetic-snapshot-anomalous-drop', $base->addHours(4), productDropPercent: 51.0);
+        $anomalousDrop = $this->qualification($supplierKey, 'synthetic-snapshot-anomalous-drop', $base->addHours(4), productDropPercent: '51');
         $belowMinimum = $this->qualification($supplierKey, 'synthetic-snapshot-below-minimum', $base->addHours(5), productCount: 99);
         $duplicate = $this->qualification($supplierKey, 'synthetic-snapshot-duplicate', $base->addHours(6), isDuplicateFingerprint: true);
         $safeAfterFrozen = $this->qualifiedSnapshot($supplierKey, 'synthetic-snapshot-safe-after-frozen', $base->addHours(7));
@@ -58,9 +58,9 @@ final class SupplierOfferLifecyclePreviewService
         $partialFreeze = $this->missing($supplierKey, 'synthetic-offer-a', 'missing_once', 1, $firstMissingAt, $base, $partial);
 
         $eolWithPositiveStock = (new ApcomAvailabilityMapper)->map(3, 1)->toArray();
-        $validReappearance = $this->reappearance($supplierKey, 'synthetic-offer-a', 'inactive_missing_from_feed', $base, $qualified, price: 125.00);
-        $zeroPriceReappearance = $this->reappearance($supplierKey, 'synthetic-offer-zero', 'inactive_missing_from_feed', $base, $qualified, price: 0.0);
-        $conflictReappearance = $this->reappearance($supplierKey, 'synthetic-offer-conflict', 'inactive_missing_from_feed', $base, $qualified, price: 125.00, hasIdentifierConflict: true);
+        $validReappearance = $this->reappearance($supplierKey, 'synthetic-offer-a', 'inactive_missing_from_feed', $base, $qualified, price: '125');
+        $zeroPriceReappearance = $this->reappearance($supplierKey, 'synthetic-offer-zero', 'inactive_missing_from_feed', $base, $qualified, price: '0');
+        $conflictReappearance = $this->reappearance($supplierKey, 'synthetic-offer-conflict', 'inactive_missing_from_feed', $base, $qualified, price: '125', hasIdentifierConflict: true);
 
         $aggregation = [
             'apcom_inactive_asbis_in_stock' => $this->aggregation('synthetic-product-a', [
@@ -206,7 +206,7 @@ final class SupplierOfferLifecyclePreviewService
         bool $isSchemaValid = true,
         bool $isTruncated = false,
         int $productCount = 100,
-        float $productDropPercent = 5.0,
+        string $productDropPercent = '5',
         bool $isDuplicateFingerprint = false,
     ): SupplierSnapshotQualificationResult {
         return $this->snapshotQualificationPolicy->qualify(new SupplierSnapshotQualificationInput(
@@ -221,7 +221,7 @@ final class SupplierOfferLifecyclePreviewService
             productCount: $productCount,
             minimumProductCount: 100,
             productDropPercent: $productDropPercent,
-            maximumProductDropPercent: 50.0,
+            maximumProductDropPercent: '50',
             hasFatalBlocker: false,
             supplierIdentityConfirmed: true,
             snapshotFingerprint: 'synthetic-fingerprint-'.hash('sha256', $snapshotId),
@@ -255,7 +255,7 @@ final class SupplierOfferLifecyclePreviewService
         ), $qualification)->toArray();
     }
 
-    private function reappearance(string $supplierKey, string $supplierSkuHash, string $previousStatus, CarbonImmutable $evaluatedAt, SupplierSnapshotQualificationResult $qualification, float $price, bool $hasIdentifierConflict = false): array
+    private function reappearance(string $supplierKey, string $supplierSkuHash, string $previousStatus, CarbonImmutable $evaluatedAt, SupplierSnapshotQualificationResult $qualification, string $price, bool $hasIdentifierConflict = false): array
     {
         return $this->reappearancePolicy->preview(new SupplierOfferReappearanceInput(
             supplierKey: $supplierKey,

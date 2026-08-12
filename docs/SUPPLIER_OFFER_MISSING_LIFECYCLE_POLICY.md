@@ -7,8 +7,12 @@ contract for deciding when an individual supplier offer may become eligible for
 a later deactivation workflow. It is preview-only in Phase 9C.6.5C.3D. It does
 not change `supplier_products`, `product_supplier_offers`, products, links, or
 catalog visibility. The operational evidence and semantic contract is defined
-for review, but no operational preview or persistence is implemented or
-authorized.
+for review. A local, CLI-driven operational preview using explicitly supplied
+local evidence is implemented on the Phase branch. It is evaluation-only,
+read-only and non-persistent: it does not apply lifecycle changes, run supplier
+import, or invoke Catalog Sync. Local implementation does not mean deployment
+or production activation; both remain outside this phase and require separate
+review and authorization.
 
 ## Operational Evidence Bundle
 
@@ -97,12 +101,15 @@ content, or changes a second supplier's offer.
 
 ## Reappearance And Reset
 
-`supplier-offer-reappearance-policy-v1` allows a future reactivation preview
-only for a qualified full snapshot with an exact supplier SKU, valid price
-greater than zero, a valid supplier mapper result, and no identifier conflict
-or blocking validation issue. A valid reappearance resets the missing count and
-first-missing timestamp. Zero price is review-only; an identifier conflict is
-blocked and never links or unlinks anything.
+Presence reset and reactivation are separate decisions. A qualified present
+offer with an unambiguous exact supplier SKU resets the missing count,
+first-missing timestamp and confirmed-missing state even when price is
+zero/invalid or the offer is out of stock. `supplier-offer-reappearance-policy-v1`
+allows a future reactivation preview only with a canonical exact price greater
+than zero, a valid supplier mapper result, and no identifier conflict or
+blocking validation issue. Zero price remains non-sellable review-only; an
+identifier conflict or SKU mismatch does not receive the presence reset and
+never links or unlinks anything.
 
 ## Absence Is Not EOL
 

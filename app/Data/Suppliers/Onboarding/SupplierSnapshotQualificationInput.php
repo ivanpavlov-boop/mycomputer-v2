@@ -18,8 +18,8 @@ final readonly class SupplierSnapshotQualificationInput
         public bool $isTruncated,
         public int $productCount,
         public int $minimumProductCount,
-        public float $productDropPercent,
-        public float $maximumProductDropPercent,
+        public string $productDropPercent,
+        public string $maximumProductDropPercent,
         public bool $hasFatalBlocker,
         public bool $supplierIdentityConfirmed,
         public ?string $snapshotFingerprint,
@@ -28,7 +28,8 @@ final readonly class SupplierSnapshotQualificationInput
         if ($this->productCount < 0 || $this->minimumProductCount < 0) {
             throw new InvalidArgumentException('Snapshot product counts cannot be negative.');
         }
-        if ($this->productDropPercent < 0 || $this->maximumProductDropPercent < 0) {
+        if (DecimalNormalizer::compare($this->productDropPercent, '0') < 0
+            || DecimalNormalizer::compare($this->maximumProductDropPercent, '0') < 0) {
             throw new InvalidArgumentException('Snapshot product drop percentages cannot be negative.');
         }
     }

@@ -67,7 +67,7 @@ final class SupplierOfferMissingLifecycleTest extends TestCase
         $qualification = (new SupplierSnapshotQualificationPolicy)->qualify(new SupplierSnapshotQualificationInput(
             supplierKey: 'apcom', snapshotId: 'synthetic-snapshot', snapshotStatus: $successful ? 'completed' : 'failed', observedAt: $evaluatedAt,
             isSuccessful: $successful, isFullSnapshot: true, isSchemaValid: true, isTruncated: false, productCount: 100,
-            minimumProductCount: 100, productDropPercent: 0.0, maximumProductDropPercent: 50.0, hasFatalBlocker: false,
+            minimumProductCount: 100, productDropPercent: '0', maximumProductDropPercent: '50', hasFatalBlocker: false,
             supplierIdentityConfirmed: true, snapshotFingerprint: 'synthetic-fingerprint', isDuplicateFingerprint: false,
         ));
 

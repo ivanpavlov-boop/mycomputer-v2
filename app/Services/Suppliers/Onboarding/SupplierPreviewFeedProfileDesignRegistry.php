@@ -12,12 +12,15 @@ final class SupplierPreviewFeedProfileDesignRegistry
 
     public const APCOM_PROFILE_V3 = 'apcom-preview-feed-profile-v3';
 
+    public const APCOM_PROFILE_V4 = 'apcom-preview-feed-profile-v4';
+
     public function find(string $key): ?SupplierPreviewFeedProfileDesign
     {
         return match ($key) {
             self::APCOM_PROFILE => $this->apcomV1(),
             self::APCOM_PROFILE_V2 => $this->apcomV2(),
             self::APCOM_PROFILE_V3 => $this->apcomV3(),
+            self::APCOM_PROFILE_V4 => $this->apcomV4(),
             default => null,
         };
     }
@@ -142,6 +145,43 @@ final class SupplierPreviewFeedProfileDesignRegistry
                 'product_visibility_write_allowed' => false,
                 'retention_cleanup_allowed' => false,
                 'storefront_visibility_runtime_allowed' => false,
+            ],
+        );
+    }
+
+    public function apcomV4(): SupplierPreviewFeedProfileDesign
+    {
+        $v3 = $this->apcomV3();
+        $fieldMappings = array_map(fn (array $field): array => match ($field['field']) {
+            'mpn' => $this->field('mpn', null, 'manufacturer_mpn_unset_without_reliable_field', 'APCOM-MPN-001'),
+            default => $field,
+        }, $v3->fieldMappings);
+        $fieldMappings[] = $this->field('source_only', 'exact supplier SKU presence evidence', 'potential_create_preview', 'APCOM-SOURCE-ONLY-001');
+        $fieldMappings[] = $this->field('zero_price', 'xml.product.fd_price equals 0', 'manual_review_non_sellable_present_offer', 'APCOM-ZERO-PRICE-001');
+        $fieldMappings[] = $this->field('snapshot_freshness', 'authoritative evidence snapshot timestamp', OperationalSupplierOfferEvidenceBundleReader::APCOM_FRESHNESS_POLICY_KEY, 'APCOM-SNAPSHOT-FRESHNESS-001');
+
+        $actionMatrix = array_map(fn (array $action): array => $action['action'] === 'CREATE detection'
+            ? $this->action('CREATE detection', 'potential_create', 'APCOM-SOURCE-ONLY-001', 'preview candidate only; manual selected CREATE requires a separate implementation and approval')
+            : $action, $v3->actionMatrix);
+        $actionMatrix[] = $this->action('Operational lifecycle evaluation', 'immutable_evidence_bundle', 'APCOM-SNAPSHOT-FRESHNESS-001', 'CLI evaluation only; no persistence, import, link, lifecycle, visibility, or Catalog Sync action');
+
+        return new SupplierPreviewFeedProfileDesign(
+            key: self::APCOM_PROFILE_V4,
+            supplierKey: 'apcom',
+            decisionRegisterKey: SupplierHumanDecisionRegistry::APCOM_REGISTER_V4,
+            semanticsProfileKey: $v3->semanticsProfileKey,
+            fieldMappings: $fieldMappings,
+            actionMatrix: $actionMatrix,
+            safetyPolicy: [
+                ...$v3->safetyPolicy,
+                'automatic_execution_allowed' => false,
+                'catalog_sync_allowed' => false,
+                'evaluation_allowed' => true,
+                'import_allowed' => false,
+                'lifecycle_write_allowed' => false,
+                'link_change_allowed' => false,
+                'schedule_change_allowed' => false,
+                'visibility_write_allowed' => false,
             ],
         );
     }

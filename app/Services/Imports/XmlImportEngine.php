@@ -59,7 +59,7 @@ class XmlImportEngine
             'error_message' => null,
         ]);
 
-        $this->log($job, 'started', 'info', 'XML import started.');
+        $history = ImportHistory::startForImport($job, 'XML import started.');
 
         try {
             $xml = $this->loadXml($feed);
@@ -150,7 +150,7 @@ class XmlImportEngine
                 'status' => 'active',
             ]);
 
-            $this->log($job, 'finished', $job->failed_rows > 0 ? 'warning' : 'info', 'XML import finished.', [
+            $history->transitionForImport('finished', $job->failed_rows > 0 ? 'warning' : 'info', 'XML import finished.', [
                 'processed_rows' => $job->processed_rows,
                 'failed_rows' => $job->failed_rows,
             ]);
@@ -166,7 +166,7 @@ class XmlImportEngine
                 'last_error' => $exception->getMessage(),
             ]);
 
-            $this->log($job, 'failed', 'error', $exception->getMessage());
+            $history->transitionForImport('failed', 'error', $exception->getMessage());
 
             throw $exception;
         }
@@ -387,21 +387,5 @@ class XmlImportEngine
         ]);
 
         $job->increment('failed_rows');
-    }
-
-    /**
-     * @param  array<string, mixed>  $context
-     */
-    protected function log(ImportJob $job, string $event, string $level, ?string $message = null, array $context = []): void
-    {
-        ImportHistory::query()->create([
-            'import_job_id' => $job->id,
-            'supplier_id' => $job->supplier_id,
-            'supplier_feed_id' => $job->supplier_feed_id,
-            'event' => $event,
-            'level' => $level,
-            'message' => $message,
-            'context' => $context,
-        ]);
     }
 }

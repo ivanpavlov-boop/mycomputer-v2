@@ -38,7 +38,7 @@ final class SupplierSnapshotQualificationTest extends TestCase
 
     public function test_anomalous_drop_minimum_count_and_duplicate_fingerprint_freeze_tracking(): void
     {
-        $drop = $this->qualify(productDropPercent: 51.0)->toArray();
+        $drop = $this->qualify(productDropPercent: '51')->toArray();
         $minimum = $this->qualify(productCount: 99)->toArray();
         $duplicate = $this->qualify(isDuplicateFingerprint: true)->toArray();
 
@@ -50,13 +50,28 @@ final class SupplierSnapshotQualificationTest extends TestCase
         $this->assertFalse($duplicate['qualifies_for_presence_tracking']);
     }
 
+    public function test_product_drop_threshold_uses_exact_decimal_comparison(): void
+    {
+        $atBoundary = $this->qualify(productDropPercent: '50')->toArray();
+        $immediatelyAbove = $this->qualify(productDropPercent: '50.000001')->toArray();
+        $longFractionAbove = $this->qualify(productDropPercent: '50.0000000000000000001')->toArray();
+
+        $this->assertTrue($atBoundary['is_drop_safe']);
+        $this->assertTrue($atBoundary['qualifies_for_presence_tracking']);
+        $this->assertFalse($immediatelyAbove['is_drop_safe']);
+        $this->assertFalse($immediatelyAbove['qualifies_for_presence_tracking']);
+        $this->assertContains('maximum_product_drop_exceeded', $immediatelyAbove['freeze_reason_codes']);
+        $this->assertFalse($longFractionAbove['is_drop_safe']);
+        $this->assertContains('maximum_product_drop_exceeded', $longFractionAbove['freeze_reason_codes']);
+    }
+
     private function qualify(
         bool $isSuccessful = true,
         bool $isFullSnapshot = true,
         bool $isSchemaValid = true,
         bool $isTruncated = false,
         int $productCount = 100,
-        float $productDropPercent = 5.0,
+        string $productDropPercent = '5',
         bool $isDuplicateFingerprint = false,
         ?string $expected = null,
     ): SupplierSnapshotQualificationResult {
@@ -72,7 +87,7 @@ final class SupplierSnapshotQualificationTest extends TestCase
             productCount: $productCount,
             minimumProductCount: 100,
             productDropPercent: $productDropPercent,
-            maximumProductDropPercent: 50.0,
+            maximumProductDropPercent: '50',
             hasFatalBlocker: false,
             supplierIdentityConfirmed: true,
             snapshotFingerprint: 'synthetic-fingerprint',

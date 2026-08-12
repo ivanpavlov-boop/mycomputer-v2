@@ -66,6 +66,7 @@ use App\Policies\BlogPolicy;
 use App\Policies\BrandPolicy;
 use App\Policies\CategoryPolicy;
 use App\Policies\CustomerPolicy;
+use App\Policies\ImportHistoryPolicy;
 use App\Policies\ImportPolicy;
 use App\Policies\LeasingApplicationPolicy;
 use App\Policies\MarketingPolicy;
@@ -186,7 +187,7 @@ class AppServiceProvider extends ServiceProvider
         Gate::policy(SupplierProduct::class, SupplierPolicy::class);
         Gate::policy(SupplierFeed::class, SupplierFeedPolicy::class);
         Gate::policy(ImportJob::class, ImportPolicy::class);
-        Gate::policy(ImportHistory::class, ImportPolicy::class);
+        Gate::policy(ImportHistory::class, ImportHistoryPolicy::class);
         Gate::policy(FailedImport::class, ImportPolicy::class);
         Gate::policy(XmlMappingTemplate::class, ImportPolicy::class);
         Gate::policy(CsvImportJob::class, ImportPolicy::class);

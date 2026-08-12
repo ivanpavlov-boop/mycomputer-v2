@@ -2,15 +2,22 @@
 
 namespace App\Models;
 
+use App\Exceptions\ImportHistoryReferenceProtectedException;
 use Database\Factories\SupplierFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\QueryException;
 
 class Supplier extends Model
 {
     /** @use HasFactory<SupplierFactory> */
     use HasFactory;
+
+    private const HISTORY_FOREIGN_KEYS = [
+        'import_histories_import_job_id_foreign',
+        'import_histories_supplier_id_foreign',
+    ];
 
     protected $fillable = [
         'company_name',
@@ -54,6 +61,41 @@ class Supplier extends Model
         ];
     }
 
+    public function hasImportHistoryReferences(): bool
+    {
+        $key = $this->getRawOriginal($this->getKeyName()) ?? $this->getKey();
+
+        return $key !== null
+            && ImportHistory::query()->where('supplier_id', $key)->exists();
+    }
+
+    public function delete()
+    {
+        if ($this->exists && $this->hasImportHistoryReferences()) {
+            throw ImportHistoryReferenceProtectedException::supplierDeletion();
+        }
+
+        try {
+            return parent::delete();
+        } catch (QueryException $exception) {
+            if (ImportHistoryReferenceProtectedException::matchesHistoricalForeignKeyRestriction(
+                $exception,
+                $this->getTable(),
+                self::HISTORY_FOREIGN_KEYS,
+                $this->hasImportHistoryReferences(),
+            )) {
+                throw ImportHistoryReferenceProtectedException::supplierDeletion($exception);
+            }
+
+            throw $exception;
+        }
+    }
+
+    public function forceDelete()
+    {
+        return $this->delete();
+    }
+
     public function getNameAttribute(): string
     {
         return $this->company_name;
@@ -82,6 +124,11 @@ class Supplier extends Model
     public function importJobs(): HasMany
     {
         return $this->hasMany(ImportJob::class);
+    }
+
+    public function importHistories(): HasMany
+    {
+        return $this->hasMany(ImportHistory::class);
     }
 
     public function productSupplierOffers(): HasMany

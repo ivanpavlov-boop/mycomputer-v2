@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\SupplierFeeds\Schemas;
 
+use App\Models\SupplierFeed;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\KeyValue;
 use Filament\Forms\Components\Select;
@@ -24,6 +25,7 @@ class SupplierFeedForm
                                 ->relationship('supplier', 'company_name')
                                 ->searchable()
                                 ->preload()
+                                ->disabled(fn (?SupplierFeed $record): bool => $record?->hasImportHistoryReferences() ?? false)
                                 ->required(),
                             TextInput::make('feed_name')->required()->maxLength(255),
                             Select::make('feed_type')

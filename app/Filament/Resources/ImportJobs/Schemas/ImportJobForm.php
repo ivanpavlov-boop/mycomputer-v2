@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\ImportJobs\Schemas;
 
+use App\Models\ImportJob;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\KeyValue;
 use Filament\Forms\Components\Select;
@@ -24,11 +25,13 @@ class ImportJobForm
                                 ->relationship('supplier', 'company_name')
                                 ->searchable()
                                 ->preload()
+                                ->disabled(fn (?ImportJob $record): bool => $record?->hasImportHistoryReferences() ?? false)
                                 ->required(),
                             Select::make('supplier_feed_id')
                                 ->relationship('feed', 'feed_name')
                                 ->searchable()
                                 ->preload()
+                                ->disabled(fn (?ImportJob $record): bool => $record?->hasImportHistoryReferences() ?? false)
                                 ->required(),
                             Select::make('xml_mapping_template_id')
                                 ->relationship('mappingTemplate', 'name')

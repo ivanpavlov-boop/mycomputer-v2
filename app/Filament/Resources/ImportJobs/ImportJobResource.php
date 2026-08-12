@@ -14,6 +14,7 @@ use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Model;
 use UnitEnum;
 
 class ImportJobResource extends Resource
@@ -38,6 +39,26 @@ class ImportJobResource extends Resource
     public static function table(Table $table): Table
     {
         return ImportJobsTable::configure($table);
+    }
+
+    public static function canDelete(Model $record): bool
+    {
+        return static::canAccessResource() && parent::canDelete($record);
+    }
+
+    public static function canDeleteAny(): bool
+    {
+        return static::canAccessResource() && parent::canDeleteAny();
+    }
+
+    public static function canForceDelete(Model $record): bool
+    {
+        return static::canAccessResource() && parent::canForceDelete($record);
+    }
+
+    public static function canForceDeleteAny(): bool
+    {
+        return static::canAccessResource() && parent::canForceDeleteAny();
     }
 
     public static function getRelations(): array
