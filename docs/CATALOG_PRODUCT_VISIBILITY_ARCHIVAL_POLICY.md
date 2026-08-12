@@ -30,7 +30,7 @@ preview.
 At day 0, the preview may recommend `would_mark_unavailable` only when no
 qualifying sellable supplier offer remains. This remains a recommendation and
 does not disable purchasing, hide listings or search results, or change current
-availability. The planned direct-page behavior remains HTTP 200, indexable,
+availability. Under the planned behavior, the direct product page remains HTTP 200, indexable,
 and eligible for the sitemap.
 
 ## First 60 Days
