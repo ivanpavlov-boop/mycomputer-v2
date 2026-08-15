@@ -7,6 +7,7 @@ use App\Jobs\RunSupplierImportJob;
 use App\Jobs\SendEmailJob;
 use App\Jobs\SyncProductJob;
 use App\Models\CategoryProductAttribute;
+use App\Models\ImportHistory;
 use App\Models\Product;
 use App\Models\ProductAttributeValue;
 use App\Models\ProductSyncLog;
@@ -19,7 +20,9 @@ use App\Services\Suppliers\SupplierImportNotificationService;
 use App\Services\Suppliers\SupplierImportOrchestrator;
 use App\Services\Suppliers\SupplierImportSafetyService;
 use App\Services\Suppliers\SupplierImportScheduleService;
+use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
 use Laravel\Sanctum\Sanctum;
@@ -155,15 +158,30 @@ class SupplierImportSchedulingTest extends TestCase
             'catalog_sync.sync_all_enabled' => false,
         ]);
 
-        Http::fake([
-            'https://feeds.example.com/products.csv' => Http::response(
-                "sku,name,brand,category,price,quantity\nCSV-1,CSV Product,Lenovo,Laptops,1200,5\n",
-                200,
-            ),
-        ]);
-
         $supplier = $this->supplier();
         $this->feed($supplier, 'https://feeds.example.com/products.csv', 'csv');
+        $startedIdAtFetch = null;
+        $startedIdAtFirstStagingWrite = null;
+        $transactionLevel = DB::transactionLevel();
+        Http::fake(function () use ($supplier, $transactionLevel, &$startedIdAtFetch) {
+            $this->assertSame($transactionLevel, DB::transactionLevel());
+            $history = ImportHistory::query()->where('supplier_id', $supplier->id)->sole();
+            $this->assertSame('started', $history->event);
+            $startedIdAtFetch = $history->id;
+
+            return Http::response(
+                "sku,name,brand,category,price,quantity\nCSV-1,CSV Product,Lenovo,Laptops,1200,5\n",
+                200,
+            );
+        });
+        DB::listen(function (QueryExecuted $query) use ($supplier, &$startedIdAtFirstStagingWrite): void {
+            if ($startedIdAtFirstStagingWrite === null
+                && preg_match('/^\s*insert\s+into\s+["`]?supplier_products/i', $query->sql) === 1) {
+                $history = ImportHistory::query()->where('supplier_id', $supplier->id)->sole();
+                $this->assertSame('started', $history->event);
+                $startedIdAtFirstStagingWrite = $history->id;
+            }
+        });
         $productCount = Product::query()->count();
         $productAttributeValueCount = ProductAttributeValue::query()->count();
         $categoryProductAttributeCount = CategoryProductAttribute::query()->count();
@@ -176,8 +194,14 @@ class SupplierImportSchedulingTest extends TestCase
         ]);
 
         $result = app(SupplierImportOrchestrator::class)->execute($run, true);
+        $history = ImportHistory::query()->where('import_job_id', $result->import_job_id)->sole();
 
+        $this->assertNotNull($startedIdAtFetch);
+        $this->assertSame($startedIdAtFetch, $startedIdAtFirstStagingWrite);
+        $this->assertSame($startedIdAtFetch, $history->id);
         $this->assertContains($result->status, ['completed', 'completed_with_warnings']);
+        $this->assertSame('finished', $history->event);
+        $this->assertSame(1, ImportHistory::query()->where('import_job_id', $result->import_job_id)->count());
         $this->assertDatabaseHas('supplier_products', [
             'supplier_id' => $supplier->id,
             'supplier_sku' => 'CSV-1',

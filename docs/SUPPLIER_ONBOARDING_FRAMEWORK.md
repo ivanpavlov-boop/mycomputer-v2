@@ -356,6 +356,14 @@ a scheduler, alter the storefront, Scout, sitemap, robots, or Catalog Sync. See
 [Catalog Product Visibility And Archival Policy](CATALOG_PRODUCT_VISIBILITY_ARCHIVAL_POLICY.md),
 and [Supplier Technical Retention Policy](SUPPLIER_TECHNICAL_RETENTION_POLICY.md).
 
+Its operational safety marker is the importer-owned `import_histories.id`:
+real XML/CSV engines create one row before feed/staging work and transition
+that same row to terminal evidence. Import History administration is
+list/view-only, application mutation/deletion and supplier cascade deletion of
+generation evidence are blocked, and no retention/pruning path is authorized.
+The final preview boundary performs supplier/import, generation and catalog
+fingerprint checks in that order and performs no mutable-state read afterward.
+
 [APCOM Missing Offer Decisions V4](APCOM_MISSING_OFFER_DECISIONS_V4.md) is the
 current documentation-only decision register for this phase. It closes only
 source-only preview classification, supplier-SKU-only `partno`, zero-price

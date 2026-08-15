@@ -3,9 +3,8 @@
 namespace App\Filament\Resources\ImportHistories;
 
 use App\Filament\Concerns\RequiresFilamentPermission;
-use App\Filament\Resources\ImportHistories\Pages\CreateImportHistory;
-use App\Filament\Resources\ImportHistories\Pages\EditImportHistory;
 use App\Filament\Resources\ImportHistories\Pages\ListImportHistories;
+use App\Filament\Resources\ImportHistories\Pages\ViewImportHistory;
 use App\Filament\Resources\ImportHistories\Schemas\ImportHistoryForm;
 use App\Filament\Resources\ImportHistories\Tables\ImportHistoriesTable;
 use App\Models\ImportHistory;
@@ -14,6 +13,7 @@ use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Model;
 use UnitEnum;
 
 class ImportHistoryResource extends Resource
@@ -40,6 +40,51 @@ class ImportHistoryResource extends Resource
         return ImportHistoriesTable::configure($table);
     }
 
+    public static function canCreate(): bool
+    {
+        return false;
+    }
+
+    public static function canEdit(Model $record): bool
+    {
+        return false;
+    }
+
+    public static function canView(Model $record): bool
+    {
+        return static::canAccessResource();
+    }
+
+    public static function canDelete(Model $record): bool
+    {
+        return false;
+    }
+
+    public static function canDeleteAny(): bool
+    {
+        return false;
+    }
+
+    public static function canForceDelete(Model $record): bool
+    {
+        return false;
+    }
+
+    public static function canForceDeleteAny(): bool
+    {
+        return false;
+    }
+
+    public static function canRestore(Model $record): bool
+    {
+        return false;
+    }
+
+    public static function canRestoreAny(): bool
+    {
+        return false;
+    }
+
     public static function getRelations(): array
     {
         return [
@@ -51,8 +96,7 @@ class ImportHistoryResource extends Resource
     {
         return [
             'index' => ListImportHistories::route('/'),
-            'create' => CreateImportHistory::route('/create'),
-            'edit' => EditImportHistory::route('/{record}/edit'),
+            'view' => ViewImportHistory::route('/{record}'),
         ];
     }
 }

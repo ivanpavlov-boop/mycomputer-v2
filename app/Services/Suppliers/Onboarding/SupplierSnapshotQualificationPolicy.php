@@ -2,6 +2,7 @@
 
 namespace App\Services\Suppliers\Onboarding;
 
+use App\Data\Suppliers\Onboarding\DecimalNormalizer;
 use App\Data\Suppliers\Onboarding\SupplierSnapshotQualificationInput;
 use App\Data\Suppliers\Onboarding\SupplierSnapshotQualificationResult;
 
@@ -12,7 +13,7 @@ final class SupplierSnapshotQualificationPolicy
     public function qualify(SupplierSnapshotQualificationInput $input): SupplierSnapshotQualificationResult
     {
         $isCountSafe = $input->productCount >= $input->minimumProductCount;
-        $isDropSafe = $input->productDropPercent <= $input->maximumProductDropPercent;
+        $isDropSafe = DecimalNormalizer::compare($input->productDropPercent, $input->maximumProductDropPercent) <= 0;
         $freezeReasons = array_values(array_filter([
             ! $input->isSuccessful ? 'snapshot_not_successful' : null,
             ! $input->isFullSnapshot ? 'snapshot_not_full' : null,

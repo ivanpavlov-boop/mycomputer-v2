@@ -11,7 +11,19 @@ use Illuminate\Support\Str;
  */
 final class SupplierImportActivityInspector
 {
+    /** ImportJob and SupplierImportRun states that can still mutate staging. */
     private const ACTIVE_IMPORT_STATUSES = ['pending', 'queued', 'running', 'processing', 'started'];
+
+    /** Explicit historical terminal states; these do not imply evidence qualification. */
+    private const TERMINAL_IMPORT_STATUSES = [
+        'previewed',
+        'completed',
+        'completed_with_errors',
+        'completed_with_warnings',
+        'failed',
+        'skipped',
+        'cancelled',
+    ];
 
     /** @return array{state: string, active_count: int, unknown_state_count: int, checked_sources: array<int, string>} */
     public function inspect(int $supplierId): array
@@ -30,7 +42,7 @@ final class SupplierImportActivityInspector
             foreach (DB::table($table)->where('supplier_id', $supplierId)->pluck('status') as $status) {
                 $normalized = Str::lower(trim((string) $status));
 
-                if ($normalized === '' || ! in_array($normalized, [...self::ACTIVE_IMPORT_STATUSES, 'completed', 'completed_with_warnings', 'failed', 'skipped', 'cancelled'], true)) {
+                if ($normalized === '' || ! in_array($normalized, [...self::ACTIVE_IMPORT_STATUSES, ...self::TERMINAL_IMPORT_STATUSES], true)) {
                     $unknown++;
                 } elseif (in_array($normalized, self::ACTIVE_IMPORT_STATUSES, true)) {
                     $active++;

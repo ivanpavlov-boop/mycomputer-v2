@@ -32,7 +32,7 @@ class SupplierCsvFeedImportService
             'error_message' => null,
         ]);
 
-        $this->log($job, 'started', 'info', 'CSV supplier import started.');
+        $history = ImportHistory::startForImport($job, 'CSV supplier import started.');
 
         try {
             $path = $this->storeFeedFile($feed);
@@ -100,7 +100,7 @@ class SupplierCsvFeedImportService
                 'status' => $job->failed_rows > 0 ? 'failed' : 'active',
             ]);
 
-            $this->log($job, 'finished', $job->failed_rows > 0 ? 'warning' : 'info', 'CSV supplier import finished.', [
+            $history->transitionForImport('finished', $job->failed_rows > 0 ? 'warning' : 'info', 'CSV supplier import finished.', [
                 'processed_rows' => $job->processed_rows,
                 'failed_rows' => $job->failed_rows,
             ]);
@@ -116,7 +116,7 @@ class SupplierCsvFeedImportService
                 'last_error' => $exception->getMessage(),
             ]);
 
-            $this->log($job, 'failed', 'error', $exception->getMessage());
+            $history->transitionForImport('failed', 'error', $exception->getMessage());
 
             throw $exception;
         }
@@ -182,21 +182,5 @@ class SupplierCsvFeedImportService
         ]);
 
         $job->increment('failed_rows');
-    }
-
-    /**
-     * @param  array<string, mixed>  $context
-     */
-    private function log(ImportJob $job, string $event, string $level, ?string $message = null, array $context = []): void
-    {
-        ImportHistory::query()->create([
-            'import_job_id' => $job->id,
-            'supplier_id' => $job->supplier_id,
-            'supplier_feed_id' => $job->supplier_feed_id,
-            'event' => $event,
-            'level' => $level,
-            'message' => $message,
-            'context' => $context,
-        ]);
     }
 }

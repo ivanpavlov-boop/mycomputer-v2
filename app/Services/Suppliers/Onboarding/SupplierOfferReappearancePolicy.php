@@ -2,6 +2,7 @@
 
 namespace App\Services\Suppliers\Onboarding;
 
+use App\Data\Suppliers\Onboarding\DecimalNormalizer;
 use App\Data\Suppliers\Onboarding\SupplierOfferReappearanceInput;
 use App\Data\Suppliers\Onboarding\SupplierOfferReappearancePreviewResult;
 use App\Data\Suppliers\Onboarding\SupplierSnapshotQualificationResult;
@@ -17,7 +18,7 @@ final class SupplierOfferReappearancePolicy
         $reasons = array_values(array_filter([
             ! $qualification->qualifiesForPresenceTracking ? 'snapshot_not_qualified' : null,
             ! $input->supplierSkuMatchesExactly ? 'supplier_sku_mismatch' : null,
-            $input->price <= 0 ? 'zero_or_invalid_price' : null,
+            $input->price === null || DecimalNormalizer::compare($input->price, '0') <= 0 ? 'zero_or_invalid_price' : null,
             ! $input->supplierMapperValid ? 'supplier_mapper_validation_failed' : null,
             $input->hasIdentifierConflict ? 'identifier_conflict' : null,
             $input->hasBlockingValidationIssue ? 'blocking_validation_issue' : null,

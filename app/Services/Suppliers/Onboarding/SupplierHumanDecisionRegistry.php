@@ -14,12 +14,15 @@ final class SupplierHumanDecisionRegistry
 
     public const APCOM_REGISTER_V3 = 'apcom-human-decisions-v3';
 
+    public const APCOM_REGISTER_V4 = 'apcom-human-decisions-v4';
+
     public function find(string $key): ?SupplierHumanDecisionRegister
     {
         return match ($key) {
             self::APCOM_REGISTER => $this->apcomV1(),
             self::APCOM_REGISTER_V2 => $this->apcomV2(),
             self::APCOM_REGISTER_V3 => $this->apcomV3(),
+            self::APCOM_REGISTER_V4 => $this->apcomV4(),
             default => null,
         };
     }
@@ -130,6 +133,66 @@ final class SupplierHumanDecisionRegistry
         );
 
         return new SupplierHumanDecisionRegister(self::APCOM_REGISTER_V3, 'apcom', $decisions, self::APCOM_REGISTER_V2);
+    }
+
+    public function apcomV4(): SupplierHumanDecisionRegister
+    {
+        $decisions = array_map(function (SupplierHumanDecision $decision): SupplierHumanDecision {
+            return match ($decision->decisionId) {
+                'APCOM-SOURCE-ONLY-001' => $this->decision(
+                    'APCOM-SOURCE-ONLY-001',
+                    'Source-only SKU classification',
+                    SupplierHumanDecisionStatus::Confirmed,
+                    'exact supplier SKU source-only class',
+                    'potential_create_preview',
+                    'Source-only rows are potential CREATE candidates in preview only. Creation, linking, and synchronization remain prohibited.',
+                    true,
+                    false,
+                    'owner_approved_v4_decision',
+                    'apcom-missing-offer-decisions-v4',
+                ),
+                'APCOM-MPN-001' => $this->decision(
+                    'APCOM-MPN-001',
+                    'Manufacturer part number',
+                    SupplierHumanDecisionStatus::Confirmed,
+                    'xml.product.partno',
+                    'supplier_sku_only_no_mpn_inference',
+                    'partno remains supplier SKU only. MPN stays empty without a separate reliable manufacturer field; heuristic matching is prohibited.',
+                    true,
+                    false,
+                    'owner_approved_v4_decision',
+                    'apcom-missing-offer-decisions-v4',
+                ),
+                'APCOM-ZERO-PRICE-001' => $this->decision(
+                    'APCOM-ZERO-PRICE-001',
+                    'Zero price review candidates',
+                    SupplierHumanDecisionStatus::ReviewOnly,
+                    'xml.product.fd_price equals 0',
+                    'manual_review_non_sellable_present_offer',
+                    'Zero price is present but non-sellable, never free, never missing, and cannot authorize a catalog or lifecycle action.',
+                    true,
+                    false,
+                    'owner_approved_v4_decision',
+                    'apcom-missing-offer-decisions-v4',
+                ),
+                default => $decision,
+            };
+        }, $this->apcomV3()->decisions);
+
+        $decisions[] = $this->decision(
+            'APCOM-SNAPSHOT-FRESHNESS-001',
+            'APCOM stock and price snapshot freshness',
+            SupplierHumanDecisionStatus::Confirmed,
+            'authoritative evidence snapshot timestamp',
+            'apcom_snapshot_freshness_preview',
+            'APCOM evidence is fresh through 24 hours inclusive. Stale evidence is non-sellable but not missing and cannot authorize a write.',
+            true,
+            false,
+            'owner_approved_v4_decision',
+            OperationalSupplierOfferEvidenceBundleReader::APCOM_FRESHNESS_POLICY_KEY,
+        );
+
+        return new SupplierHumanDecisionRegister(self::APCOM_REGISTER_V4, 'apcom', $decisions, self::APCOM_REGISTER_V3);
     }
 
     private function decision(

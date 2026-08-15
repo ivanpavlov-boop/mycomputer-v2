@@ -224,7 +224,7 @@ Phase 8 manual selected UPDATE price/stock sync has been implemented behind a fe
 
 | Phase | Name | Status |
 | --- | --- | --- |
-| Phase 9C.6.5C.3D | Missing Supplier Offer Lifecycle and Catalog Archival Policy Preview | Decision closure V4 records the four owner-approved source-only, MPN, zero-price, and APCOM-specific 24-hour freshness semantics. Synthetic tooling remains in review with deterministic, CLI-only, zero-persistence and zero-mutation boundaries. No operational preview, lifecycle write, storefront/search/sitemap/noindex behavior, retention cleanup, or persistence is implemented. Documentation merge is a prerequisite only; the implementation gate remains blocked. |
+| Phase 9C.6.5C.3D | Missing Supplier Offer Lifecycle and Catalog Archival Policy Preview | The first immutable-input operational preview implementation is complete locally only. It adds a deterministic APCOM-only CLI evaluator, additive V4 runtime contracts and synthetic tests; no real APCOM evidence has been processed. It has not been pushed, merged, deployed or operationally executed. All offer/Product lifecycle and visibility writes, persistence, import, Catalog Sync, storefront/search/sitemap/noindex behavior and retention cleanup remain blocked. |
 
 ## Completed Documentation Closeout
 
@@ -238,7 +238,7 @@ Phase 8 manual selected UPDATE price/stock sync has been implemented behind a fe
 
 | Phase | Name | Status |
 | --- | --- | --- |
-| Phase 9C.6.5C.3D | Missing Supplier Offer Lifecycle and Catalog Archival Policy Preview | V4 is the current documentation decision-closure register and preserves V3 as historical evidence. Local synthetic tooling remains preview-only; no operational preview, persistence, lifecycle write, storefront/search/sitemap/noindex behavior, retention cleanup, or automatic execution is authorized. Documentation review and merge do not authorize implementation; a separate explicit implementation request is required. |
+| Phase 9C.6.5C.3D | Missing Supplier Offer Lifecycle and Catalog Archival Policy Preview | Local implementation validation is in progress before any push/review workflow. V4 remains the approved semantic authority and V3 remains historical evidence. The implementation has not used real APCOM evidence and operational staging/VPS execution remains separately gated. No persistence, lifecycle/visibility write, import, Catalog Sync or automatic action is authorized. |
 
 ## Paused / Partial Phases
 

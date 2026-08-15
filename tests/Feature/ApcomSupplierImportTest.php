@@ -13,8 +13,11 @@ use App\Models\SupplierProduct;
 use App\Models\XmlMappingTemplate;
 use App\Services\Imports\XmlImportEngine;
 use App\Services\Products\ProductSyncService;
+use App\Services\Security\SsrfProtectionService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
+use Tests\Support\ExactSyntheticFeedSsrfProtectionService;
 use Tests\TestCase;
 
 class ApcomSupplierImportTest extends TestCase
@@ -62,16 +65,18 @@ class ApcomSupplierImportTest extends TestCase
 
     public function test_apcom_xml_import_stages_rows_logs_failures_and_keeps_feed_active(): void
     {
+        $expectedUrl = 'https://feeds.example.test/apcom.xml';
         [$feed, $template] = $this->apcomFeedAndTemplate();
-        $feed->update(['feed_url' => 'https://feeds.example.test/apcom.xml']);
+        $feed->update(['feed_url' => $expectedUrl]);
 
+        Http::preventStrayRequests();
         Http::fake([
-            'https://feeds.example.test/apcom.xml' => Http::response($this->apcomXml(includeInvalidRow: true), 200),
+            $expectedUrl => Http::response($this->apcomXml(includeInvalidRow: true), 200),
         ]);
 
         $job = $this->importJob($feed, $template);
 
-        app(XmlImportEngine::class)->import($job);
+        $fake = $this->withExactSyntheticFeed($expectedUrl, fn () => app(XmlImportEngine::class)->import($job));
 
         $supplierProduct = SupplierProduct::query()->where('supplier_sku', 'MW103ZE/A')->firstOrFail();
         $incoming = AvailabilityStatus::query()->where('code', 'in_stock')->firstOrFail();
@@ -103,24 +108,36 @@ class ApcomSupplierImportTest extends TestCase
         ]);
 
         $this->assertSame(1, FailedImport::query()->where('import_job_id', $job->id)->count());
+        $this->assertDatabaseHas('import_histories', [
+            'import_job_id' => $job->id,
+            'supplier_id' => $feed->supplier_id,
+            'event' => 'finished',
+        ]);
         $this->assertSame('completed_with_errors', $job->refresh()->status);
         $this->assertSame('active', $feed->refresh()->status);
         $this->assertSame('1 rows failed validation.', $feed->last_error);
+        $this->assertSame([$expectedUrl], $fake->requestedUrls);
+        Http::assertSent(static fn (Request $request): bool => $request->url() === $expectedUrl);
+        Http::assertSentCount(1);
     }
 
     public function test_apcom_xml_import_is_retry_safe_and_product_sync_updates_catalog_and_search_payload(): void
     {
+        $expectedUrl = 'https://feeds.example.test/apcom.xml';
         [$feed, $template] = $this->apcomFeedAndTemplate();
-        $feed->update(['feed_url' => 'https://feeds.example.test/apcom.xml']);
+        $feed->update(['feed_url' => $expectedUrl]);
 
+        Http::preventStrayRequests();
         Http::fake([
-            'https://feeds.example.test/apcom.xml' => Http::sequence()
+            $expectedUrl => Http::sequence()
                 ->push($this->apcomXml(price: '855,62', quantity: 7), 200)
                 ->push($this->apcomXml(price: '849.99', quantity: 3), 200),
         ]);
 
-        app(XmlImportEngine::class)->import($this->importJob($feed, $template));
-        app(XmlImportEngine::class)->import($this->importJob($feed, $template));
+        $fake = $this->withExactSyntheticFeed($expectedUrl, function () use ($feed, $template): void {
+            app(XmlImportEngine::class)->import($this->importJob($feed, $template));
+            app(XmlImportEngine::class)->import($this->importJob($feed, $template));
+        });
 
         $supplierProduct = SupplierProduct::query()->where('supplier_sku', 'MW103ZE/A')->firstOrFail();
 
@@ -152,6 +169,9 @@ class ApcomSupplierImportTest extends TestCase
         $this->assertContains('MacBook Air', $search['category_path']);
         $this->assertSame('limited_stock', $search['availability_status_code']);
         $this->assertContains('ram', collect($search['attributes'])->pluck('slug')->all());
+        $this->assertSame([$expectedUrl, $expectedUrl], $fake->requestedUrls);
+        Http::assertSent(static fn (Request $request): bool => $request->url() === $expectedUrl);
+        Http::assertSentCount(2);
     }
 
     private function apcomFeedAndTemplate(): array
@@ -162,6 +182,21 @@ class ApcomSupplierImportTest extends TestCase
             SupplierFeed::query()->where('supplier_id', $supplier->id)->where('feed_name', 'APCOM XML Product Feed')->firstOrFail(),
             XmlMappingTemplate::query()->where('supplier_id', $supplier->id)->where('name', 'APCOM XML Product Mapping')->firstOrFail(),
         ];
+    }
+
+    private function withExactSyntheticFeed(string $expectedUrl, callable $callback): ExactSyntheticFeedSsrfProtectionService
+    {
+        $original = app(SsrfProtectionService::class);
+        $fake = new ExactSyntheticFeedSsrfProtectionService($expectedUrl);
+        $this->app->instance(SsrfProtectionService::class, $fake);
+
+        try {
+            $callback();
+        } finally {
+            $this->app->instance(SsrfProtectionService::class, $original);
+        }
+
+        return $fake;
     }
 
     private function importJob(SupplierFeed $feed, XmlMappingTemplate $template): ImportJob

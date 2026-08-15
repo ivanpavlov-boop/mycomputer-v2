@@ -1,0 +1,66 @@
+{
+    "schema_version": "supplier-offer-lifecycle-operational-evidence-v1",
+    "supplier": "apcom",
+    "supplier_scope": [
+        "apcom"
+    ],
+    "policy_versions": {
+        "aggregation": "catalog-offer-aggregation-policy-v1",
+        "decision_register": "apcom-human-decisions-v4",
+        "deletion": "catalog-product-deletion-policy-v1",
+        "missing_offer": "supplier-offer-missing-policy-v1",
+        "preview_profile": "apcom-preview-feed-profile-v4",
+        "reappearance": "supplier-offer-reappearance-policy-v1",
+        "retention": "supplier-technical-retention-policy-v1",
+        "snapshot_qualification": "supplier-full-snapshot-qualification-policy-v1",
+        "visibility": "catalog-product-visibility-lifecycle-policy-v1"
+    },
+    "source_identity": "synthetic-apcom-stock-price-v1",
+    "freshness_policies": [
+        {
+            "supplier": "apcom",
+            "policy_key": "apcom-snapshot-freshness-policy-v1",
+            "max_age_hours": 24,
+            "approved": true
+        }
+    ],
+    "snapshots": [
+        {
+            "snapshot_id": "synthetic-apcom-001",
+            "supplier": "apcom",
+            "source_identity": "synthetic-apcom-stock-price-v1",
+            "captured_at": "2026-08-10T12:00:00+00:00",
+            "authoritative_snapshot_at": "2026-08-10T12:00:00+00:00",
+            "fingerprint": "1111111111111111111111111111111111111111111111111111111111111111",
+            "status": "completed",
+            "successful": true,
+            "full": true,
+            "schema_valid": true,
+            "truncated": false,
+            "product_count": 100,
+            "minimum_product_count": 1,
+            "product_drop_percent": 0,
+            "maximum_product_drop_percent": 40,
+            "fatal_integrity_blocker": false,
+            "supplier_identity_confirmed": true,
+            "comparable": true,
+            "observations": [
+                {
+                    "supplier_sku_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                    "present": true,
+                    "price": "100.00",
+                    "raw_quantity_observed": 6,
+                    "eol_flag": 0,
+                    "canonical_public_status": null,
+                    "supplier_mapper_valid": true,
+                    "exact_supplier_sku_match": true,
+                    "identifier_conflict": false,
+                    "blocking_validation_issue": false,
+                    "duplicate_offer": false,
+                    "reliable_manufacturer_mpn_hash": null
+                }
+            ]
+        }
+    ],
+    "product_lifecycle_evidence": []
+}
