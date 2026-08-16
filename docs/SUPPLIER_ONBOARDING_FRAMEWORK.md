@@ -342,16 +342,19 @@ remains disabled, and images remain prohibited.
 
 ## Phase 9C.6.5C.3D Missing Offer Lifecycle Preview
 
-Phase 9C.6.5C.3D is local/in-review synthetic tooling. It defines qualified
-full-snapshot absence tracking, three consecutive observations plus a 48-hour
-duration, reappearance validation, multi-supplier offer aggregation, future
+Phase 9C.6.5C.3D is merged and deployed synthetic read-only tooling at
+`c22fc9a8dddf3c6778ab0b88e5a50cbc02fe3f21`. It defines qualified
+full-snapshot absence tracking, three consecutive qualified missing snapshots
+plus a 48-hour duration, reappearance validation, multi-supplier offer
+aggregation, future
 visibility/archival policy, deletion prohibition, and retention planning. It
 also has a documented input-driven operational evidence contract for review:
 immutable versioned evidence, explicit `evaluated_at`, CLI-only evaluation,
 stable deterministic output, no persistence, and fail-closed import
-concurrency checks. Operational preview implementation remains unapproved. The
-current tooling does not read real supplier XML, modify any database table, use
-a scheduler, alter the storefront, Scout, sitemap, robots, or Catalog Sync. See
+concurrency checks. No real APCOM evidence has been processed and operational
+execution remains unapproved. The current tooling does not read real supplier
+XML, modify any database table, use a scheduler, alter the storefront, Scout,
+sitemap, robots, or Catalog Sync. See
 [Supplier Offer Missing Lifecycle Policy](SUPPLIER_OFFER_MISSING_LIFECYCLE_POLICY.md),
 [Catalog Product Visibility And Archival Policy](CATALOG_PRODUCT_VISIBILITY_ARCHIVAL_POLICY.md),
 and [Supplier Technical Retention Policy](SUPPLIER_TECHNICAL_RETENTION_POLICY.md).
@@ -380,13 +383,19 @@ reappearance or chronology. They must not be backfilled into evidence.
 
 [Immutable Supplier Offer Snapshot Persistence Design](IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md)
 defines a documentation-only prerequisite: future imports may add one final
-append-only generation header and an exhaustive privacy-safe hashed observation
-set without changing staging behavior. The design includes fail-closed gaps,
-qualification, fingerprints, privacy, retention, rollout and rollback rules.
-It does not add a migration, capture implementation, producer, import approval,
-schedule enablement, lifecycle action or Catalog Sync behavior.
+append-only generation header, immutable first-enrollment cohort rows and an
+exhaustive physical privacy-safe hashed presence/absence set without changing
+staging semantics. The remediated design also requires a strict opaque source
+identity, one common supplier capture lock, bounded temp-file streaming, exact
+indexes, fail-closed gaps and deterministic qualification. It does not add a
+migration, streaming parser change, capture implementation, producer, import
+approval, schedule enablement, lifecycle action or Catalog Sync behavior.
 
-The first future qualified generation is baseline only. C3D.1 remains blocked
-until a separately authorized implementation is deployed and enabled and the
-minimum V4 future-history window is collected without gaps. Supplier #3 work
-must not begin before this prerequisite is resolved.
+The first complete generation in each source/cohort epoch is a comparison
+baseline only. Because the current V1 lifecycle contract requires
+`comparable=true`, the unchanged V4 threshold is met only by three later
+qualified comparable absences spanning at least 48 hours from the first of
+those three. Any gap, overlap or cohort expansion requires a new baseline.
+C3D.1 remains blocked until a separately authorized implementation is deployed
+and enabled and that future-history window is collected. Supplier #3 work must
+not begin before this prerequisite is resolved.

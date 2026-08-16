@@ -2,14 +2,21 @@
 
 ## Status And Scope
 
-Phase 9C.6.5C.3D.1-PRE.A is a documentation-only design. It resolves the
-architecture question behind `BLOCKED_HISTORICAL_SOURCE_CONTRACT_REQUIRED`,
-but it does not add tables, models, import hooks, evidence production, or an
-operational preview. No existing data is qualified by this design.
+Phase 9C.6.5C.3D.1-PRE.A is a documentation-only prerequisite. It resolves the
+architecture questions behind `BLOCKED_HISTORICAL_SOURCE_CONTRACT_REQUIRED`,
+but it does not add a migration, model, parser, import hook, feature flag,
+evidence file, or operational preview. No existing data is qualified by this
+design.
 
 The design is supplier-generic where the existing importer already provides a
 supplier and feed boundary. APCOM is the first bounded consumer. V1 through V3
-remain historical contracts and V4 remains the current semantic authority.
+remain historical contracts. V4 remains the current semantic authority.
+
+The read-only C3D preview implementation was merged through PR #210 and
+deployed at `c22fc9a8dddf3c6778ab0b88e5a50cbc02fe3f21`. This persistence design
+is a local documentation-only follow-up under fresh independent review. Its
+migration, parser/capture implementation, evidence preparation, operational
+execution, and closeout are not approved or implemented.
 
 Read this design with [APCOM Missing Offer Decisions V4](APCOM_MISSING_OFFER_DECISIONS_V4.md),
 [APCOM Operational Offer Lifecycle Preview](APCOM_OPERATIONAL_OFFER_LIFECYCLE_PREVIEW.md),
@@ -21,396 +28,709 @@ and [Supplier Technical Retention Policy](SUPPLIER_TECHNICAL_RETENTION_POLICY.md
 
 The current application cannot reconstruct qualified lifecycle history:
 
-- `import_histories.id` is an immutable importer-owned generation marker, but
-  its terminal context contains aggregate processed and failed counts only;
+- `import_histories.id` is an immutable importer-owned attempt marker, but its
+  terminal context contains aggregate processed and failed counts only;
 - `supplier_import_runs` contains mutable aggregate execution reports;
 - `supplier_products` is the mutable current staging projection;
-- `supplier_feed_items` is raw mutable data without qualified generation
-  provenance and is not populated by the reviewed import flow;
-- `received_at`, `updated_at`, logs, caches, current presence, and current
-  payloads are not authoritative historical snapshot evidence.
+- `product_supplier_offers` is current catalog-offer state, not source history;
+- `supplier_feed_items` is mutable raw data without the required qualified
+  generation provenance and is not populated by the reviewed XML flow;
+- timestamps, logs, caches, current presence, and current payloads are not
+  authoritative historical presence or absence evidence.
 
 The future schema therefore starts empty. Existing rows must not be backfilled,
-converted, or presented as historical absence, presence, or reappearance.
+converted, or represented as historical presence, absence, or reappearance.
 
-The reviewed XML flow is
-`SupplierImportOrchestrator -> RunSupplierImportJob -> XmlImportEngine::import()`;
-the legacy scheduled path also reaches `XmlImportEngine::import()` through
-`ProcessXmlSupplierFeed`. The engine creates the ImportHistory generation before
-loading and mapping the source, updates current `supplier_products`, and then
-records the terminal import outcome. `SupplierImportRun` remains an outer
-mutable aggregate/report. The first APCOM capture integration therefore belongs
-inside the shared XML engine after `ImportHistory::startForImport()`, not only
-in one caller. Other import engines require their own later reviewed source
-adapter and cannot be treated as qualified by inference.
+The reviewed XML execution paths are:
+
+```text
+RunSupplierImportJob
+-> SupplierImportOrchestrator::run()
+-> XmlImportEngine::import()
+
+ProcessXmlSupplierFeed
+-> XmlImportEngine::import()
+```
+
+`XmlImportEngine::import()` creates the ImportHistory generation before source
+loading, calls `SsrfProtectionService::downloadToTemporaryFile()`, currently
+parses that file with `simplexml_load_file()`, maps rows, and writes current
+`supplier_products`. `SupplierImportRun` remains an outer mutable report. The
+first APCOM capture boundary must therefore be shared by both XML callers and
+must begin only after `ImportHistory::startForImport()`.
+
+The current `simplexml_load_file()` and `extractRows()` implementation builds a
+complete in-memory XML tree and row array. A capture implementation must not
+pretend that this is bounded memory. Before capture can be enabled, a separately
+reviewed implementation phase must replace that parser traversal with a
+behavior-equivalent streaming traversal over the same downloaded temporary
+file. Existing mapping, validation, staging, failure isolation, and import
+terminal semantics must remain unchanged and regression-tested.
 
 ## Selected Architecture
 
-The future implementation adds two append-only evidence tables and reuses the
-existing `import_histories.id` as the attempt sequence marker:
+The future implementation adds three append-only evidence tables and reuses
+`import_histories.id` as the attempt sequence marker:
 
-1. `supplier_offer_snapshot_generations` stores one immutable final header for
-   one import generation.
-2. `supplier_offer_snapshot_observations` stores the exhaustive set of offers
-   actually observed during that generation, using hashes rather than raw
-   identifiers.
+1. `supplier_offer_snapshot_generations` stores one immutable final capture
+   header for one ImportHistory generation.
+2. `supplier_offer_snapshot_enrollments` stores the first immutable enrollment
+   of every hashed offer identity in a supplier/source cohort.
+3. `supplier_offer_snapshot_observations` stores one physical `present=true` or
+   `present=false` observation for every identity enrolled for that generation.
 
-There is no mutable current-snapshot row. A complete header and its observations
-are inserted in one database transaction after source traversal. A failed or
-partial traversal may insert a frozen header with zero observations. If even
-that persistence fails, the existing ImportHistory generation remains without
-a snapshot header. That missing header is a sequence gap and blocks lifecycle
-readiness; it must never be interpreted as offer absence.
+The third enrollment layer is mandatory. Mutable staging can identify cohort
+membership at a capture boundary, but it cannot preserve that membership after
+a row is removed. An enrolled identity therefore remains in every later
+generation in the same supplier/source cohort, even after it disappears from
+`supplier_products` or `product_supplier_offers`.
 
-The header is not updated from `started` to `finished`. It is a final fact.
-`import_histories` continues to own the start/terminal import transition, while
-the snapshot header records the final capture outcome once.
+There is no mutable current-snapshot row. A complete header, newly discovered
+enrollments, and all observations are inserted atomically after source
+traversal. A failed capture may persist one final frozen header without
+observations. If final persistence fails, the ImportHistory generation remains
+without a header. A missing header is a sequence gap and never means absence.
+
+The header is not updated from `started` to `finished`. It is one final fact.
+`import_histories` continues to own import execution state.
+
+## Cohort Enrollment Contract
+
+Enrollment is privacy-safe, monotonic, and source-scoped.
+
+At finalization of each capture-capable generation, the future coordinator
+forms a membership set from:
+
+- every valid source offer observed in the streamed input;
+- every valid current `supplier_products` identity required by the operational
+  preview for that supplier;
+- every valid current `product_supplier_offers` identity required by that
+  preview; and
+- all earlier immutable enrollments in the same supplier/source scope.
+
+Only the canonical domain-separated `supplier_sku_hash` is persisted. Raw SKU,
+EAN, MPN, source record, name, URL, or path is prohibited. An application row
+without one unambiguous canonical supplier SKU is a capture integrity blocker;
+the producer must not guess its identity.
+
+The first capture transaction enrolls the current application cohort and all
+valid source-only identities with the current ImportHistory ID as their
+effective generation. Later captures enroll newly observed or newly required
+identities in the same way. The provenance code records whether first
+enrollment came from `initial_application_cohort`, `application_cohort_entry`,
+`source_observation`, or both application and source in the same generation.
+This includes the documented 86-identity APCOM staging-only cohort, including
+identities that are absent from the first future captured source and therefore
+do not need to reappear before they can begin accumulating explicit absence
+evidence.
+
+Enrollment never claims history before its effective generation. An identity
+first enrolled from current application state and absent from that generation's
+source receives a physical `present=false` observation beginning with that
+generation only. An identity first discovered in the source receives
+`present=true`. Deleting mutable staging later cannot erase either enrollment
+or its subsequent absence history.
+
+Every new enrollment changes the cohort fingerprint and starts a new cohort
+epoch. This is required because the current V1 reader requires the exact same
+identity set in every selected snapshot. A V1 evidence window may include only
+qualified comparable generations from one unchanged cohort epoch. It must not
+synthesize false observations before an identity was enrolled.
 
 ## Generation Header Data Dictionary
 
 Proposed additive table: `supplier_offer_snapshot_generations`.
 
-| Column | Type | Null/default | Purpose and invariant | Index/FK | Privacy |
-| --- | --- | --- | --- | --- | --- |
-| `id` | unsigned bigint | not null | Surrogate storage key; never emitted as evidence | primary | internal |
-| `supplier_id` | unsigned bigint | not null | Supplier ownership copied from the generation | index; FK `RESTRICT` | internal |
-| `supplier_key` | varchar(96) ASCII | not null | Versioned canonical supplier key captured with the generation; later supplier edits cannot rewrite provenance | index with generation | public contract |
-| `supplier_feed_id` | unsigned bigint | not null | Exact feed ownership at capture time | index; FK `RESTRICT` | sensitive metadata |
-| `import_history_id` | unsigned bigint | not null | Existing immutable importer generation identity | unique; FK `RESTRICT` | internal |
-| `schema_version` | varchar(96) | not null | Snapshot persistence schema version | index | public contract |
-| `producer_version` | varchar(96) | not null | Capture implementation contract version | index | public contract |
-| `policy_versions` | JSON | not null | Canonically ordered policy-version map used for qualification | application exact-key check | public contract |
-| `freshness_policy_key` | varchar(96) ASCII | nullable | Exact approved supplier freshness-policy key, when one exists | index | public contract |
-| `freshness_max_age_hours` | unsigned integer | nullable | Captured approved maximum age; null when no policy exists | none | policy metadata |
-| `freshness_policy_approved` | boolean | false | Approval fact captured for V1 projection | index | public contract |
-| `source_identity` | varchar(512) UTF-8 | not null | Exact validated identity, maximum 128 Unicode code points; no path or URL | supplier/index prefix where supported | restricted metadata |
-| `source_fingerprint` | char(64) ASCII | not null | Lowercase SHA-256 of the exact source bytes consumed by that import | index | pseudonymous |
-| `captured_at` | char(25) ASCII | not null | Canonical ISO-8601 completion instant with numeric offset and second precision | index | operational metadata |
-| `authoritative_snapshot_at` | char(25) ASCII | nullable | Supplier-authoritative instant only when genuinely available | index | operational metadata |
-| `capture_started_at` | char(25) ASCII | not null | Canonical source traversal start | none | operational metadata |
-| `capture_completed_at` | char(25) ASCII | not null | Canonical source traversal end; not evidence freshness unless authoritative | index | operational metadata |
-| `capture_outcome` | varchar(48) | not null | Closed code: `completed`, `completed_with_errors`, `failed`, `incomplete`, `overflow` | index | public contract |
-| `failure_reason_code` | varchar(96) | nullable | Stable privacy-safe code only; no exception message or source data | index | public contract |
-| `qualification_state` | varchar(48) | not null | Closed final code: `qualified`, `failed`, `incomplete`, `schema_invalid`, `truncated`, `overflow`, `anomalous`, `not_comparable`, or `integrity_blocked` | index | public contract |
-| `successful` | boolean | false | Import/capture success fact | index | public contract |
-| `full` | boolean | false | Exhaustive traversal completed | index | public contract |
-| `schema_valid` | boolean | false | Every required source field passed the approved schema | index | public contract |
-| `truncated` | boolean | false | Any source or collector truncation occurred | index | public contract |
-| `fatal_integrity_blocker` | boolean | false | Integrity failure freezes this generation | index | public contract |
-| `supplier_identity_confirmed` | boolean | false | Source belongs to the expected supplier | index | public contract |
-| `comparable` | boolean | false | Source identity and semantics match the previous qualified generation | index | public contract |
-| `total_observed_count` | unsigned integer | 0 | Parsed source records before deduplication | none | aggregate |
-| `valid_observation_count` | unsigned integer | 0 | Unique observations eligible for the immutable set | none | aggregate |
-| `invalid_observation_count` | unsigned integer | 0 | Records rejected by field validation | none | aggregate |
-| `rejected_observation_count` | unsigned integer | 0 | Records rejected by policy/scope validation | none | aggregate |
-| `duplicate_observation_count` | unsigned integer | 0 | Duplicate stable offer identities | none | aggregate |
-| `minimum_product_count` | unsigned integer | not null | Supplier threshold captured for reproducibility | none | policy metadata |
-| `product_drop_percent` | decimal(9,6) | not null | Exact count drop from the preceding comparable generation | none | aggregate |
-| `maximum_product_drop_percent` | unsigned tinyint | not null | Captured supplier threshold | none | policy metadata |
-| `observation_set_fingerprint` | char(64) ASCII | nullable | Hash of ordered canonical observation fingerprints; required for a complete set | index | pseudonymous |
-| `created_at` | timestamp | database current time | Storage audit time only; never lifecycle chronology | index | operational metadata |
+| Column | Type | Null/default | Purpose and invariant | Privacy |
+| --- | --- | --- | --- | --- |
+| `id` | unsigned bigint | not null | Surrogate storage key; never emitted | internal |
+| `supplier_id` | unsigned bigint | not null | Supplier ownership copied from ImportHistory | internal |
+| `supplier_key` | varchar(96) ASCII | not null | Versioned canonical supplier key at capture | public contract |
+| `supplier_feed_id` | unsigned bigint | not null | Exact feed ownership | sensitive metadata |
+| `import_history_id` | unsigned bigint | not null | Immutable importer generation identity | internal |
+| `predecessor_snapshot_generation_id` | unsigned bigint | nullable | Immediately preceding valid header used for comparison | internal |
+| `schema_version` | varchar(96) ASCII | not null | Persistence schema version | public contract |
+| `producer_version` | varchar(96) ASCII | not null | Capture implementation contract | public contract |
+| `qualification_policy_key` | varchar(96) ASCII | not null | Exact qualification policy | public contract |
+| `capture_integrity_policy_key` | varchar(96) ASCII | not null | Exact capture-integrity policy | public contract |
+| `policy_versions` | JSON | not null | Canonically ordered complete policy map | public contract |
+| `freshness_policy_key` | varchar(96) ASCII | nullable | Approved supplier freshness key | public contract |
+| `freshness_max_age_hours` | unsigned integer | nullable | Captured approved maximum age | policy metadata |
+| `freshness_policy_approved` | boolean | false | Approval fact for V1 projection | public contract |
+| `source_identity` | varchar(128) ASCII | not null | Exact validated opaque identity under the contract below | restricted metadata |
+| `source_fingerprint` | char(64) ASCII | not null | SHA-256 of exact downloaded bytes consumed | pseudonymous |
+| `captured_at` | char(25) ASCII | not null | Canonical capture completion instant | operational metadata |
+| `authoritative_snapshot_at` | char(25) ASCII | nullable | Supplier-authoritative instant only when genuine | operational metadata |
+| `capture_started_at` | char(25) ASCII | not null | Canonical source traversal start | operational metadata |
+| `capture_completed_at` | char(25) ASCII | not null | Canonical source traversal end | operational metadata |
+| `capture_outcome` | varchar(48) ASCII | not null | `completed`, `completed_with_errors`, `failed`, `incomplete`, or `overflow` | public contract |
+| `capture_failure_reason_code` | varchar(96) ASCII | nullable | Stable privacy-safe capture code | public contract |
+| `qualification_state` | varchar(48) ASCII | not null | `qualified_baseline`, `qualified_comparable`, or `frozen` | public contract |
+| `qualification_reason_codes` | JSON | not null | Sorted unique closed reason-code list | public contract |
+| `successful` | boolean | false | Import/capture success primitive | public contract |
+| `full` | boolean | false | Exhaustive traversal primitive | public contract |
+| `schema_valid` | boolean | false | Required source schema passed | public contract |
+| `truncated` | boolean | false | Source or collector truncation occurred | public contract |
+| `fatal_integrity_blocker` | boolean | false | Integrity failure primitive | public contract |
+| `supplier_identity_confirmed` | boolean | false | Source belongs to expected supplier | public contract |
+| `comparable` | boolean | false | Same source semantics and cohort as predecessor | public contract |
+| `total_observed_count` | unsigned integer | 0 | Source rows before deduplication | aggregate |
+| `valid_observation_count` | unsigned integer | 0 | Unique physically present source offers | aggregate |
+| `invalid_observation_count` | unsigned integer | 0 | Rows failing field validation | aggregate |
+| `rejected_observation_count` | unsigned integer | 0 | Rows rejected by scope/policy | aggregate |
+| `duplicate_observation_count` | unsigned integer | 0 | Canonically identical duplicate source rows | aggregate |
+| `enrolled_observation_count` | unsigned integer | 0 | Full physical cohort observation count | aggregate |
+| `minimum_product_count` | unsigned integer | not null | Captured supplier threshold | policy metadata |
+| `product_drop_percent` | decimal(9,6) | nullable | Drop from predecessor; null for baseline | aggregate |
+| `maximum_product_drop_percent` | unsigned tinyint | not null | Captured supplier threshold | policy metadata |
+| `cohort_fingerprint` | char(64) ASCII | nullable | Hash of sorted enrolled identities effective here | pseudonymous |
+| `observation_set_fingerprint` | char(64) ASCII | nullable | Hash of sorted physical observation fingerprints | pseudonymous |
+| `generation_fingerprint` | char(64) ASCII | not null | Hash of the complete canonical final header contract | pseudonymous |
+| `created_at` | timestamp | database current time | Storage audit time only | operational metadata |
 
-The table has no `updated_at`. Application validation requires lowercase
-64-character hexadecimal fingerprints, exact policy keys, canonical timestamps,
-non-negative counts, count reconciliation under the capture contract, and a
-non-null observation-set fingerprint only for a persisted exhaustive set.
-`qualification_state=qualified` is allowed only when every objective gate in
-this document passes; it is a final reproducibility fact, not a mutable workflow
-status.
+There is no `updated_at`. `supplier_id`, `supplier_feed_id`, and
+`import_history_id` must agree with ImportHistory. A freshness key, age, and
+approval form one complete valid tuple or remain absent/false. Counts are
+non-negative and reconcile under the capture policy.
 
-`supplier_id`, `supplier_feed_id`, and `import_history_id` must agree with the
-existing ImportHistory generation. `supplier_key` must agree with the
-versioned feed profile at capture time. A freshness key, age and approval must
-either form one complete valid triple or all be absent/false. The unique
-`import_history_id` constraint provides retry idempotency and rejects duplicate
-capture finalization.
+`qualified_baseline` requires all non-comparative integrity gates, a complete
+cohort, `comparable=false`, a null predecessor when no usable sequence exists,
+and `product_drop_percent=null`. `qualified_comparable` additionally requires
+an exact predecessor, an unchanged cohort fingerprint, `comparable=true`, and
+a non-null passing product-drop value. Any reason code produces `frozen`.
 
-The future MySQL DDL must use `CHECK` constraints for the closed outcome and
-qualification codes, boolean domains, 0-100 maximum drop threshold, fingerprint
-shape, and freshness triple. A `qualified` row must imply `successful=true`,
-`full=true`, `schema_valid=true`, `truncated=false`, no fatal blocker, confirmed
-supplier identity, comparability, zero invalid/rejected rows, a completed
-outcome, and a non-null observation-set fingerprint. Cross-row count and
-fingerprint reconciliation remains an application transaction invariant and
-must be verified again by the reader.
+## Enrollment Data Dictionary
+
+Proposed additive table: `supplier_offer_snapshot_enrollments`.
+
+| Column | Type | Null/default | Purpose and invariant | Privacy |
+| --- | --- | --- | --- | --- |
+| `id` | unsigned bigint | not null | Surrogate storage key | internal |
+| `supplier_id` | unsigned bigint | not null | Supplier cohort owner | internal |
+| `supplier_feed_id` | unsigned bigint | not null | Feed provenance at first enrollment | sensitive metadata |
+| `source_identity` | varchar(128) ASCII | not null | Exact opaque cohort identity | restricted metadata |
+| `supplier_sku_hash` | char(64) ASCII | not null | Domain-separated offer identity | pseudonymous |
+| `effective_import_history_id` | unsigned bigint | not null | First generation where membership is valid | internal |
+| `enrollment_source` | varchar(48) ASCII | not null | Closed provenance code described above | public contract |
+| `enrollment_fingerprint` | char(64) ASCII | not null | Hash of canonical privacy-safe enrollment fields | pseudonymous |
+| `enrolled_at` | char(25) ASCII | not null | Canonical capture instant of first enrollment | operational metadata |
+| `created_at` | timestamp | database current time | Storage audit time only | operational metadata |
+
+There is no `updated_at`. The first enrollment for
+(`supplier_id`, `source_identity`, `supplier_sku_hash`) is immutable and unique.
+Retries may accept the already committed row only when its complete canonical
+fingerprint is identical. A later generation cannot change provenance,
+effective generation, or enrollment time.
 
 ## Observation Data Dictionary
 
 Proposed additive table: `supplier_offer_snapshot_observations`.
 
-| Column | Type | Null/default | Purpose and invariant | Index/FK | Privacy |
-| --- | --- | --- | --- | --- | --- |
-| `id` | unsigned bigint | not null | Surrogate storage key; never emitted | primary | internal |
-| `snapshot_generation_id` | unsigned bigint | not null | Immutable owning header | FK `RESTRICT`; composite indexes | internal |
-| `supplier_sku_hash` | char(64) ASCII | not null | Existing domain-separated offer identity | unique with generation | pseudonymous |
-| `present` | boolean | true | Stored rows are offers observed in the complete traversal | index | public contract |
-| `price` | decimal(12,2) | nullable | Canonical supplier price needed by V4 preview | none | commercial restricted |
-| `currency` | char(3) ASCII | nullable | ISO 4217 currency when the source carries it; null only when the versioned feed profile fixes the currency unambiguously | none | commercial metadata |
-| `raw_quantity_observed` | unsigned integer | nullable | Bounded internal stock observation | none | commercial restricted |
-| `eol_flag` | unsigned tinyint | nullable | Validated 0/1 supplier lifecycle evidence | none | restricted metadata |
-| `canonical_public_status` | varchar(48) | nullable | Existing canonical availability enum value | index | public contract |
-| `supplier_mapper_valid` | boolean | false | Approved mapper accepted the observation | index | public contract |
-| `exact_supplier_sku_match` | boolean | false | Identity validation result | index | public contract |
-| `identifier_conflict` | boolean | false | Conflict freezes reappearance/matching interpretation | index | public contract |
-| `blocking_validation_issue` | boolean | false | Stable blocker fact without raw error text | index | public contract |
-| `duplicate_offer` | boolean | false | Duplicate identity classification | index | public contract |
-| `reliable_manufacturer_mpn_hash` | char(64) ASCII | nullable | Reserved V1 evidence field; APCOM V4 requires null because no reliable MPN field or approved MPN hash domain exists | none | pseudonymous |
-| `observation_fingerprint` | char(64) ASCII | not null | Hash of canonical observation fields | index | pseudonymous |
-| `created_at` | timestamp | database current time | Storage audit time only | none | operational metadata |
+| Column | Type | Null/default | Purpose and invariant | Privacy |
+| --- | --- | --- | --- | --- |
+| `id` | unsigned bigint | not null | Surrogate storage key | internal |
+| `snapshot_generation_id` | unsigned bigint | not null | Immutable owning header | internal |
+| `supplier_sku_hash` | char(64) ASCII | not null | Enrolled offer identity | pseudonymous |
+| `present` | boolean | not null | Physical source presence fact | public contract |
+| `price` | decimal(12,2) | nullable | Canonical supplier price when present | commercial restricted |
+| `currency` | char(3) ASCII | nullable | ISO 4217 currency when present | commercial metadata |
+| `raw_quantity_observed` | unsigned integer | nullable | Bounded internal stock observation | commercial restricted |
+| `eol_flag` | unsigned tinyint | nullable | Validated 0/1 lifecycle evidence | restricted metadata |
+| `canonical_public_status` | varchar(48) ASCII | nullable | Versioned canonical availability | public contract |
+| `supplier_mapper_valid` | boolean | false | Approved mapper accepted observation | public contract |
+| `exact_supplier_sku_match` | boolean | false | Identity validation result | public contract |
+| `identifier_conflict` | boolean | false | Identity conflict fact | public contract |
+| `blocking_validation_issue` | boolean | false | Stable blocker fact | public contract |
+| `duplicate_offer` | boolean | false | Duplicate classification | public contract |
+| `reliable_manufacturer_mpn_hash` | char(64) ASCII | nullable | Reserved V1 field; null for APCOM V4 | pseudonymous |
+| `observation_fingerprint` | char(64) ASCII | not null | Hash of canonical observation fields | pseudonymous |
+| `created_at` | timestamp | database current time | Storage audit time only | operational metadata |
 
-The table has no `updated_at`. A complete generation stores exactly one row per
-unique observed supplier-offer identity. Raw identifiers are never stored.
-The later evidence adapter selects an explicit bounded generation range, forms
-the deterministic union of immutable offer hashes, and emits explicit
-`present=false` observations for identities absent from a complete generation.
-An incomplete or frozen generation is never used to prove absence.
+There is no `updated_at`. Every finalized complete generation stores exactly
+one row for every enrollment effective by that generation. `present=true` rows
+carry validated source semantics. `present=false` rows must have null semantic
+values, false mapper and exact-match flags, and false conflict/blocker/duplicate
+flags. No absence row is inferred from a partial or frozen traversal.
 
-The future MySQL DDL must constrain physical rows to `present=true`, EOL to
-null/0/1, currency to null or three uppercase ASCII letters, fingerprint/hash
-columns to lowercase hexadecimal shape, and `canonical_public_status` to the
-versioned enum accepted by the current V1 reader. The composite unique
-constraint is (`snapshot_generation_id`, `supplier_sku_hash`).
+## Exact Index And Foreign-key Contract
 
-The future producer must fail if current catalog coverage requires an identity
-that cannot be accounted for by the selected immutable generation range. It
-must not fill that gap from mutable staging.
+The future MySQL 8.4 migration must use these named structures or a reviewed
+equivalent with the same key order and query support.
 
-## Projection Into The Existing V1 Evidence Contract
+`supplier_offer_snapshot_generations`:
 
-The later source adapter must project a bounded selection into
-`supplier-offer-lifecycle-operational-evidence-v1`; it must not change that
-reader schema silently. The mapping is fixed as follows:
+- primary key `id`;
+- unique `uq_snapshot_generation_import_history` on `import_history_id`;
+- index `ix_snapshot_generation_feed_import` on
+  (`supplier_id`, `supplier_feed_id`, `import_history_id`);
+- index `ix_snapshot_generation_scope_order` on
+  (`supplier_id`, `source_identity`, `import_history_id`);
+- index `ix_snapshot_generation_qualified_range` on
+  (`supplier_id`, `source_identity`, `qualification_state`, `import_history_id`);
+- index `ix_snapshot_generation_retention` on (`created_at`, `id`);
+- index `ix_snapshot_generation_predecessor` on
+  `predecessor_snapshot_generation_id`;
+- `RESTRICT` foreign keys to supplier, feed, ImportHistory, and predecessor.
 
-| V1 field | Immutable source |
-| --- | --- |
-| `snapshot_id` | `sample('snapshot_generation', CanonicalOnboardingData::encode(['import_history_id' => ..., 'supplier' => ...]))`; the raw database ID is not emitted |
-| `supplier` | stored versioned canonical `supplier_key` |
-| `source_identity` | exact stored `source_identity` |
-| `captured_at` | stored `captured_at` |
-| `authoritative_snapshot_at` | stored authoritative timestamp; a missing value blocks APCOM qualification |
-| `fingerprint` | stored `source_fingerprint`; repeated exact source bytes remain duplicate-fingerprint evidence |
-| `status` | stored `capture_outcome` |
-| qualification booleans | stored `successful`, `full`, `schema_valid`, `truncated`, `fatal_integrity_blocker`, `supplier_identity_confirmed`, and `comparable` |
-| `product_count` | stored `valid_observation_count` |
-| count/drop thresholds | stored `minimum_product_count`, `product_drop_percent`, and `maximum_product_drop_percent` |
-| observations | deterministic union projection described below |
+`supplier_offer_snapshot_enrollments`:
 
-The adapter recomputes V4 qualification from the primitive fields and requires
-it to agree with the stored `qualification_state`; the stored state cannot
-override the current versioned policy. Header audit counts, capture timing,
-currency, row/set fingerprints and failure codes are persistence-only metadata
-and are not added to the exact-key V1 JSON.
+- primary key `id`;
+- unique `uq_snapshot_enrollment_scope_offer` on
+  (`supplier_id`, `source_identity`, `supplier_sku_hash`);
+- index `ix_snapshot_enrollment_effective` on
+  (`supplier_id`, `source_identity`, `effective_import_history_id`,
+  `supplier_sku_hash`);
+- index `ix_snapshot_enrollment_feed` on
+  (`supplier_feed_id`, `effective_import_history_id`);
+- `RESTRICT` foreign keys to supplier, feed, and effective ImportHistory.
 
-Bundle-level supplier scope, source identity, policy versions and freshness
-policies are emitted only when every selected generation agrees exactly on the
-stored values. An absent or unapproved APCOM freshness policy blocks bundle
-production; the producer must not read a newer mutable supplier setting to fill
-the gap.
+`supplier_offer_snapshot_observations`:
 
-For an explicit selected generation range, the adapter first forms the sorted
-union of every persisted `supplier_sku_hash`. Each generation then emits one
-V1 observation for every union member. A physical row maps its semantic fields
-directly and has `present=true`. An identity absent from an otherwise qualified
-complete generation is emitted deterministically with `present=false`, null
-price/quantity/EOL/status/MPN, false mapper and exact-match flags, and false
-conflict/blocker/duplicate flags. A missing, incomplete or frozen generation is
-never expanded into absence observations and instead blocks the bundle.
+- primary key `id`;
+- unique `uq_snapshot_observation_generation_offer` on
+  (`snapshot_generation_id`, `supplier_sku_hash`);
+- index `ix_snapshot_observation_offer_history` on
+  (`supplier_sku_hash`, `snapshot_generation_id`);
+- `RESTRICT` foreign key to generation.
 
-Optional V1 `product_lifecycle_evidence` is not snapshot-table data. If a later
-producer includes it, it must come from the existing separately fingerprinted
-read-only catalog boundary and use the existing `product()` hash domain. It
-must never create a Product foreign key or Product mutation in these tables.
+Exact range reads must be supplier/source bounded, ImportHistory ordered, and
+limited by generation count, observation count, and encoded output bytes. The
+producer must never execute an unbounded all-history read. The retention index
+supports later candidate reporting only; this phase authorizes no deletion.
 
-## Explicitly Prohibited Data
+Supplier and source columns have low-to-moderate cardinality and lead bounded
+scope/range indexes; monotonic ImportHistory IDs then provide ordering. Offer
+hashes have high cardinality and lead identity-history lookup, while generation
+ID leads the high-fan-out traversal of all cohort observations. Enrollment's
+effective-generation index supports `effective_import_history_id <= current`
+within one exact supplier/source scope. The feed/import index supports feed
+ownership checks; global ImportHistory uniqueness supplies retry idempotency.
+The predecessor and all parent-key indexes support their `RESTRICT` foreign
+keys. A later migration PR must include MySQL migration tests plus
+representative `EXPLAIN` assertions for each access pattern and expected row
+fan-out before capture can be enabled.
 
-Neither table may contain raw supplier SKU, EAN/GTIN, MPN, product name,
-description, raw source record, XML, feed URL, credential, token, host or
-container path, catalog SEO, category, attribute, image, or application secret.
-Exception messages and log prose are not evidence fields.
+The migration must add `CHECK` constraints for closed codes, boolean domains,
+fingerprint shapes, timestamps, count reconciliation, baseline/comparable
+implications, and the null semantics of absent observations. Application
+validation and reader reconciliation remain mandatory because cross-row set
+equality cannot be expressed completely in one row constraint.
+
+## Source Identity Contract
+
+The persistence source identity is an application-owned opaque logical-source
+identifier. It is not a feed URL, filesystem path, container path, credential,
+or supplier-provided label.
+
+The future snapshot-specific value object must first call the existing
+`OperationalSupplierSourceIdentity::validate()` unchanged, then enforce this
+stricter exact grammar without trimming, case-folding, Unicode normalization,
+or replacement:
+
+```text
+^snapshot-source-v1:[a-z0-9]+(?:[._-][a-z0-9]+)*(?::[a-z0-9]+(?:[._-][a-z0-9]+)*)*$
+```
+
+The identity is ASCII and at most 128 bytes. Therefore its byte and code-point
+limits are identical. Valid examples are:
+
+```text
+snapshot-source-v1:apcom:primary-stock-price
+snapshot-source-v1:synthetic:fixture-a
+```
+
+Invalid forms include empty components, whitespace, control characters,
+slashes, backslashes, drive prefixes, URI scheme separators, leading/trailing
+punctuation, uppercase characters, and values longer than 128 bytes. Invalid
+input blocks capture before any evidence row is inserted. The existing broader
+V1 source-identity validator and its callers are not changed by this design.
+
+Non-sensitive invalid examples are:
+
+```text
+snapshot-source-v1:
+snapshot-source-v1:feed data
+snapshot-source-v1:Uppercase
+snapshot-source-v1:trailing-
+[invalid: contains URI scheme separator]
+[invalid: contains ASCII SOLIDUS U+002F]
+[invalid: contains ASCII REVERSE SOLIDUS U+005C]
+[invalid: begins with a drive designator]
+[invalid: begins with a UNC prefix]
+```
 
 ## Cryptographic Contract
 
 The design reuses `OperationalSupplierOfferIdentityHasher` and
-`CanonicalOnboardingData`; it does not introduce a second algorithm.
+`CanonicalOnboardingData`; it does not invent a second identity algorithm.
 
-- Encoding is UTF-8.
 - Supplier keys use the existing lowercase/trim behavior.
-- Source identity is the exact validated decoded UTF-8 value. It is not
-  trimmed, case-folded or Unicode-normalized, and remains bounded to 128 code
-  points under the existing validator.
 - Supplier SKU identity is exactly SHA-256 of
   `supplier-offer-lifecycle-operational-preview-v1|supplier_sku|<supplier>|<sku>`
-  through the existing `supplierSku()` method.
-- A product reference, when the existing evidence/report contract requires it,
-  uses the existing `product()` domain.
-- Observation fingerprints use the existing `sample()` primitive with the
-  explicit bucket `snapshot_observation` and canonical JSON bytes of the
-  semantic observation fields, excluding storage ID, foreign key,
-  `observation_fingerprint`, and `created_at`.
-- Observation-set fingerprints use `sample()` with the explicit bucket
-  `snapshot_observation_set` and canonical JSON containing the sorted
-  observation fingerprints.
-- Evidence `snapshot_id` values use `sample()` with the explicit bucket
-  `snapshot_generation` and canonical JSON bytes containing the stored supplier
-  key and ImportHistory ID.
-- Source fingerprints remain lowercase SHA-256 of the exact bytes consumed by
-  the authorized importer. They are not derived from a path or URL.
+  through `OperationalSupplierOfferIdentityHasher::supplierSku()`.
+- A product reference uses the existing `product()` domain only where the
+  current evidence contract requires it.
+- Observation fingerprints use `sample()` with bucket
+  `snapshot_observation_v1` and canonical semantic fields, including physical
+  `present`, excluding storage keys and timestamps.
+- Enrollment fingerprints use `sample()` with bucket
+  `snapshot_enrollment_v1` and canonical supplier key, source identity, offer
+  hash, effective ImportHistory ID, and provenance code.
+- Cohort fingerprints use `sample()` with bucket `snapshot_cohort_v1` and the
+  ordered enrollment hashes effective for the generation.
+- Observation-set fingerprints use `sample()` with bucket
+  `snapshot_observation_set_v1` and ordered observation fingerprints.
+- Evidence `snapshot_id` uses `sample()` with bucket `snapshot_generation_v1`
+  and canonical supplier key plus ImportHistory ID.
+- Generation fingerprints use `sample()` with bucket
+  `snapshot_generation_header_v1` and every canonical final header field,
+  including policy keys, high-level state, sorted reason-code list, counts,
+  chronology, cohort fingerprint and observation-set fingerprint, while
+  excluding storage ID, `generation_fingerprint`, and `created_at`.
+- Source fingerprints are lowercase SHA-256 of exact bytes in the downloaded
+  temporary source file. They are never derived from source identity, path, or
+  URL.
 
-The current hasher has no dedicated manufacturer-MPN method. APCOM V4 leaves
-`reliable_manufacturer_mpn_hash` null, so this persistence design does the same.
-It must not improvise an MPN bucket through `sample()`. A future supplier that
-requires MPN evidence needs a separately reviewed, versioned cryptographic
-contract before that nullable column may be populated.
+APCOM V4 keeps `reliable_manufacturer_mpn_hash` null because there is no
+approved MPN domain. A future supplier requiring MPN evidence needs a separate
+versioned contract. The hashes are pseudonymous, not anonymous, and remain
+restricted operational data. No secret or keyed hash is introduced.
 
-The current V1 contract uses unkeyed domain-separated SHA-256; keyed hashing is
-not currently required. Hashes are therefore pseudonymous, not anonymous, and
-remain restricted operational data. No secret is introduced or referenced.
-A future keyed-hash change requires a new versioned schema and migration design;
-old hashes must not be silently rehashed or mixed with a new namespace.
-
-Any equal supplier-offer hash with non-identical canonical observation input is
-a collision/conflict and freezes the generation. The system must not choose one
-row. Raw values must not be logged to diagnose the conflict.
+Any equal offer hash with non-identical canonical identity input, or equal row
+fingerprint with non-identical canonical row input, is an integrity conflict.
+The generation freezes. Raw values must not be logged to diagnose it.
 
 ## Append-only Enforcement
 
-The future migration and models must enforce all of these boundaries:
+The future migration and models must enforce:
 
-- no update path for either table;
-- database `BEFORE UPDATE` and `BEFORE DELETE` guards reject mutation with a
-  stable error on supported MySQL deployments; the migration contract must
-  test those guards rather than relying only on model behavior;
+- no UPDATE or DELETE path for any of the three tables;
+- MySQL `BEFORE UPDATE` and `BEFORE DELETE` guards tested independently of
+  model behavior;
 - no mass-assignment mutation surface;
-- model insert methods callable only from the capture repository;
-- model `delete`, `forceDelete`, increment, decrement, and touch rejected;
-- no `CASCADE` or `SET NULL` from supplier, feed, ImportHistory, or header;
-- parent deletion blocked by `RESTRICT` foreign keys and application guards;
-- one final header per ImportHistory generation;
-- one observation per generation and supplier SKU hash;
-- all final rows inserted in one transaction;
-- no status transition represented by updating a header;
-- `created_at` and IDs never used as source chronology;
+- insert methods available only through the immutable capture repository;
+- model delete, force-delete, increment, decrement, and touch rejected;
+- no `CASCADE` or `SET NULL`; all parent relationships use `RESTRICT`;
+- one final generation per ImportHistory;
+- one first enrollment per supplier/source/offer hash;
+- one physical observation per generation/offer hash;
+- complete final rows committed in one transaction;
+- no state transition represented by updating a header;
 - no automatic prune, retention job, or admin mutation resource.
 
-Direct query-builder writes remain an implementation-review concern. Tests must
-prove database constraints and restricted foreign keys independently of model
-guards. Database users should receive no ordinary UPDATE or DELETE grant for
-these tables where deployment operations support table-level grants.
+Direct query-builder writes remain an implementation-review concern. Where
+deployment permits table-level grants, the runtime database user should not
+receive ordinary UPDATE or DELETE grants for these tables.
 
-## Future Import Capture Semantics
+## Bounded Capture And Temporary State
 
-The future integration must be an additive observer of the existing authorized
-import traversal, not a second feed request or a second import framework.
+The future integration is an additive observer of one authorized import. It is
+not a second feed request and does not retain raw source data.
 
-1. `ImportHistory::startForImport()` allocates the immutable generation before
-   source reading, as it does now.
-2. A supplier-scoped, default-off capture gate decides whether a bounded
-   collector is attached. Deployment alone does not enable it.
-3. The APCOM XML integration is inside `XmlImportEngine::import()`, so both
-   reviewed callers share one capture boundary. The engine must expose the same
-   bounded byte buffer to XML parsing and hashing; no second URL request or
-   source copy is allowed.
-4. Every parsed source row contributes only validation facts and privacy-safe
-   hashes to a bounded in-memory collector. Existing staging mapping and writes
-   remain unchanged.
-5. The collector has an implementation-tested hard bound derived from the
-   8 MiB evidence limit and the maximum canonical observation size. Reaching
-   the bound produces `overflow`, never truncation presented as complete.
-6. After traversal, counts, chronology, source identity, qualification facts,
-   canonical observations, row fingerprints, and the ordered set fingerprint
-   are finalized.
-7. One transaction inserts the final header and, only for an exhaustive set,
-   its observations in deterministic chunks. It performs no Product, mapping,
-   staging, Catalog Sync, cache, job, or event write.
-8. The normal import terminal transition remains owned by the importer.
+1. `ImportHistory::startForImport()` allocates the generation.
+2. The common supplier import execution coordinator already owns the
+   supplier-scoped execution lock described below. A separate default-off gate
+   determines whether capture is attempted.
+3. `SsrfProtectionService::downloadToTemporaryFile()` downloads once to its
+   restricted system temporary file.
+4. The process opens the mode-0600 file without following links, records its
+   file identity and size, and hashes its exact bytes incrementally.
+5. A behavior-equivalent streaming XML parser traverses that same restricted
+   file while its identity is held. Before deletion, a second bounded local
+   hash pass must reproduce the first digest and the file identity/size must be
+   unchanged. Any mismatch freezes capture. This is not a second fetch or
+   download and proves that parsing and the stored fingerprint refer to the
+   same downloaded bytes.
+6. The streaming parser consumes the file without a complete XML tree;
+   the existing complete SimpleXML tree and extracted row array must not remain
+   in the capture-enabled path.
+7. Existing mapping, validation, and staging writes execute for each streamed
+   row exactly as before.
+8. The observer writes only fixed-size privacy-safe canonical records to a
+   mode-0600 system temporary spool. It never writes raw identifiers, XML,
+   credentials, URLs, paths, names, or payloads.
+9. The spool has explicit row and byte ceilings derived from the approved
+   maximum import row count and canonical observation size. It introduces no
+   smaller source-file limit than the authorized importer. Exceeding a capture
+   ceiling yields
+   `overflow`; no prefix is represented as complete.
+10. Finalization uses bounded external sort/deduplication and a streamed merge
+   with the immutable enrollment query. Memory remains bounded by configured
+   chunk size, not source or cohort size.
+11. One database transaction inserts new enrollments, the final header, and
+    deterministic chunks of exhaustive physical observations.
+12. Both source temporary file and privacy-safe spool are removed in `finally`
+    on success, failure, signal-driven worker termination where PHP cleanup
+    runs, and repository retry. A startup janitor may remove only stale files
+    bearing a capture-specific random prefix and correct owner/mode; it is not
+    evidence and must never inspect or log contents.
 
-Capture failure does not roll back a successful supplier staging import. The
-ImportHistory generation without a valid snapshot header is an explicit gap;
-all lifecycle chains crossing it freeze. Operators may investigate the capture
-implementation, but they may not backfill the missing evidence from staging.
+The observer does not use Laravel cache, session, queue payloads, application
+storage, or logs as temporary evidence. It does not hold the complete source,
+cohort, or observation set in memory. It performs no second HTTP request and no
+second source download.
 
-A parsing failure may insert a frozen final header with zero observations and a
-stable failure code. Partial observations are not retained as absence evidence.
-If the frozen-header transaction also fails, the missing header is still a
-fail-closed gap.
+Capture-only failures must be caught after staging semantics are known. They
+must not convert an otherwise successful supplier staging import into failure.
+The result is a frozen header when final facts are safe, or a missing-header
+gap when they are not. Partial observations are never committed.
 
-Retries receive a new ImportHistory generation. Retrying finalization for the
-same generation is idempotent only when the complete canonical header and set
-fingerprints match; otherwise the unique constraint rejects it as conflict.
-Concurrent imports cannot share a generation and the existing activity guard
-continues to block operational evaluation while an import is active or unknown.
+## Supplier Concurrency Contract
 
-APCOM remains `schedule_enabled=false`. Capture enablement, an import run, an
-evidence candidate, and lifecycle preview each require separate authorization.
-Super Admin, authorization, queue, scheduler, and Catalog Sync behavior are
-outside this integration and remain unchanged.
+The existing orchestration lock does not cover `ProcessXmlSupplierFeed` and is
+not a sufficient boundary. The future implementation must introduce one
+`SupplierImportExecutionCoordinator` used by both job handlers before either
+caller enters the orchestrator or XML engine. The orchestrator's current lock
+ownership moves into that coordinator; its internal import body must not
+reacquire the same lock.
 
-## Qualification And Completeness
+`RunSupplierImportJob::handle()` loads the run/supplier and calls the
+coordinator around a lock-already-held orchestrator execution method.
+`ProcessXmlSupplierFeed::handle()` loads the ImportJob/supplier and calls the
+same coordinator around `XmlImportEngine::import()`. Direct calls to either
+lock-already-held method are prohibited outside the coordinator and covered by
+call-site tests. The existing `SupplierImportExecutionLock` is the one owner
+wrapper; no second lock object is nested.
 
-A generation can participate in lifecycle evidence only when all are true:
-
-- one terminal ImportHistory generation and one matching final header exist;
-- source traversal was successful and full;
-- schema is valid and no truncation or overflow occurred;
-- source identity is valid and stable across the selected supplier sequence;
-- supplier identity is confirmed;
-- authoritative timestamp provenance is present and valid where freshness is
-  evaluated;
-- total/count reconciliation and deterministic duplicate classification pass;
-- `invalid_observation_count` and `rejected_observation_count` are zero; V4
-  defines no non-zero tolerance that could safely prove exhaustive absence;
-- exact duplicate rows may be counted and collapsed only when their complete
-  canonical observation bytes are identical; conflicting duplicates set a
-  blocker, while duplicate snapshot fingerprints are detected across
-  generations and freeze the later generation;
-- source and observation-set fingerprints are present and valid;
-- minimum product count and existing maximum product-drop checks pass;
-- the generation is comparable with the previous qualified generation;
-- no fatal integrity blocker or unknown state exists;
-- every ImportHistory generation in the selected interval is accounted for.
-
-Invalid, partial, duplicate, failed, anomalous, missing-header, or unknown
-generations freeze the sequence. They neither increment nor reset missing
-tracking. Existing V4 thresholds remain unchanged: three consecutive qualified
-missing snapshots and at least 48 elapsed hours are required before an offer
-may receive a preview-only future-deactivation recommendation.
-
-## No Backfill And Readiness State Machine
-
-The new tables start empty. There is no conversion from `supplier_products`,
-ImportHistory messages/context, SupplierImportRun reports, feed items, logs,
-caches, or raw files.
-
-Readiness is evaluated per supplier as:
+The common Laravel cache-lock key reuses the project's existing supplier import
+namespace:
 
 ```text
-capture_disabled
--> awaiting_first_generation
--> baseline_only
--> collecting_qualified_history
--> evidence_window_ready
+supplier_import:<supplier_id>
 ```
 
-Any failed, incomplete, unknown, missing-header, identity-drift, chronology,
-count-drop, duplicate, or fingerprint gap changes the state to
-`history_gap_requires_new_sequence`. The next qualified generation starts a
-new sequence; a gap is never skipped.
+The coordinator acquires `Cache::lock(key, 4200)->get()` before
+`ImportHistory::startForImport()` and holds the returned owner token until
+snapshot finalization and the import terminal transition are complete. The
+4,200-second lease is the maximum 3,600-second import job timeout plus a
+600-second termination grace. It releases only through owner-checked
+`release()` in `finally`; `forceRelease()` is prohibited. The cache backend must
+be the deployment's atomic Redis lock store. Capture enablement fails closed on
+another backend or unavailable ownership checks. The implementation verifies
+`isOwnedByCurrentProcess()` before each staging chunk and again before snapshot
+commit. Loss or unknown ownership aborts before further writes and prevents a
+qualified header.
 
-The first qualified generation is baseline only. Operational evidence is
-unavailable until a bounded selection contains at least the V4-required three
-consecutive qualified snapshots, covers at least 48 elapsed hours when a
-confirmed-missing recommendation is sought, and satisfies freshness and
-coverage at the explicit operator-supplied `evaluated_at`. This is a formula,
-not a promised calendar date.
+Lock contention does not authorize an overlapping import or capture. The
+orchestrated path retains its stable skipped-run report; the legacy queued path
+throws a stable retryable lock-unavailable failure. Neither path creates an
+ImportHistory or performs staging, snapshot, Product, or Catalog Sync writes.
+`force=true` may bypass the existing dispatch pre-check but may not release or
+bypass a lock owned by another process. Before source download, the coordinator
+also requires the existing ImportHistory activity inspector to report no other
+active or unknown attempt for that supplier. This covers a stale
+pre-coordinator worker conservatively. Capture activation is prohibited until
+an implementation audit proves that all real XML callers use this boundary.
 
-## Catalog Sync Separation
+A normal exit releases the owner lock. A worker crash leaves the lock held only
+until the 4,200-second lease expires, which is longer than the enforced job
+timeout. If ImportHistory was already created but no final header committed,
+that generation is a gap. A queue retry cannot enter while the old lease is
+owned; after expiry it starts a new ImportHistory generation and cannot reuse or
+rewrite the crashed attempt.
 
-Snapshot capture writes only the two new append-only evidence tables in
-addition to the importer's existing staging behavior. It does not write a
-Product, execute CREATE or UPDATE, link or unlink, apply lifecycle or visibility
-recommendations, change a schedule, or call Catalog Sync.
+Ordering is by `import_histories.id`, never completion timestamp. A comparable
+generation may reference only the immediately preceding accounted generation
+in the same supplier/source sequence. Every intervening ImportHistory ID must
+have one terminal capture header. Missing headers, duplicate delivery, worker
+crashes, lost lock ownership, unknown activity, and any pre-coordinator overlap
+break the sequence. The next structurally complete uncontended generation
+becomes a new baseline. With the common lock intact, same-supplier completion
+order cannot differ from ImportHistory order.
 
-Required defaults remain:
+The lock permits imports for different suppliers to proceed concurrently. It
+does not call Catalog Sync, scheduler activation, or Product mutation. The
+existing activity inspector remains an evaluation-time guard in addition to,
+not instead of, the capture lock.
+
+## Qualification State And Reason Projection
+
+The persisted high-level state is deterministic:
+
+```text
+qualification_reason_codes is non-empty -> frozen
+no reasons and no usable predecessor     -> qualified_baseline
+no reasons and passing predecessor       -> qualified_comparable
+```
+
+There is no precedence among failures. The repository stores the sorted unique
+set of every applicable known lowercase snake-case reason as a canonical JSON
+array with no insignificant whitespace. The capture-integrity policy owns
+capture and cohort reasons. The existing V4 qualification policy owns its
+current snapshot reasons. Their union is covered by the immutable generation
+fingerprint.
+
+Required capture reason codes include:
+
+```text
+capture_overflow
+capture_truncated
+capture_invalid_observation
+capture_rejected_observation
+capture_identity_conflict
+capture_duplicate_conflict
+capture_cohort_incomplete
+capture_cohort_changed
+capture_generation_gap
+capture_source_identity_invalid
+capture_source_fingerprint_invalid
+capture_observation_fingerprint_conflict
+capture_concurrent_import_activity
+capture_unknown_activity
+capture_persistence_failure
+```
+
+The exact current V4 policy reason codes remain owned by
+`SupplierSnapshotQualificationPolicy`; this design does not rename them.
+Zero invalid and rejected observations are capture-integrity requirements for
+exhaustive absence, not a claim that V4 already defines those counters.
+They are deliberately stricter than V4 because one rejected source row could
+be the supposedly absent offer. Either non-zero counter freezes readiness under
+`supplier-snapshot-capture-integrity-policy-v1`; it does not change the V4
+missing threshold.
+
+An unknown reason code can never be stored on a qualified row. The repository
+maps it to the known privacy-safe `capture_unknown_integrity_reason` and freezes
+the generation without persisting the unknown value. A reason-code allowlist,
+policy key, and projection test are required before implementation.
+
+The evidence adapter recomputes V4 qualification from stored primitive fields
+through the existing policy and requires agreement with the stored result. It
+does not project capture-only counters as invented V1 fields. A
+`qualified_baseline` is an integrity-qualified persistence baseline but is not
+emitted as a qualified V1 lifecycle snapshot because the current V1 contract
+requires `comparable=true`. Only `qualified_comparable` generations map to V1
+qualification booleans that may participate in missing/reappearance tracking.
+
+## Baseline, Comparison, And Gap Rules
+
+The first structurally complete generation in a new supplier/source/cohort
+epoch is `qualified_baseline` when all non-comparative gates pass:
+
+- `predecessor_snapshot_generation_id` is null;
+- `comparable=false`;
+- `product_drop_percent=null`;
+- the complete physical cohort and both set fingerprints are present;
+- minimum-count and all non-comparative integrity checks pass.
+
+The next generation is comparable only when:
+
+- no ImportHistory generation is missing between it and the baseline or prior
+  comparable generation;
+- source identity, producer/schema/policy semantics, and cohort fingerprint
+  are exactly equal;
+- the predecessor is `qualified_baseline` or `qualified_comparable`;
+- current and predecessor counts are non-zero and reconciled; and
+- `max(0, ((previous_count - current_count) / previous_count) * 100)` rounded
+  to the policy's six-decimal contract does not exceed the stored threshold.
+
+A cohort expansion, source identity change, policy-semantic change, failed or
+frozen generation, missing header, overlap, chronology ambiguity, or
+fingerprint conflict ends the epoch. The next complete generation is a new
+baseline. A gap is never skipped and never interpreted as absence.
+
+V4's runtime rule still says a frozen snapshot neither increments nor resets a
+lifecycle state. PRE.A applies a stricter evidence-readiness boundary: it keeps
+all prior facts immutable but refuses to bridge an unprovable capture or cohort
+gap into a new operational evidence candidate. Requiring a new baseline after
+the gap is therefore a versioned capture-integrity decision, not a changed V4
+missing counter or an invented extra absence.
+
+## Projection Into The Existing V1 Evidence Contract
+
+The later adapter must project a bounded selection into the exact
+`supplier-offer-lifecycle-operational-evidence-v1` schema. It must not change
+that reader silently.
+
+| V1 field | Immutable source |
+| --- | --- |
+| `snapshot_id` | `sample('snapshot_generation_v1', CanonicalOnboardingData::encode([...]))` using stored supplier key and ImportHistory ID |
+| `supplier` | stored canonical `supplier_key` |
+| `source_identity` | exact stored opaque identity |
+| `captured_at` | stored `captured_at` |
+| `authoritative_snapshot_at` | stored authoritative timestamp |
+| `fingerprint` | stored exact-byte `source_fingerprint` |
+| `status` | stored `capture_outcome` |
+| qualification booleans | stored primitives, permitted only from `qualified_comparable` |
+| `product_count` | stored `valid_observation_count` |
+| count/drop thresholds | stored threshold and comparison values |
+| observations | stored physical observations in supplier-SKU-hash order |
+
+The selected generations must all be `qualified_comparable`, have identical
+supplier, source identity, schema/producer/policy versions, freshness contract,
+and cohort fingerprint, and contain exactly the same physical offer-hash set.
+The adapter verifies each set fingerprint and count before emitting data. It
+never forms a union that invents pre-enrollment history and never fills a gap
+from mutable staging.
+
+An absent physical row in a supposedly complete generation is
+`capture_cohort_incomplete`, not implicit `present=false`. Optional V1
+`product_lifecycle_evidence` remains a separately fingerprinted read-only
+catalog boundary and never creates a Product foreign key or mutation here.
+
+## Exact V4 Window Counting
+
+V4, `SupplierOfferLifecyclePolicy`, and
+`OperationalSupplierOfferLifecyclePreviewService` require exactly three
+consecutive qualified snapshots in which the same offer is absent, plus at
+least 48 elapsed hours from the first qualified absence. This design does not
+change that threshold.
+
+Because the current V1 contract requires `comparable=true`, the persistence
+baseline is not one of those three V4 snapshots. The minimum sequence is:
+
+```text
+qualified_baseline
+qualified_comparable absence 1  <- starts the 48-hour clock
+qualified_comparable absence 2
+qualified_comparable absence 3  <- recommendation eligible only if >=48h
+```
+
+This is baseline plus three, not four V4 absences. The baseline is the required
+comparison anchor and is not counted by missing tracking. `captured_at` is the
+chronology used by the current lifecycle service; `authoritative_snapshot_at`
+is independently required for freshness and must not replace missing-duration
+chronology.
+
+An identity enrolled in the baseline has no history before that baseline. If
+it is physically absent there, that fact is retained but does not start the V4
+counter. An identity enrolled in a later generation changes the cohort epoch;
+that generation becomes the next baseline, and three later comparable absences
+are required. No mutable current row or pre-enrollment timestamp can shorten
+the sequence.
+
+## Multi-supplier And Alternative-offer Boundary
+
+Enrollment and readiness are evaluated independently for each canonical
+supplier/source scope. One ready APCOM sequence does not prove stability of an
+alternative supplier offer.
+
+The later producer may emit an offer-level APCOM candidate only for the exact
+APCOM identity with a ready immutable window. A product-level lifecycle
+recommendation remains blocked unless every supplier identity required by the
+current product-level preview has its own compatible ready window and the
+existing alternative-supplier stability checks pass. Mutable staging cannot
+stand in for missing history from another supplier.
+
+## Explicitly Prohibited Data And Writes
+
+The three tables may not contain raw supplier SKU, EAN/GTIN, MPN, product name,
+description, raw source record, XML, feed URL, credential, token, host path,
+container path, SEO, category, attribute, image, or application secret.
+Exception messages and log prose are not evidence fields.
+
+Capture writes only the three new append-only tables in addition to the
+importer's pre-existing staging behavior. It does not:
+
+- write or read-modify-write a Product;
+- execute Catalog Sync CREATE or UPDATE;
+- link, unlink, publish, hide, deactivate, or archive anything;
+- mutate `supplier_products`, `product_supplier_offers`, mappings, categories,
+  attributes, images, prices, or stock beyond the existing importer behavior;
+- dispatch a job, change a schedule, or enable APCOM;
+- use evidence production as import authorization.
+
+Required Catalog Sync defaults remain:
 
 ```text
 CATALOG_SYNC_CREATE_ENABLED=true
@@ -419,82 +739,98 @@ CATALOG_SYNC_SYNC_ALL_ENABLED=false
 CATALOG_SYNC_AUTO_ENABLED=false
 ```
 
-Evidence persistence is not Catalog Sync and does not authorize supplier import
-or automatic supplier-to-catalog behavior.
+## No Backfill And Readiness State Machine
+
+The tables start empty. There is no conversion from staging, catalog offers,
+ImportHistory context, SupplierImportRun reports, feed items, logs, caches, or
+raw files.
+
+Readiness per supplier/source/cohort epoch is:
+
+```text
+capture_disabled
+-> awaiting_first_generation
+-> qualified_baseline_only
+-> one_qualified_comparable_snapshot
+-> two_qualified_comparable_snapshots
+-> three_snapshot_window_ready
+```
+
+The ready state permits evidence preparation only. A confirmed-missing preview
+recommendation additionally needs three consecutive physical absences and at
+least 48 elapsed hours. A gap changes state to
+`history_gap_requires_new_baseline`. A cohort expansion changes state to
+`cohort_changed_requires_new_baseline`. Neither condition is skipped.
 
 ## Retention And Capacity
 
 The current planning policy retains raw snapshots and detailed technical logs
-for 90 days and summarized import runs for 24 months. Immutable lifecycle
-evidence must retain at least the maximum V4 evaluation horizon represented in
-an approved bundle plus a separately reviewed safety margin. Because the
-visibility policy can describe a 24-month cold-archive candidate, the minimum
-functional horizon is 24 complete months plus that margin. The margin is not
-approved in this phase, so the initial effective retention is indefinite and
-the implementation must not automatically delete snapshot evidence. A concrete
-cleanup period requires a later privacy, audit, legal, and lifecycle review.
-
-Let:
-
-- `G` be retained generations;
-- `O_g` be unique observations in generation `g`;
-- `H` be average encoded header bytes including indexes;
-- `R` be average encoded observation bytes including indexes.
+for 90 days and summarized import runs for 24 months. These immutable hashed
+lifecycle facts are neither raw snapshots nor ordinary logs. They must retain
+at least the longest approved lifecycle evaluation horizon plus a separately
+reviewed safety margin. Because no cleanup margin is approved here, initial
+retention is indefinite and no automatic deletion is authorized.
 
 Estimated storage is:
 
 ```text
-G * H + sum(O_g * R) + database index overhead
+generation headers
++ first-enrollment rows
++ sum(physical cohort observations per generation)
++ indexes
 ```
 
-The implementation phase must benchmark `H` and `R` with synthetic bounded
-fixtures, not real VPS data. Primary reads are supplier/feed plus explicit
-ImportHistory ID range, ordered by generation and offer hash. Expected indexes
-support that query and uniqueness; no unbounded `all history` command is
-allowed. The producer must stream database rows and enforce generation,
-observation, output-byte, and sample limits.
+The implementation phase must benchmark row and index sizes with synthetic
+bounded fixtures, never real VPS data. It must test the exact indexes above,
+stream reads, and enforce generation, observation, and output-byte limits.
 
-Archival or deletion requires a separate dry-run-first design, explicit audit
-scope, protection of evidence referenced by closeouts, and approval. Rollback
-must never delete already captured immutable history.
+Any archival or deletion requires a later dry-run-first design, explicit
+privacy/legal/audit scope, protection of referenced closeouts, and approval.
+Rollback must never delete already captured history.
 
-## Future Rollout And Rollback
+## Future Rollout, Failure, And Rollback
 
-1. Add empty additive tables and restrictive constraints.
-2. Add append-only models and repositories.
-3. Add the bounded capture service behind a supplier-scoped default-off gate.
-4. Add synthetic, MySQL, immutability, concurrency, and zero-regression tests.
-5. Obtain independent code and security review.
-6. Merge into `main` with green CI.
-7. Deploy separately to staging with capture still disabled.
-8. Verify schema, permissions, existing imports, staging, and Catalog Sync are
-   unchanged.
-9. Obtain separate authorization to enable capture for APCOM manual imports.
-10. Collect future qualified generations without enabling the APCOM schedule.
-11. Verify readiness and gaps read-only.
-12. Implement or activate the bounded evidence producer in a separate phase.
-13. Obtain human approval for one exact evidence candidate.
-14. Run one separately authorized C3D.1 operational preview.
-15. Close out through documentation only after zero-mutation proof.
+1. Add empty additive tables, checks, `RESTRICT` keys, and mutation guards.
+2. Add immutable models/repository and snapshot-specific source identity.
+3. Replace the capture-enabled XML path with behavior-equivalent streaming
+   parsing and prove staging parity while capture remains disabled.
+4. Add the common supplier capture coordinator and bounded temporary spool.
+5. Add synthetic MySQL immutability, concurrency, crash, gap, retry, cohort,
+   no-backfill, and zero-mutation tests.
+6. Obtain independent code, database, Catalog Sync Safety, and security review.
+7. Merge and deploy with capture disabled.
+8. Verify schema, importer behavior, staging, Products, Catalog Sync flags,
+   Super Admin, queue, and scheduler remain unchanged.
+9. Obtain separate authorization for one APCOM manual capture activation.
+10. Collect future generations; do not enable the APCOM schedule.
+11. Verify cohort epochs and gaps read-only.
+12. Implement the exact V1 producer in another reviewed phase.
+13. Obtain human approval for one exact candidate and one C3D.1 preview.
 
-Deployment is never capture activation. Capture activation is never import
-authorization. Import completion is never evidence approval.
+Deployment is not capture activation. Capture activation is not import
+authorization. Import completion is not evidence approval.
 
-Rollback disables only the capture gate and leaves imports, staging, Products,
-Catalog Sync flags, and captured history untouched. A defective schema or
-capture implementation requires a forward fix; captured evidence is not
-deleted or rewritten.
+Rollback disables only the capture gate. It does not remove schema or captured
+rows, rewrite history, modify staging, touch Products, or change Catalog Sync.
+Failure before commit rolls back all three evidence-table inserts and removes
+temporary capture state. Failure after commit requires a forward fix because
+the committed generation is immutable.
 
 ## Future Implementation Map
 
-Proposed later files, subject to implementation review:
+Proposed later files, subject to separate implementation review:
 
 ```text
 database/migrations/*_create_supplier_offer_snapshot_generations_table.php
+database/migrations/*_create_supplier_offer_snapshot_enrollments_table.php
 database/migrations/*_create_supplier_offer_snapshot_observations_table.php
 app/Models/SupplierOfferSnapshotGeneration.php
+app/Models/SupplierOfferSnapshotEnrollment.php
 app/Models/SupplierOfferSnapshotObservation.php
+app/Data/Suppliers/Onboarding/SnapshotSourceIdentity.php
 app/Repositories/Suppliers/ImmutableSupplierOfferSnapshotRepository.php
+app/Services/Suppliers/SupplierImportExecutionLock.php
+app/Services/Suppliers/SupplierImportExecutionCoordinator.php
 app/Services/Suppliers/Snapshots/SupplierOfferSnapshotCollector.php
 app/Services/Suppliers/Snapshots/SupplierOfferSnapshotCaptureService.php
 app/Services/Suppliers/Snapshots/ImportHistorySnapshotSourceAdapter.php
@@ -503,31 +839,22 @@ app/Console/Commands/PrepareOperationalSupplierOfferLifecycleEvidence.php
 config/supplier_snapshot_capture.php
 tests/Feature/SupplierOfferSnapshotPersistenceTest.php
 tests/Feature/SupplierOfferSnapshotCaptureTest.php
+tests/Feature/SupplierOfferSnapshotConcurrencyTest.php
 tests/Feature/OperationalSupplierOfferEvidenceProducerTest.php
 tests/Unit/Suppliers/SupplierOfferSnapshotFingerprintTest.php
 tests/Feature/SupplierOfferLifecycleDocumentationContractTest.php
-docs/IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md
-docs/APCOM_OPERATIONAL_OFFER_LIFECYCLE_PREVIEW.md
-docs/SUPPLIER_ONBOARDING_FRAMEWORK.md
-docs/PHASES.md
-docs/ROADMAP.md
 ```
 
-The implementation should be split into independently reviewable phases:
-
-1. additive schema and immutable repository contract, capture disabled;
-2. bounded import capture integration and zero-regression verification;
-3. separately authorized APCOM capture enablement and future-history collection;
-4. evidence source adapter, producer, and private writer;
-5. candidate approval, one operational preview, and documentation closeout.
-
-Migration, capture enablement, evidence generation, and operational closeout
-must not share one authorization.
+Implementation remains split into independently reviewed phases: schema and
+repository; streaming/capture integration; separately authorized APCOM capture
+enablement; V1 producer; candidate approval and one preview. Migration, parser
+change, activation, evidence production, and closeout must not share one
+authorization.
 
 ## Non-approval Boundary
 
-This design does not authorize a migration, model, producer, import hook,
-feature flag, real evidence candidate, supplier import, APCOM schedule change,
-Catalog Sync action, Product mutation, retention cleanup, deployment, or C3D.1
-operational preview. Supplier #3 selection must not begin while this prerequisite
-remains unresolved.
+This design does not authorize a migration, model, parser refactor, producer,
+import hook, feature flag, real evidence candidate, supplier import, APCOM
+schedule change, Catalog Sync action, Product mutation, retention cleanup,
+deployment, or C3D.1 operational preview. Supplier #3 selection must not begin
+while this prerequisite remains unresolved.

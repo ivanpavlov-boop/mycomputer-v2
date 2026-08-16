@@ -260,11 +260,19 @@ disabled. `CART-025` remains open.
 10. **APCOM Authoritative Human Decision Evidence and Profile Approval Gate -
    documentation decisions complete.** V4 is the semantic authority, while
    implementation approval remains closed.
-11. **Immutable supplier-offer snapshot persistence prerequisite - design
-   complete locally.** No migration, capture hook, producer, historical
-   backfill or operational evidence exists. C3D.1 remains blocked until future
-   qualified history is captured under the separately reviewed design in
-   `docs/IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md`.
+11. **Immutable supplier-offer snapshot persistence prerequisite - independent
+    review findings remediated locally.** The follow-up design has immutable
+    first enrollment, exhaustive physical absence rows, deterministic baseline
+    and gap semantics, a common supplier capture lock, strict opaque source
+    identity, bounded temp-file streaming and exact query indexes. No migration,
+    parser change, capture hook, producer, historical backfill or operational
+    evidence exists. C3D.1 remains blocked until the design is re-reviewed and
+    one future baseline plus three qualified comparable snapshots are captured
+    in an unchanged cohort epoch. See
+    `docs/IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md`.
+    The underlying read-only C3D tooling was already merged and deployed at
+    `c22fc9a8dddf3c6778ab0b88e5a50cbc02fe3f21`; the persistence design itself is
+    local, documentation-only, unapproved and undeployed.
 12. Select Supplier #3 only after a reviewed readiness matrix and explicit human
    decision; ASBIS remains Supplier #2.
 13. Supplier #3 preview-only integration.

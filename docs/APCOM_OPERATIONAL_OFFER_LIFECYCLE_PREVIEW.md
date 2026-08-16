@@ -9,7 +9,8 @@ qualification, missing-offer, reappearance, multi-supplier aggregation,
 visibility, deletion and retention policies; it does not create a second
 policy engine.
 
-The implementation was merged through PR #210, but it has not processed real
+The implementation was merged through PR #210 and deployed at
+`c22fc9a8dddf3c6778ab0b88e5a50cbc02fe3f21`, but it has not processed real
 APCOM evidence or run the operational preview. Operational execution remains
 separately gated. The current database has no immutable per-generation
 offer-observation history, and mutable staging, aggregate import reports and
@@ -17,9 +18,14 @@ logs cannot be reconstructed as qualified history.
 
 The documentation-only persistence prerequisite is defined in
 [Immutable Supplier Offer Snapshot Persistence Design](IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md).
-No migration, capture implementation, historical backfill or evidence producer
-exists yet. C3D.1 remains blocked until those stages are separately reviewed,
-deployed, explicitly enabled and warmed up with future qualified generations.
+Its remediated local architecture uses immutable generation headers,
+first-enrollment cohort rows and exhaustive physical presence/absence
+observations. It requires
+a common supplier capture lock and a behavior-equivalent streaming traversal
+over the importer's one downloaded temporary file. No migration, parser change,
+capture implementation, historical backfill or evidence producer exists yet.
+C3D.1 remains blocked until those stages are separately reviewed, deployed,
+explicitly enabled and warmed up with future qualified generations.
 
 ## Command
 
@@ -58,7 +64,7 @@ supplier-offer-lifecycle-operational-evidence-v1
 It includes:
 
 - the exact policy-version set and supplier scope;
-- stable source identity without a path or URL;
+- stable exact decoded source identity under the current bounded V1 validator;
 - an explicit per-supplier approved freshness policy;
 - ordered capture and authoritative snapshot timestamps;
 - unique snapshot fingerprints and record-count/drop evidence;
@@ -77,9 +83,17 @@ per-supplier identity map share one fail-closed validator: identities must be
 valid UTF-8, non-empty, not Unicode-whitespace-only and no longer than 128
 Unicode code points. Validation returns the original string unchanged.
 
-The bundle rejects raw supplier SKU, EAN/GTIN, MPN, source paths and raw source
-records. `received_at`, `last_seen_at`, `updated_at`, current database presence
-and implicit current time are not accepted as historical evidence.
+The future persistence producer applies an additional snapshot-specific opaque
+ASCII grammar to its own stored source identity. That stricter contract does
+not alter the existing V1 reader validator. It rejects paths, URLs, controls,
+whitespace and normalization while preserving the accepted value exactly.
+
+The bundle has no fields for raw supplier SKU, EAN/GTIN, MPN, source paths or
+raw source records. The current broad V1 source-identity validator does not by
+itself classify path- or URL-shaped strings; future persisted evidence closes
+that producer boundary through the stricter snapshot-specific grammar above.
+`received_at`, `last_seen_at`, `updated_at`, current database presence and
+implicit current time are not accepted as historical evidence.
 
 Duplicate snapshot fingerprints remain valid immutable evidence but are
 frozen by the existing qualification policy and are never counted twice.
@@ -120,6 +134,11 @@ path, URL, credentials or complete records are emitted.
 - One APCOM absence is not EOL. Three consecutive qualified missing snapshots
   and at least 48 elapsed hours may emit `would_deactivate_offer` for the APCOM
   offer only.
+- The future persistence baseline is a comparison anchor, not one of those
+  three V4 snapshots. Under the current V1 `comparable=true` requirement, the
+  minimum immutable sequence is one qualified baseline followed by three
+  qualified comparable absences; the 48-hour clock starts at the first of the
+  three comparable absences.
 - Failed, partial, malformed, truncated, anomalous, duplicate, below-minimum,
   non-comparable or supplier-unconfirmed snapshots freeze tracking. A frozen
   snapshot neither increments nor resets the lifecycle.
