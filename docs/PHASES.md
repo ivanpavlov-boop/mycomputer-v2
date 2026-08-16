@@ -225,29 +225,17 @@ Phase 8 manual selected UPDATE price/stock sync has been implemented behind a fe
 | Phase | Name | Status |
 | --- | --- | --- |
 | Phase 9C.6.5C.3D | Missing Supplier Offer Lifecycle and Catalog Archival Policy Preview | The immutable-input evaluator and V4 runtime contracts were merged through PR #210 and deployed at `c22fc9a8dddf3c6778ab0b88e5a50cbc02fe3f21`. No real APCOM evidence has been processed and no operational preview has run. Lifecycle/visibility writes, persistence, import, Catalog Sync, storefront/search/sitemap/noindex behavior and retention cleanup remain blocked. |
-| Phase 9C.6.5C.3D.1-PRE.A | Immutable Supplier Offer Snapshot Persistence Design | Second-review findings remediated locally and pending a third fresh independent review. The design now defines one stable parent-execution claim shared by both XML job paths, terminal duplicate no-op and fingerprint-conflict behavior; append-only generation, first-enrollment cohort and exhaustive physical observation tables; exact named FK/query indexes including `import_histories(supplier_id, id)`; a strict opaque source identity; a common supplier capture lock; bounded temp-file streaming; deterministic qualification/gap rules; baseline plus three V4-comparable absences; and twelve separate rollout gates. It adds no claim table, migration, parser change, capture implementation, producer, backfill, import or operational evidence. |
+| Phase 9C.6.5C.3D.1-PRE.A | Immutable Supplier Offer Snapshot Persistence Design | Latest review findings remediated locally and pending a fresh independent four-commit review. The design now defines transactional `supplier_import_dispatch_outbox`; one stable execution claim shared by both XML paths with `pending_dispatch`, `queued`, `processing` and immutable terminal states; no importer replay after the non-repeatable staging boundary; atomic ImportHistory/evidence/claim finalization; fail-closed abandoned-processing recovery; exact `ascii`/`ascii_bin` hexadecimal checks; append-only cohort/generation/observation evidence; exact indexes; bounded streaming; deterministic V4 qualification/gaps; and 49 fine-grained rollout checkpoints. It adds no table, migration, command, parser change, capture implementation, producer, backfill, import or operational evidence. |
 
-### Phase 9C.6.5C.3D.1-PRE.A Rollout Gates
+### Phase 9C.6.5C.3D.1-PRE.A Rollout Checkpoints
 
-The immutable-persistence sequence is exact and non-combinable:
-
-1. Persistence design receives independent approval and its documentation PR is merged into `main`.
-2. Additive schema/migration implementation is separately authorized, implemented and tested.
-3. Capture/idempotency implementation is separately authorized, implemented and tested while remaining disabled by default.
-4. Schema and capture implementation receive independent review and are merged into `main`.
-5. The merged implementation is separately deployed to staging and verified; deployment does not enable capture.
-6. APCOM snapshot capture is separately authorized and explicitly enabled; enablement does not authorize an import.
-7. Individual future APCOM imports are separately and manually authorized.
-8. Immutable qualified history is collected and the full warm-up/readiness gate passes.
-9. The read-only evidence producer is separately implemented, reviewed, merged and deployed.
-10. One exact evidence candidate is prepared and explicitly approved by the human operator.
-11. Exactly one controlled read-only operational preview is separately authorized and executed.
-12. Operational results receive independent review and documentation-only closeout is completed.
-
-Review is not merge; merge is not deployment; deployment is not enablement;
-enablement is not import; evidence creation is not approval; evidence approval
-is not preview; and preview is not closeout. A failed gate blocks every later
-gate.
+The authoritative sequence is the
+[49-row fine-grained checkpoint matrix](IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md#fine-grained-rollout-checkpoints).
+It gives separate rows to every authorization, implementation, review, push/PR,
+CI, merge, deployment, verification, enablement, import, producer, candidate,
+preview and closeout action. No row combines review/merge, merge/deployment,
+candidate preparation/approval, approval/preview or result review/closeout. A
+failed checkpoint blocks every later checkpoint.
 
 ## Completed Documentation Closeout
 
@@ -261,7 +249,7 @@ gate.
 
 | Phase | Name | Status |
 | --- | --- | --- |
-| Phase 9C.6.5C.3D.1 | Controlled Operational Offer Lifecycle Preview | Blocked by `BLOCKED_HISTORICAL_SOURCE_CONTRACT_REQUIRED`. V4 remains the semantic authority and V1-V3 remain historical contracts. Mutable staging cannot be backfilled as history; no claim/schema migration, streaming parser change, capture/idempotency implementation or evidence producer exists. C3D.1 requires completion of the twelve separate PRE.A gates, including one immutable baseline plus three later qualified comparable snapshots in one unchanged cohort epoch and at least 48 hours from the first comparable absence before any confirmed-missing candidate can satisfy the exact V4 window. Implementation, review/merge, deployment, capture enablement, each import, warm-up, producer, candidate approval, one preview and closeout require separate authorization. Supplier #3 remains unstarted. |
+| Phase 9C.6.5C.3D.1 | Controlled Operational Offer Lifecycle Preview | C3D.1 remains blocked by `BLOCKED_HISTORICAL_SOURCE_CONTRACT_REQUIRED`. V4 remains authoritative and V1-V3 remain historical. Mutable staging cannot be backfilled; no outbox/claim/schema migration, recovery command, streaming parser, capture/idempotency implementation or producer exists. The phase follows the full 49-checkpoint lifecycle; checkpoint 24 requires one immutable baseline plus three later comparable absences in one unchanged cohort epoch and at least 48 hours from absence 1, and no operational preview is permitted before checkpoint 40. Every review, PR, merge, deployment, enablement, import, producer, candidate, preview and closeout action requires its own checkpoint. Supplier #3 remains unstarted. |
 
 ## Paused / Partial Phases
 
