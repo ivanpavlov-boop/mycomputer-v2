@@ -9,9 +9,17 @@ qualification, missing-offer, reappearance, multi-supplier aggregation,
 visibility, deletion and retention policies; it does not create a second
 policy engine.
 
-The implementation has not processed real APCOM evidence. It has not been
-pushed, merged, deployed or run on staging/VPS. Operational execution remains
-separately gated.
+The implementation was merged through PR #210, but it has not processed real
+APCOM evidence or run the operational preview. Operational execution remains
+separately gated. The current database has no immutable per-generation
+offer-observation history, and mutable staging, aggregate import reports and
+logs cannot be reconstructed as qualified history.
+
+The documentation-only persistence prerequisite is defined in
+[Immutable Supplier Offer Snapshot Persistence Design](IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md).
+No migration, capture implementation, historical backfill or evidence producer
+exists yet. C3D.1 remains blocked until those stages are separately reviewed,
+deployed, explicitly enabled and warmed up with future qualified generations.
 
 ## Command
 

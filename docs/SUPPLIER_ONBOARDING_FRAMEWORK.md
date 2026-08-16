@@ -370,3 +370,23 @@ source-only preview classification, supplier-SKU-only `partno`, zero-price
 review, and APCOM-specific 24-hour freshness semantics. Documentation merge is
 a prerequisite only; the implementation gate remains closed and the current
 tooling and supplier onboarding flow remain non-persistent and non-executable.
+
+## Phase 9C.6.5C.3D.1-PRE.A Immutable Snapshot Persistence Design
+
+The confirmed C3D.1 blocker is the absence of a qualified immutable historical
+source. `supplier_products`, ImportHistory aggregate context, mutable feed
+items, logs and current timestamps cannot prove historical absence,
+reappearance or chronology. They must not be backfilled into evidence.
+
+[Immutable Supplier Offer Snapshot Persistence Design](IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md)
+defines a documentation-only prerequisite: future imports may add one final
+append-only generation header and an exhaustive privacy-safe hashed observation
+set without changing staging behavior. The design includes fail-closed gaps,
+qualification, fingerprints, privacy, retention, rollout and rollback rules.
+It does not add a migration, capture implementation, producer, import approval,
+schedule enablement, lifecycle action or Catalog Sync behavior.
+
+The first future qualified generation is baseline only. C3D.1 remains blocked
+until a separately authorized implementation is deployed and enabled and the
+minimum V4 future-history window is collected without gaps. Supplier #3 work
+must not begin before this prerequisite is resolved.

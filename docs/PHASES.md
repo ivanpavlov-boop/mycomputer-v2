@@ -224,7 +224,8 @@ Phase 8 manual selected UPDATE price/stock sync has been implemented behind a fe
 
 | Phase | Name | Status |
 | --- | --- | --- |
-| Phase 9C.6.5C.3D | Missing Supplier Offer Lifecycle and Catalog Archival Policy Preview | The first immutable-input operational preview implementation is complete locally only. It adds a deterministic APCOM-only CLI evaluator, additive V4 runtime contracts and synthetic tests; no real APCOM evidence has been processed. It has not been pushed, merged, deployed or operationally executed. All offer/Product lifecycle and visibility writes, persistence, import, Catalog Sync, storefront/search/sitemap/noindex behavior and retention cleanup remain blocked. |
+| Phase 9C.6.5C.3D | Missing Supplier Offer Lifecycle and Catalog Archival Policy Preview | The immutable-input evaluator and V4 runtime contracts were merged through PR #210. No real APCOM evidence has been processed and no operational preview has run. Lifecycle/visibility writes, persistence, import, Catalog Sync, storefront/search/sitemap/noindex behavior and retention cleanup remain blocked. |
+| Phase 9C.6.5C.3D.1-PRE.A | Immutable Supplier Offer Snapshot Persistence Design | Documentation design complete locally and pending independent review. It defines future append-only generation headers and privacy-safe hashed observations, but adds no migration, capture implementation, producer, backfill, import or operational evidence. |
 
 ## Completed Documentation Closeout
 
@@ -238,7 +239,7 @@ Phase 8 manual selected UPDATE price/stock sync has been implemented behind a fe
 
 | Phase | Name | Status |
 | --- | --- | --- |
-| Phase 9C.6.5C.3D | Missing Supplier Offer Lifecycle and Catalog Archival Policy Preview | Local implementation validation is in progress before any push/review workflow. V4 remains the approved semantic authority and V3 remains historical evidence. The implementation has not used real APCOM evidence and operational staging/VPS execution remains separately gated. No persistence, lifecycle/visibility write, import, Catalog Sync or automatic action is authorized. |
+| Phase 9C.6.5C.3D.1 | Controlled Operational Offer Lifecycle Preview | Blocked by `BLOCKED_HISTORICAL_SOURCE_CONTRACT_REQUIRED`. V4 remains the semantic authority and V1-V3 remain historical contracts. Mutable staging cannot be backfilled as history; no migration, capture implementation or evidence producer exists. C3D.1 requires future qualified generations under the separately reviewed persistence prerequisite before any evidence candidate or operational run can be authorized. |
 
 ## Paused / Partial Phases
 

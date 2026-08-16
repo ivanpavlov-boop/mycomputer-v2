@@ -258,17 +258,22 @@ disabled. `CART-025` remains open.
    source/staging evidence and zero-mutation guarantees are documented. No
    import, schedule re-enable, or Catalog Sync approval exists.
 10. **APCOM Authoritative Human Decision Evidence and Profile Approval Gate -
-   next/pending, not started.** It requires authoritative evidence and explicit
-   human decisions before any future execution design.
-11. Select Supplier #3 only after a reviewed readiness matrix and explicit human
+   documentation decisions complete.** V4 is the semantic authority, while
+   implementation approval remains closed.
+11. **Immutable supplier-offer snapshot persistence prerequisite - design
+   complete locally.** No migration, capture hook, producer, historical
+   backfill or operational evidence exists. C3D.1 remains blocked until future
+   qualified history is captured under the separately reviewed design in
+   `docs/IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md`.
+12. Select Supplier #3 only after a reviewed readiness matrix and explicit human
    decision; ASBIS remains Supplier #2.
-12. Supplier #3 preview-only integration.
-13. Controlled `supplier_products` staging apply.
-14. Post-apply verification.
-15. Repeat the same controlled sequence for the remaining current suppliers.
-16. Supplier category and canonical mappings.
-17. Controlled manual CREATE sync.
-18. Optional controlled UPDATE pilot later.
+13. Supplier #3 preview-only integration.
+14. Controlled `supplier_products` staging apply.
+15. Post-apply verification.
+16. Repeat the same controlled sequence for the remaining current suppliers.
+17. Supplier category and canonical mappings.
+18. Controlled manual CREATE sync.
+19. Optional controlled UPDATE pilot later.
 
 Every future supplier must use the same onboarding pipeline rather than an
 uncontrolled one-off importer:
@@ -696,14 +701,14 @@ by Phase 1D.2B and CART-023 remains open. Operational boundaries are documented 
    `b2b4fb95f1d2bfe2382fe6cab9a8462fa6f7e277`, CI #322 succeeded, and VPS was
    synced and verified. APCOM schedule remains disabled; Catalog Sync UPDATE,
    Sync All, and automatic sync remain disabled.
-4. Review the locally completed C3D immutable-input operational preview
-   implementation. The APCOM-only CLI evaluator is deterministic,
-   non-persistent and zero-mutation, and reuses the existing synthetic policy
-   authority. It has not been pushed, merged, deployed, operationally executed
-   or run with real APCOM evidence. Offer/Product writes, storefront/search/
-   sitemap/noindex behavior, retention cleanup, persistence, schedule changes,
-   import and Catalog Sync remain blocked; staging/VPS execution needs a
-   separate explicit gate. C3D remains before Supplier #3 selection.
+4. Keep the merged PR #210 C3D evaluator dormant. It is deterministic,
+   non-persistent and zero-mutation, but no qualified immutable historical
+   source or evidence producer exists. Implement the separately reviewed
+   append-only snapshot prerequisite, then collect the minimum future V4
+   history before requesting C3D.1 evidence approval. No backfill from mutable
+   staging is allowed. Offer/Product writes, lifecycle application, retention
+   cleanup, schedule changes, import and Catalog Sync remain blocked. C3D.1
+   remains before Supplier #3 selection.
 5. Select Supplier #3 only after a reviewed readiness matrix and explicit human
    decision; ASBIS remains Supplier #2.
 6. Phase 9C.6.6 Multi-Supplier Category Mapping Review.
