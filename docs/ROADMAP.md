@@ -260,15 +260,19 @@ disabled. `CART-025` remains open.
 10. **APCOM Authoritative Human Decision Evidence and Profile Approval Gate -
    documentation decisions complete.** V4 is the semantic authority, while
    implementation approval remains closed.
-11. **Immutable supplier-offer snapshot persistence prerequisite - independent
-    review findings remediated locally.** The follow-up design has immutable
-    first enrollment, exhaustive physical absence rows, deterministic baseline
-    and gap semantics, a common supplier capture lock, strict opaque source
-    identity, bounded temp-file streaming and exact query indexes. No migration,
-    parser change, capture hook, producer, historical backfill or operational
-    evidence exists. C3D.1 remains blocked until the design is re-reviewed and
-    one future baseline plus three qualified comparable snapshots are captured
-    in an unchanged cohort epoch. See
+11. **Immutable supplier-offer snapshot persistence prerequisite - second-review
+    findings remediated locally.** The follow-up design has one stable
+    parent-execution claim shared by both XML job paths, terminal duplicate
+    no-op and fingerprint-conflict behavior; immutable first enrollment;
+    exhaustive physical absence rows; deterministic baseline and gap semantics;
+    a common supplier capture lock; strict opaque source identity; bounded
+    temp-file streaming; exact named FK/query indexes, including
+    `import_histories(supplier_id, id)`; and twelve separate rollout gates. No
+    claim table, migration, parser change, capture hook, producer, historical
+    backfill or operational evidence exists. C3D.1 remains blocked until a third
+    fresh independent review approves the design and the later gates collect one
+    future baseline plus three qualified comparable snapshots in an unchanged
+    cohort epoch over at least 48 hours from the first comparable absence. See
     `docs/IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md`.
     The underlying read-only C3D tooling was already merged and deployed at
     `c22fc9a8dddf3c6778ab0b88e5a50cbc02fe3f21`; the persistence design itself is
@@ -282,6 +286,28 @@ disabled. `CART-025` remains open.
 17. Supplier category and canonical mappings.
 18. Controlled manual CREATE sync.
 19. Optional controlled UPDATE pilot later.
+
+### Immutable Persistence Rollout Gates
+
+The sequence for item 11 is exact and non-combinable:
+
+1. Persistence design receives independent approval and its documentation PR is merged into `main`.
+2. Additive schema/migration implementation is separately authorized, implemented and tested.
+3. Capture/idempotency implementation is separately authorized, implemented and tested while remaining disabled by default.
+4. Schema and capture implementation receive independent review and are merged into `main`.
+5. The merged implementation is separately deployed to staging and verified; deployment does not enable capture.
+6. APCOM snapshot capture is separately authorized and explicitly enabled; enablement does not authorize an import.
+7. Individual future APCOM imports are separately and manually authorized.
+8. Immutable qualified history is collected and the full warm-up/readiness gate passes.
+9. The read-only evidence producer is separately implemented, reviewed, merged and deployed.
+10. One exact evidence candidate is prepared and explicitly approved by the human operator.
+11. Exactly one controlled read-only operational preview is separately authorized and executed.
+12. Operational results receive independent review and documentation-only closeout is completed.
+
+Review is not merge; merge is not deployment; deployment is not enablement;
+enablement is not import; evidence creation is not approval; evidence approval
+is not preview; and preview is not closeout. Failure at one gate blocks every
+later gate.
 
 Every future supplier must use the same onboarding pipeline rather than an
 uncontrolled one-off importer:
@@ -710,13 +736,16 @@ by Phase 1D.2B and CART-023 remains open. Operational boundaries are documented 
    synced and verified. APCOM schedule remains disabled; Catalog Sync UPDATE,
    Sync All, and automatic sync remain disabled.
 4. Keep the merged PR #210 C3D evaluator dormant. It is deterministic,
-   non-persistent and zero-mutation, but no qualified immutable historical
-   source or evidence producer exists. Implement the separately reviewed
-   append-only snapshot prerequisite, then collect the minimum future V4
-   history before requesting C3D.1 evidence approval. No backfill from mutable
-   staging is allowed. Offer/Product writes, lifecycle application, retention
-   cleanup, schedule changes, import and Catalog Sync remain blocked. C3D.1
-   remains before Supplier #3 selection.
+   non-persistent and zero-mutation, but no execution claim, qualified immutable
+   historical source or evidence producer exists. Complete the twelve separate
+   immutable-persistence gates in order: approve/merge design, implement schema,
+   implement disabled capture/idempotency, review/merge, deploy disabled, enable
+   capture separately, authorize each import, pass warm-up, implement the
+   producer, approve one candidate, authorize one preview, then close out after
+   independent review. No backfill from mutable staging is allowed.
+   Offer/Product writes, lifecycle application, retention cleanup, schedule
+   changes and Catalog Sync remain blocked. C3D.1 remains before Supplier #3
+   selection.
 5. Select Supplier #3 only after a reviewed readiness matrix and explicit human
    decision; ASBIS remains Supplier #2.
 6. Phase 9C.6.6 Multi-Supplier Category Mapping Review.

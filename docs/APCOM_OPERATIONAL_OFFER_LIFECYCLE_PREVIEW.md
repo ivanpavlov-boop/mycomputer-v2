@@ -20,12 +20,38 @@ The documentation-only persistence prerequisite is defined in
 [Immutable Supplier Offer Snapshot Persistence Design](IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md).
 Its remediated local architecture uses immutable generation headers,
 first-enrollment cohort rows and exhaustive physical presence/absence
-observations. It requires
-a common supplier capture lock and a behavior-equivalent streaming traversal
-over the importer's one downloaded temporary file. No migration, parser change,
+observations. A separate stable parent-execution claim makes both importer job
+paths idempotent across concurrent and sequential duplicate delivery through a
+terminal no-op, while different bytes for the same key fail closed without a
+new generation. It requires exact named FK/query indexes, a common supplier
+capture lock and a behavior-equivalent streaming traversal over the importer's
+one downloaded temporary file. No claim table, migration, parser change,
 capture implementation, historical backfill or evidence producer exists yet.
-C3D.1 remains blocked until those stages are separately reviewed, deployed,
-explicitly enabled and warmed up with future qualified generations.
+C3D.1 remains blocked until those stages pass the twelve separate gates below
+and future qualified generations complete warm-up. Supplier #3 remains
+unselected and unstarted.
+
+## Immutable Persistence Rollout Gates
+
+The required sequence is exact and non-combinable:
+
+1. Persistence design receives independent approval and its documentation PR is merged into `main`.
+2. Additive schema/migration implementation is separately authorized, implemented and tested.
+3. Capture/idempotency implementation is separately authorized, implemented and tested while remaining disabled by default.
+4. Schema and capture implementation receive independent review and are merged into `main`.
+5. The merged implementation is separately deployed to staging and verified; deployment does not enable capture.
+6. APCOM snapshot capture is separately authorized and explicitly enabled; enablement does not authorize an import.
+7. Individual future APCOM imports are separately and manually authorized.
+8. Immutable qualified history is collected and the full warm-up/readiness gate passes.
+9. The read-only evidence producer is separately implemented, reviewed, merged and deployed.
+10. One exact evidence candidate is prepared and explicitly approved by the human operator.
+11. Exactly one controlled read-only operational preview is separately authorized and executed.
+12. Operational results receive independent review and documentation-only closeout is completed.
+
+Review is not merge; merge is not deployment; deployment is not enablement;
+enablement is not import; evidence creation is not approval; evidence approval
+is not preview; and preview is not closeout. Failure at any gate permits only
+safe remediation or rollback within that gate, never entry to the next gate.
 
 ## Command
 

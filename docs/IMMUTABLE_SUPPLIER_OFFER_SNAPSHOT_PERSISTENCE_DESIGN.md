@@ -45,7 +45,7 @@ The reviewed XML execution paths are:
 
 ```text
 RunSupplierImportJob
--> SupplierImportOrchestrator::run()
+-> SupplierImportOrchestrator::execute()
 -> XmlImportEngine::import()
 
 ProcessXmlSupplierFeed
@@ -69,14 +69,17 @@ terminal semantics must remain unchanged and regression-tested.
 
 ## Selected Architecture
 
-The future implementation adds three append-only evidence tables and reuses
-`import_histories.id` as the attempt sequence marker:
+The future implementation adds one narrowly scoped mutable execution-claim
+table, three append-only evidence tables, and reuses `import_histories.id` as
+the attempt sequence marker:
 
-1. `supplier_offer_snapshot_generations` stores one immutable final capture
+1. `supplier_import_execution_claims` owns one stable logical execution across
+   queue retry and redelivery. It coordinates an attempt but is not evidence.
+2. `supplier_offer_snapshot_generations` stores one immutable final capture
    header for one ImportHistory generation.
-2. `supplier_offer_snapshot_enrollments` stores the first immutable enrollment
+3. `supplier_offer_snapshot_enrollments` stores the first immutable enrollment
    of every hashed offer identity in a supplier/source cohort.
-3. `supplier_offer_snapshot_observations` stores one physical `present=true` or
+4. `supplier_offer_snapshot_observations` stores one physical `present=true` or
    `present=false` observation for every identity enrolled for that generation.
 
 The third enrollment layer is mandatory. Mutable staging can identify cohort
@@ -93,6 +96,164 @@ without a header. A missing header is a sequence gap and never means absence.
 
 The header is not updated from `started` to `finished`. It is one final fact.
 `import_histories` continues to own import execution state.
+
+## Parent-execution Idempotency Contract
+
+The supplier lock serializes concurrent work, but it does not identify a later
+delivery of the same queue payload. The future implementation therefore uses
+one `supplier_import_execution_claims` row as the shared parent-execution
+contract for `RunSupplierImportJob` and `ProcessXmlSupplierFeed`. Extending only
+`ImportJob` is rejected because the orchestrated path creates its ImportJob
+inside `SupplierImportOrchestrator::execute()`, after the parent queue job has
+already been dispatched.
+
+### Stable logical execution identity
+
+`logical_execution_key` is exactly 64 lowercase hexadecimal ASCII characters,
+generated from 32 cryptographically secure random bytes exactly once before
+initial dispatch. The column is `char(64)` with binary ASCII comparison and a
+global unique constraint. It contains no supplier key, database identifier,
+feed URL, credential, path, token or raw supplier identifier and is not an
+authentication capability.
+
+For the orchestrated path, `SupplierImportOrchestrator::dispatch()` creates the
+`SupplierImportRun` and pending execution claim in one database transaction,
+then dispatches `RunSupplierImportJob` after commit with the claim ID and exact
+logical key in the serialized job payload. Laravel queue retry and redelivery
+therefore preserve that key. Feed, ImportJob and ImportHistory are bound once
+under the coordinator lock when execution begins.
+
+For every legacy XML entry point, the explicit operator or scheduler action
+creates its ImportJob and a fresh pending execution claim in one transaction,
+then dispatches `ProcessXmlSupplierFeed` after commit with the ImportJob ID,
+claim ID and exact logical key. Requeuing an ImportJob as a genuinely new
+operator action creates a new claim and key; queue retry of the already
+dispatched action retains the old claim and key. No `handle()` method generates
+a logical key.
+
+### Claim and attempt ownership
+
+Both handlers must enter the common owner-checked
+`SupplierImportExecutionCoordinator` before the orchestrator or XML engine.
+After the coordinator owns `supplier_import:<supplier_id>`, it locks the claim
+row with `SELECT ... FOR UPDATE`, verifies the serialized key, supplier, path
+and parent references, and performs one compare-and-set transition. Each
+`handle()` invocation creates a separate random attempt token and stores only
+its SHA-256 hash. The raw attempt token stays in process memory. The active
+attempt may proceed only while it owns both the claim token and the Redis lock;
+both are rechecked before staging chunks and final snapshot commit.
+
+The exact claim states are `pending`, `active`, `terminal_qualified`,
+`terminal_frozen`, and `terminal_failed`. Only `pending -> active`, an
+owner-checked `active -> active` retry takeover after the prior Redis lease is
+no longer owned, and `active ->` one terminal state are valid. Terminal state,
+terminal reason, bound source fingerprint, ImportJob and ImportHistory are
+write-once. A database compare-and-set permits exactly one terminal transition.
+
+Claim behavior is deterministic:
+
+- **Unseen key at dispatch:** insert one `pending` claim. A handler receiving a
+  key without that committed claim fails closed before download or import.
+- **Active claim owned by another attempt:** Redis-lock acquisition or claim
+  token comparison fails; the delivery is retryable and creates no ImportJob,
+  ImportHistory, snapshot, staging, Product or Catalog Sync write.
+- **Retry after interruption:** after the old Redis lease is no longer owned,
+  the same logical key may replace the attempt-token hash and resume the same
+  bound ImportJob and ImportHistory. It may never allocate another history.
+- **Terminal qualified generation:** return the stored deterministic successful
+  no-op result.
+- **Terminal frozen generation:** return the stored deterministic frozen no-op
+  result.
+- **Terminal failed execution:** return the stored deterministic failed result
+  without retrying import work.
+- **Conflicting retry:** a mismatching key, parent, supplier, feed or bound
+  source fingerprint fails closed and cannot become a new generation.
+- **Explicit new execution:** a new manual authorization creates a new key and
+  claim; only this case may allocate a later ImportHistory generation.
+
+Every terminal delivery checks claim state before feed resolution, source
+download, `XmlImportEngine`, ImportJob/ImportHistory allocation or snapshot
+work. It does not download again, call `XmlImportEngine`, create another
+ImportJob or ImportHistory, insert another header/observation set, alter
+chronology, or dispatch Catalog Sync, jobs or events.
+
+### Crash and source-fingerprint recovery
+
+The source file is completely downloaded and incrementally hashed before
+streamed row processing begins. If an interruption occurs before a fingerprint
+is bound, no source bytes have been accepted for the logical execution and no
+staging row has been processed; the same claim may reacquire ownership,
+redownload, bind the first valid fingerprint and continue with the same
+ImportJob and ImportHistory.
+
+If interruption occurs after the fingerprint is bound but before terminal
+finalization, a retry may restart processing only when the newly downloaded
+exact bytes produce the identical digest. It reuses the same claim, ImportJob
+and ImportHistory. A different digest atomically produces
+`terminal_frozen` with the stable privacy-safe reason
+`capture_source_fingerprint_conflict`; it does not overwrite the first digest,
+does not allocate a generation, and creates no qualified absence evidence. The
+operator must authorize a new logical execution with a new key for different
+source bytes.
+
+### Execution-claim data dictionary
+
+Proposed additive coordination table: `supplier_import_execution_claims`.
+Unlike the three evidence tables, this row is deliberately mutable only through
+the owner-checked state machine above.
+
+| Column | Type | Null/default | Purpose and invariant | Privacy |
+| --- | --- | --- | --- | --- |
+| `id` | unsigned bigint | not null | Surrogate claim key | internal |
+| `logical_execution_key` | char(64) ASCII binary | not null | Random stable logical execution identity; globally unique | internal |
+| `supplier_id` | unsigned bigint | not null | Exact supplier owner | internal |
+| `supplier_feed_id` | unsigned bigint | nullable while orchestrated claim is pending | Bound once before download | sensitive metadata |
+| `supplier_import_run_id` | unsigned bigint | nullable | Required orchestrated-path parent | internal |
+| `import_job_id` | unsigned bigint | nullable before orchestrated allocation | Legacy parent at dispatch; bound once on orchestrated execution | internal |
+| `import_history_id` | unsigned bigint | nullable before generation allocation | The only ImportHistory for this logical execution | internal |
+| `execution_path` | varchar(32) ASCII | not null | `orchestrated` or `legacy_xml` | public contract |
+| `state` | varchar(32) ASCII | `pending` | Closed state machine above | public contract |
+| `active_attempt_token_hash` | char(64) ASCII | nullable | SHA-256 of current in-memory attempt token | pseudonymous |
+| `source_fingerprint` | char(64) ASCII | nullable | First accepted exact-byte digest; immutable once set | pseudonymous |
+| `terminal_reason_code` | varchar(96) ASCII | nullable | Stable allowlisted reason for terminal frozen/failed | public contract |
+| `claimed_at` | char(25) ASCII | nullable | Canonical current-attempt claim instant | operational metadata |
+| `terminal_at` | char(25) ASCII | nullable | Canonical terminal instant | operational metadata |
+| `created_at`, `updated_at` | timestamps | database managed | Coordination audit only | operational metadata |
+
+An orchestrated claim requires `supplier_import_run_id`; a legacy claim forbids
+that parent and requires `import_job_id` at dispatch. Any active claim requires
+a feed and ImportJob. A claim may bind at most one ImportHistory. Terminal
+qualified/frozen requires that history; terminal failure before source work may
+have no history. The implementation must enforce these implications with
+database checks plus application validation.
+
+Database uniqueness is deliberately narrow: the logical key is globally
+unique; `supplier_import_execution_claims.import_history_id` is unique when
+non-null; generation claim and ImportHistory references are each unique; and a
+claim row can reach terminal state once. `import_histories.import_job_id` is not
+globally unique because the current event/history model and explicit legacy
+re-execution may legitimately associate multiple histories with one ImportJob.
+
+The later implementation is not acceptable without focused tests proving:
+
+- two sequential deliveries with one key create one claim, ImportHistory and
+  final header;
+- concurrent deliveries with one key permit one active owner and one final
+  header;
+- delivery after terminal qualified, frozen and failed states is a deterministic
+  no-op/terminal result with no download or importer call;
+- identical bytes after interruption reuse the same claim, ImportJob,
+  ImportHistory and generation;
+- different bytes for one key freeze without replacing the first fingerprint
+  or creating qualified evidence;
+- two explicitly authorized keys create two ordered logical executions;
+- duplicate legacy and duplicate orchestrated deliveries obey the same state
+  machine;
+- interruption before fingerprint can bind the first later verified digest;
+- interruption after fingerprint but before finalization cannot duplicate
+  chronology; and
+- every terminal logical execution has at most one final header and exhaustive
+  observation set.
 
 ## Cohort Enrollment Contract
 
@@ -147,6 +308,7 @@ Proposed additive table: `supplier_offer_snapshot_generations`.
 | `supplier_id` | unsigned bigint | not null | Supplier ownership copied from ImportHistory | internal |
 | `supplier_key` | varchar(96) ASCII | not null | Versioned canonical supplier key at capture | public contract |
 | `supplier_feed_id` | unsigned bigint | not null | Exact feed ownership | sensitive metadata |
+| `supplier_import_execution_claim_id` | unsigned bigint | not null | One owning logical execution | internal |
 | `import_history_id` | unsigned bigint | not null | Immutable importer generation identity | internal |
 | `predecessor_snapshot_generation_id` | unsigned bigint | nullable | Immediately preceding valid header used for comparison | internal |
 | `schema_version` | varchar(96) ASCII | not null | Persistence schema version | public contract |
@@ -188,10 +350,10 @@ Proposed additive table: `supplier_offer_snapshot_generations`.
 | `generation_fingerprint` | char(64) ASCII | not null | Hash of the complete canonical final header contract | pseudonymous |
 | `created_at` | timestamp | database current time | Storage audit time only | operational metadata |
 
-There is no `updated_at`. `supplier_id`, `supplier_feed_id`, and
-`import_history_id` must agree with ImportHistory. A freshness key, age, and
-approval form one complete valid tuple or remain absent/false. Counts are
-non-negative and reconcile under the capture policy.
+There is no `updated_at`. `supplier_id`, `supplier_feed_id`, execution claim,
+and `import_history_id` must agree. A freshness key, age, and approval form one
+complete valid tuple or remain absent/false. Counts are non-negative and
+reconcile under the capture policy.
 
 `qualified_baseline` requires all non-comparative integrity gates, a complete
 cohort, `comparable=false`, a null predecessor when no usable sequence exists,
@@ -230,6 +392,7 @@ Proposed additive table: `supplier_offer_snapshot_observations`.
 | --- | --- | --- | --- | --- |
 | `id` | unsigned bigint | not null | Surrogate storage key | internal |
 | `snapshot_generation_id` | unsigned bigint | not null | Immutable owning header | internal |
+| `snapshot_enrollment_id` | unsigned bigint | not null | Exact immutable cohort enrollment observed | internal |
 | `supplier_sku_hash` | char(64) ASCII | not null | Enrolled offer identity | pseudonymous |
 | `present` | boolean | not null | Physical source presence fact | public contract |
 | `price` | decimal(12,2) | nullable | Canonical supplier price when present | commercial restricted |
@@ -247,51 +410,86 @@ Proposed additive table: `supplier_offer_snapshot_observations`.
 | `created_at` | timestamp | database current time | Storage audit time only | operational metadata |
 
 There is no `updated_at`. Every finalized complete generation stores exactly
-one row for every enrollment effective by that generation. `present=true` rows
-carry validated source semantics. `present=false` rows must have null semantic
-values, false mapper and exact-match flags, and false conflict/blocker/duplicate
-flags. No absence row is inferred from a partial or frozen traversal.
+one row for every enrollment effective by that generation. The enrollment ID,
+generation scope and repeated offer hash must reconcile in the final
+transaction. `present=true` rows carry validated source semantics.
+`present=false` rows must have null semantic values, false mapper and
+exact-match flags, and false conflict/blocker/duplicate flags. No absence row
+is inferred from a partial or frozen traversal.
 
 ## Exact Index And Foreign-key Contract
 
-The future MySQL 8.4 migration must use these named structures or a reviewed
-equivalent with the same key order and query support.
+The future MySQL 8.4 additive migrations must create the exact named indexes
+below. A foreign key is accepted only when its documented supporting index has
+the referenced child column as the leftmost column. The implementation must not
+depend on an implicit MySQL-created index or implicit name.
 
-`supplier_offer_snapshot_generations`:
+### `supplier_import_execution_claims`
 
-- primary key `id`;
-- unique `uq_snapshot_generation_import_history` on `import_history_id`;
-- index `ix_snapshot_generation_feed_import` on
-  (`supplier_id`, `supplier_feed_id`, `import_history_id`);
-- index `ix_snapshot_generation_scope_order` on
-  (`supplier_id`, `source_identity`, `import_history_id`);
-- index `ix_snapshot_generation_qualified_range` on
-  (`supplier_id`, `source_identity`, `qualification_state`, `import_history_id`);
-- index `ix_snapshot_generation_retention` on (`created_at`, `id`);
-- index `ix_snapshot_generation_predecessor` on
-  `predecessor_snapshot_generation_id`;
-- `RESTRICT` foreign keys to supplier, feed, ImportHistory, and predecessor.
+| Index | Ordered columns | Unique | Supported boundary |
+| --- | --- | --- | --- |
+| `PRIMARY` | (`id`) | yes | claim identity |
+| `uq_import_execution_claim_logical_key` | (`logical_execution_key`) | yes | exact retry/redelivery lookup and one claim per logical execution |
+| `ix_import_execution_claim_supplier` | (`supplier_id`) | no | `fk_import_execution_claim_supplier` to `suppliers.id` |
+| `ix_import_execution_claim_feed` | (`supplier_feed_id`) | no | `fk_import_execution_claim_feed` to `supplier_feeds.id` |
+| `ix_import_execution_claim_run` | (`supplier_import_run_id`) | no | `fk_import_execution_claim_run` to `supplier_import_runs.id` |
+| `ix_import_execution_claim_job` | (`import_job_id`) | no | `fk_import_execution_claim_job` to `import_jobs.id`; multiple explicitly authorized claims may reference one reusable legacy job |
+| `uq_import_execution_claim_history` | (`import_history_id`) | yes | `fk_import_execution_claim_history` to `import_histories.id` and at most one claim per history |
+| `ix_import_execution_claim_scope_state` | (`supplier_id`, `supplier_feed_id`, `state`, `id`) | no | bounded active/terminal claim inspection for one supplier/feed |
 
-`supplier_offer_snapshot_enrollments`:
+All five claim parent foreign keys use `RESTRICT`. The logical-key query is
+`WHERE logical_execution_key = ?`. Active-state inspection is
+`WHERE supplier_id = ? AND supplier_feed_id = ? AND state IN (...) ORDER BY id`.
 
-- primary key `id`;
-- unique `uq_snapshot_enrollment_scope_offer` on
-  (`supplier_id`, `source_identity`, `supplier_sku_hash`);
-- index `ix_snapshot_enrollment_effective` on
-  (`supplier_id`, `source_identity`, `effective_import_history_id`,
-  `supplier_sku_hash`);
-- index `ix_snapshot_enrollment_feed` on
-  (`supplier_feed_id`, `effective_import_history_id`);
-- `RESTRICT` foreign keys to supplier, feed, and effective ImportHistory.
+### `supplier_offer_snapshot_generations`
 
-`supplier_offer_snapshot_observations`:
+| Index | Ordered columns | Unique | Supported boundary |
+| --- | --- | --- | --- |
+| `PRIMARY` | (`id`) | yes | generation identity |
+| `uq_snapshot_generation_execution_claim` | (`supplier_import_execution_claim_id`) | yes | `fk_snapshot_generation_execution_claim` to `supplier_import_execution_claims.id`; at most one final header per logical execution |
+| `uq_snapshot_generation_import_history` | (`import_history_id`) | yes | `fk_snapshot_generation_import_history` to `import_histories.id`; at most one final header per history |
+| `ix_snapshot_generation_feed` | (`supplier_feed_id`) | no | `fk_snapshot_generation_feed` to `supplier_feeds.id` |
+| `ix_snapshot_generation_feed_import` | (`supplier_id`, `supplier_feed_id`, `import_history_id`) | no | `fk_snapshot_generation_supplier` to `suppliers.id` by left prefix and exact supplier/feed/history ownership lookup |
+| `ix_snapshot_generation_scope_order` | (`supplier_id`, `source_identity`, `import_history_id`) | no | exact source sequence ordered by ImportHistory ID |
+| `ix_snapshot_generation_qualified_range` | (`supplier_id`, `source_identity`, `qualification_state`, `import_history_id`) | no | bounded qualified-window selection in generation order |
+| `ix_snapshot_generation_retention` | (`created_at`, `id`) | no | later retention-candidate reporting only |
+| `ix_snapshot_generation_predecessor` | (`predecessor_snapshot_generation_id`) | no | `fk_snapshot_generation_predecessor` self-reference |
 
-- primary key `id`;
-- unique `uq_snapshot_observation_generation_offer` on
-  (`snapshot_generation_id`, `supplier_sku_hash`);
-- index `ix_snapshot_observation_offer_history` on
-  (`supplier_sku_hash`, `snapshot_generation_id`);
-- `RESTRICT` foreign key to generation.
+All generation foreign keys use `RESTRICT`.
+
+### `supplier_offer_snapshot_enrollments`
+
+| Index | Ordered columns | Unique | Supported boundary |
+| --- | --- | --- | --- |
+| `PRIMARY` | (`id`) | yes | enrollment identity |
+| `uq_snapshot_enrollment_scope_offer` | (`supplier_id`, `source_identity`, `supplier_sku_hash`) | yes | `fk_snapshot_enrollment_supplier` to `suppliers.id` by left prefix and first enrollment per scope/offer |
+| `ix_snapshot_enrollment_feed` | (`supplier_feed_id`, `effective_import_history_id`) | no | `fk_snapshot_enrollment_feed` to `supplier_feeds.id` and feed/history ownership lookup |
+| `ix_snapshot_enrollment_effective_history` | (`effective_import_history_id`) | no | `fk_snapshot_enrollment_effective_history` to `import_histories.id` |
+| `ix_snapshot_enrollment_effective` | (`supplier_id`, `source_identity`, `effective_import_history_id`, `supplier_sku_hash`) | no | `WHERE supplier_id = ? AND source_identity = ? AND effective_import_history_id <= ? ORDER BY effective_import_history_id, supplier_sku_hash` |
+
+All enrollment foreign keys use `RESTRICT`.
+
+### `supplier_offer_snapshot_observations`
+
+| Index | Ordered columns | Unique | Supported boundary |
+| --- | --- | --- | --- |
+| `PRIMARY` | (`id`) | yes | observation identity |
+| `uq_snapshot_observation_generation_enrollment` | (`snapshot_generation_id`, `snapshot_enrollment_id`) | yes | `fk_snapshot_observation_generation` to generation by left prefix and one observation per enrolled identity per generation |
+| `uq_snapshot_observation_generation_offer` | (`snapshot_generation_id`, `supplier_sku_hash`) | yes | one physical offer-hash fact per generation and generation traversal |
+| `ix_snapshot_observation_enrollment_history` | (`snapshot_enrollment_id`, `snapshot_generation_id`) | no | `fk_snapshot_observation_enrollment` to enrollment and bounded identity history |
+| `ix_snapshot_observation_offer_history` | (`supplier_sku_hash`, `snapshot_generation_id`) | no | bounded offer-hash history in generation order |
+
+Both observation foreign keys use `RESTRICT`.
+
+### Existing `import_histories` additive range index
+
+A new future additive migration must create non-unique
+`ix_import_history_supplier_id` on (`supplier_id`, `id`). It supports
+`WHERE supplier_id = ? AND id > ? AND id <= ? ORDER BY id` for supplier-scoped
+generation-gap traversal. The historical
+`2026_06_07_121751_3_create_import_histories_table.php` migration must not be
+edited. Its existing (`supplier_id`, `created_at`) index does not replace the
+required (`supplier_id`, `id`) left-prefix/range access pattern.
 
 Exact range reads must be supplier/source bounded, ImportHistory ordered, and
 limited by generation count, observation count, and encoded output bytes. The
@@ -301,14 +499,19 @@ supports later candidate reporting only; this phase authorizes no deletion.
 Supplier and source columns have low-to-moderate cardinality and lead bounded
 scope/range indexes; monotonic ImportHistory IDs then provide ordering. Offer
 hashes have high cardinality and lead identity-history lookup, while generation
-ID leads the high-fan-out traversal of all cohort observations. Enrollment's
-effective-generation index supports `effective_import_history_id <= current`
-within one exact supplier/source scope. The feed/import index supports feed
-ownership checks; global ImportHistory uniqueness supplies retry idempotency.
-The predecessor and all parent-key indexes support their `RESTRICT` foreign
-keys. A later migration PR must include MySQL migration tests plus
-representative `EXPLAIN` assertions for each access pattern and expected row
-fan-out before capture can be enabled.
+ID leads the high-fan-out traversal of all cohort observations. Retry
+idempotency comes from the unique logical execution claim, not from global
+ImportHistory or `import_job_id` uniqueness. The predecessor and every parent
+column have an explicit left-prefix index supporting their `RESTRICT` foreign
+key.
+
+A later migration PR must include MySQL migration tests and representative
+`EXPLAIN` assertions for every access pattern on empty, small and populated
+synthetic databases. The expected named key must be selected; access type must
+be `const`, `eq_ref`, `ref` or bounded `range`; no unbounded full-table scan is
+accepted; estimated rows must remain bounded by the selected
+supplier/feed/generation interval; and any filesort or temporary table must be
+explicitly justified and bounded.
 
 The migration must add `CHECK` constraints for closed codes, boolean domains,
 fingerprint shapes, timestamps, count reconciliation, baseline/comparable
@@ -411,6 +614,7 @@ The future migration and models must enforce:
 - insert methods available only through the immutable capture repository;
 - model delete, force-delete, increment, decrement, and touch rejected;
 - no `CASCADE` or `SET NULL`; all parent relationships use `RESTRICT`;
+- one final generation per execution claim;
 - one final generation per ImportHistory;
 - one first enrollment per supplier/source/offer hash;
 - one physical observation per generation/offer hash;
@@ -427,39 +631,45 @@ receive ordinary UPDATE or DELETE grants for these tables.
 The future integration is an additive observer of one authorized import. It is
 not a second feed request and does not retain raw source data.
 
-1. `ImportHistory::startForImport()` allocates the generation.
-2. The common supplier import execution coordinator already owns the
-   supplier-scoped execution lock described below. A separate default-off gate
-   determines whether capture is attempted.
-3. `SsrfProtectionService::downloadToTemporaryFile()` downloads once to its
+1. The dispatch boundary has already persisted the stable execution claim and
+   serialized its logical key with the parent job.
+2. The common supplier import execution coordinator acquires the supplier lock,
+   locks and claims that exact row, and checks terminal state before any import
+   allocation or source work.
+3. The coordinator reuses the claim's bound ImportJob and ImportHistory or calls
+   `ImportHistory::startForImport()` exactly once and binds the resulting
+   generation to the claim. A separate default-off gate determines whether
+   snapshot capture is attempted.
+4. `SsrfProtectionService::downloadToTemporaryFile()` downloads once to its
    restricted system temporary file.
-4. The process opens the mode-0600 file without following links, records its
+5. The process opens the mode-0600 file without following links, records its
    file identity and size, and hashes its exact bytes incrementally.
-5. A behavior-equivalent streaming XML parser traverses that same restricted
+6. A behavior-equivalent streaming XML parser traverses that same restricted
    file while its identity is held. Before deletion, a second bounded local
    hash pass must reproduce the first digest and the file identity/size must be
    unchanged. Any mismatch freezes capture. This is not a second fetch or
    download and proves that parsing and the stored fingerprint refer to the
    same downloaded bytes.
-6. The streaming parser consumes the file without a complete XML tree;
+7. The streaming parser consumes the file without a complete XML tree;
    the existing complete SimpleXML tree and extracted row array must not remain
    in the capture-enabled path.
-7. Existing mapping, validation, and staging writes execute for each streamed
+8. Existing mapping, validation, and staging writes execute for each streamed
    row exactly as before.
-8. The observer writes only fixed-size privacy-safe canonical records to a
+9. The observer writes only fixed-size privacy-safe canonical records to a
    mode-0600 system temporary spool. It never writes raw identifiers, XML,
    credentials, URLs, paths, names, or payloads.
-9. The spool has explicit row and byte ceilings derived from the approved
+10. The spool has explicit row and byte ceilings derived from the approved
    maximum import row count and canonical observation size. It introduces no
    smaller source-file limit than the authorized importer. Exceeding a capture
    ceiling yields
    `overflow`; no prefix is represented as complete.
-10. Finalization uses bounded external sort/deduplication and a streamed merge
+11. Finalization uses bounded external sort/deduplication and a streamed merge
    with the immutable enrollment query. Memory remains bounded by configured
    chunk size, not source or cohort size.
-11. One database transaction inserts new enrollments, the final header, and
-    deterministic chunks of exhaustive physical observations.
-12. Both source temporary file and privacy-safe spool are removed in `finally`
+12. One database transaction inserts new enrollments, the final header, and
+    deterministic chunks of exhaustive physical observations, then performs
+    the owner-checked terminal claim transition.
+13. Both source temporary file and privacy-safe spool are removed in `finally`
     on success, failure, signal-driven worker termination where PHP cleanup
     runs, and repository retry. A startup janitor may remove only stale files
     bearing a capture-specific random prefix and correct owner/mode; it is not
@@ -481,8 +691,8 @@ The existing orchestration lock does not cover `ProcessXmlSupplierFeed` and is
 not a sufficient boundary. The future implementation must introduce one
 `SupplierImportExecutionCoordinator` used by both job handlers before either
 caller enters the orchestrator or XML engine. The orchestrator's current lock
-ownership moves into that coordinator; its internal import body must not
-reacquire the same lock.
+ownership moves into that coordinator; its internal
+`SupplierImportOrchestrator::execute()` body must not reacquire the same lock.
 
 `RunSupplierImportJob::handle()` loads the run/supplier and calls the
 coordinator around a lock-already-held orchestrator execution method.
@@ -524,19 +734,21 @@ an implementation audit proves that all real XML callers use this boundary.
 
 A normal exit releases the owner lock. A worker crash leaves the lock held only
 until the 4,200-second lease expires, which is longer than the enforced job
-timeout. If ImportHistory was already created but no final header committed,
-that generation is a gap. A queue retry cannot enter while the old lease is
-owned; after expiry it starts a new ImportHistory generation and cannot reuse or
-rewrite the crashed attempt.
+timeout. A queue retry cannot enter while the old lease is owned. After expiry,
+the same serialized logical key may take over the active claim and reuse its
+bound ImportJob and ImportHistory under the source-fingerprint recovery rules;
+it may not start a second generation. A genuinely new authorized execution has
+a new key and may allocate the next ImportHistory.
 
 Ordering is by `import_histories.id`, never completion timestamp. A comparable
 generation may reference only the immediately preceding accounted generation
 in the same supplier/source sequence. Every intervening ImportHistory ID must
-have one terminal capture header. Missing headers, duplicate delivery, worker
-crashes, lost lock ownership, unknown activity, and any pre-coordinator overlap
-break the sequence. The next structurally complete uncontended generation
-becomes a new baseline. With the common lock intact, same-supplier completion
-order cannot differ from ImportHistory order.
+have one terminal capture header. A terminal duplicate delivery is a no-op and
+does not create an intervening generation. Missing headers after terminal
+failure, unrecoverable worker crashes, lost lock ownership, unknown activity,
+and any pre-coordinator overlap break the sequence. The next structurally
+complete uncontended generation becomes a new baseline. With the common lock
+intact, same-supplier completion order cannot differ from ImportHistory order.
 
 The lock permits imports for different suppliers to proceed concurrently. It
 does not call Catalog Sync, scheduler activation, or Product mutation. The
@@ -790,22 +1002,75 @@ Rollback must never delete already captured history.
 
 ## Future Rollout, Failure, And Rollback
 
-1. Add empty additive tables, checks, `RESTRICT` keys, and mutation guards.
-2. Add immutable models/repository and snapshot-specific source identity.
-3. Replace the capture-enabled XML path with behavior-equivalent streaming
-   parsing and prove staging parity while capture remains disabled.
-4. Add the common supplier capture coordinator and bounded temporary spool.
-5. Add synthetic MySQL immutability, concurrency, crash, gap, retry, cohort,
-   no-backfill, and zero-mutation tests.
-6. Obtain independent code, database, Catalog Sync Safety, and security review.
-7. Merge and deploy with capture disabled.
-8. Verify schema, importer behavior, staging, Products, Catalog Sync flags,
-   Super Admin, queue, and scheduler remain unchanged.
-9. Obtain separate authorization for one APCOM manual capture activation.
-10. Collect future generations; do not enable the APCOM schedule.
-11. Verify cohort epochs and gaps read-only.
-12. Implement the exact V1 producer in another reviewed phase.
-13. Obtain human approval for one exact candidate and one C3D.1 preview.
+The rollout has exactly twelve non-combinable gates:
+
+1. **Persistence design approval and documentation merge.** Input: this complete
+   design and a fresh independent review. Result: an approved documentation PR
+   merged into `main`. Authorization permits documentation merge only. Failure
+   keeps PRE.A unapproved and permits no schema work. Next permitted gate: 2.
+2. **Additive schema implementation.** Input: a separate explicit schema
+   authorization and the merged design. Result: future additive migrations for
+   the claim and three evidence tables, exact named indexes, checks, `RESTRICT`
+   keys and mutation guards, plus synthetic MySQL tests. Authorization permits
+   schema/repository implementation only. Failure leaves capture absent and
+   disabled. Next permitted gate: 3 after schema validation passes.
+3. **Capture and idempotency implementation.** Input: separate explicit
+   implementation authorization and validated schema. Result: stable-key
+   dispatch, common coordinator, claim state machine, behavior-equivalent
+   streaming parser, bounded spool and capture tests, all disabled by default.
+   Authorization does not permit enablement or an import. Failure keeps capture
+   disabled. Next permitted gate: 4.
+4. **Independent implementation review and merge.** Input: complete schema and
+   capture diff with passing MySQL, concurrency, crash, retry, gap, cohort,
+   no-backfill and zero-mutation tests. Result: independent database, Security
+   and Catalog Sync Safety approval and merge into `main`. Authorization permits
+   review and merge only. Failure blocks merge. Next permitted gate: 5.
+5. **Disabled staging deployment and verification.** Input: exact merged
+   implementation plus separate deployment approval. Result: staging schema and
+   code deployed with capture still disabled, followed by importer, staging,
+   Product, Catalog Sync flag, Super Admin, queue and scheduler verification.
+   Authorization does not enable capture. Failure rolls back application state
+   safely while retaining additive schema. Next permitted gate: 6.
+6. **APCOM capture enablement.** Input: successful disabled deployment evidence
+   and separate explicit enablement authorization. Result: the APCOM-specific
+   default-off capture gate is explicitly enabled. Enablement does not authorize
+   an import or schedule. Failure disables capture. Next permitted gate: 7.
+7. **Individually authorized future APCOM imports.** Input: one explicit manual
+   operator authorization per import while the APCOM schedule remains disabled.
+   Result: at most one claimed immutable generation for that logical execution.
+   A failed/frozen run is retained or represented as a gap and is never
+   automatically rerun or backfilled. Next permitted gate: another separately
+   authorized gate 7 import or gate 8 when enough history exists.
+8. **Immutable warm-up/readiness.** Input: future captured generations only.
+   Result: read-only proof of one baseline plus three later comparable absences
+   in one unchanged cohort epoch and at least 48 hours from the first comparable
+   absence. Failure waits for separately authorized future imports; it cannot
+   backfill or skip gaps. Next permitted gate: 9.
+9. **Read-only evidence producer.** Input: successful readiness proof and a
+   separate implementation authorization. Result: the exact V1 producer is
+   implemented, independently reviewed, merged and deployed read-only.
+   Authorization does not prepare a candidate or run a preview. Failure blocks
+   evidence preparation. Next permitted gate: 10.
+10. **Exact candidate preparation and human approval.** Input: the deployed
+    producer and separate candidate-preparation authorization. Result: one
+    pinned privacy-safe evidence candidate with exact hash and evaluation time,
+    then explicit human approval of that exact candidate. Preparation is not
+    preview authorization. Failure destroys or rejects the candidate. Next
+    permitted gate: 11.
+11. **One controlled operational preview.** Input: exact approved candidate and
+    separate one-run authorization. Result: exactly one read-only C3D.1 preview
+    with zero-mutation evidence. Authorization permits neither lifecycle writes
+    nor closeout. Failure stops without rerun unless separately authorized.
+    Next permitted gate: 12.
+12. **Independent result review and documentation closeout.** Input: the exact
+    preview report and zero-mutation evidence. Result: independent review and a
+    documentation-only closeout. Authorization does not permit lifecycle,
+    Product, offer, retention or Catalog Sync writes. Failure leaves C3D.1 open;
+    no later supplier phase is permitted.
+
+Review is not merge; merge is not deployment; deployment is not enablement;
+enablement is not import; evidence creation is not approval; evidence approval
+is not preview; and preview is not closeout.
 
 Deployment is not capture activation. Capture activation is not import
 authorization. Import completion is not evidence approval.
@@ -821,14 +1086,18 @@ the committed generation is immutable.
 Proposed later files, subject to separate implementation review:
 
 ```text
+database/migrations/*_create_supplier_import_execution_claims_table.php
 database/migrations/*_create_supplier_offer_snapshot_generations_table.php
 database/migrations/*_create_supplier_offer_snapshot_enrollments_table.php
 database/migrations/*_create_supplier_offer_snapshot_observations_table.php
+database/migrations/*_add_supplier_id_id_index_to_import_histories_table.php
+app/Models/SupplierImportExecutionClaim.php
 app/Models/SupplierOfferSnapshotGeneration.php
 app/Models/SupplierOfferSnapshotEnrollment.php
 app/Models/SupplierOfferSnapshotObservation.php
 app/Data/Suppliers/Onboarding/SnapshotSourceIdentity.php
 app/Repositories/Suppliers/ImmutableSupplierOfferSnapshotRepository.php
+app/Repositories/Suppliers/SupplierImportExecutionClaimRepository.php
 app/Services/Suppliers/SupplierImportExecutionLock.php
 app/Services/Suppliers/SupplierImportExecutionCoordinator.php
 app/Services/Suppliers/Snapshots/SupplierOfferSnapshotCollector.php
@@ -840,16 +1109,15 @@ config/supplier_snapshot_capture.php
 tests/Feature/SupplierOfferSnapshotPersistenceTest.php
 tests/Feature/SupplierOfferSnapshotCaptureTest.php
 tests/Feature/SupplierOfferSnapshotConcurrencyTest.php
+tests/Feature/SupplierImportExecutionIdempotencyTest.php
 tests/Feature/OperationalSupplierOfferEvidenceProducerTest.php
 tests/Unit/Suppliers/SupplierOfferSnapshotFingerprintTest.php
 tests/Feature/SupplierOfferLifecycleDocumentationContractTest.php
 ```
 
-Implementation remains split into independently reviewed phases: schema and
-repository; streaming/capture integration; separately authorized APCOM capture
-enablement; V1 producer; candidate approval and one preview. Migration, parser
-change, activation, evidence production, and closeout must not share one
-authorization.
+Implementation remains split by the twelve gates above. Migration, capture,
+review/merge, deployment, enablement, import, warm-up, evidence production,
+candidate approval, preview, and closeout must not share one authorization.
 
 ## Non-approval Boundary
 

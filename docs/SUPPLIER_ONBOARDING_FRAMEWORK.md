@@ -385,11 +385,15 @@ reappearance or chronology. They must not be backfilled into evidence.
 defines a documentation-only prerequisite: future imports may add one final
 append-only generation header, immutable first-enrollment cohort rows and an
 exhaustive physical privacy-safe hashed presence/absence set without changing
-staging semantics. The remediated design also requires a strict opaque source
-identity, one common supplier capture lock, bounded temp-file streaming, exact
-indexes, fail-closed gaps and deterministic qualification. It does not add a
-migration, streaming parser change, capture implementation, producer, import
-approval, schedule enablement, lifecycle action or Catalog Sync behavior.
+staging semantics. A separate stable parent-execution claim shared by both XML
+job paths prevents concurrent or sequential redelivery from creating another
+ImportHistory or snapshot generation; terminal delivery is a no-op, and
+different source bytes for the same key fail closed. The remediated design also
+requires a strict opaque source identity, one common supplier capture lock,
+bounded temp-file streaming, exact named foreign-key/query indexes, fail-closed
+gaps and deterministic qualification. It does not add a claim table, migration,
+streaming parser change, capture implementation, producer, import approval,
+schedule enablement, lifecycle action or Catalog Sync behavior.
 
 The first complete generation in each source/cohort epoch is a comparison
 baseline only. Because the current V1 lifecycle contract requires
@@ -399,3 +403,22 @@ those three. Any gap, overlap or cohort expansion requires a new baseline.
 C3D.1 remains blocked until a separately authorized implementation is deployed
 and enabled and that future-history window is collected. Supplier #3 work must
 not begin before this prerequisite is resolved.
+
+The immutable-persistence rollout sequence is exact and non-combinable:
+
+1. Persistence design receives independent approval and its documentation PR is merged into `main`.
+2. Additive schema/migration implementation is separately authorized, implemented and tested.
+3. Capture/idempotency implementation is separately authorized, implemented and tested while remaining disabled by default.
+4. Schema and capture implementation receive independent review and are merged into `main`.
+5. The merged implementation is separately deployed to staging and verified; deployment does not enable capture.
+6. APCOM snapshot capture is separately authorized and explicitly enabled; enablement does not authorize an import.
+7. Individual future APCOM imports are separately and manually authorized.
+8. Immutable qualified history is collected and the full warm-up/readiness gate passes.
+9. The read-only evidence producer is separately implemented, reviewed, merged and deployed.
+10. One exact evidence candidate is prepared and explicitly approved by the human operator.
+11. Exactly one controlled read-only operational preview is separately authorized and executed.
+12. Operational results receive independent review and documentation-only closeout is completed.
+
+Review, merge, deployment, enablement, import, evidence preparation, approval,
+preview and closeout remain separate authorization boundaries. Failure at one
+gate cannot authorize the next.
