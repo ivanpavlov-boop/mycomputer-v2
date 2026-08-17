@@ -260,15 +260,22 @@ disabled. `CART-025` remains open.
 10. **APCOM Authoritative Human Decision Evidence and Profile Approval Gate -
    documentation decisions complete.** V4 is the semantic authority, while
    implementation approval remains closed.
-11. **Immutable supplier-offer snapshot persistence prerequisite - allocation
-    and queue-timing findings remediated locally.** The follow-up design has
+11. **Immutable supplier-offer snapshot persistence prerequisite - dedicated
+    queue, ownership, clock, outbox and crash-state findings remediated
+    locally.** The follow-up design has
     transactional `supplier_import_dispatch_outbox` and a stable claim shared
     by both XML paths; pair-null orchestrated dispatch followed by owner-checked
     atomic feed/ImportJob allocation; early pair-bound legacy authorization
     through the same allocation contract; explicit `pending_dispatch`,
-    `queued`, `processing` and terminal states; exact 3,600/3,900/4,200-second
-    job/retry/lease timing; database-clock lease-aware release;
-    `recovery_required` transport recovery; an explicit
+    `queued`, `processing` and terminal states; dedicated
+    `redis_supplier_import` / `supplier-imports` routing and worker at
+    `retry_after=3900` while unrelated Redis work remains at
+    `retry_after=1300`; exact
+    `3600 < 3900 < 4200 < 4320` job/retry/DB-lease/Redis-TTL timing; one MySQL
+    UTC ownership-tuple CAS within a 60-second bootstrap; in-handle owner-proven
+    exception closeout; newly deserialized transport-only `failed()`;
+    canonical outbox-only `recovery_required`; exact ownership/outbox checks
+    and cross-state transactions; an explicit canonical
     SupplierImportRun/ImportJob/ImportHistory crash matrix; separate
     queue-delivery, logical-processing and outbox-publication attempts; no
     importer replay after non-repeatable staging mutation; atomic authoritative
@@ -276,16 +283,17 @@ disabled. `CART-025` remains open.
     recovery; exact `ascii`/`ascii_bin` hexadecimal checks; immutable enrollment
     and physical observations; deterministic V4 gaps; bounded streaming; exact
     indexes; and 49 fine-grained rollout checkpoints. No outbox/claim table,
-    migration, queue setting, command, parser change, capture hook, producer,
+    migration, queue setting, worker, command, parser change, capture hook, producer,
     historical backfill or operational evidence exists. C3D.1 remains blocked
-    until a fresh independent five-commit review approves the design and later
+    until a fresh independent six-commit review approves the design and later
     checkpoints collect one future baseline plus three qualified comparable
     snapshots in an unchanged cohort epoch over at least 48 hours from absence
     1. See
     `docs/IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md`.
     The underlying read-only C3D tooling was already merged and deployed at
     `c22fc9a8dddf3c6778ab0b88e5a50cbc02fe3f21`; the persistence design itself is
-    local, documentation-only, unapproved and undeployed.
+    local, documentation-only, unapproved and undeployed. The planned dedicated
+    worker adds no automatic schedule.
 12. Select Supplier #3 only after a reviewed readiness matrix and explicit human
    decision; ASBIS remains Supplier #2.
 13. Supplier #3 preview-only integration.
@@ -735,9 +743,14 @@ by Phase 1D.2B and CART-023 remains open. Operational boundaries are documented 
 4. Keep the merged PR #210 C3D evaluator dormant. It is deterministic,
    non-persistent and zero-mutation, but no outbox/claim, qualified immutable
    history or producer exists. The local prerequisite design also requires
-   owner-checked pair allocation, exact 3,600/3,900/4,200-second queue timing,
-   lease-aware release, `recovery_required` outbox handling and explicit
-   authoritative parent-state recovery; none is implemented or enabled.
+   dedicated `redis_supplier_import` / `supplier-imports` routing at
+   `retry_after=3900` while unrelated Redis queues retain
+   `retry_after=1300`; exact
+   `3600 < 3900 < 4200 < 4320` job/retry/DB-lease/Redis-TTL timing; one MySQL
+   UTC complete ownership-tuple CAS; in-handle owner-proven closeout;
+   transport-only `failed()`; canonical outbox-only `recovery_required`; exact
+   ownership/outbox checks and canonical authoritative parent-state recovery;
+   none is implemented or enabled. The dedicated worker adds no schedule.
    Complete the linked 49 fine-grained checkpoints in order; every
    authorization, technical action, review, PR, merge, deployment, enablement,
    import, candidate, preview and closeout remains separate. No backfill from

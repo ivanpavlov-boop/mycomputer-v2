@@ -31,16 +31,28 @@ The legacy path remains pair-bound at authorization through the same allocation
 contract. Before `processing`, same-key delivery may safely retry; after the
 first non-repeatable staging side effect, importer replay is prohibited and
 abandoned work closes as a visible failed gap. The future timing contract is
-exactly 3,600-second job timeout, 3,900-second Redis `retry_after`, and
-4,200-second lock lease, with database-clock lease-aware release. Transport
-exhaustion moves recoverable queued work to outbox `recovery_required`; owner-
-checked failed callbacks and the explicit parent-state crash matrix prevent
-stranded or contradictory SupplierImportRun, ImportJob and ImportHistory
-states. Queue-delivery, logical-processing and outbox-publication attempts
-remain separate. Final evidence, ImportHistory, claim and authoritative parent
-transitions share one database transaction. Exact `ascii`/`ascii_bin`
-lowercase-hexadecimal checks, named FK/query indexes, a common supplier lock and
-a behavior-equivalent streaming traversal are required. No outbox/claim table,
+exactly `3600 < 3900 < 4200 < 4320`: supplier job timeout, dedicated
+`redis_supplier_import` / `supplier-imports` retry-after, MySQL ownership lease,
+and Redis supplier-lock TTL. The unrelated Redis queues and worker retain
+`retry_after=1300` and cannot consume `supplier-imports`. One MySQL UTC CAS
+writes the complete hashed-token/claim-time/lease-expiry ownership tuple before
+work; the 60-second bootstrap and lease-expiry-plus-30 delay remain inside the
+Redis TTL padding.
+
+Owner-proven exception closeout runs only inside active `handle()`
+`try/catch/finally`, where the raw token and lock object exist. Newly
+deserialized Laravel `failed()` is transport-only: it cannot close
+`processing`, release the original lock, replay the importer, or rewrite
+evidence. Transport exhaustion may move only the existing outbox to canonical
+`recovery_required`; it is not a claim state. Exact ownership/outbox checks,
+transactional cross-state rules, and the 33-row canonical parent-state crash
+matrix prevent stranded or contradictory SupplierImportRun, ImportJob and
+ImportHistory states. Queue-delivery, logical-processing and
+outbox-publication attempts remain separate. Final evidence, ImportHistory,
+claim and authoritative parent transitions share one database transaction.
+Exact `ascii`/`ascii_bin` lowercase-hexadecimal checks, named FK/query indexes,
+a common supplier lock and a behavior-equivalent streaming traversal are
+required. The dedicated worker adds no automatic schedule. No outbox/claim table,
 migration, command, parser change, capture implementation, historical backfill
 or evidence producer exists yet. C3D.1 remains blocked until the fine-grained
 checkpoints below and future qualified warm-up complete. Supplier #3 remains

@@ -394,19 +394,32 @@ Claims use `pending_dispatch`, `queued`, `processing`, and immutable terminal
 states. Orchestrated claims remain feed/job pair-null until the queue owner
 performs one atomic allocation; legacy claims remain early pair-bound through
 the same allocation repository. The future queue timing is exactly
-3,600-second job timeout, 3,900-second Redis `retry_after`, and 4,200-second
-lock lease, with database-clock lease-aware release. Recoverable transport
-exhaustion moves the outbox to `recovery_required`; owner-checked failed
-callbacks and an explicit SupplierImportRun/ImportJob/ImportHistory crash matrix
-close every terminal path without replay. Queue-delivery, logical-processing
-and outbox-publication attempts remain separate. Importer replay stops
-permanently at the first non-repeatable staging mutation. Abandoned processing
-closes the authoritative parent states and claim together as a failed gap,
-while successful/frozen evidence finalization commits ImportHistory, claim,
+`3600 < 3900 < 4200 < 4320`: job timeout, dedicated
+`redis_supplier_import` / `supplier-imports` retry-after, MySQL ownership lease,
+and Redis lock TTL. The general Redis connection and worker retain
+`retry_after=1300` and cannot consume the supplier queue. After Redis
+acquisition, one MySQL UTC CAS writes the complete
+hashed-token/`claimed_at`/lease-expiry ownership tuple within 60 seconds before
+any allocation or source work; the DB lease-expiry-plus-30 contention delay
+fits inside Redis TTL padding.
+
+Recoverable pre-processing transport failure moves only the existing outbox to
+canonical `recovery_required`, never the execution claim. Owner-proven
+exception closeout runs inside active `handle()` `try/catch/finally`; newly
+deserialized Laravel `failed()` is transport-only and cannot close
+`processing`, release the original lock, replay the importer, or rewrite
+evidence. Exact ownership/outbox checks, transactional cross-record rules and
+the canonical SupplierImportRun/ImportJob/ImportHistory crash matrix close
+every terminal path without replay. Queue-delivery, logical-processing and
+outbox-publication attempts remain separate. Importer replay stops permanently
+at the first non-repeatable staging mutation. Abandoned processing closes the
+authoritative parent states and claim together as a failed gap, while
+successful/frozen evidence finalization commits ImportHistory, claim,
 authoritative parent states and immutable evidence together. The design also
 requires exact `ascii`/`ascii_bin` hexadecimal checks, a strict opaque source
 identity, one common supplier lock, bounded temp-file streaming, exact named
-indexes and deterministic qualification. It does not add an outbox/claim table,
+indexes and deterministic qualification. The dedicated worker adds no automatic
+schedule. It does not add an outbox/claim table,
 migration, command, streaming parser change, capture implementation, producer,
 import approval, schedule enablement, lifecycle action or Catalog Sync behavior.
 
