@@ -421,10 +421,18 @@ crash matrix close every terminal path without replay. The future outbox adds
 `delivery_watchdog_at`, set from MySQL UTC plus exactly 4,320 seconds after
 acknowledged publication, and the exact
 `ix_import_dispatch_outbox_state_watchdog_id(state, delivery_watchdog_at, id)`
-for bounded stale-payload selection. A due null-owner `queued/published` row
-uses `dispatch_payload_unobserved` for bounded same-key recovery or terminal
-exhaustion. A separate owner-independent repository resolves a complete expired
-queued owner under a new supplier lock and complete-tuple CAS. The exact
+for bounded stale-payload detection. The marker is non-null only for the exact
+cross-record `queued/published` pair and is cleared atomically on processing,
+recovery-required and every terminal/finalized transition. A future scheduled
+read-only monitor emits privacy-safe warning/critical evidence but performs no
+mutation and creates no recovery authority. Manual recovery requires an exact
+immutable 900-second authorization and immutable result. Same-key recovery
+with `dispatch_payload_unobserved` is permitted only before the 1,800-second
+operator-response objective; afterward republication is forbidden and an
+exact authorization may only terminalize fail closed. Without operator action,
+the execution can remain nonterminal and critically alerted. A separate
+owner-independent repository resolves a complete expired queued owner under a
+new supplier lock and complete-tuple CAS only through that authority. The exact
 dry-run-first `suppliers:resolve-import-publication-mismatch` command can
 terminalize only one explicitly identified eligible pre-processing execution;
 an identical rerun is a no-op and every conflict fails closed. Queue-delivery,
@@ -443,12 +451,15 @@ ImportHistory, claim, published outbox, authoritative parent states and
 immutable evidence together. The design also requires exact
 `ascii`/`ascii_bin` hexadecimal checks, a strict opaque source identity, one
 common supplier lock, bounded temp-file streaming, retained one-job uniqueness,
-a separately named three-column child FK index and deterministic qualification.
-The dedicated worker adds no automatic
-schedule. It does not add an outbox/claim/authorization table,
-migration, watchdog, recovery repository, command, streaming parser change,
-capture implementation, producer, import approval, schedule enablement,
-lifecycle action or Catalog Sync behavior.
+a nullable unique claim-to-run key, the exact execution-path/parent-shape
+check, a separately named three-column child FK index and deterministic
+qualification.
+The dedicated import worker adds no import or automatic-recovery schedule; the
+only planned automatic cadence is the read-only watchdog monitor. This design
+does not add a runtime outbox/claim/recovery-authorization table, migration,
+watchdog monitor, recovery repository, command, streaming parser change,
+capture implementation, producer, import approval, lifecycle action or Catalog
+Sync behavior.
 The persistence prerequisite remains local, unapproved, unimplemented and
 undeployed. No evidence candidate exists and no operational preview is
 authorized.

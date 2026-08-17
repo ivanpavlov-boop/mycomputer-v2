@@ -262,7 +262,7 @@ disabled. `CART-025` remains open.
    implementation approval remains closed.
 11. **Immutable supplier-offer snapshot persistence prerequisite - queued
     payload and terminal-recovery findings remediated locally.**
-    The nine-commit follow-up design has
+    The ten-commit follow-up design has
     transactional `supplier_import_dispatch_outbox` and a stable claim shared
     by both XML paths; pair-null orchestrated dispatch followed by owner-checked
     atomic feed/ImportJob allocation; early pair-bound legacy authorization
@@ -280,10 +280,16 @@ disabled. `CART-025` remains open.
     `recovery_required` with an explicit reconciler terminal path; fixed-order
     ownership/outbox transactions requiring `published` before
     processing/finalization; a 4,320-second MySQL-UTC `delivery_watchdog_at`
-    selected by
+    present only for the exact `queued/published` pair and selected by
     `ix_import_dispatch_outbox_state_watchdog_id(state, delivery_watchdog_at, id)`;
-    bounded `dispatch_payload_unobserved` same-key recovery or terminal
-    exhaustion; owner-independent complete expired queued-owner CAS; an exact
+    a read-only scheduled 300-second monitor with due warning, 1,800-second
+    critical threshold and 900-second critical repetition; immutable
+    exact-pair/fingerprint/action recovery authority expiring after 900 seconds
+    plus one immutable result; operator-authorized
+    `dispatch_payload_unobserved` same-key recovery only before the response
+    objective and fail-closed-only terminalization afterward; explicit
+    acknowledgement that absent operator action can remain nonterminal and
+    critically alerted; owner-independent complete expired queued-owner CAS; an exact
     dry-run-first one-execution publication-mismatch command and idempotent
     terminal repository; an explicit canonical 36-row by 11-column
     SupplierImportRun/ImportJob/ImportHistory crash matrix; separate
@@ -298,11 +304,13 @@ disabled. `CART-025` remains open.
     enrollment and physical observations; exact-source-only authorized
     enrollment-generation baselines with deterministic authorization drift
     frozen; no mutable membership reread; deterministic V4 gaps; bounded streaming;
-    retained one-job uniqueness plus a separate named composite child FK index;
-    and 49 fine-grained rollout checkpoints. No outbox/claim/authorization table,
+    retained one-job uniqueness, nullable unique one-claim-per-orchestrated-run,
+    an exact execution-path/parent-shape check, plus a separate named composite
+    child FK index; and 49 fine-grained rollout checkpoints. No runtime
+    outbox/claim/recovery-authorization table,
     migration, queue setting, worker, command, parser change, capture hook, producer,
     historical backfill or operational evidence exists. C3D.1 remains blocked
-    until a fresh independent complete nine-commit review approves the design and later
+    until a fresh independent complete ten-commit review approves the design and later
     checkpoints collect one future baseline plus three qualified comparable
     snapshots in an unchanged cohort epoch over at least 48 hours from absence
     1. See
@@ -771,10 +779,14 @@ by Phase 1D.2B and CART-023 remains open. Operational boundaries are documented 
    MySQL-UTC-plus-24-hour deadline and cumulative delivery budget; canonical
    outbox-only `recovery_required`; processing/finalization gated on
    `outbox.state=published`; exact ownership/outbox checks; the 4,320-second
-   indexed acknowledged-payload watchdog; owner-independent expired
-   `queued/published` recovery/terminal CAS; the exact one-execution
-   publication-mismatch command; and canonical authoritative parent-state recovery;
-   none is implemented or enabled. The dedicated worker adds no schedule.
+   indexed acknowledged-payload watchdog cleared outside `queued/published`;
+   read-only scheduled monitoring plus exact immutable manual recovery
+   authorization/result; owner-independent expired `queued/published`
+   recovery/terminal CAS; one non-null orchestrated claim per run with exact
+   path/parent shape; the exact one-execution publication-mismatch command; and
+   canonical authoritative parent-state recovery; none is implemented or
+   enabled. The dedicated import worker adds no import or automatic-recovery
+   schedule; only the read-only monitor has a planned cadence.
    Complete the linked 49 fine-grained checkpoints in order; every
    authorization, technical action, review, PR, merge, deployment, enablement,
    import, candidate, preview and closeout remains separate. No backfill from

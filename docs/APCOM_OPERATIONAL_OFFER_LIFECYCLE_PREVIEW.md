@@ -58,10 +58,21 @@ ImportJob and ImportHistory states. The future outbox includes the exact
 `delivery_watchdog_at` liveness marker and
 `ix_import_dispatch_outbox_state_watchdog_id(state, delivery_watchdog_at, id)`.
 Acknowledged publication sets the watchdog from MySQL UTC plus exactly 4,320
-seconds. A due null-owner `queued/published` row becomes bounded same-key
-recovery with `dispatch_payload_unobserved` or atomic terminal exhaustion. A
-separate `ExpiredQueuedImportTerminalRepository` resolves a complete expired
-pre-processing owner without the lost raw token. The exact CLI-only,
+seconds, and every departure from the exact cross-record `queued/published`
+pair clears it atomically. The future scheduled
+`suppliers:monitor-import-dispatch-watchdogs` command only detects due rows and
+emits privacy-safe warning/critical evidence; it neither mutates rows nor
+creates recovery authority. Manual recovery requires one immutable,
+exact-pair/fingerprint/action-bound authorization that expires after 900
+seconds and one immutable result. Before the 1,800-second operator-response
+objective, that authority may permit same-key recovery with
+`dispatch_payload_unobserved`; afterward republication is forbidden and only
+exact fail-closed terminalization is available. If the operator takes no
+action, a critically alerted execution can remain nonterminal, so the design claims protocol
+boundedness only after an authorized command starts, not autonomous
+terminalization. A separate `ExpiredQueuedImportTerminalRepository` resolves a
+complete expired pre-processing owner without the lost raw token only through
+that authority. The exact CLI-only,
 dry-run-first `suppliers:resolve-import-publication-mismatch` command selects
 one claim/outbox/key and uses `PublicationMismatchTerminalRepository` for
 idempotent terminal resolution. Queue-delivery, logical-processing and
@@ -74,7 +85,9 @@ ownership. Live-owner finalization requires the raw token and owned Redis lock;
 the separate abandoned-owner API uses a new supplier lock and an expired
 persisted `processing/published` tuple without the lost raw token. Final evidence, ImportHistory, claim, published outbox, and
 authoritative parent transitions share one fixed-order database transaction.
-Exact `ascii`/`ascii_bin` lowercase-hexadecimal checks, retained one-job
+Exact `ascii`/`ascii_bin` lowercase-hexadecimal checks,
+`uq_import_execution_claim_run`, the exact
+`chk_import_execution_claim_path_parent` parent-shape check, retained one-job
 uniqueness, a separate named three-column child FK index, a common supplier
 lock and a behavior-equivalent streaming traversal are required. One consistent
 MySQL snapshot authorizes prior enrollments and current application identities
@@ -82,10 +95,11 @@ before source work; exact-source-only additions are the only later expansion,
 and finalization never rereads mutable membership. An authorized expansion makes
 its complete enrollment generation the new non-comparable baseline; only a
 deterministic authorization mismatch emits `capture_cohort_changed` and freezes.
-The dedicated worker adds no automatic schedule. No
-outbox/claim/authorization table, migration, watchdog, recovery repository,
-command, parser change, capture implementation, historical backfill or evidence
-producer exists yet. C3D.1 remains blocked until the fine-grained
+The dedicated import worker adds no import or automatic-recovery schedule; the
+only planned automatic cadence is the read-only watchdog monitor. No runtime
+outbox/claim/recovery-authorization table, migration, watchdog monitor,
+recovery repository, command, parser change, capture implementation,
+historical backfill or evidence producer exists yet. C3D.1 remains blocked until the fine-grained
 checkpoints below and future qualified warm-up complete. Supplier #3 remains
 unselected and unstarted.
 The persistence prerequisite remains local, unapproved, unimplemented and
