@@ -50,10 +50,21 @@ deserialized Laravel `failed()` is transport-only: it cannot close
 evidence. `recovery_required` is a recoverable outbox-only state while deadline
 and delivery budget remain valid. Delivery eight or deadline expiry directly
 terminalizes a pre-processing claim, outbox and applicable parents; a
-recoverable row that later exhausts is terminalized by the reconciler. Exact ownership/outbox checks,
-transactional cross-state rules, and the 33-row canonical parent-state crash
-matrix prevent stranded or contradictory SupplierImportRun, ImportJob and
-ImportHistory states. Queue-delivery, logical-processing and
+recoverable row that later exhausts is terminalized by the reconciler. Exact
+ownership/outbox checks,
+transactional cross-state rules, and the 36-row by 11-column canonical
+parent-state crash matrix prevent stranded or contradictory SupplierImportRun,
+ImportJob and ImportHistory states. The future outbox includes the exact
+`delivery_watchdog_at` liveness marker and
+`ix_import_dispatch_outbox_state_watchdog_id(state, delivery_watchdog_at, id)`.
+Acknowledged publication sets the watchdog from MySQL UTC plus exactly 4,320
+seconds. A due null-owner `queued/published` row becomes bounded same-key
+recovery with `dispatch_payload_unobserved` or atomic terminal exhaustion. A
+separate `ExpiredQueuedImportTerminalRepository` resolves a complete expired
+pre-processing owner without the lost raw token. The exact CLI-only,
+dry-run-first `suppliers:resolve-import-publication-mismatch` command selects
+one claim/outbox/key and uses `PublicationMismatchTerminalRepository` for
+idempotent terminal resolution. Queue-delivery, logical-processing and
 outbox-publication attempts remain separate. A successful eighth publication is
 valid; only a failed or ambiguous eighth publication terminalizes, and no ninth
 attempt exists. Processing requires the canonical
@@ -71,11 +82,15 @@ before source work; exact-source-only additions are the only later expansion,
 and finalization never rereads mutable membership. An authorized expansion makes
 its complete enrollment generation the new non-comparable baseline; only a
 deterministic authorization mismatch emits `capture_cohort_changed` and freezes.
-The dedicated worker adds no automatic schedule. No outbox/claim/authorization table,
-migration, command, parser change, capture implementation, historical backfill
-or evidence producer exists yet. C3D.1 remains blocked until the fine-grained
+The dedicated worker adds no automatic schedule. No
+outbox/claim/authorization table, migration, watchdog, recovery repository,
+command, parser change, capture implementation, historical backfill or evidence
+producer exists yet. C3D.1 remains blocked until the fine-grained
 checkpoints below and future qualified warm-up complete. Supplier #3 remains
 unselected and unstarted.
+The persistence prerequisite remains local, unapproved, unimplemented and
+undeployed. No evidence candidate exists and no operational preview is
+authorized.
 
 ## Immutable Persistence Rollout Checkpoints
 

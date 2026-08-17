@@ -6,7 +6,7 @@ Phase 9C.6.5C.3D.1-PRE.A is a documentation-only prerequisite. It resolves the
 architecture questions behind `BLOCKED_HISTORICAL_SOURCE_CONTRACT_REQUIRED`,
 but it does not add a migration, model, parser, import hook, feature flag,
 evidence file, or operational preview. No existing data is qualified by this
-design.
+design. No evidence candidate exists and no operational preview is authorized.
 
 The design is supplier-generic where the existing importer already provides a
 supplier and feed boundary. APCOM is the first bounded consumer. V1 through V3
@@ -14,11 +14,11 @@ remain historical contracts. V4 remains the current semantic authority.
 
 The read-only C3D preview implementation was merged through PR #210 and
 deployed at `c22fc9a8dddf3c6778ab0b88e5a50cbc02fe3f21`. This persistence design
-is a local documentation-only eight-commit follow-up pending fresh independent
+is a local documentation-only nine-commit follow-up pending fresh independent
 complete-branch review. Its
 migration, parser/capture implementation, evidence preparation, operational
 execution, and closeout are not approved or implemented.
-C3D.1 remains blocked and Supplier #3 remains unstarted.
+C3D.1 remains blocked and Supplier #3 remains unselected and unstarted.
 
 Read this design with [APCOM Missing Offer Decisions V4](APCOM_MISSING_OFFER_DECISIONS_V4.md),
 [APCOM Operational Offer Lifecycle Preview](APCOM_OPERATIONAL_OFFER_LIFECYCLE_PREVIEW.md),
@@ -568,7 +568,12 @@ staging mutation, the beginning of `handle()` calls one delivery-admission
 service. In the fixed outbox-then-claim lock order, its short transaction loads
 the canonical rows, verifies the payload/key/parent binding, reads MySQL
 `UTC_TIMESTAMP(6)`, and increments the durable outbox
-`delivery_attempt_count` exactly once for that dequeued invocation. Counts one
+`delivery_attempt_count` exactly once for that dequeued invocation. A
+legitimately observed canonical `queued/published` delivery may also refresh
+`delivery_watchdog_at` to `UTC_TIMESTAMP(6) + INTERVAL 4320 SECOND` before it
+releases for supplier-lock contention. That liveness refresh never changes the
+immutable transport deadline, any counter, the database ownership lease, or
+the Redis lock TTL. Counts one
 through seven may proceed only when the deadline is still in the future and the
 claim/outbox pair is otherwise eligible. The eighth cumulative logical
 delivery, or any delivery at or after `transport_deadline_at`, is irrecoverable
@@ -581,10 +586,13 @@ fixed order. It atomically changes both rows to
 records `transport_delivery_budget_exhausted` for delivery eight or
 `transport_deadline_expired` for deadline expiry. It creates no generation,
 enrollment, observation, absence evidence, staging mutation, or importer side
-effect. A `processing` or terminal claim is never replayed or regressed; an
-expired delivery seeing another complete owner performs no outbox mutation and
-returns for operator inspection or the separately authorized abandoned-owner
-path.
+effect. A `processing` or terminal claim is never replayed or regressed. A
+delivery that sees a complete expired pre-processing owner must not return
+normally into an unbounded state: while holding a newly acquired owner-checked
+supplier lock it may invoke
+`ExpiredQueuedImportTerminalRepository::resolveExpiredQueuedOwnership()`, or it
+must leave the durable watchdog candidate intact for the CLI reconciler. It
+cannot fabricate the lost raw attempt token.
 
 A lock-contention `release()` consumes the delivery count already recorded for
 that invocation. A fresh queue payload created by separately authorized
@@ -719,10 +727,43 @@ identifiers and one narrowly allowed owner-independent outbox CAS:
 | `queued` with outbox `published` and no active ownership tuple while deadline remains valid and `delivery_attempt_count <= 6` | under the fixed outbox-then-claim locks, CAS outbox `published -> recovery_required`, write `transport_callback_recovery_required` and timestamp, and preserve claim/parents |
 | `queued` with outbox `published` and no active ownership tuple after deadline or delivery-budget exhaustion | under the full outbox-claim-parent lock order, atomically close claim, outbox, and applicable parents with `transport_deadline_expired` or `transport_delivery_budget_exhausted` |
 | `queued` with a complete unexpired ownership tuple and outbox `published` | no-op; preserve active owner and published outbox and request later operator inspection |
-| `queued` with a complete expired ownership tuple and outbox `published` | no-op; do not clear an owner from a deserialized callback; request supplier-locked stale-owner reconciliation |
+| `queued` with a complete expired ownership tuple and outbox `published` | no-op in the deserialized callback; preserve the tuple and durable watchdog candidate for the supplier-locked expired-owner repository |
 | `processing` with outbox `published` | no-op; preserve both records and request abandoned-processing recovery after verified expiry |
 | outbox already `recovery_required` or `terminal_failed` | no-op; no stale payload may acquire ownership or mutate the claim |
 | owner tuple, key, parent or cross-state mismatch | fail closed with no mutation and request explicit reconciliation |
+
+The future owner-independent pre-processing contract is
+`ExpiredQueuedImportTerminalRepository::resolveExpiredQueuedOwnership()`. It
+never accepts or fabricates the lost raw attempt token. The caller first
+acquires a new owner-checked supplier Redis lock; the repository then reads
+MySQL `UTC_TIMESTAMP(6)` and transactionally locks `outbox -> claim ->
+applicable parents`. It accepts only literal `queued/published`, a complete
+ownership tuple whose `attempt_lease_expires_at < UTC_TIMESTAMP(6)`, no
+generation or evidence, authoritative parent bindings, and no conflicting
+terminal state. Its compare-and-set includes the complete persisted expired
+tuple; every state, token-hash, timestamp, key, parent, evidence, or lock
+mismatch affects zero rows.
+
+With a future deadline and `delivery_attempt_count <= 6`, the repository clears
+the expired ownership tuple, changes `published -> recovery_required`, keeps the
+claim `queued`, clears `delivery_watchdog_at`, and records
+`queued_ownership_lease_expired`. The existing bounded same-key recovery path
+may then republish. If delivery eight has been consumed or the immutable
+deadline has expired, the same locked transaction clears ownership and changes
+claim and outbox to `terminal_failed`, closes every applicable
+SupplierImportRun, ImportJob, and ImportHistory as failed, and records
+`transport_delivery_budget_exhausted` or `transport_deadline_expired`. Neither
+outcome downloads, runs the importer, mutates staging, creates a generation,
+enrollment, observation, absence fact, or recommendation.
+
+Race outcomes are exact. A complete unexpired owner is active and rejects the
+repository. Normal live-owner finalization wins by changing state or tuple, so
+the expired-owner CAS affects zero rows. `processing/published` belongs only to
+`AbandonedSupplierImportTerminalRepository::failExpiredProcessing()` and is
+never handled here. Another duplicate delivery or stale-payload reconciler must
+win the same supplier lock and complete-tuple CAS; the loser re-reads the
+canonical result and performs no work. A payload arriving after terminalization
+returns the stored terminal no-op before source access.
 
 The separately authorized manual outbox reconciler may lease the same
 `recovery_required` event and publish a fresh payload with the same claim ID/key,
@@ -936,7 +977,7 @@ Redis integration tests proving all of these exact cases:
 16. every canonical outbox check rejects invalid state/field combinations;
 17. `recovery_required` is accepted only as an outbox state;
 18. outbox publication attempt nine is rejected;
-19. every one of the 33 crash rows uses canonical claim/outbox/parent states;
+19. every one of the 36 crash rows uses canonical claim/outbox/parent states;
 20. every claim/outbox cross-record mismatch fails closed;
 21. the installed Laravel Worker honors `$tries = 8` because neither job
     defines or returns `retryUntil()`;
@@ -990,6 +1031,32 @@ Redis integration tests proving all of these exact cases:
     rejected by every repository,
     invariant, crash row, and migration test.
 
+The same future MySQL/Redis suite must add focused watchdog and mismatch
+coverage for exactly these cases:
+
+1. acknowledged publication whose Redis payload is missing;
+2. watchdog grace not yet expired;
+3. watchdog expiry;
+4. worker observation racing watchdog selection;
+5. supplier-lock contention;
+6. same-key republication;
+7. delivery-count and deadline preservation across republication;
+8. null-owner terminal exhaustion;
+9. expired-owner recovery with remaining budget;
+10. expired-owner terminal exhaustion;
+11. live-owner race rejection;
+12. mismatch dry-run;
+13. mismatch apply;
+14. mismatch idempotent rerun;
+15. mismatch conflicting rerun;
+16. stale payload after terminalization; and
+17. zero evidence and zero staging mutation for every new terminal path.
+
+Those tests must also prove the exact field/check/index contract, the
+4,320-second MySQL-UTC grace, bounded deterministic candidate ordering, and the
+populated-fixture `EXPLAIN` requirements for
+`ix_import_dispatch_outbox_state_watchdog_id`.
+
 The same suite retains the previously specified allocation rollback, unique
 ImportJob, duplicate binding, parent closeout, zero-qualified-evidence and
 legacy/orchestrated idempotency assertions.
@@ -999,6 +1066,12 @@ legacy/orchestrated idempotency assertions.
 Proposed additive coordination table: `supplier_import_dispatch_outbox`.
 It is mutable only through owner-checked publishing/recovery transitions. It is
 not evidence, a schedule, or authorization for another import.
+
+The future schema adds this exact nullable liveness field:
+
+```sql
+delivery_watchdog_at TIMESTAMP(6) NULL
+```
 
 | Column | Type | Null/default | Purpose and invariant | Privacy |
 | --- | --- | --- | --- | --- |
@@ -1020,6 +1093,7 @@ not evidence, a schedule, or authorization for another import.
 | `next_attempt_at` | timestamp(6) | nullable | Deterministic retry eligibility | operational metadata |
 | `published_at` | timestamp(6) | nullable | First acknowledged Redis publication; write-once | operational metadata |
 | `last_published_at` | timestamp(6) | nullable | Most recent acknowledged publication of the same event/key | operational metadata |
+| `delivery_watchdog_at` | timestamp(6) | nullable | MySQL-UTC liveness deadline for observing an acknowledged `published` payload; exactly 4,320 seconds after acknowledgement or a legitimate queued-delivery observation | operational metadata |
 | `recovery_required_at` | timestamp(6) | nullable | Transport exhaustion/manual intervention boundary | operational metadata |
 | `recovery_reason_code` | varchar(96) ASCII | nullable | Allowlisted recoverable transport reason | public contract |
 | `terminal_at` | timestamp(6) | nullable | Canonical terminal-failure instant | operational metadata |
@@ -1055,7 +1129,7 @@ transition table is:
 | `leased` | `leased` | owner-checked replacement after lease expiry |
 | `leased` | `published` | owner-checked initial-dispatch acknowledgement or handler adoption for a pending-origin lease |
 | `leased` | `terminal_failed` | failed or ambiguous eighth publication or irreconcilable binding mismatch |
-| `published` | `recovery_required` | owner-proven in-handle pre-processing closeout or transport-only callback while deadline and delivery budget remain valid |
+| `published` | `recovery_required` | owner-proven in-handle pre-processing closeout, transport-only callback, stale-payload watchdog, or expired queued-owner recovery while deadline and delivery budget remain valid |
 | `recovery_required` | `leased` | separately authorized manual reconciler |
 | `leased` | `published` | owner-checked acknowledgement of that same reconciled recovery event/key |
 | `recovery_required` | `terminal_failed` | deadline/delivery budget became irrecoverable, failed eighth recovery publication, or irreconcilable binding mismatch |
@@ -1066,9 +1140,16 @@ explicit intermediate `leased` state and acknowledged republication. Lease
 fields are present only in `leased`; publication, recovery-required, and
 terminal transitions clear them. `published_at` records the first publication
 and is write-once; `last_published_at` advances only after another acknowledged
-publication of the same event/key. `transport_deadline_at` and
-`delivery_attempt_count` are never reset by those transitions. Recovery fields
-are present only in `recovery_required`. State changes require the expected
+publication of the same event/key. Every acknowledged publication sets
+`delivery_watchdog_at = UTC_TIMESTAMP(6) + INTERVAL 4320 SECOND`; a legitimate
+queued delivery may refresh it by the same MySQL-UTC rule. The watchdog is
+non-null only while the outbox is `published`; transitions to `pending`,
+`leased`, `recovery_required`, or `terminal_failed` require it to be null. It
+remains an audit/liveness value for a processed terminal claim whose canonical
+outbox stays `published`, but only a `queued/published` pair is selectable by
+the watchdog reconciler. `transport_deadline_at` and `delivery_attempt_count`
+are never reset by those transitions. Recovery fields are present only in
+`recovery_required`. State changes require the expected
 state, token where applicable, and exactly one affected row. No DELETE or
 pruning is authorized.
 Outbox retention is indefinite until a later dry-run-first retention design
@@ -1136,6 +1217,7 @@ CONSTRAINT chk_import_outbox_state_fields CHECK (
         AND lease_expires_at IS NULL
         AND published_at IS NULL
         AND last_published_at IS NULL
+        AND delivery_watchdog_at IS NULL
         AND recovery_required_at IS NULL
         AND recovery_reason_code IS NULL
         AND terminal_at IS NULL
@@ -1147,6 +1229,7 @@ CONSTRAINT chk_import_outbox_state_fields CHECK (
         AND lease_token_hash IS NOT NULL
         AND leased_at IS NOT NULL
         AND lease_expires_at IS NOT NULL
+        AND delivery_watchdog_at IS NULL
         AND recovery_required_at IS NULL
         AND recovery_reason_code IS NULL
         AND terminal_at IS NULL
@@ -1160,6 +1243,7 @@ CONSTRAINT chk_import_outbox_state_fields CHECK (
         AND lease_expires_at IS NULL
         AND published_at IS NOT NULL
         AND last_published_at IS NOT NULL
+        AND delivery_watchdog_at IS NOT NULL
         AND recovery_required_at IS NULL
         AND recovery_reason_code IS NULL
         AND terminal_at IS NULL
@@ -1173,6 +1257,7 @@ CONSTRAINT chk_import_outbox_state_fields CHECK (
         AND lease_expires_at IS NULL
         AND published_at IS NOT NULL
         AND last_published_at IS NOT NULL
+        AND delivery_watchdog_at IS NULL
         AND recovery_required_at IS NOT NULL
         AND recovery_reason_code IS NOT NULL
         AND terminal_at IS NULL
@@ -1184,6 +1269,7 @@ CONSTRAINT chk_import_outbox_state_fields CHECK (
         AND lease_token_hash IS NULL
         AND leased_at IS NULL
         AND lease_expires_at IS NULL
+        AND delivery_watchdog_at IS NULL
         AND recovery_required_at IS NULL
         AND recovery_reason_code IS NULL
         AND terminal_at IS NOT NULL
@@ -1200,6 +1286,7 @@ CONSTRAINT chk_import_outbox_timestamp_order CHECK (
     AND (next_attempt_at IS NULL OR next_attempt_at >= created_at)
     AND (published_at IS NULL OR published_at >= created_at)
     AND (last_published_at IS NULL OR last_published_at >= published_at)
+    AND (delivery_watchdog_at IS NULL OR delivery_watchdog_at >= last_published_at)
     AND (recovery_required_at IS NULL OR recovery_required_at >= created_at)
     AND (terminal_at IS NULL OR terminal_at >= created_at)
 )
@@ -1207,6 +1294,9 @@ CONSTRAINT chk_import_outbox_timestamp_order CHECK (
 
 The application and repository allowlists additionally restrict recoverable
 reasons to failures that still have both transport boundaries available.
+They include the liveness reasons `dispatch_payload_unobserved` and
+`queued_ownership_lease_expired` alongside the existing transport-only callback
+and in-handle pre-processing reasons.
 Canonical terminal reasons in this boundary are exactly
 `transport_delivery_budget_exhausted`, `transport_deadline_expired`,
 `dispatch_publication_attempts_exhausted`, and
@@ -1224,6 +1314,16 @@ failed or irreconcilably ambiguous eighth publication, with
 `published` with `attempt_count = 8`, but it does not reset the separate
 delivery count or transport deadline.
 
+| Reason code | Exact state/result boundary |
+| --- | --- |
+| `dispatch_payload_unobserved` | recoverable `queued/recovery_required` after the due null-owner watchdog proves no delivery observation |
+| `queued_ownership_lease_expired` | recoverable `queued/recovery_required` after complete expired pre-processing ownership is cleared |
+| `transport_delivery_budget_exhausted` | irrecoverable pre-processing `terminal_failed/terminal_failed` when delivery eight is consumed |
+| `transport_deadline_expired` | irrecoverable pre-processing `terminal_failed/terminal_failed` at or after the immutable deadline |
+| `dispatch_publication_attempts_exhausted` | `terminal_failed/terminal_failed` only after failed or irreconcilably ambiguous publication attempt eight |
+| `dispatch_publication_mismatch` | explicit canonical pre-processing mismatch resolution to `terminal_failed/terminal_failed` |
+| `processing_lease_abandoned` | post-processing claim/parents become terminal failed while the canonical outbox remains `published` |
+
 Cross-record invariants cannot be delegated to single-table checks. Every
 transaction below uses the fixed `outbox -> claim -> ImportHistory -> ImportJob
 -> SupplierImportRun -> SupplierFeed` `FOR UPDATE` lock order, skipping absent
@@ -1238,7 +1338,10 @@ transactions and proved by
 | processing admission | `queued -> processing` requires the same transaction to verify `outbox.state = published`; `processing/recovery_required` is forbidden | `SupplierImportExecutionCoordinator` through `SupplierImportStateInvariantRepository`; queued-to-processing versus transport-failure races yield only one canonical pair |
 | stale delivery with `recovery_required` | preserve queued claim/parents and outbox; the stale payload exits before ownership, allocation, download, importer or evidence | `SupplierImportExecutionCoordinator`; only an acknowledged manual `recovery_required -> leased -> published` cycle can make a later payload eligible |
 | recoverable pre-processing failure | claim remains `queued`; its `published` outbox becomes `recovery_required` only while the deadline is future and `delivery_attempt_count <= 6`; parent state is preserved | `SupplierImportTransportFailureService`; no terminal claim/parent/evidence write and a pending-dispatch/recovery-required pairing is rejected |
+| acknowledged payload unobserved | only `queued/published` with due `delivery_watchdog_at`, null ownership, canonical parents, and no evidence becomes `queued/recovery_required` with `dispatch_payload_unobserved`, or the exact terminal pair when a transport boundary is exhausted | `ReconcileSupplierImportDispatchOutbox` through the fixed-order invariant/terminal repositories; bounded indexed selection and supplier-lock revalidation prevent a Redis-payload assumption |
+| expired queued ownership | only a complete expired `queued/published` ownership tuple may be cleared; recoverable transport becomes `queued/recovery_required` with `queued_ownership_lease_expired`, otherwise all applicable rows close terminally | `ExpiredQueuedImportTerminalRepository::resolveExpiredQueuedOwnership()`; complete-tuple CAS, new supplier lock, exact race rejection, and zero importer/evidence work are required |
 | irrecoverable pre-processing delivery/deadline exhaustion | `queued/published` or `queued/recovery_required` becomes `terminal_failed/terminal_failed`; every applicable parent closes atomically | delivery admission or `SupplierImportTransportFailureService` plus terminal repository; exact reason distinguishes budget from deadline and no importer/evidence work runs |
+| explicit publication mismatch | one exactly identified eligible pre-processing pair becomes `terminal_failed/terminal_failed` with `dispatch_publication_mismatch`; same-terminal rerun is a no-op and every conflict fails closed | `PublicationMismatchTerminalRepository::failPreProcessingMismatch()` under the supplier lock and canonical row-lock order; no broad selection or source/import/evidence work |
 | terminal outbox failure | outbox `terminal_failed`, claim `terminal_failed`, complete ownership tuple cleared, and every applicable parent closed in one transaction | `SupplierImportDispatchOutboxRepository` plus `TransactionalImportTerminalRepository`; mismatch rolls back all rows |
 | terminal claim no-op | all terminal deliveries preserve canonical terminal state, parent state, generation/gap and exact terminal outbox mapping | `SupplierImportExecutionCoordinator`; no source, importer, parent, outbox or evidence mutation |
 | published outbox after final claim | `terminal_qualified`, `terminal_frozen`, and post-processing `terminal_failed` require the acknowledged outbox to remain `published`; this does not reopen execution | coordinator terminal repository; finalization locks outbox then claim and rejects every other pair |
@@ -1257,7 +1360,10 @@ outbox from `leased` (or `pending` when a fast handler adopts it) to `published`
 and the claim from `pending_dispatch` to `queued`. A crash before publication
 leaves the row recoverable. A crash after Redis accepted the job but before
 acknowledgement leaves it eligible for duplicate publication; claim uniqueness
-and terminal checks make that duplicate harmless. Neither case creates a key.
+and terminal checks make that duplicate harmless. Every acknowledged initial or
+recovery publication sets
+`delivery_watchdog_at = UTC_TIMESTAMP(6) + INTERVAL 4320 SECOND` in the same
+owner-token-checked transaction. Neither case creates a key.
 
 The only future recovery interface is CLI-only:
 
@@ -1272,8 +1378,16 @@ the default; `--apply` is mandatory for publication; `--limit` is required,
 defaults to 25, and rejects values outside 1 through 50. There is no scheduler,
 HTTP route, Filament action, queue self-dispatch, or automatic invocation.
 
-The reconciler reads only due `pending` or `recovery_required` rows, or `leased`
-rows whose lease has expired. MySQL 8.4 workers claim a bounded page through one
+The reconciler reads only due `pending` or `recovery_required` rows, `leased`
+rows whose lease has expired, or stale `published` candidates selected through
+`ix_import_dispatch_outbox_state_watchdog_id` where the joined claim is
+`queued`, `delivery_watchdog_at <= UTC_TIMESTAMP(6)`, no generation/evidence
+exists, and all claim/outbox/parent bindings are canonical. Stale selection is
+ordered by `delivery_watchdog_at, id`, bounded to the requested `1..50` limit,
+and may not scan the outbox without the named index. After discovery, the
+reconciler acquires the owner-checked supplier Redis lock, transactionally locks
+`outbox -> claim -> applicable parents`, and revalidates every predicate. MySQL
+8.4 workers claim an ordinary pending/recovery/stale-lease page through one
 transaction using `SELECT ... FOR UPDATE SKIP LOCKED`, a random owner key and
 hashed token, and a five-minute lease. It validates the original
 claim/key/parent and refuses every terminal claim. A `recovery_required` event
@@ -1284,6 +1398,15 @@ reason, a literal `queued` claim, a future deadline, and
 boundary is no longer valid, the reconciler locks outbox, claim, and applicable
 parents and atomically terminalizes them with `transport_deadline_expired` or
 `transport_delivery_budget_exhausted`; it cannot merely refuse republication.
+For a stale `queued/published` candidate with a complete null ownership tuple,
+the reconciler first changes only the outbox to `recovery_required`, clears the
+watchdog, preserves the queued claim and parents, and records
+`dispatch_payload_unobserved`. It then uses the same bounded
+`recovery_required -> leased -> published` path when both transport boundaries
+remain valid, or atomically terminalizes claim, outbox, and parents when either
+boundary is exhausted. A complete expired ownership tuple is delegated only to
+`ExpiredQueuedImportTerminalRepository::resolveExpiredQueuedOwnership()`; an
+unexpired or half-bound tuple is never cleared or guessed.
 Attempt delays are deterministic: 1, 5, 15, 30, 60, 120, 240, then 480 minutes,
 capped at eight outbox publication attempts. Safe output contains only row IDs,
 states, counts, and allowlisted reason codes.
@@ -1302,8 +1425,8 @@ started ImportHistory, and authoritative orchestrated run fields. The reason is
 be proved is terminalized, and any payload accepted despite the ambiguity sees
 the terminal claim and no-ops. No ninth publication, importer work, or evidence
 is permitted. A mismatch in the terminal transaction rolls back everything and
-requires the same CLI's explicit terminal-resolution path on a separately
-authorized run. It never leaves a silently stranded `pending_dispatch` or
+requires the separately authorized exact terminal-resolution command below. It
+never leaves a silently stranded `pending_dispatch` or
 `queued` claim.
 
 A terminal claim encountered after an ambiguous successful publication accepts
@@ -1312,6 +1435,78 @@ never republishes or performs a recovery-state shortcut. Stale leases may be
 replaced only after expiry with an owner-checked compare-and-set. Recovery never
 changes a schedule, deadline, delivery budget, calls Catalog Sync, or authorizes
 a new execution.
+
+The exact future publication-mismatch interface is:
+
+```text
+php artisan suppliers:resolve-import-publication-mismatch \
+    --claim-id=<claim-id> \
+    --expected-outbox-id=<outbox-id> \
+    --expected-logical-execution-key=<64-character-key>
+
+php artisan suppliers:resolve-import-publication-mismatch \
+    --claim-id=<claim-id> \
+    --expected-outbox-id=<outbox-id> \
+    --expected-logical-execution-key=<64-character-key> \
+    --apply
+```
+
+`suppliers:resolve-import-publication-mismatch` is CLI-only, unscheduled,
+dry-run by default, explicitly mutating only with `--apply`, limited to exactly
+one selected execution, idempotent, and protected by the approved operator
+authorization procedure. All three identifying inputs are mandatory. Supplier
+name, feed URL, source path, raw supplier identifier, and any broad query are
+forbidden selectors.
+
+The command calls
+`PublicationMismatchTerminalRepository::failPreProcessingMismatch()`. After a
+supplier Redis lock it transactionally locks `outbox -> claim -> applicable
+parents` and accepts only these canonical pairs: `pending_dispatch/pending`;
+`pending_dispatch/leased` with an expired lease; `queued/published` with null or
+expired pre-processing ownership; or `queued/recovery_required` with no active
+owner. It rejects unexpired or half-bound ownership, `processing`, qualified or
+frozen terminal claims, conflicting terminal reasons, generation/evidence,
+noncanonical parents, and any mismatched claim ID, outbox ID, or logical key.
+
+Parent authority is exact: an orchestrated execution requires its
+SupplierImportRun; a legacy execution forbids one. ImportJob/feed must be a
+valid pair-null or pair-bound tuple for the current state, never half-bound, and
+any ImportHistory must belong to the same execution. The complete-state CAS
+atomically writes `terminal_failed/terminal_failed`, closes every applicable
+parent, records `dispatch_publication_mismatch` and a MySQL-UTC terminal
+timestamp, and clears all ownership, publication-lease, watchdog, and recovery
+fields. It performs zero source access, download, importer/staging work,
+generation, enrollment, observation, absence evidence, or lifecycle
+recommendation.
+
+A rerun with the identical claim, outbox, key, terminal reason, and parent
+bindings returns `already_terminal_noop` without mutation. Any conflicting
+reason, state, key, parent, active owner, or evidence fails closed. Dry-run and
+apply output is limited to the selected claim/outbox IDs, canonical states,
+allowlisted reason, parent type/counts, eligibility/result code, and affected
+row counts. It never prints payload JSON, supplier/feed/source identifiers,
+URLs, paths, credentials, raw product identifiers, or source data.
+
+### Bounded `queued/published` substate outcomes
+
+| Ownership and payload observation | Transport boundary | Deterministic outcome |
+| --- | --- | --- |
+| null owner; payload observed before watchdog | valid | refresh the MySQL-UTC watchdog if needed, then ordinary ownership admission; active continuation only |
+| null owner; payload unobserved and watchdog not due | any | no mutation; bounded grace remains active |
+| null owner; payload unobserved and watchdog due | budget and deadline valid | supplier-locked `published -> recovery_required` with `dispatch_payload_unobserved`, then bounded same-key republication |
+| null owner; payload unobserved and watchdog due | delivery exhausted or deadline expired | atomic `terminal_failed/terminal_failed` with the exact transport reason |
+| complete unexpired owner | any | active-owner continuation; watchdog/reconciler and duplicates affect zero rows |
+| complete expired owner | budget and deadline valid | complete-tuple CAS clears ownership and writes `queued_ownership_lease_expired`; bounded same-key recovery follows |
+| complete expired owner | delivery exhausted or deadline expired | complete-tuple CAS atomically terminalizes claim, outbox, and applicable parents |
+| half-bound owner | any | fail closed; no ownership clearing, republication, terminal write, or work |
+| recoverable transport failure already in `queued/recovery_required` | budget and deadline valid | existing bounded same-key `recovery_required -> leased -> published` path |
+| recoverable transport failure already in `queued/recovery_required` | delivery exhausted or deadline expired | atomic pre-processing terminalization with the exact transport reason |
+| publication mismatch in an eligible canonical pre-processing pair | no active owner and no evidence | explicit one-execution mismatch command performs atomic terminal failure; identical rerun is `already_terminal_noop` |
+| stale payload after a recovery or terminal winner | any | state/key/owner revalidation rejects work; terminal delivery returns the stored no-op |
+
+Thus every `queued/published` state has exactly one active-owner continuation,
+bounded same-key recovery, atomic terminal failure, or explicit fail-closed
+mismatch resolution. No outcome relies indefinitely on a Redis payload.
 
 ## Cohort Enrollment Contract
 
@@ -1603,6 +1798,7 @@ additive index does not change ImportJob behavior.
 | `uq_import_dispatch_outbox_claim_key` | (`supplier_import_execution_claim_id`, `logical_execution_key`) | yes | `fk_import_dispatch_outbox_claim_key` to the exact claim/key pair |
 | `ix_import_dispatch_outbox_due` | (`state`, `next_attempt_at`, `id`) | no | bounded pending recovery page |
 | `ix_import_dispatch_outbox_lease` | (`state`, `lease_expires_at`, `id`) | no | bounded stale-lease recovery page |
+| `ix_import_dispatch_outbox_state_watchdog_id` | (`state`, `delivery_watchdog_at`, `id`) | no | bounded stale acknowledged-payload selection ordered by watchdog and ID |
 
 Both outbox foreign keys use `RESTRICT`. The two claim references are
 deliberately redundant: the simple relationship supports ownership traversal,
@@ -1686,6 +1882,13 @@ be selected; access type must be `const`, `eq_ref`, `ref` or bounded `range`;
 no unbounded full-table scan is accepted; estimated rows must remain bounded by
 the selected supplier/feed/generation interval; and any filesort or temporary
 table must be explicitly justified and bounded.
+
+The stale-payload migration test additionally requires MySQL `EXPLAIN` to
+select `ix_import_dispatch_outbox_state_watchdog_id` for the populated-fixture
+candidate query, use bounded `range` access over `state` and
+`delivery_watchdog_at`, preserve deterministic `delivery_watchdog_at, id`
+ordering, and report a row estimate bounded by the requested `1..50` page. An
+unbounded outbox scan is a migration-acceptance failure.
 
 The migration must add `CHECK` constraints for closed codes, boolean domains,
 fingerprint shapes, timestamps, count reconciliation, baseline/comparable
@@ -1977,7 +2180,7 @@ The canonical terminal outbox mapping is exact:
 | frozen finalization or pre-mutation fingerprint conflict | `terminal_frozen` | `published` | frozen header-only outcome or documented zero-generation conflict; exact terminal parents |
 | live-owner execution failure after `processing` | `terminal_failed` | `published` | raw-token/Redis-lock proof; no qualified generation; applicable parents/history failed atomically |
 | abandoned-owner processing recovery | `terminal_failed` | `published` | new supplier lock plus expired persisted tuple; no raw old token, generation, evidence, or replay |
-| recoverable pre-processing failure | non-terminal `queued` | `recovery_required` | both transport boundaries valid; no importer/evidence; parents preserved at their exact boundary |
+| recoverable pre-processing failure, unobserved published payload, or expired queued owner | non-terminal `queued` | `recovery_required` | both transport boundaries valid; exact recoverable reason; no importer/evidence; parents preserved at their exact boundary |
 | irrecoverable pre-processing delivery/deadline exhaustion | `terminal_failed` | `terminal_failed` | exact transport reason; every applicable parent closed atomically; no importer/evidence |
 | failed eighth dispatch publication or irreconcilable dispatch binding | `terminal_failed` | `terminal_failed` | exact publication reason; every applicable parent closed atomically; no importer/evidence |
 
@@ -2007,7 +2210,8 @@ failed.
 `IH` below means the one bound ImportHistory. `None` under evidence means no
 committed generation, enrollment, or observation.
 `N/A — legacy path has no SupplierImportRun` is abbreviated in cells as
-`legacy: N/A`. Every recovery query is bounded and owner-checked.
+`legacy: N/A`. Every recovery query is bounded and owner-checked. This canonical
+matrix has exactly 36 data rows and 11 columns.
 
 | Boundary | Path | SupplierImportRun | ImportJob | ImportHistory | Claim | Outbox | Evidence | Allowed recovery | Prohibited actions | Required operator action |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -2041,9 +2245,12 @@ committed generation, enrollment, or observation.
 | 28. Transport-only `failed()` sees `processing` | both | orchestrated: unchanged `running`; legacy: N/A | unchanged `running` | unchanged `started` | unchanged `processing` with complete original ownership tuple | unchanged `published` | none | after verified expiry, dedicated abandoned-owner recovery acquires a new supplier lock and CASes the persisted tuple without the old raw token | outbox regression, owner replacement, live-owner token bypass, direct terminal updates, lock release, or importer replay | authorize the abandoned-processing reconciler after verified expiry |
 | 29. Publication attempt 8 succeeds | both | unchanged at the exact pre-processing boundary; orchestrated may remain `pending`; legacy: N/A | unchanged at the exact pre-processing boundary; may be absent or `pending` | absent | initial publication changes `pending_dispatch -> queued`; recovery publication preserves `queued` | literal `published` with `attempt_count=8` | none | normal same-key delivery; terminal checks still precede all work | terminalizing solely because ordinal is eight or permitting attempt nine | none |
 | 30. Publication attempt 8 fails or remains irreconcilably ambiguous | both | orchestrated: atomically `failed`; legacy: N/A | bound ImportJob atomically `failed` when present | atomically `failed` when present | atomically `terminal_failed` with `dispatch_publication_attempts_exhausted` | atomically `terminal_failed` with same reason | none | no ninth publication; any actually accepted stale payload sees terminal claim and no-ops | leaving parent pending/queued, another publication, new job under old key, or importer replay | inspect queue transport, then separately authorize a new execution |
-| 31. Stale queued attempt lease | both | orchestrated: unchanged `pending` before history or `running` after history; legacy: N/A | unchanged absent, `pending`, or `running` according to allocation/history boundary | unchanged absent or `started` | expired `queued`; owner replaceable only after Redis and database lease proof | `published`: eligible for fixed-order owner replacement; `recovery_required`: ineligible until acknowledged `leased -> published` | none | published branch may replace ownership under the same key; recovery branch exits stale payload and requires authorized republication before a later payload can claim | live-owner takeover, `forceRelease()`, second parent/history, or ownership while outbox is `recovery_required` | none for published ordinary retry; authorize bounded outbox recovery only for `recovery_required` |
+| 31. Stale queued attempt lease | both | orchestrated: unchanged `pending` before history or `running` after history; legacy: N/A | unchanged absent, `pending`, or `running` according to allocation/history boundary | unchanged absent or `started` | `queued` with a complete expired pre-processing owner | `published` with durable watchdog | none | new supplier lock plus complete-tuple CAS clears ownership and writes `queued_ownership_lease_expired` for bounded same-key recovery, or atomically terminalizes on exhausted delivery/deadline | live-owner takeover, `forceRelease()`, second parent/history, lost-token fabrication, source work, or ownership while outbox is `recovery_required` | authorize one bounded outbox reconciliation if delivery admission did not invoke the repository |
 | 32. Stale processing attempt lease | both | orchestrated: unchanged `running`; legacy: N/A | unchanged `running` | unchanged `started` | expired `processing` with complete persisted tuple | unchanged `published` | none | new supplier lock plus `outbox -> claim -> parents` abandoned-owner CAS; winner of live-owner/finalization race is authoritative | outbox regression, owner replacement, old raw-token requirement, download, importer replay, or direct terminal repair | authorize bounded abandoned-processing recovery |
 | 33. Different source fingerprint under same key | both | orchestrated: atomically `failed`; legacy: N/A | atomically `failed` without importer replay | atomically `failed` when already started | atomically `terminal_frozen` with first digest retained | unchanged `published` | no generation | no replay; new logical execution requires new authorization | digest replacement, parser/staging, or evidence generation | investigate source identity, then authorize a new execution if appropriate |
+| 34. Publication acknowledged but Redis payload is lost before `handle()` | both | orchestrated: unchanged `pending`; legacy: N/A | unchanged absent or `pending` | absent | `queued` with null owner | `published` with due `delivery_watchdog_at` | none | indexed bounded reconciler wins supplier lock, writes `dispatch_payload_unobserved`, and same-key republishes while boundaries remain valid or terminalizes all applicable rows when exhausted | indefinite reliance on Redis, new key/event/job, source access, importer, evidence, or ninth publication | authorize one dry-run-first bounded outbox reconciliation |
+| 35. Complete expired `queued/published` pre-processing owner | both | orchestrated: unchanged `pending` or `running`; legacy: N/A | unchanged absent, `pending`, or `running` | unchanged absent or `started` | `queued` with complete expired tuple | `published` with durable watchdog | none | `ExpiredQueuedImportTerminalRepository::resolveExpiredQueuedOwnership()` wins supplier lock and complete-tuple CAS, then bounded same-key recovery or exact terminal exhaustion; stale later payload no-ops | clearing a live/half-bound owner, old-token fabrication, importer replay, evidence, or parent drift | authorize bounded reconciliation only when delivery admission did not resolve it |
+| 36. Explicit publication-mismatch terminal resolution and rerun | both | applicable orchestrated run atomically `failed`; legacy: N/A | applicable bound job atomically `failed` | applicable same-execution history atomically `failed` | eligible pre-processing claim atomically `terminal_failed` | atomically `terminal_failed` | none | exact-ID/key command under supplier and row locks records `dispatch_publication_mismatch`; identical rerun returns `already_terminal_noop` | broad selection, active-owner race, parent/key guess, source/import/staging/evidence work, or conflicting terminal rewrite | authorize the one-execution dry-run, review, then separately apply if still canonical |
 
 The matrix uses only canonical states. Its terminal outcome mapping is exact:
 
@@ -2458,7 +2665,7 @@ review is not closeout. A failed row blocks every later row.
 
 | # | Checkpoint | Prerequisite | Separately responsible authorization | Permitted action | Result/artifact | Failure behavior | Next |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | Local design independent approval | complete local eight-commit design candidate | independent Security, Database and Catalog Sync Safety reviewers | review only | `APPROVED` verdict for exact diff | remediate locally; no push | 2 |
+| 1 | Local design independent approval | complete local nine-commit design candidate | independent Security, Database and Catalog Sync Safety reviewers | review only | `APPROVED` verdict for exact diff | remediate locally; no push | 2 |
 | 2 | Authorize design push/Draft PR | checkpoint 1 approval | repository owner | authorize only the exact reviewed commit | recorded one-workflow authorization | remain local | 3 |
 | 3 | Create design Draft PR | checkpoint 2 authorization | Release/DevOps operator | push exact branch and open Draft PR | Draft PR with pinned head/base | stop; do not broaden scope | 4 |
 | 4 | Design PR CI/review approval | checkpoint 3 Draft PR | CI plus independent reviewers | checks and review only | green required checks and approval | remediate in a separately reviewed commit | 5 |
@@ -2551,6 +2758,8 @@ app/Repositories/Suppliers/SupplierImportCohortAuthorizationRepository.php
 app/Repositories/Imports/TransactionalImportGenerationStartRepository.php
 app/Repositories/Imports/TransactionalImportTerminalRepository.php
 app/Repositories/Imports/AbandonedSupplierImportTerminalRepository.php
+app/Repositories/Imports/ExpiredQueuedImportTerminalRepository.php
+app/Repositories/Imports/PublicationMismatchTerminalRepository.php
 app/Services/Suppliers/SupplierImportExecutionLock.php
 app/Services/Suppliers/SupplierImportDeliveryAdmissionService.php
 app/Services/Suppliers/SupplierImportExecutionCoordinator.php
@@ -2566,6 +2775,7 @@ app/Services/Suppliers/Onboarding/OperationalSupplierOfferEvidenceProducer.php
 app/Console/Commands/PrepareOperationalSupplierOfferLifecycleEvidence.php
 app/Console/Commands/ReconcileSupplierImportDispatchOutbox.php
 app/Console/Commands/ReconcileAbandonedSupplierImportExecutions.php
+app/Console/Commands/ResolveImportPublicationMismatch.php
 config/supplier_snapshot_capture.php
 tests/Feature/SupplierOfferSnapshotPersistenceTest.php
 tests/Feature/SupplierOfferSnapshotCaptureTest.php
@@ -2578,6 +2788,8 @@ tests/Feature/SupplierImportCohortAuthorizationTest.php
 tests/Feature/SupplierImportQueueTimingTest.php
 tests/Feature/SupplierImportFailedCallbackTest.php
 tests/Feature/SupplierImportMysqlRedisRecoveryTest.php
+tests/Feature/SupplierImportPublishedPayloadWatchdogTest.php
+tests/Feature/SupplierImportPublicationMismatchResolutionTest.php
 tests/Feature/OperationalSupplierOfferEvidenceProducerTest.php
 tests/Unit/Suppliers/SupplierOfferSnapshotFingerprintTest.php
 tests/Feature/SupplierOfferLifecycleDocumentationContractTest.php
@@ -2587,8 +2799,9 @@ The future schema migration must add `allocated_at`, the exact pair-null,
 pair-bound, ownership-tuple and outbox checks, the unique claim-to-ImportJob
 allocation, retained single-column claim/job uniqueness, separately named
 three-column child FK index, compatible composite ImportJob parent key,
-immutable transport deadline, durable delivery counter, and outbox
-recovery/terminal fields, four write-once capture-start authorization fields,
+immutable transport deadline, durable delivery counter,
+`delivery_watchdog_at`, exact watchdog state checks and named selection index,
+and outbox recovery/terminal fields, four write-once capture-start authorization fields,
 and the exact immutable authorization-member table/index defined above.
 Migration tests must audit `SHOW CREATE
 TABLE` and `information_schema.statistics`; an implicit FK index fails
@@ -2616,9 +2829,12 @@ pre-processing terminal exhaustion. The
 state-invariant repository owns fixed-order cross-record
 outbox/claim/parent transactions; the outbox and live-owner terminal
 repositories enforce canonical state checks and terminal ownership clearing.
-The abandoned-owner command uses a separate expired-tuple method and never a
-live-token bypass. MySQL/Redis integration
-tests must prove every 42-item acceptance criterion above. These are planned
+The abandoned-processing command and expired-queued-owner repository use
+separate expired-tuple methods and never a live-token bypass. The outbox
+reconciler owns the indexed stale-payload watchdog path, while the exact
+publication-mismatch command owns only one explicitly identified execution.
+MySQL/Redis integration tests must prove every 42-item acceptance criterion and
+all 17 focused watchdog/mismatch cases above. These are planned
 implementation requirements only; this documentation commit changes no
 runtime, queue, Docker, environment, schema, worker, or feature-flag value.
 

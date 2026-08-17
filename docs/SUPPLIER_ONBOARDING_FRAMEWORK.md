@@ -18,7 +18,7 @@ Phase 9C.6.5C.1 and 9C.6.5C.2 operational sequence. Phase 9C.6.5C.3 local-only
 normalization planning, C.3A official/observed semantics tooling, and the
 C.3A.2 operational review closeout are complete read-only stages. No feed
 profile, import, or Catalog Sync action is approved. Supplier #3 remains
-unselected.
+unselected and unstarted.
 
 ## Intended Pipeline
 
@@ -416,8 +416,19 @@ exception closeout runs inside active `handle()` `try/catch/finally`; newly
 deserialized Laravel `failed()` is transport-only and cannot close
 `processing`, release the original lock, replay the importer, or rewrite
 evidence. Exact ownership/outbox checks, transactional cross-record rules and
-the canonical SupplierImportRun/ImportJob/ImportHistory crash matrix close
-every terminal path without replay. Queue-delivery, logical-processing and
+the canonical 36-row by 11-column SupplierImportRun/ImportJob/ImportHistory
+crash matrix close every terminal path without replay. The future outbox adds
+`delivery_watchdog_at`, set from MySQL UTC plus exactly 4,320 seconds after
+acknowledged publication, and the exact
+`ix_import_dispatch_outbox_state_watchdog_id(state, delivery_watchdog_at, id)`
+for bounded stale-payload selection. A due null-owner `queued/published` row
+uses `dispatch_payload_unobserved` for bounded same-key recovery or terminal
+exhaustion. A separate owner-independent repository resolves a complete expired
+queued owner under a new supplier lock and complete-tuple CAS. The exact
+dry-run-first `suppliers:resolve-import-publication-mismatch` command can
+terminalize only one explicitly identified eligible pre-processing execution;
+an identical rerun is a no-op and every conflict fails closed. Queue-delivery,
+logical-processing and
 outbox-publication attempts remain separate. A successful eighth publication is
 valid; only a failed or ambiguous eighth publication is terminal, and attempt
 nine is prohibited. Processing and live-owner terminal
@@ -435,8 +446,12 @@ common supplier lock, bounded temp-file streaming, retained one-job uniqueness,
 a separately named three-column child FK index and deterministic qualification.
 The dedicated worker adds no automatic
 schedule. It does not add an outbox/claim/authorization table,
-migration, command, streaming parser change, capture implementation, producer,
-import approval, schedule enablement, lifecycle action or Catalog Sync behavior.
+migration, watchdog, recovery repository, command, streaming parser change,
+capture implementation, producer, import approval, schedule enablement,
+lifecycle action or Catalog Sync behavior.
+The persistence prerequisite remains local, unapproved, unimplemented and
+undeployed. No evidence candidate exists and no operational preview is
+authorized.
 
 The first complete generation in each source/cohort epoch is a comparison
 baseline only. One consistent MySQL snapshot authorizes prior enrollments and

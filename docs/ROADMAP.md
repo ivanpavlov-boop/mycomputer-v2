@@ -260,9 +260,9 @@ disabled. `CART-025` remains open.
 10. **APCOM Authoritative Human Decision Evidence and Profile Approval Gate -
    documentation decisions complete.** V4 is the semantic authority, while
    implementation approval remains closed.
-11. **Immutable supplier-offer snapshot persistence prerequisite - exhaustion,
-    abandoned recovery and cohort authorization findings remediated locally.**
-    The eight-commit follow-up design has
+11. **Immutable supplier-offer snapshot persistence prerequisite - queued
+    payload and terminal-recovery findings remediated locally.**
+    The nine-commit follow-up design has
     transactional `supplier_import_dispatch_outbox` and a stable claim shared
     by both XML paths; pair-null orchestrated dispatch followed by owner-checked
     atomic feed/ImportJob allocation; early pair-bound legacy authorization
@@ -277,8 +277,15 @@ disabled. `CART-025` remains open.
     without `retryUntil()`; an immutable MySQL-UTC-plus-24-hour outbox deadline
     and non-resetting cumulative delivery budget; direct terminal claim/outbox/
     parent closeout at delivery-budget or deadline exhaustion; recoverable-only
-    `recovery_required` with an explicit reconciler terminal path; fixed-order ownership/outbox transactions requiring
-    `published` before processing/finalization; an explicit canonical
+    `recovery_required` with an explicit reconciler terminal path; fixed-order
+    ownership/outbox transactions requiring `published` before
+    processing/finalization; a 4,320-second MySQL-UTC `delivery_watchdog_at`
+    selected by
+    `ix_import_dispatch_outbox_state_watchdog_id(state, delivery_watchdog_at, id)`;
+    bounded `dispatch_payload_unobserved` same-key recovery or terminal
+    exhaustion; owner-independent complete expired queued-owner CAS; an exact
+    dry-run-first one-execution publication-mismatch command and idempotent
+    terminal repository; an explicit canonical 36-row by 11-column
     SupplierImportRun/ImportJob/ImportHistory crash matrix; separate
     queue-delivery, logical-processing and outbox-publication attempts; a valid
     successful eighth publication, terminal failed/ambiguous eighth publication,
@@ -295,7 +302,7 @@ disabled. `CART-025` remains open.
     and 49 fine-grained rollout checkpoints. No outbox/claim/authorization table,
     migration, queue setting, worker, command, parser change, capture hook, producer,
     historical backfill or operational evidence exists. C3D.1 remains blocked
-    until a fresh independent complete eight-commit review approves the design and later
+    until a fresh independent complete nine-commit review approves the design and later
     checkpoints collect one future baseline plus three qualified comparable
     snapshots in an unchanged cohort epoch over at least 48 hours from absence
     1. See
@@ -303,7 +310,9 @@ disabled. `CART-025` remains open.
     The underlying read-only C3D tooling was already merged and deployed at
     `c22fc9a8dddf3c6778ab0b88e5a50cbc02fe3f21`; the persistence design itself is
     local, documentation-only, unapproved and undeployed. The planned dedicated
-    worker adds no automatic schedule.
+    worker adds no automatic schedule. No evidence candidate exists, no
+    operational preview is authorized, and Supplier #3 remains unselected and
+    unstarted.
 12. Select Supplier #3 only after a reviewed readiness matrix and explicit human
    decision; ASBIS remains Supplier #2.
 13. Supplier #3 preview-only integration.
@@ -761,8 +770,10 @@ by Phase 1D.2B and CART-023 remains open. Operational boundaries are documented 
    transport-only `failed()`; `$tries=8` without `retryUntil()`; immutable
    MySQL-UTC-plus-24-hour deadline and cumulative delivery budget; canonical
    outbox-only `recovery_required`; processing/finalization gated on
-   `outbox.state=published`; exact ownership/outbox checks and canonical
-   authoritative parent-state recovery;
+   `outbox.state=published`; exact ownership/outbox checks; the 4,320-second
+   indexed acknowledged-payload watchdog; owner-independent expired
+   `queued/published` recovery/terminal CAS; the exact one-execution
+   publication-mismatch command; and canonical authoritative parent-state recovery;
    none is implemented or enabled. The dedicated worker adds no schedule.
    Complete the linked 49 fine-grained checkpoints in order; every
    authorization, technical action, review, PR, merge, deployment, enablement,
