@@ -389,17 +389,26 @@ staging semantics. A separate stable parent-execution claim shared by both XML
 job paths prevents concurrent or sequential redelivery from creating another
 ImportHistory or snapshot generation; terminal delivery is a no-op, and
 different source bytes for the same key fail closed. Transactional
-`supplier_import_dispatch_outbox` is the durable database-to-Redis handoff. Claims use
-`pending_dispatch`, `queued`, `processing`, and immutable terminal states;
-importer replay stops permanently at the first non-repeatable staging mutation.
-Abandoned processing closes ImportHistory and claim together as a failed gap,
-while successful/frozen evidence finalization commits ImportHistory, claim and
-immutable evidence together. The design also requires exact `ascii`/`ascii_bin`
-hexadecimal checks, a strict opaque source identity, one common supplier lock,
-bounded temp-file streaming, exact named indexes and deterministic
-qualification. It does not add an outbox/claim table, migration, command,
-streaming parser change, capture implementation, producer, import approval,
-schedule enablement, lifecycle action or Catalog Sync behavior.
+`supplier_import_dispatch_outbox` is the durable database-to-Redis handoff.
+Claims use `pending_dispatch`, `queued`, `processing`, and immutable terminal
+states. Orchestrated claims remain feed/job pair-null until the queue owner
+performs one atomic allocation; legacy claims remain early pair-bound through
+the same allocation repository. The future queue timing is exactly
+3,600-second job timeout, 3,900-second Redis `retry_after`, and 4,200-second
+lock lease, with database-clock lease-aware release. Recoverable transport
+exhaustion moves the outbox to `recovery_required`; owner-checked failed
+callbacks and an explicit SupplierImportRun/ImportJob/ImportHistory crash matrix
+close every terminal path without replay. Queue-delivery, logical-processing
+and outbox-publication attempts remain separate. Importer replay stops
+permanently at the first non-repeatable staging mutation. Abandoned processing
+closes the authoritative parent states and claim together as a failed gap,
+while successful/frozen evidence finalization commits ImportHistory, claim,
+authoritative parent states and immutable evidence together. The design also
+requires exact `ascii`/`ascii_bin` hexadecimal checks, a strict opaque source
+identity, one common supplier lock, bounded temp-file streaming, exact named
+indexes and deterministic qualification. It does not add an outbox/claim table,
+migration, command, streaming parser change, capture implementation, producer,
+import approval, schedule enablement, lifecycle action or Catalog Sync behavior.
 
 The first complete generation in each source/cohort epoch is a comparison
 baseline only. Because the current V1 lifecycle contract requires

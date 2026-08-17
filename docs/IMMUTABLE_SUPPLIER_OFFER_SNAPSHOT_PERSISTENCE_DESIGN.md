@@ -125,20 +125,22 @@ no supplier key, database identifier, feed URL, credential, path, token or raw
 supplier identifier and is not an authentication capability.
 
 For the orchestrated path, `SupplierImportOrchestrator::dispatch()` creates the
-`SupplierImportRun`, `pending_dispatch` execution claim, and exactly one pending
-initial-dispatch outbox row in one database transaction. For every legacy XML
-entry point, the explicit operator or scheduler action creates its ImportJob,
-`pending_dispatch` claim, and exactly one pending initial-dispatch outbox row in
-one transaction. If either transaction rolls back, none of its parent, claim,
-or outbox rows exists.
+`SupplierImportRun`, pair-null `pending_dispatch` execution claim, and exactly
+one pending initial-dispatch outbox row in one database transaction. It does not
+resolve a feed or create an ImportJob. For every legacy XML entry point, the
+explicit operator or scheduler action creates its already-known ImportJob,
+pair-bound `pending_dispatch` claim, and exactly one pending initial-dispatch
+outbox row in one transaction through the shared allocation repository. If
+either transaction rolls back, none of its parent, claim, or outbox rows
+exists.
 
 Only after commit may an immediate outbox publisher attempt Redis publication.
 The committed outbox row, not Redis and not
 `queue.connections.redis.after_commit`, is the durable handoff. Every publish
 or republish serializes the original claim ID and exact logical key. Queue retry
-and redelivery preserve them. Requeuing an ImportJob as a genuinely new,
-separately authorized operator action creates a new claim, outbox row, and key;
-no publisher, reconciler, or `handle()` method generates a key.
+and redelivery preserve them. A genuinely new, separately authorized legacy
+operator action creates a fresh ImportJob, claim, outbox row, and key; no
+publisher, reconciler, or `handle()` method generates a key.
 
 ### Claim and attempt ownership
 
@@ -161,6 +163,9 @@ The exact claim states are `pending_dispatch`, `queued`, `processing`,
 - successful Redis publication, or handler adoption of a publication that won
   the race with publisher acknowledgement, compare-and-sets
   `pending_dispatch -> queued` and the outbox row to `published` together;
+- an orchestrated `queued` claim may remain pair-null until its worker completes
+  the owner-checked allocation transaction below; publication never resolves a
+  feed or creates an ImportJob;
 - `queued -> queued` may replace attempt ownership only after the old owner and
   supplier lock are no longer valid and before the non-repeatable boundary;
 - `queued -> processing` occurs exactly once, immediately before the first
@@ -179,10 +184,159 @@ prior state, expected attempt ownership, and one affected row. Outbox delivery
 may advance only `pending_dispatch -> queued`; it cannot create a claim,
 ImportJob, ImportHistory, or generation.
 
+### Pair-null allocation contract
+
+`supplier_feed_id`, `import_job_id`, and `allocated_at` form one indivisible
+allocation tuple. They are either all null or all non-null. A half-bound claim
+is invalid. Pair-null is permitted only for an orchestrated `pending_dispatch`
+or `queued` claim, and for `terminal_failed` when no allocation transaction ever
+committed. The legacy authorization transaction is pair-bound before dispatch.
+
+Successful allocation is mandatory before source download, parsing,
+ImportHistory creation, or `queued -> processing`. Every
+`terminal_qualified` or `terminal_frozen` claim is pair-bound. A
+`terminal_failed` claim is pair-bound whenever `allocated_at`,
+`import_history_id`, `source_fingerprint`, or `processing_started_at` is
+present. An allocation transaction that rolls back never sets `allocated_at`
+and therefore remains a legitimate pair-null pre-allocation outcome.
+
+The future MySQL 8.4 migration uses these exact named checks, with the full
+pair-bound expression repeated rather than hidden in application code:
+
+```sql
+CONSTRAINT chk_import_execution_claim_allocation_pair CHECK (
+    (supplier_feed_id IS NULL AND import_job_id IS NULL AND allocated_at IS NULL)
+    OR
+    (supplier_feed_id IS NOT NULL AND import_job_id IS NOT NULL AND allocated_at IS NOT NULL)
+),
+CONSTRAINT chk_import_execution_claim_history_allocation CHECK (
+    import_history_id IS NULL
+    OR (supplier_feed_id IS NOT NULL AND import_job_id IS NOT NULL AND allocated_at IS NOT NULL)
+),
+CONSTRAINT chk_import_execution_claim_fingerprint_allocation CHECK (
+    source_fingerprint IS NULL
+    OR (supplier_feed_id IS NOT NULL AND import_job_id IS NOT NULL AND allocated_at IS NOT NULL)
+),
+CONSTRAINT chk_import_execution_claim_processing_allocation CHECK (
+    state <> 'processing'
+    OR (
+        supplier_feed_id IS NOT NULL
+        AND import_job_id IS NOT NULL
+        AND allocated_at IS NOT NULL
+        AND import_history_id IS NOT NULL
+        AND source_fingerprint IS NOT NULL
+        AND processing_started_at IS NOT NULL
+    )
+),
+CONSTRAINT chk_import_execution_claim_terminal_evidence_allocation CHECK (
+    state NOT IN ('terminal_qualified', 'terminal_frozen')
+    OR (
+        supplier_feed_id IS NOT NULL
+        AND import_job_id IS NOT NULL
+        AND allocated_at IS NOT NULL
+        AND import_history_id IS NOT NULL
+    )
+)
+```
+
+Application validation additionally requires a pair-bound
+`terminal_failed` claim whenever any allocation/processing marker is present;
+the checks above enforce each persisted marker directly without incorrectly
+forbidding a pair-null pre-allocation terminal failure.
+
+### Owner-checked allocation transaction
+
+Only the delivered worker allocates the orchestrated path, after Redis
+delivery, common supplier-lock acquisition, claim-row `FOR UPDATE`, exact
+`state = queued`, logical-key verification, and current attempt-token
+verification. One transaction then:
+
+1. locks the applicable `SupplierImportRun` and supplier;
+2. resolves one active feed deterministically by the current XML-before-CSV
+   priority followed by ascending feed ID and locks that feed;
+3. verifies that the claim allocation tuple is still pair-null;
+4. creates exactly one pending ImportJob for that supplier/feed;
+5. compare-and-sets the claim from pair-null to that feed, ImportJob, and
+   database `UTC_TIMESTAMP(6)` `allocated_at` while leaving state `queued`;
+6. binds the same feed and ImportJob to the `SupplierImportRun`; and
+7. requires every insert/update compare-and-set to affect exactly one row.
+
+The transaction writes no fingerprint, performs no download or parsing, calls
+no importer, creates no ImportHistory or snapshot, and does not enter
+`processing`. Rollback removes the ImportJob and run binding and leaves the
+claim pair-null/queued, so the same logical key may repeat allocation safely.
+After commit, duplicate delivery reuses the existing tuple only when claim,
+supplier, feed, ImportJob, run, and logical key all agree. The deterministic
+resolver is rerun under lock; a different result or any half/conflicting
+binding closes the pre-processing claim and applicable run/job/history
+atomically as `terminal_failed` with
+`capture_allocation_binding_conflict`, without replacement allocation or
+evidence.
+
+No suitable active feed closes a still pair-null claim and its
+`SupplierImportRun` atomically as `terminal_failed` with
+`capture_allocation_feed_unavailable`. It creates no ImportJob, ImportHistory,
+generation, or absence evidence. A genuinely different feed requires a new
+operator-authorized logical execution.
+
+The legacy XML path deliberately preserves early allocation. Its authorization
+transaction creates the known pending ImportJob, uses the same allocation
+repository to bind the claim/feed/job tuple and `allocated_at`, then creates
+the outbox row. Its worker never allocates again; it only verifies the committed
+tuple under the same claim-to-ImportJob uniqueness and ownership checks used by
+the orchestrated path. `processing` is impossible for either path until the
+tuple is bound.
+
+After successful allocation and before source download, one transaction locks
+the claim, ImportJob, feed, and applicable run, creates exactly one
+`ImportHistory(event=started)`, binds it to the claim, sets ImportJob to
+`running`, and sets the orchestrated run to `running`. It replaces the current
+self-transactional history helper with a transaction-aware repository method.
+Rollback leaves no history and all parent records pre-start; retry reuses the
+same allocation.
+
+### Queue timing and attempt ownership
+
+The future transport invariant is exact:
+
+```text
+RunSupplierImportJob timeout        = 3600 seconds
+Redis retry_after                   = 3900 seconds
+supplier lock / attempt lease       = 4200 seconds
+required ordering                   = 3600 < 3900 < 4200
+```
+
+The current `.env.example` value `REDIS_QUEUE_RETRY_AFTER=1300` is incompatible
+with this future capture/idempotency contract. It remains unchanged in this
+documentation phase and must become `3900` only in the separately authorized
+runtime implementation and deployment checkpoints. `ProcessXmlSupplierFeed`
+retains its 1200-second job timeout and therefore also satisfies the 3900-second
+reservation boundary. The queue-worker default timeout must be no greater than
+3600 seconds; deployment validation must prove that Laravel resolves the
+orchestrated job's effective per-job timeout to exactly 3600 and that no worker
+option can extend execution past it.
+
 Attempt ownership uses the same fixed 4,200-second upper bound as the supplier
-Redis lock. `attempt_lease_expires_at` is set to acquisition time plus 4,200
-seconds and is not extended. Ownership replacement is forbidden while either
-the Redis lock or database attempt lease may still be valid.
+Redis lock. `attempt_lease_expires_at` is set from database
+`UTC_TIMESTAMP(6)` plus 4,200 seconds and is not extended. Ownership replacement
+is forbidden while either the Redis lock or database attempt lease may still be
+valid.
+
+Future queue transport settings are explicit for both job payloads:
+
+```text
+$tries = 8
+$backoff = [120, 600, 1800, 3600]
+retryUntil = authorization or manual-republication time + 24 hours UTC
+```
+
+The canonical UTC transport deadline is serialized in the outbox payload and
+cannot be regenerated by a queue retry. A separately authorized manual outbox
+republication may set a new 24-hour deadline while retaining the same claim ID
+and logical key. Queue delivery attempts, the single logical transition into
+`processing`, and the outbox's maximum eight publication attempts are three
+independent counters. Only the successful `queued -> processing` CAS counts as
+the logical processing attempt.
 
 Claim behavior is deterministic:
 
@@ -194,8 +348,9 @@ Claim behavior is deterministic:
 - **Published:** the claim is `queued`; duplicate publication or delivery uses
   the same claim and key.
 - **Queued claim owned by another attempt:** Redis-lock acquisition or claim
-  token comparison fails; the delivery is retryable and creates no ImportJob,
-  ImportHistory, snapshot, staging, Product or Catalog Sync write.
+  token comparison fails; the duplicate follows the lease-aware release
+  contract below and creates no ImportJob, ImportHistory, snapshot, staging,
+  Product or Catalog Sync write.
 - **Retry before non-repeatable processing:** after the old lease is no longer
   owned, the same logical key may replace attempt ownership, redownload if
   needed, and reuse the same bound ImportJob and ImportHistory.
@@ -221,6 +376,86 @@ download, `XmlImportEngine`, ImportJob/ImportHistory allocation or snapshot
 work. It does not download again, call `XmlImportEngine`, create another
 ImportJob or ImportHistory, insert another header/observation set, alter
 chronology, or dispatch Catalog Sync, jobs or events.
+
+### Lock-contention release contract
+
+A Redis redelivery that cannot acquire the supplier lock performs only a
+bounded read of the durable claim and database clock. It never changes the
+active owner, allocates, downloads, invokes the importer, calls
+`forceRelease()`, creates a key/job/outbox event, or terminally fails the claim
+because of contention.
+
+The authoritative clock is MySQL `UTC_TIMESTAMP(6)`. For a valid lease whose
+expiry is no later than `claimed_at + INTERVAL 4200 SECOND`, the job calculates:
+
+```text
+remaining_seconds = ceil(max(0,
+    TIMESTAMPDIFF(MICROSECOND, UTC_TIMESTAMP(6), attempt_lease_expires_at)
+) / 1000000)
+
+release_delay_seconds = min(4230, max(30, remaining_seconds + 30))
+```
+
+It calls Laravel `release(release_delay_seconds)` and returns. The next delivery
+therefore cannot be eligible earlier than 30 seconds after the recorded lease
+expiry. A missing, malformed, or overlong lease is not guessed: the delivery
+fails safely into the failed-callback contract, which records manual recovery
+required without changing the active owner.
+
+### Transport exhaustion and failed callbacks
+
+Queue delivery attempts do not decide logical execution correctness. Every
+future `failed()` callback loads the claim by ID/key, acquires the common
+supplier lock when ownership permits, locks claim/outbox and bound parents with
+`FOR UPDATE`, and uses state plus owner-token compare-and-set. It never decides
+from the payload attempt count alone.
+
+Before `processing`, exhausted transport changes the existing outbox from
+`published|pending|leased` to `recovery_required`, records the allowlisted
+reason `transport_attempts_exhausted`, clears only stale claim attempt ownership,
+and leaves the same claim/key recoverable. It does not mark the shared claim,
+run, or job terminal merely because a payload exhausted transport attempts.
+The separately authorized manual outbox reconciler may lease that same event
+and publish a fresh payload with the same claim ID/key and a new bounded
+transport deadline. Queue-delivery, logical-processing, and outbox-publication
+attempt accounting remain separate. It creates no claim, ImportJob,
+authorization, or outbox event.
+
+After `processing`, failed callback replay is always prohibited. When the
+callback proves that it still owns both attempt token and Redis lock, it may use
+the atomic terminal-failure repository to close ImportJob, ImportHistory, claim,
+and authoritative SupplierImportRun fields as failed with no evidence. Without
+both ownership proofs it changes nothing; after lease expiry, only the manual
+abandoned-processing reconciler may close the execution.
+
+Failed-callback behavior is exact:
+
+| Durable case | Required locks/CAS | Records that may change | Redis republish | Importer | Operator action |
+| --- | --- | --- | --- | --- | --- |
+| terminal claim | lock claim and verify terminal state | none; return stored terminal result | no | prohibited | none |
+| `processing`, callback owns token and Redis lock | supplier lock plus claim/job/history/run `FOR UPDATE`; exact owner CAS | atomically fail ImportJob, ImportHistory, claim, applicable run; no evidence | no | prohibited | separately authorize a new execution if desired |
+| `processing`, ownership absent/unknown | read and fail closed; no terminal CAS | none | no | prohibited | abandoned-processing recovery after verified expiry |
+| queued pair-null | claim/outbox `FOR UPDATE`; exact key/state CAS | outbox to `recovery_required`; stale ownership only may be cleared | manual reconciler only | prohibited | authorize one reconciler apply run |
+| queued pair-bound without started history | claim/outbox/job/run `FOR UPDATE` | outbox to `recovery_required`; job/run remain non-terminal; stale ownership only may be cleared | manual reconciler only | prohibited | authorize one reconciler apply run |
+| queued pair-bound with started history | claim/outbox/job/history/run `FOR UPDATE` | outbox to `recovery_required`; parent/history remain unchanged; stale ownership only may be cleared | manual reconciler only | prohibited | authorize one reconciler apply run |
+| stale queued ownership | supplier lock plus expired-lease and owner-token CAS | clear stale attempt fields; outbox to `recovery_required` | manual reconciler only | prohibited | authorize one reconciler apply run |
+| `pending_dispatch` | claim/outbox `FOR UPDATE`; payload/key proof | outbox to `recovery_required`; claim/run/job remain pending | manual reconciler only | prohibited | authorize one reconciler apply run |
+| failed allocation | verify `terminal_failed` and allocation reason | none | no | prohibited | new authorization only for another import |
+| abandoned processing | verify terminal failure from recovery | none | no | prohibited | new authorization only for another import |
+| source fingerprint conflict | verify `terminal_frozen` and immutable digest | none | no | prohibited | new authorization/key for different bytes |
+| outbox attempt exhaustion | supplier lock plus outbox/claim/parents `FOR UPDATE`; exact attempt/state CAS | terminal transaction described below | no | prohibited | inspect terminal outcome; new authorization for another import |
+
+Outbox publication attempts remain separate. Attempt eight is terminal and
+operator-visible. For pair-null `pending_dispatch`, one transaction marks the
+outbox and claim `terminal_failed` and the orchestrated run failed; legacy is
+normally pair-bound and closes its pending ImportJob too. For a
+`recovery_required` queued claim, the same supplier-locked transaction closes
+the claim, bound ImportJob, any started ImportHistory, and authoritative
+SupplierImportRun fields as `terminal_failed` with
+`dispatch_attempts_exhausted`. No source/import/evidence work runs. A mismatch
+rolls back everything and requires the explicit terminal-resolution command;
+it is never left silently pending or queued. Any later import requires a new
+operator-authorized key.
 
 ### Crash and source-fingerprint recovery
 
@@ -264,9 +499,10 @@ the owner-checked state machine above.
 | `id` | unsigned bigint | not null | Surrogate claim key | internal |
 | `logical_execution_key` | `CHAR(64) CHARACTER SET ascii COLLATE ascii_bin` | not null | Random stable logical execution identity; globally unique | internal |
 | `supplier_id` | unsigned bigint | not null | Exact supplier owner | internal |
-| `supplier_feed_id` | unsigned bigint | nullable while orchestrated claim is pending | Bound once before download | sensitive metadata |
+| `supplier_feed_id` | unsigned bigint | nullable for orchestrated pre-allocation only | Pair-null/pair-bound tuple; bound once before download | sensitive metadata |
 | `supplier_import_run_id` | unsigned bigint | nullable | Required orchestrated-path parent | internal |
-| `import_job_id` | unsigned bigint | nullable before orchestrated allocation | Legacy parent at dispatch; bound once on orchestrated execution | internal |
+| `import_job_id` | unsigned bigint | nullable for orchestrated pre-allocation only | Pair-null/pair-bound tuple; unique across claims | internal |
+| `allocated_at` | timestamp(6) | nullable for orchestrated pre-allocation only | Database UTC time written atomically with the pair; write-once | operational metadata |
 | `import_history_id` | unsigned bigint | nullable before generation allocation | The only ImportHistory for this logical execution | internal |
 | `execution_path` | varchar(32) ASCII | not null | `orchestrated` or `legacy_xml` | public contract |
 | `state` | varchar(32) ASCII | `pending_dispatch` | Closed state machine above | public contract |
@@ -280,20 +516,21 @@ the owner-checked state machine above.
 | `created_at`, `updated_at` | timestamps | database managed | Coordination audit only | operational metadata |
 
 An orchestrated claim requires `supplier_import_run_id`; a legacy claim forbids
-that parent and requires `import_job_id` at dispatch. A `queued` or `processing`
-claim requires a feed and ImportJob. `processing` requires a bound ImportHistory,
-source fingerprint, owner token hash, lease expiry, and write-once
-`processing_started_at`. A claim may bind at most one ImportHistory. Terminal
-qualified/frozen requires that history; terminal failure before source work may
-have no history. The implementation must enforce these implications with
-database checks plus application validation.
+that parent and is pair-bound at dispatch. An orchestrated `pending_dispatch` or
+`queued` claim may be pair-null. Every processing claim requires the complete
+allocation tuple, a bound ImportHistory, source fingerprint, owner token hash,
+lease expiry, and write-once `processing_started_at`. A claim may bind at most
+one ImportHistory. Terminal qualified/frozen requires that history; terminal
+failure before successful allocation may have neither allocation nor history.
+The exact checks and owner-checked application validation above enforce these
+implications.
 
 Database uniqueness is deliberately narrow: the logical key is globally
-unique; `supplier_import_execution_claims.import_history_id` is unique when
+unique; `supplier_import_execution_claims.import_job_id` and
+`supplier_import_execution_claims.import_history_id` are each unique when
 non-null; generation claim and ImportHistory references are each unique; and a
-claim row can reach terminal state once. `import_histories.import_job_id` is not
-globally unique because the current event/history model and explicit legacy
-re-execution may legitimately associate multiple histories with one ImportJob.
+claim row can reach terminal state once. A separately authorized legacy
+re-execution creates a fresh ImportJob rather than sharing one across claims.
 
 Claim rows have no DELETE, prune, reuse, or key-rotation path in this phase.
 Their retention is indefinite while any outbox, ImportHistory, or immutable
@@ -324,6 +561,31 @@ The later implementation is not acceptable without focused tests proving:
 - every terminal logical execution has at most one final header and exhaustive
   observation set.
 
+Allocation and transport acceptance is not complete without MySQL 8.4 and
+Redis integration tests proving all of these exact cases:
+
+1. publisher transition of an orchestrated pair-null claim to `queued`;
+2. the pair-null/pair-bound allocation check;
+3. rejection of each half-bound feed/job/timestamp permutation;
+4. exactly one ImportJob from orchestrated allocation;
+5. complete rollback of a crash at every point inside allocation;
+6. reuse of the existing binding on duplicate allocation;
+7. fail-closed conflicting feed/job/supplier binding;
+8. rejection of `processing` without feed and ImportJob;
+9. deployment validation of `3600 < 3900 < 4200`;
+10. redelivery during an active lock released no earlier than lease expiry plus
+    30 seconds using the database clock;
+11. contention that never terminally fails the shared claim;
+12. transport-attempt exhaustion producing durable `recovery_required` state;
+13. a failed callback that cannot replay a processing claim;
+14. outbox attempt eight producing the defined terminal/operator-visible
+    outcome;
+15. exact ImportJob and SupplierImportRun state at every crash boundary;
+16. atomic terminal closure of all authoritative parent records;
+17. legacy-path early allocation and duplicate-delivery idempotency; and
+18. zero qualified absence evidence for every allocation, transport, and
+    recovery failure.
+
 ### Dispatch-outbox data dictionary
 
 Proposed additive coordination table: `supplier_import_dispatch_outbox`.
@@ -337,25 +599,28 @@ not evidence, a schedule, or authorization for another import.
 | `logical_execution_key` | `CHAR(64) CHARACTER SET ascii COLLATE ascii_bin` | not null | Exact key copied from and constrained with the claim | internal |
 | `event_type` | varchar(48) ASCII | `initial_dispatch` | Only authorized event in this phase | public contract |
 | `job_type` | varchar(48) ASCII | not null | `run_supplier_import` or `process_xml_supplier_feed` | public contract |
-| `dispatch_payload` | JSON | not null | Canonical allowlist described below | restricted operational metadata |
+| `dispatch_payload` | JSON | not null | Canonical allowlist including fixed UTC transport deadline | restricted operational metadata |
 | `dispatch_payload_hash` | `CHAR(64) CHARACTER SET ascii COLLATE ascii_bin` | not null | SHA-256 of canonical dispatch payload | pseudonymous |
-| `state` | varchar(32) ASCII | `pending` | `pending`, `leased`, `published`, or `terminal_failed` | public contract |
+| `state` | varchar(32) ASCII | `pending` | `pending`, `leased`, `published`, `recovery_required`, or `terminal_failed` | public contract |
 | `attempt_count` | unsigned smallint | `0` | Bounded publication attempts; maximum 8 | aggregate |
 | `lease_owner_key` | varchar(96) CHARACTER SET ascii COLLATE ascii_bin | nullable | Random per-invocation owner label; no host/user name | pseudonymous |
 | `lease_token_hash` | `CHAR(64) CHARACTER SET ascii COLLATE ascii_bin` | nullable | SHA-256 of in-memory lease token | pseudonymous |
 | `leased_at` | timestamp(6) | nullable | Lease acquisition instant | operational metadata |
 | `lease_expires_at` | timestamp(6) | nullable | Stale-lease recovery boundary | operational metadata |
 | `next_attempt_at` | timestamp(6) | nullable | Deterministic retry eligibility | operational metadata |
-| `published_at` | timestamp(6) | nullable | First acknowledged Redis publication | operational metadata |
+| `published_at` | timestamp(6) | nullable | First acknowledged Redis publication; write-once | operational metadata |
+| `last_published_at` | timestamp(6) | nullable | Most recent acknowledged publication of the same event/key | operational metadata |
+| `recovery_required_at` | timestamp(6) | nullable | Transport exhaustion/manual intervention boundary | operational metadata |
+| `recovery_reason_code` | varchar(96) ASCII | nullable | Allowlisted recoverable transport reason | public contract |
 | `terminal_failure_reason_code` | varchar(96) ASCII | nullable | Stable allowlisted terminal reason | public contract |
 | `created_at`, `updated_at` | timestamp(6) | database managed | Mutable coordination audit | operational metadata |
 
 `dispatch_payload` contains exactly `schema_version`, claim ID, logical key,
-parent type, parent ID, and the existing boolean `force` intent where required
-by the authorized parent action. It contains no supplier ID, feed URL,
-credential, XML, observation, source identity, source path, raw supplier
-identifier, or arbitrary job data. Consumers load every other value from the
-claim and its constrained parent.
+parent type, parent ID, canonical UTC `transport_deadline_at`, and the existing
+boolean `force` intent where required by the authorized parent action. It
+contains no supplier ID, feed URL, credential, XML, observation, source
+identity, source path, raw supplier identifier, or arbitrary job data.
+Consumers load every other value from the claim and its constrained parent.
 
 One composite foreign key
 (`supplier_import_execution_claim_id`, `logical_execution_key`) references the
@@ -366,14 +631,20 @@ insert a replacement event.
 
 The exact outbox transitions are `pending -> leased`, owner-checked
 `leased -> published`, handler-adopted `pending|leased -> published`, expired
-owner-checked `leased -> leased`, and `pending|leased -> terminal_failed` after
-the bounded terminal rules below. `published` and `terminal_failed` have no
-outgoing transition. Lease fields are present only in `leased`; publication and
-terminal transitions clear them. `published_at` is write-once. State changes
-require the expected state, token where applicable, and exactly one affected
-row. No DELETE or pruning is authorized. Outbox retention is indefinite until a
-later dry-run-first retention design defines protection for linked claims and
-audit evidence; parent deletion remains blocked by `RESTRICT`.
+owner-checked `leased -> leased`, failed-callback
+`pending|leased|published -> recovery_required`, manual
+`recovery_required -> leased -> published`, and
+`pending|leased|recovery_required -> terminal_failed` after the bounded
+terminal rules below. Only `terminal_failed` has no outgoing transition.
+Lease fields are present only in `leased`; publication, recovery-required, and
+terminal transitions clear them. `published_at` records the first publication
+and is write-once; `last_published_at` advances only after another acknowledged
+publication of the same event/key. Recovery fields are present only in
+`recovery_required`. State changes require the expected state, token where
+applicable, and exactly one affected row. No DELETE or pruning is authorized.
+Outbox retention is indefinite until a later dry-run-first retention design
+defines protection for linked claims and audit evidence; parent deletion
+remains blocked by `RESTRICT`.
 
 ### Outbox publisher and manual recovery
 
@@ -399,22 +670,29 @@ the default; `--apply` is mandatory for publication; `--limit` is required,
 defaults to 25, and rejects values outside 1 through 50. There is no scheduler,
 HTTP route, Filament action, queue self-dispatch, or automatic invocation.
 
-The reconciler reads only due `pending` rows or `leased` rows whose lease has
-expired. MySQL 8.4 workers claim a bounded page through one transaction using
-`SELECT ... FOR UPDATE SKIP LOCKED`, a random owner key and hashed token, and a
-five-minute lease. It validates the original claim/key/parent and refuses every
-terminal claim. Attempt delays are deterministic: 1, 5, 15, 30, 60, 120, 240,
-then 480 minutes, capped at eight attempts. Safe output contains only row IDs,
+The reconciler reads only due `pending` or `recovery_required` rows, or `leased`
+rows whose lease has expired. MySQL 8.4 workers claim a bounded page through one
+transaction using `SELECT ... FOR UPDATE SKIP LOCKED`, a random owner key and
+hashed token, and a five-minute lease. It validates the original
+claim/key/parent and refuses every terminal claim. A `recovery_required` event
+must carry an allowlisted failed-callback reason and a non-processing claim.
+Attempt delays are deterministic: 1, 5, 15, 30, 60, 120, 240, then 480 minutes,
+capped at eight outbox publication attempts. Safe output contains only row IDs,
 states, counts, and allowlisted reason codes.
 
-At eight failed attempts, or on an irreconcilable parent/key mismatch, one
-transaction moves the outbox to `terminal_failed` and a still
-`pending_dispatch` claim to `terminal_failed` with a privacy-safe reason such as
-`dispatch_attempts_exhausted`, and marks the still-pending parent ImportJob or
-SupplierImportRun failed with that allowlisted reason; no ImportHistory exists
-and no import ran. This prevents a failed dispatch from remaining a false
-running import. A
-terminal claim encountered after an ambiguous successful publication changes
+At outbox attempt eight, or on an irreconcilable parent/key mismatch, the
+reconciler acquires the supplier lock and locks outbox, claim, and every bound
+parent. For `pending_dispatch`, one transaction moves outbox and claim to
+`terminal_failed`, closes the pending orchestrated run, and closes the legacy
+ImportJob when present. For `recovery_required` with a queued pre-processing
+claim, it additionally closes the bound ImportJob, any started ImportHistory,
+and authoritative orchestrated run fields. The reason is the privacy-safe
+`dispatch_attempts_exhausted`; no importer ran and no evidence is created.
+Mismatch rolls back the whole terminal transaction and requires the same
+CLI's explicit terminal-resolution path on a separately authorized run. It
+never leaves a silently stranded `pending_dispatch` or `queued` claim.
+
+A terminal claim encountered after an ambiguous successful publication changes
 only the outbox to `published` when the original delivery is proven, otherwise
 to `terminal_failed`; it never republishes. Stale leases may be replaced only
 after expiry with an owner-checked compare-and-set. Recovery never changes a
@@ -599,13 +877,28 @@ depend on an implicit MySQL-created index or implicit name.
 | `ix_import_execution_claim_supplier` | (`supplier_id`) | no | `fk_import_execution_claim_supplier` to `suppliers.id` |
 | `ix_import_execution_claim_feed` | (`supplier_feed_id`) | no | `fk_import_execution_claim_feed` to `supplier_feeds.id` |
 | `ix_import_execution_claim_run` | (`supplier_import_run_id`) | no | `fk_import_execution_claim_run` to `supplier_import_runs.id` |
-| `ix_import_execution_claim_job` | (`import_job_id`) | no | `fk_import_execution_claim_job` to `import_jobs.id`; multiple explicitly authorized claims may reference one reusable legacy job |
+| `uq_import_execution_claim_job` | (`import_job_id`) | yes | left-prefix support for `fk_import_execution_claim_job_scope`; one ImportJob may belong to only one execution claim |
 | `uq_import_execution_claim_history` | (`import_history_id`) | yes | `fk_import_execution_claim_history` to `import_histories.id` and at most one claim per history |
 | `ix_import_execution_claim_scope_state` | (`supplier_id`, `supplier_feed_id`, `state`, `id`) | no | bounded active/terminal claim inspection for one supplier/feed |
 
 All five claim parent foreign keys use `RESTRICT`. The logical-key query is
 `WHERE logical_execution_key = ?`. Active-state inspection is
 `WHERE supplier_id = ? AND supplier_feed_id = ? AND state IN (...) ORDER BY id`.
+The exact composite ownership foreign key
+`fk_import_execution_claim_job_scope` uses
+(`import_job_id`, `supplier_id`, `supplier_feed_id`) and references the future
+unique `import_jobs` key with those columns in the same order. It guarantees
+that a bound job belongs to the claim's supplier and feed.
+
+### Existing `import_jobs` additive ownership index
+
+| Index | Ordered columns | Unique | Supported boundary |
+| --- | --- | --- | --- |
+| `uq_import_job_id_supplier_feed` | (`id`, `supplier_id`, `supplier_feed_id`) | yes | referenced parent for `fk_import_execution_claim_job_scope`; deterministic claim/job/feed ownership |
+
+The primary key already makes `id` unique, but MySQL requires the exact
+referenced column sequence for the composite ownership relationship. This
+additive index does not change ImportJob behavior.
 
 ### `supplier_import_dispatch_outbox`
 
@@ -861,49 +1154,55 @@ not a second feed request and does not retain raw source data.
 
 1. The dispatch boundary has already committed the parent, stable execution
    claim, and one pending outbox row atomically. The outbox publication has
-   advanced the exact claim to `queued` without generating a new key.
+   advanced the exact claim to `queued` without generating a new key, feed, or
+   ImportJob. The orchestrated path may still be pair-null; legacy is already
+   pair-bound.
 2. The common supplier import execution coordinator acquires the supplier lock,
    locks and claims that exact row, and checks terminal state before any import
    allocation or source work.
-3. The coordinator reuses the claim's bound ImportJob and ImportHistory or calls
-   `ImportHistory::startForImport()` exactly once and binds the resulting
-   generation to the claim. A separate default-off gate determines whether
-   snapshot capture is attempted.
-4. `SsrfProtectionService::downloadToTemporaryFile()` downloads once to its
+3. The owner-checked allocation transaction creates and binds exactly one
+   orchestrated ImportJob, or verifies the legacy/existing tuple. It commits the
+   pair and `allocated_at` before any source operation.
+4. The transaction-aware generation-start repository creates exactly one
+   ImportHistory, binds it to the claim, and marks ImportJob and applicable run
+   running. A separate default-off gate determines whether snapshot capture is
+   attempted.
+5. `SsrfProtectionService::downloadToTemporaryFile()` downloads once to its
    restricted system temporary file.
-5. The process opens the mode-0600 file without following links, records its
+6. The process opens the mode-0600 file without following links, records its
    file identity and size, and hashes its exact bytes incrementally.
-6. A behavior-equivalent streaming XML parser traverses that same restricted
+7. A behavior-equivalent streaming XML parser traverses that same restricted
    file while its identity is held. Before deletion, a second bounded local
    hash pass must reproduce the first digest and the file identity/size must be
    unchanged. Any mismatch freezes capture. This is not a second fetch or
    download and proves that parsing and the stored fingerprint refer to the
    same downloaded bytes.
-7. The streaming parser consumes the file without a complete XML tree;
+8. The streaming parser consumes the file without a complete XML tree;
    the existing complete SimpleXML tree and extracted row array must not remain
    in the capture-enabled path.
-8. Immediately before existing mapping, validation, counters, failure inserts,
+9. Immediately before existing mapping, validation, counters, failure inserts,
    or staging writes can mutate state, the coordinator owner-checks the lock and
    claim and compare-and-sets `queued -> processing`. Existing importer behavior
    then executes for each streamed row exactly as before. It cannot be replayed
    for this logical key after that transition.
-9. The observer writes only fixed-size privacy-safe canonical records to a
+10. The observer writes only fixed-size privacy-safe canonical records to a
    mode-0600 system temporary spool. It never writes raw identifiers, XML,
    credentials, URLs, paths, names, or payloads.
-10. The spool has explicit row and byte ceilings derived from the approved
-   maximum import row count and canonical observation size. It introduces no
-   smaller source-file limit than the authorized importer. Exceeding a capture
-   ceiling yields
-   `overflow`; no prefix is represented as complete.
-11. Finalization uses bounded external sort/deduplication and a streamed merge
-   with the immutable enrollment query. Memory remains bounded by configured
-   chunk size, not source or cohort size.
-12. One database transaction on the import connection inserts new enrollments,
+11. The spool has explicit row and byte ceilings derived from the approved
+    maximum import row count and canonical observation size. It introduces no
+    smaller source-file limit than the authorized importer. Exceeding a capture
+    ceiling yields
+    `overflow`; no prefix is represented as complete.
+12. Finalization uses bounded external sort/deduplication and a streamed merge
+    with the immutable enrollment query. Memory remains bounded by configured
+    chunk size, not source or cohort size.
+13. One database transaction on the import connection inserts new enrollments,
     the final header, deterministic chunks of exhaustive physical observations,
     all final privacy-safe fingerprints/counts, the terminal ImportHistory
     compare-and-set, the current importer-equivalent terminal ImportJob/feed
-    fields, and the owner-checked terminal claim compare-and-set.
-13. Both source temporary file and privacy-safe spool are removed in `finally`
+    fields, the authoritative terminal SupplierImportRun fields when applicable,
+    and the owner-checked terminal claim compare-and-set.
+14. Both source temporary file and privacy-safe spool are removed in `finally`
     on success, failure, signal-driven worker termination where PHP cleanup
     runs, and repository retry. A startup janitor may remove only stale files
     bearing a capture-specific random prefix and correct owner/mode; it is not
@@ -933,12 +1232,19 @@ transaction as evidence insertion.
 
 That finalization transaction also applies the current importer's terminal
 ImportJob and SupplierFeed status/timestamp fields from the already-computed
-result. `terminal_qualified` maps ImportHistory to `finished`.
-`terminal_frozen` maps it to `finished` when staging completed but capture
-qualification froze, and to `failed` when the importer never crossed into a
-valid completed result. `terminal_failed` maps it to `failed`. The outer
-SupplierImportRun remains a derived report; terminal redelivery may rebuild that
-report from the stored terminal result without rerunning the importer.
+result. For the orchestrated path it atomically writes the authoritative
+SupplierImportRun status, bound feed/job, `started_at`, `finished_at`,
+`duration_seconds`, `products_seen`, `products_failed`, warning/error counts,
+and allowlisted terminal reason. `terminal_qualified` maps ImportHistory to
+`finished`. `terminal_frozen` maps it to `finished` when staging completed but
+capture qualification froze, and to `failed` when the importer never crossed
+into a valid completed result. `terminal_failed` maps it to `failed`.
+
+Only the non-authoritative detailed `SupplierImportRun.report` projection and
+derived secondary aggregates may be rebuilt idempotently after commit from the
+stored terminal result. Rebuilding may not alter authoritative terminal status,
+timestamps, parent bindings, critical counts, or reasons and never reruns the
+importer. The legacy path has no SupplierImportRun.
 
 Each terminal compare-and-set must affect exactly one row or throw so the whole
 transaction rolls back. A terminal claim with `ImportHistory=started`, or a
@@ -951,27 +1257,45 @@ forbidden; manual abandoned-processing recovery closes the pair as failed.
 ### Crash and recovery matrix
 
 `IH` below means the one bound ImportHistory. `None` under evidence means no
-committed generation, enrollment, or observation. Every recovery query is
-bounded and owner-checked.
+committed generation, enrollment, or observation.
+`N/A — legacy path has no SupplierImportRun` is abbreviated in cells as
+`legacy: N/A`. Every recovery query is bounded and owner-checked.
 
-| Boundary | Durable database state | Permitted retry/reconciliation | Download | Importer | ImportHistory | Claim | Outbox | Evidence | Required operator action | Why no false absence |
+| Boundary | Path | SupplierImportRun | ImportJob | ImportHistory | Claim | Outbox | Evidence | Allowed recovery | Prohibited actions | Required operator action |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1. Before claim/outbox transaction | no parent/claim/outbox | repeat the still-authorized creation request | no | no | none | none | none | none | repeat original authorization action | no generation exists |
-| 2. During claim/outbox transaction | all three rows commit or all roll back | retry transaction only after rollback is confirmed | no | no | none | none | none | none | repeat original authorization action | atomic creation exposes no partial authority |
-| 3. Commit before Redis publish | parent plus `pending_dispatch`; pending outbox | manual outbox reconciler republishes original key | no until queued | no | none | `pending_dispatch` | `pending` | none | authorize one reconciler run | no source work occurred |
-| 4. Publish before acknowledgement | Redis may hold job; database remains pending/leased | handler adopts publication or reconciler republishes same key | only after adoption to queued | only after queued | none before handler | `pending_dispatch` until adoption | `pending`/`leased` until adoption | none | authorize reconciler only if handler does not adopt | duplicate delivery shares one claim |
-| 5. Delivery before supplier lock | queued claim and published outbox | ordinary delivery retry with same payload | no | no | none | `queued` | `published` | none | none unless queue is operationally failed | lock prevents overlap and no source ran |
-| 6. Lock acquired before processing | queued owner; IH may be bound started | same-key takeover only after lock/attempt lease expiry | yes | no | none or `started` | `queued` | `published` | none | none for ordinary queue retry | no importer side effect exists |
-| 7. During download | queued owner; IH started; no accepted fingerprint required | same-key redownload after lease expiry | yes | no | `started` | `queued` | `published` | none | none for ordinary queue retry | downloaded bytes are not evidence |
-| 8. Fingerprint bound before parser/staging | queued owner and immutable fingerprint; IH started | identical bytes may continue; different bytes close frozen | yes | not before `processing` CAS | `started`, then terminal with conflict | `queued`, then terminal frozen on conflict | `published` | none on conflict | new authorization only for different bytes | conflict creates no generation |
-| 9. During parser/staging mutation | partial staging/counters/failures possible | never replay importer; abandoned recovery only | no retry download | no replay | `started` | `processing` | `published` | none committed | authorize recovery, then separately authorize any new import | partial staging is never a snapshot |
-| 10. After partial staging writes | same as row 9 with visible partial importer state | fail-closed recovery only | no | no replay | `started` | `processing` | `published` | none | recovery plus new import authorization if desired | gap explicitly breaks chronology |
-| 11. Importer complete before final evidence transaction | completed staging; local bounded final facts may exist | live owner may finalize once; after crash use failed recovery, never importer replay | no | no replay | `started` | `processing` | `published` | none committed | recovery after crash | uncommitted spool/facts cannot prove absence |
-| 12. During final evidence transaction | either all final rows/transitions commit or none do | on rollback use abandoned-processing recovery | no | no replay | terminal only on commit, otherwise `started` | terminal only on commit, otherwise `processing` | `published` | all final evidence or none | recovery after rollback/crash | one transaction prevents qualified partial state |
-| 13. Final commit before queue acknowledgement | complete terminal pair and zero/one final header | duplicate delivery returns stored terminal result | no | no | terminal | terminal | `published` | immutable final set | none | terminal check occurs before source work |
-| 14. Duplicate after any terminal state | unchanged terminal rows | deterministic no-op only | no | no | unchanged | terminal | published/terminal failed | unchanged | new authorization only for a new import | terminal state has no outgoing transition |
-| 15. Stale outbox or attempt lease | pending/leased outbox, queued claim, or processing claim | outbox lease may be replaced; queued owner may be replaced; processing uses failed recovery | only queued may redownload | never for stale processing | none/started | state-specific | state-specific | none unless already terminal | separately authorize relevant reconciler | processing cannot be replayed into evidence |
-| 16. Different fingerprint under same key | first digest remains write-once | queued conflict closes IH/claim frozen; processing never redownloads | only pre-processing verification | no | terminal frozen when bound | terminal frozen | published | no generation | new explicit logical execution required | conflicting bytes cannot establish chronology |
+| 1. Before authorization transaction | both | orchestrated: absent; legacy: N/A | absent | absent | absent | absent | none | repeat the still-valid authorization request | download, importer, or inferred evidence | repeat only the original authorized action |
+| 2. Orchestrated authorization transaction rolls back | orchestrated | absent after rollback | absent | absent | absent | absent | none | retry the whole authorization transaction after rollback is confirmed | partial parent, job, claim, or outbox retention | repeat only the original authorized action |
+| 3. Legacy authorization/allocation transaction rolls back | legacy | orchestrated: N/A; legacy: N/A | absent after rollback | absent | absent | absent | none | retry the whole authorization/allocation transaction after rollback is confirmed | retaining an orphan ImportJob or pair-null legacy claim | repeat only the original authorized action |
+| 4. Authorization commit before Redis publish | both | orchestrated: `pending`; legacy: N/A | orchestrated: absent; legacy: `pending` | absent | `pending_dispatch`; orchestrated pair-null, legacy pair-bound | `pending` | none | publisher or authorized reconciler republishes the same key and deadline | new claim, new legacy ImportJob, download, or importer | none for normal publisher; authorize one reconciler run if needed |
+| 5. Redis publish before database acknowledgement | both | orchestrated: `pending`; legacy: N/A | orchestrated: absent; legacy: `pending` | absent | `pending_dispatch` until handler adoption; original allocation unchanged | `leased` or `pending` until adoption | none | handler adopts publication or reconciler republishes the same payload | creating another claim or legacy ImportJob | authorize reconciler only if adoption does not occur |
+| 6. Queued delivery before supplier lock | both | orchestrated: `pending`; legacy: N/A | orchestrated: absent; legacy: `pending` | absent | `queued`; orchestrated pair-null, legacy pair-bound | `published` | none | same delivery retries within the fixed transport deadline | source access, importer, or second allocation before lock | none unless transport is exhausted |
+| 7. Lock contention | both | orchestrated: `pending`; legacy: N/A | orchestrated: absent or allocated `pending`; legacy: `pending` | absent | unchanged `queued`; pair-null or pair-bound | `published` | none | release the same delivery with the database-clock lease-aware delay | terminal skip, new claim/job, `forceRelease()`, source access, or importer | none while ordinary transport retries remain |
+| 8. Lock acquired before orchestrated allocation | orchestrated | `pending` and pair-null | absent | absent | owner-held `queued`, pair-null | `published` | none | owner may run the one allocation transaction | download, ImportHistory start, or processing CAS before allocation | none |
+| 9. Active feed resolution fails | orchestrated | terminal `failed` with allowlisted allocation reason | absent | absent | pair-null `terminal_failed` with `capture_allocation_feed_unavailable` | terminal publication record | none | no replay; a new execution requires new authorization | manufacturing a feed/job pair or reusing the terminal key | review feed configuration, then separately authorize a new execution |
+| 10. Crash inside orchestrated allocation transaction | orchestrated | `pending` and still pair-null after rollback | absent after rollback | absent | owner-held `queued`, pair-null after rollback | `published` | none | same owner attempt may retry, or same-key retry may allocate after lease expiry | orphan ImportJob, partial pair, source access, or ImportHistory | none unless repeated failure exhausts transport |
+| 11. Allocation transaction commits | orchestrated | `pending` and bound to the exact feed/job | `pending`, bound to same supplier/feed | absent | owner-held `queued`, pair-bound with `allocated_at` | `published` | none | same owner proceeds; duplicate delivery reuses the exact pair | second ImportJob, rebinding, or changing `allocated_at` | none |
+| 12. Legacy delivery after early allocation | legacy | orchestrated: N/A; legacy: N/A | `pending`, bound at authorization | absent | owner-held `queued`, pair-bound with `allocated_at` | `published` | none | same owner proceeds; duplicate delivery reuses the exact pair | second ImportJob or claim rebinding | none |
+| 13. Transaction-aware ImportHistory start rolls back | both | orchestrated: `pending`; legacy: N/A | `pending` | absent after rollback | owner-held `queued`, pair-bound | `published` | none | retry only the start transaction under the same owner | source access, processing CAS, or second history | none |
+| 14. ImportHistory start commits before source access | both | orchestrated: `running` with `started_at`; legacy: N/A | `running` | `started`, bound to exact job | owner-held `queued`, pair-bound | `published` | none | same owner proceeds; same-key retry may reuse after valid lease expiry | second history or importer before fingerprint/processing gate | none |
+| 15. During source download | both | orchestrated: `running`; legacy: N/A | `running` | `started` | owner-held `queued`, pair-bound | `published` | none | same-key redownload only before `processing` and after valid lease recovery | treating downloaded bytes as evidence or starting a new job | none for ordinary retry |
+| 16. Fingerprint bound before parser/staging | both | orchestrated: `running`; legacy: N/A | `running` | `started` | owner-held `queued` with immutable fingerprint | `published` | none | identical bytes may continue to processing CAS | fingerprint replacement, second download after processing, or conflicting importer run | none unless bytes conflict |
+| 17. Processing CAS commits | both | orchestrated: `running`; legacy: N/A | `running` | `started` | owner-held `processing`, pair-bound | `published` | none | live owner continues once; crash requires failed recovery | all automatic importer replay and new allocation | authorize abandoned-processing recovery after expiry if owner is lost |
+| 18. During first or later staging mutation | both | orchestrated: `running`; legacy: N/A | `running` | `started` | owner-held `processing` | `published` | none committed | live owner continues; otherwise failed recovery only | download retry, importer replay, or partial evidence commit | authorize recovery, then separately authorize any new execution |
+| 19. Importer completes before finalization | both | orchestrated: `running`; legacy: N/A | `running`; computed terminal result exists only in bounded local facts | `started` | owner-held `processing` | `published` | none committed | live owner finalizes once; crash uses failed recovery | importer replay or evidence reconstructed from mutable staging | authorize recovery only after owner loss |
+| 20. Finalization transaction rolls back | both | orchestrated: `running`; legacy: N/A | `running` | `started` | `processing` | `published` | none committed | abandoned-processing recovery only after rollback and owner loss | importer replay or partial terminal repair | authorize bounded recovery |
+| 21. Finalization commits before queue acknowledgement | both | orchestrated: authoritative terminal `completed`, `completed_with_warnings`, or `failed`; legacy: N/A | authoritative terminal `completed`, `completed_with_errors`, or `failed` | `finished` or `failed` | matching immutable terminal state | `published` | complete immutable set or explicit zero-header failed gap | duplicate delivery returns stored terminal result | any rerun, rebinding, or terminal mutation | none |
+| 22. Duplicate after any terminal state | both | orchestrated: unchanged `completed`, `completed_with_warnings`, or `failed`; legacy: N/A | unchanged `completed`, `completed_with_errors`, or `failed` | unchanged `finished` or `failed` | unchanged `terminal_qualified`, `terminal_frozen`, or `terminal_failed` | unchanged `published` or `terminal_failed` | unchanged complete immutable set or explicit zero-header failed gap | deterministic no-op | source access, importer, new evidence, or terminal rewrite | new authorization only for a genuinely new execution |
+| 23. Transport exhaustion while pair-null queued | orchestrated | `pending` | absent | absent | recoverable `queued`, pair-null | `recovery_required` | none | authenticated manual republish of same key and original deadline policy | terminal failure, new claim/job, or source access | authorize one bounded outbox recovery |
+| 24. Transport exhaustion while pair-bound queued without history | both | orchestrated: `pending`; legacy: N/A | `pending` | absent | recoverable `queued`, pair-bound | `recovery_required` | none | authenticated manual republish of same key | second ImportJob, terminal skip, or direct importer invocation | authorize one bounded outbox recovery |
+| 25. Transport exhaustion while pair-bound queued with started history | both | orchestrated: `running`; legacy: N/A | `running` | `started` | recoverable `queued`, pair-bound | `recovery_required` | none | authenticated manual republish of same key while lease checks pass | second history/job or processing without lock ownership | authorize one bounded outbox recovery |
+| 26. Failed callback while current attempt still owns queued claim | both | orchestrated: unchanged `pending` before history or `running` after history; legacy: N/A | unchanged absent, `pending`, or `running` according to allocation/history boundary | unchanged absent or `started` | unchanged recoverable `queued` | `recovery_required` | none | outbox recovery under the same stable key | marking terminal solely because queue delivery exhausted | authorize one bounded outbox recovery |
+| 27. Failed callback while current attempt owns processing claim | both | orchestrated: atomically `failed`; legacy: N/A | atomically `failed` | atomically `failed` | atomically `terminal_failed` with allowlisted transport reason | atomically `terminal_failed` | none | no replay; later execution needs new authorization | importer replay, republish, or inferred evidence | inspect failure, then separately authorize any new execution |
+| 28. Failed callback cannot prove processing ownership | both | orchestrated: unchanged `running`; legacy: N/A | unchanged `running` | unchanged `started` | unchanged expired or unknown `processing` | unchanged `published` or already `recovery_required` | none | bounded abandoned-processing recovery after independent owner/lease proof | guessing ownership, direct terminal updates, or importer replay | authorize the abandoned-processing reconciler |
+| 29. Outbox publication attempt 8 for `pending_dispatch` | both | orchestrated: atomically `failed`; legacy: N/A | orchestrated: absent; legacy: atomically `failed` | absent | atomically `terminal_failed` with publication reason | atomically `terminal_failed` | none | no automatic retry; new execution requires new authorization | leaving parent pending or creating an untracked queue job | inspect queue transport, then separately authorize a new execution |
+| 30. Outbox publication attempt 8 for recoverable queued claim | both | orchestrated: atomically `failed`; legacy: N/A | pair-bound job atomically `failed`; pair-null orchestrated job remains absent | absent or atomically `failed` if already started | atomically `terminal_failed` with publication-exhausted reason | atomically `terminal_failed` | none | no automatic retry; new execution requires new authorization | stranded `queued` state, new job under old key, or importer replay | inspect queue transport, then separately authorize a new execution |
+| 31. Stale queued attempt lease | both | orchestrated: unchanged `pending` before history or `running` after history; legacy: N/A | unchanged absent, `pending`, or `running` according to allocation/history boundary | unchanged absent or `started` | expired `queued`; owner may be replaced only after Redis and database lease proof | unchanged `published` or `recovery_required` | none | same key may replace attempt ownership and continue pre-processing | live-owner takeover, `forceRelease()`, second parent, or second history | none for ordinary retry; bounded outbox recovery if marked required |
+| 32. Stale processing attempt lease | both | orchestrated: unchanged `running`; legacy: N/A | unchanged `running` | unchanged `started` | expired `processing` | unchanged `published` or `recovery_required` | none | abandoned-processing recovery only | owner replacement, download, importer replay, or direct terminal repair | authorize bounded abandoned-processing recovery |
+| 33. Different source fingerprint under same key | both | orchestrated: atomically `failed`; legacy: N/A | atomically `failed` without importer replay | atomically `failed` when already started | atomically `terminal_frozen` with first digest retained | unchanged `published` | no generation | no replay; new logical execution requires new authorization | digest replacement, parser/staging, or evidence generation | investigate source identity, then authorize a new execution if appropriate |
 
 The separately designed future abandoned-processing command contract is:
 
@@ -1031,11 +1355,13 @@ qualified header. Before `processing`, the queued execution may later reacquire
 and continue. At or after `processing`, the same key may not rerun the importer
 and must use abandoned-processing recovery.
 
-Lock contention does not authorize an overlapping import or capture. The
-orchestrated path retains its stable skipped-run report; the legacy queued path
-throws a stable retryable lock-unavailable failure. Neither path creates an
-ImportHistory or performs staging, snapshot, Product, or Catalog Sync writes.
-`force=true` may bypass the existing dispatch pre-check but may not release or
+Lock contention does not authorize an overlapping import, a terminal skipped
+run, or capture. Both paths keep the same claim and allocation state unchanged
+and release the current queue delivery with the database-clock lease-aware
+delay defined above. Neither path creates another ImportJob or ImportHistory or
+performs source, staging, snapshot, Product, or Catalog Sync writes. The failed
+callback must then apply the state/owner matrix above if transport is exhausted.
+`force=true` may bypass only the dispatch pre-check; it may not release or
 bypass a lock owned by another process. Before source download, the coordinator
 also requires the existing ImportHistory activity inspector to report no other
 active or unknown attempt for that supplier. This covers a stale
@@ -1043,8 +1369,12 @@ pre-coordinator worker conservatively. Capture activation is prohibited until
 an implementation audit proves that all real XML callers use this boundary.
 
 A normal exit releases the owner lock. A worker crash leaves the lock held only
-until the 4,200-second lease expires, which is longer than the enforced job
-timeout. A queue retry cannot enter while the old lease is owned. After expiry,
+until the 4,200-second lease expires. The future Redis `retry_after` is exactly
+3,900 seconds, strictly longer than the 3,600-second effective job timeout and
+strictly shorter than the lock lease. A contending delivery is released no
+earlier than the database-observed lease expiry plus 30 seconds and no later
+than 4,230 seconds. A queue retry cannot enter while the old lease is owned.
+After expiry,
 the same serialized key may replace ownership only while the claim is `queued`
 and `processing_started_at` is null. It reuses its bound ImportJob and
 ImportHistory and may not allocate a second generation. An expired `processing`
@@ -1329,7 +1659,7 @@ review is not closeout. A failed row blocks every later row.
 
 | # | Checkpoint | Prerequisite | Separately responsible authorization | Permitted action | Result/artifact | Failure behavior | Next |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | Local design independent approval | complete local four-commit design candidate | independent Security, Database and Catalog Sync Safety reviewers | review only | `APPROVED` verdict for exact diff | remediate locally; no push | 2 |
+| 1 | Local design independent approval | complete local five-commit design candidate | independent Security, Database and Catalog Sync Safety reviewers | review only | `APPROVED` verdict for exact diff | remediate locally; no push | 2 |
 | 2 | Authorize design push/Draft PR | checkpoint 1 approval | repository owner | authorize only the exact reviewed commit | recorded one-workflow authorization | remain local | 3 |
 | 3 | Create design Draft PR | checkpoint 2 authorization | Release/DevOps operator | push exact branch and open Draft PR | Draft PR with pinned head/base | stop; do not broaden scope | 4 |
 | 4 | Design PR CI/review approval | checkpoint 3 Draft PR | CI plus independent reviewers | checks and review only | green required checks and approval | remediate in a separately reviewed commit | 5 |
@@ -1399,6 +1729,7 @@ database/migrations/*_create_supplier_offer_snapshot_generations_table.php
 database/migrations/*_create_supplier_offer_snapshot_enrollments_table.php
 database/migrations/*_create_supplier_offer_snapshot_observations_table.php
 database/migrations/*_add_supplier_id_id_index_to_import_histories_table.php
+database/migrations/*_add_supplier_feed_allocation_constraints_to_import_jobs_table.php
 app/Models/SupplierImportExecutionClaim.php
 app/Models/SupplierImportDispatchOutbox.php
 app/Models/SupplierOfferSnapshotGeneration.php
@@ -1408,10 +1739,14 @@ app/Data/Suppliers/Onboarding/SnapshotSourceIdentity.php
 app/Repositories/Suppliers/ImmutableSupplierOfferSnapshotRepository.php
 app/Repositories/Suppliers/SupplierImportExecutionClaimRepository.php
 app/Repositories/Suppliers/SupplierImportDispatchOutboxRepository.php
+app/Repositories/Suppliers/SupplierImportAllocationRepository.php
+app/Repositories/Imports/TransactionalImportGenerationStartRepository.php
 app/Repositories/Imports/TransactionalImportTerminalRepository.php
 app/Services/Suppliers/SupplierImportExecutionLock.php
 app/Services/Suppliers/SupplierImportExecutionCoordinator.php
 app/Services/Suppliers/SupplierImportDispatchOutboxPublisher.php
+app/Services/Suppliers/SupplierImportTransportFailureService.php
+app/Services/Suppliers/SupplierImportQueueTimingValidator.php
 app/Services/Suppliers/Snapshots/SupplierOfferSnapshotCollector.php
 app/Services/Suppliers/Snapshots/SupplierOfferSnapshotCaptureService.php
 app/Services/Suppliers/Snapshots/ImportHistorySnapshotSourceAdapter.php
@@ -1426,10 +1761,24 @@ tests/Feature/SupplierOfferSnapshotConcurrencyTest.php
 tests/Feature/SupplierImportExecutionIdempotencyTest.php
 tests/Feature/SupplierImportDispatchOutboxTest.php
 tests/Feature/SupplierImportCrashRecoveryTest.php
+tests/Feature/SupplierImportAllocationTest.php
+tests/Feature/SupplierImportQueueTimingTest.php
+tests/Feature/SupplierImportFailedCallbackTest.php
+tests/Feature/SupplierImportMysqlRedisRecoveryTest.php
 tests/Feature/OperationalSupplierOfferEvidenceProducerTest.php
 tests/Unit/Suppliers/SupplierOfferSnapshotFingerprintTest.php
 tests/Feature/SupplierOfferLifecycleDocumentationContractTest.php
 ```
+
+The future schema migration must add `allocated_at`, the exact pair-null and
+pair-bound checks, the unique claim-to-ImportJob allocation, the composite
+ImportJob supplier/feed ownership index, and the outbox recovery fields defined
+above. The later implementation must also change `.env.example` to
+`REDIS_QUEUE_RETRY_AFTER=3900`, retain a worker timeout no greater than 3,600
+seconds, apply the exact per-job timeout/backoff/deadline contract, and verify
+the deployed Redis queue timing before capture enablement. These are planned
+implementation requirements only; this documentation commit changes no
+runtime, queue, Docker, environment, schema, or feature-flag value.
 
 Implementation remains split by the 49 checkpoints above. Review, push/PR,
 merge, deployment, enablement, import, candidate preparation, candidate

@@ -25,9 +25,19 @@ paths idempotent across concurrent and sequential duplicate delivery through a
 terminal no-op. One transactional `supplier_import_dispatch_outbox` row is the
 durable database-to-Redis handoff for each claim. Claims move through
 `pending_dispatch`, `queued`, `processing`, and one immutable terminal state.
-Before `processing`, same-key delivery may safely retry; after the first
-non-repeatable staging side effect, importer replay is prohibited and abandoned
-work closes as a visible failed gap. Final evidence, ImportHistory and claim
+The orchestrated claim is deliberately pair-null through dispatch and queueing;
+only the queue owner allocates and atomically binds one feed/ImportJob pair.
+The legacy path remains pair-bound at authorization through the same allocation
+contract. Before `processing`, same-key delivery may safely retry; after the
+first non-repeatable staging side effect, importer replay is prohibited and
+abandoned work closes as a visible failed gap. The future timing contract is
+exactly 3,600-second job timeout, 3,900-second Redis `retry_after`, and
+4,200-second lock lease, with database-clock lease-aware release. Transport
+exhaustion moves recoverable queued work to outbox `recovery_required`; owner-
+checked failed callbacks and the explicit parent-state crash matrix prevent
+stranded or contradictory SupplierImportRun, ImportJob and ImportHistory
+states. Queue-delivery, logical-processing and outbox-publication attempts
+remain separate. Final evidence, ImportHistory, claim and authoritative parent
 transitions share one database transaction. Exact `ascii`/`ascii_bin`
 lowercase-hexadecimal checks, named FK/query indexes, a common supplier lock and
 a behavior-equivalent streaming traversal are required. No outbox/claim table,
