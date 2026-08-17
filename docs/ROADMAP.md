@@ -260,9 +260,9 @@ disabled. `CART-025` remains open.
 10. **APCOM Authoritative Human Decision Evidence and Profile Approval Gate -
    documentation decisions complete.** V4 is the semantic authority, while
    implementation approval remains closed.
-11. **Immutable supplier-offer snapshot persistence prerequisite - schema,
-    transport deadline, cohort epoch and outbox recovery findings remediated
-    locally.** The seven-commit follow-up design has
+11. **Immutable supplier-offer snapshot persistence prerequisite - exhaustion,
+    abandoned recovery and cohort authorization findings remediated locally.**
+    The eight-commit follow-up design has
     transactional `supplier_import_dispatch_outbox` and a stable claim shared
     by both XML paths; pair-null orchestrated dispatch followed by owner-checked
     atomic feed/ImportJob allocation; early pair-bound legacy authorization
@@ -275,21 +275,27 @@ disabled. `CART-025` remains open.
     UTC ownership-tuple CAS within a 60-second bootstrap; in-handle owner-proven
     exception closeout; newly deserialized transport-only `failed()`; `$tries=8`
     without `retryUntil()`; an immutable MySQL-UTC-plus-24-hour outbox deadline
-    and non-resetting cumulative delivery budget; canonical outbox-only
-    `recovery_required`; fixed-order ownership/outbox transactions requiring
+    and non-resetting cumulative delivery budget; direct terminal claim/outbox/
+    parent closeout at delivery-budget or deadline exhaustion; recoverable-only
+    `recovery_required` with an explicit reconciler terminal path; fixed-order ownership/outbox transactions requiring
     `published` before processing/finalization; an explicit canonical
     SupplierImportRun/ImportJob/ImportHistory crash matrix; separate
-    queue-delivery, logical-processing and outbox-publication attempts; no
+    queue-delivery, logical-processing and outbox-publication attempts; a valid
+    successful eighth publication, terminal failed/ambiguous eighth publication,
+    and no ninth attempt; no
     importer replay after non-repeatable staging mutation; atomic authoritative
-    parent/history/evidence/claim finalization; fail-closed abandoned-processing
-    recovery; exact `ascii`/`ascii_bin` hexadecimal checks; immutable enrollment
-    and physical observations; authorized enrollment-generation baselines with
-    unexpected cohort drift frozen; deterministic V4 gaps; bounded streaming;
+    parent/history/evidence/claim finalization; separate live-owner raw-token and
+    abandoned-owner new-lock/expired-tuple APIs; exact `ascii`/`ascii_bin`
+    hexadecimal checks; immutable consistent-snapshot capture-start cohort
+    authorization fields and hashed members before source work; immutable
+    enrollment and physical observations; exact-source-only authorized
+    enrollment-generation baselines with deterministic authorization drift
+    frozen; no mutable membership reread; deterministic V4 gaps; bounded streaming;
     retained one-job uniqueness plus a separate named composite child FK index;
-    and 49 fine-grained rollout checkpoints. No outbox/claim table,
+    and 49 fine-grained rollout checkpoints. No outbox/claim/authorization table,
     migration, queue setting, worker, command, parser change, capture hook, producer,
     historical backfill or operational evidence exists. C3D.1 remains blocked
-    until a fresh independent complete seven-commit review approves the design and later
+    until a fresh independent complete eight-commit review approves the design and later
     checkpoints collect one future baseline plus three qualified comparable
     snapshots in an unchanged cohort epoch over at least 48 hours from absence
     1. See

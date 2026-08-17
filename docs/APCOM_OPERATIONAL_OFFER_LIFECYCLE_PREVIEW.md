@@ -18,7 +18,8 @@ logs cannot be reconstructed as qualified history.
 
 The documentation-only persistence prerequisite is defined in
 [Immutable Supplier Offer Snapshot Persistence Design](IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md).
-Its remediated local architecture uses immutable generation headers,
+Its remediated local architecture uses a durable capture-start authorization
+header plus immutable hashed seed members, immutable generation headers,
 first-enrollment cohort rows and exhaustive physical presence/absence
 observations. A separate stable parent-execution claim makes both importer job
 paths idempotent across concurrent and sequential duplicate delivery through a
@@ -46,22 +47,31 @@ Owner-proven exception closeout runs only inside active `handle()`
 `try/catch/finally`, where the raw token and lock object exist. Newly
 deserialized Laravel `failed()` is transport-only: it cannot close
 `processing`, release the original lock, replay the importer, or rewrite
-evidence. Transport exhaustion may move only the existing outbox to canonical
-`recovery_required`; it is not a claim state. Exact ownership/outbox checks,
+evidence. `recovery_required` is a recoverable outbox-only state while deadline
+and delivery budget remain valid. Delivery eight or deadline expiry directly
+terminalizes a pre-processing claim, outbox and applicable parents; a
+recoverable row that later exhausts is terminalized by the reconciler. Exact ownership/outbox checks,
 transactional cross-state rules, and the 33-row canonical parent-state crash
 matrix prevent stranded or contradictory SupplierImportRun, ImportJob and
 ImportHistory states. Queue-delivery, logical-processing and
-outbox-publication attempts remain separate. Processing requires the canonical
+outbox-publication attempts remain separate. A successful eighth publication is
+valid; only a failed or ambiguous eighth publication terminalizes, and no ninth
+attempt exists. Processing requires the canonical
 outbox to be `published`; recovery must complete
 `recovery_required -> leased -> published` before a handler can acquire
-ownership. Final evidence, ImportHistory, claim, published outbox, and
+ownership. Live-owner finalization requires the raw token and owned Redis lock;
+the separate abandoned-owner API uses a new supplier lock and an expired
+persisted `processing/published` tuple without the lost raw token. Final evidence, ImportHistory, claim, published outbox, and
 authoritative parent transitions share one fixed-order database transaction.
 Exact `ascii`/`ascii_bin` lowercase-hexadecimal checks, retained one-job
 uniqueness, a separate named three-column child FK index, a common supplier
-lock and a behavior-equivalent streaming traversal are required. Expected
-authorized cohort expansion makes its complete enrollment generation the new
-non-comparable baseline; only unexpected drift emits `capture_cohort_changed`
-and freezes. The dedicated worker adds no automatic schedule. No outbox/claim table,
+lock and a behavior-equivalent streaming traversal are required. One consistent
+MySQL snapshot authorizes prior enrollments and current application identities
+before source work; exact-source-only additions are the only later expansion,
+and finalization never rereads mutable membership. An authorized expansion makes
+its complete enrollment generation the new non-comparable baseline; only a
+deterministic authorization mismatch emits `capture_cohort_changed` and freezes.
+The dedicated worker adds no automatic schedule. No outbox/claim/authorization table,
 migration, command, parser change, capture implementation, historical backfill
 or evidence producer exists yet. C3D.1 remains blocked until the fine-grained
 checkpoints below and future qualified warm-up complete. Supplier #3 remains

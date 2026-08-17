@@ -382,8 +382,9 @@ items, logs and current timestamps cannot prove historical absence,
 reappearance or chronology. They must not be backfilled into evidence.
 
 [Immutable Supplier Offer Snapshot Persistence Design](IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md)
-defines a documentation-only prerequisite: future imports may add one final
-append-only generation header, immutable first-enrollment cohort rows and an
+defines a documentation-only prerequisite: future imports may first persist one
+capture-start authorization header and immutable hashed seed set, then add one
+final append-only generation header, immutable first-enrollment cohort rows and an
 exhaustive physical privacy-safe hashed presence/absence set without changing
 staging semantics. A separate stable parent-execution claim shared by both XML
 job paths prevents concurrent or sequential redelivery from creating another
@@ -406,34 +407,45 @@ fits inside Redis TTL padding. Both jobs use `$tries=8` without
 plus 24 hours, and neither it nor the durable cumulative eight-delivery budget
 can be reset by release, retry, reconciliation or republication.
 
-Recoverable pre-processing transport failure moves only the existing outbox to
-canonical `recovery_required`, never the execution claim. Owner-proven
+Recoverable pre-processing failure moves only a queued claim's published outbox
+to canonical `recovery_required` while its deadline and delivery budget remain
+valid. Delivery eight or deadline expiry instead atomically terminalizes claim,
+outbox and applicable parents; the reconciler terminalizes a previously
+recoverable row when either boundary later expires. Owner-proven
 exception closeout runs inside active `handle()` `try/catch/finally`; newly
 deserialized Laravel `failed()` is transport-only and cannot close
 `processing`, release the original lock, replay the importer, or rewrite
 evidence. Exact ownership/outbox checks, transactional cross-record rules and
 the canonical SupplierImportRun/ImportJob/ImportHistory crash matrix close
 every terminal path without replay. Queue-delivery, logical-processing and
-outbox-publication attempts remain separate. Processing and terminal
+outbox-publication attempts remain separate. A successful eighth publication is
+valid; only a failed or ambiguous eighth publication is terminal, and attempt
+nine is prohibited. Processing and live-owner terminal
 finalization require `outbox.state = published`; a recoverable event must
 complete `recovery_required -> leased -> published` before later ownership.
 Importer replay stops permanently at the first non-repeatable staging mutation.
-Abandoned processing closes the authoritative parent states and claim together
-as a failed gap, while successful/frozen evidence finalization commits
+Abandoned processing uses a separate CLI-only API: it acquires a new supplier
+lock and proves an expired persisted `processing/published` tuple without the
+lost raw token, then closes authoritative parents and claim together as a
+failed gap with the outbox still `published`. Successful/frozen evidence finalization commits
 ImportHistory, claim, published outbox, authoritative parent states and
 immutable evidence together. The design also requires exact
 `ascii`/`ascii_bin` hexadecimal checks, a strict opaque source identity, one
 common supplier lock, bounded temp-file streaming, retained one-job uniqueness,
 a separately named three-column child FK index and deterministic qualification.
 The dedicated worker adds no automatic
-schedule. It does not add an outbox/claim table,
+schedule. It does not add an outbox/claim/authorization table,
 migration, command, streaming parser change, capture implementation, producer,
 import approval, schedule enablement, lifecycle action or Catalog Sync behavior.
 
 The first complete generation in each source/cohort epoch is a comparison
-baseline only. An expected, authorized cohort expansion makes its complete
-enrollment/observation generation that new baseline; only unexpected drift
-emits `capture_cohort_changed`, freezes, and requires operator investigation.
+baseline only. One consistent MySQL snapshot authorizes prior enrollments and
+applicable application identities before source work; the exact downloaded
+source may add validated source-only identities, and finalization does not
+reread mutable membership. An authorized expansion makes its complete
+enrollment/observation generation that new baseline; only a deterministic
+authorization mismatch emits `capture_cohort_changed`, freezes, and requires
+operator investigation.
 Because the current V1 lifecycle contract requires `comparable=true`, the
 unchanged V4 threshold is met only by three later qualified comparable absences
 spanning at least 48 hours from the first of those three. Any gap or overlap
