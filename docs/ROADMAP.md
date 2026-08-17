@@ -260,9 +260,9 @@ disabled. `CART-025` remains open.
 10. **APCOM Authoritative Human Decision Evidence and Profile Approval Gate -
    documentation decisions complete.** V4 is the semantic authority, while
    implementation approval remains closed.
-11. **Immutable supplier-offer snapshot persistence prerequisite - dedicated
-    queue, ownership, clock, outbox and crash-state findings remediated
-    locally.** The follow-up design has
+11. **Immutable supplier-offer snapshot persistence prerequisite - schema,
+    transport deadline, cohort epoch and outbox recovery findings remediated
+    locally.** The seven-commit follow-up design has
     transactional `supplier_import_dispatch_outbox` and a stable claim shared
     by both XML paths; pair-null orchestrated dispatch followed by owner-checked
     atomic feed/ImportJob allocation; early pair-bound legacy authorization
@@ -273,19 +273,23 @@ disabled. `CART-025` remains open.
     `retry_after=1300`; exact
     `3600 < 3900 < 4200 < 4320` job/retry/DB-lease/Redis-TTL timing; one MySQL
     UTC ownership-tuple CAS within a 60-second bootstrap; in-handle owner-proven
-    exception closeout; newly deserialized transport-only `failed()`;
-    canonical outbox-only `recovery_required`; exact ownership/outbox checks
-    and cross-state transactions; an explicit canonical
+    exception closeout; newly deserialized transport-only `failed()`; `$tries=8`
+    without `retryUntil()`; an immutable MySQL-UTC-plus-24-hour outbox deadline
+    and non-resetting cumulative delivery budget; canonical outbox-only
+    `recovery_required`; fixed-order ownership/outbox transactions requiring
+    `published` before processing/finalization; an explicit canonical
     SupplierImportRun/ImportJob/ImportHistory crash matrix; separate
     queue-delivery, logical-processing and outbox-publication attempts; no
     importer replay after non-repeatable staging mutation; atomic authoritative
     parent/history/evidence/claim finalization; fail-closed abandoned-processing
     recovery; exact `ascii`/`ascii_bin` hexadecimal checks; immutable enrollment
-    and physical observations; deterministic V4 gaps; bounded streaming; exact
-    indexes; and 49 fine-grained rollout checkpoints. No outbox/claim table,
+    and physical observations; authorized enrollment-generation baselines with
+    unexpected cohort drift frozen; deterministic V4 gaps; bounded streaming;
+    retained one-job uniqueness plus a separate named composite child FK index;
+    and 49 fine-grained rollout checkpoints. No outbox/claim table,
     migration, queue setting, worker, command, parser change, capture hook, producer,
     historical backfill or operational evidence exists. C3D.1 remains blocked
-    until a fresh independent six-commit review approves the design and later
+    until a fresh independent complete seven-commit review approves the design and later
     checkpoints collect one future baseline plus three qualified comparable
     snapshots in an unchanged cohort epoch over at least 48 hours from absence
     1. See
@@ -748,16 +752,20 @@ by Phase 1D.2B and CART-023 remains open. Operational boundaries are documented 
    `retry_after=1300`; exact
    `3600 < 3900 < 4200 < 4320` job/retry/DB-lease/Redis-TTL timing; one MySQL
    UTC complete ownership-tuple CAS; in-handle owner-proven closeout;
-   transport-only `failed()`; canonical outbox-only `recovery_required`; exact
-   ownership/outbox checks and canonical authoritative parent-state recovery;
+   transport-only `failed()`; `$tries=8` without `retryUntil()`; immutable
+   MySQL-UTC-plus-24-hour deadline and cumulative delivery budget; canonical
+   outbox-only `recovery_required`; processing/finalization gated on
+   `outbox.state=published`; exact ownership/outbox checks and canonical
+   authoritative parent-state recovery;
    none is implemented or enabled. The dedicated worker adds no schedule.
    Complete the linked 49 fine-grained checkpoints in order; every
    authorization, technical action, review, PR, merge, deployment, enablement,
    import, candidate, preview and closeout remains separate. No backfill from
    mutable staging is allowed.
    Offer/Product writes, lifecycle application, retention cleanup, schedule
-   changes and Catalog Sync remain blocked. C3D.1 remains before Supplier #3
-   selection.
+   changes and Catalog Sync remain blocked. Expected authorized cohort expansion
+   uses its complete enrollment generation as a new baseline; unexpected drift
+   freezes. C3D.1 remains before Supplier #3 selection.
 5. Select Supplier #3 only after a reviewed readiness matrix and explicit human
    decision; ASBIS remains Supplier #2.
 6. Phase 9C.6.6 Multi-Supplier Category Mapping Review.

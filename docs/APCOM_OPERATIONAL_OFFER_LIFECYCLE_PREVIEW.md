@@ -34,10 +34,13 @@ abandoned work closes as a visible failed gap. The future timing contract is
 exactly `3600 < 3900 < 4200 < 4320`: supplier job timeout, dedicated
 `redis_supplier_import` / `supplier-imports` retry-after, MySQL ownership lease,
 and Redis supplier-lock TTL. The unrelated Redis queues and worker retain
-`retry_after=1300` and cannot consume `supplier-imports`. One MySQL UTC CAS
-writes the complete hashed-token/claim-time/lease-expiry ownership tuple before
-work; the 60-second bootstrap and lease-expiry-plus-30 delay remain inside the
-Redis TTL padding.
+`retry_after=1300` and cannot consume `supplier-imports`. Both jobs use
+`$tries=8` without `retryUntil()`. A separate canonical outbox
+`transport_deadline_at`, created from MySQL UTC plus exactly 24 hours at
+original authorization, and a durable eight-delivery counter are never reset
+by release or republication. One MySQL UTC CAS writes the complete
+hashed-token/claim-time/lease-expiry ownership tuple before work; the 60-second
+bootstrap and lease-expiry-plus-30 delay remain inside the Redis TTL padding.
 
 Owner-proven exception closeout runs only inside active `handle()`
 `try/catch/finally`, where the raw token and lock object exist. Newly
@@ -48,11 +51,17 @@ evidence. Transport exhaustion may move only the existing outbox to canonical
 transactional cross-state rules, and the 33-row canonical parent-state crash
 matrix prevent stranded or contradictory SupplierImportRun, ImportJob and
 ImportHistory states. Queue-delivery, logical-processing and
-outbox-publication attempts remain separate. Final evidence, ImportHistory,
-claim and authoritative parent transitions share one database transaction.
-Exact `ascii`/`ascii_bin` lowercase-hexadecimal checks, named FK/query indexes,
-a common supplier lock and a behavior-equivalent streaming traversal are
-required. The dedicated worker adds no automatic schedule. No outbox/claim table,
+outbox-publication attempts remain separate. Processing requires the canonical
+outbox to be `published`; recovery must complete
+`recovery_required -> leased -> published` before a handler can acquire
+ownership. Final evidence, ImportHistory, claim, published outbox, and
+authoritative parent transitions share one fixed-order database transaction.
+Exact `ascii`/`ascii_bin` lowercase-hexadecimal checks, retained one-job
+uniqueness, a separate named three-column child FK index, a common supplier
+lock and a behavior-equivalent streaming traversal are required. Expected
+authorized cohort expansion makes its complete enrollment generation the new
+non-comparable baseline; only unexpected drift emits `capture_cohort_changed`
+and freezes. The dedicated worker adds no automatic schedule. No outbox/claim table,
 migration, command, parser change, capture implementation, historical backfill
 or evidence producer exists yet. C3D.1 remains blocked until the fine-grained
 checkpoints below and future qualified warm-up complete. Supplier #3 remains

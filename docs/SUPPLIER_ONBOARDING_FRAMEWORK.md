@@ -401,7 +401,10 @@ and Redis lock TTL. The general Redis connection and worker retain
 acquisition, one MySQL UTC CAS writes the complete
 hashed-token/`claimed_at`/lease-expiry ownership tuple within 60 seconds before
 any allocation or source work; the DB lease-expiry-plus-30 contention delay
-fits inside Redis TTL padding.
+fits inside Redis TTL padding. Both jobs use `$tries=8` without
+`retryUntil()`. The canonical outbox deadline is created once from MySQL UTC
+plus 24 hours, and neither it nor the durable cumulative eight-delivery budget
+can be reset by release, retry, reconciliation or republication.
 
 Recoverable pre-processing transport failure moves only the existing outbox to
 canonical `recovery_required`, never the execution claim. Owner-proven
@@ -411,23 +414,31 @@ deserialized Laravel `failed()` is transport-only and cannot close
 evidence. Exact ownership/outbox checks, transactional cross-record rules and
 the canonical SupplierImportRun/ImportJob/ImportHistory crash matrix close
 every terminal path without replay. Queue-delivery, logical-processing and
-outbox-publication attempts remain separate. Importer replay stops permanently
-at the first non-repeatable staging mutation. Abandoned processing closes the
-authoritative parent states and claim together as a failed gap, while
-successful/frozen evidence finalization commits ImportHistory, claim,
-authoritative parent states and immutable evidence together. The design also
-requires exact `ascii`/`ascii_bin` hexadecimal checks, a strict opaque source
-identity, one common supplier lock, bounded temp-file streaming, exact named
-indexes and deterministic qualification. The dedicated worker adds no automatic
+outbox-publication attempts remain separate. Processing and terminal
+finalization require `outbox.state = published`; a recoverable event must
+complete `recovery_required -> leased -> published` before later ownership.
+Importer replay stops permanently at the first non-repeatable staging mutation.
+Abandoned processing closes the authoritative parent states and claim together
+as a failed gap, while successful/frozen evidence finalization commits
+ImportHistory, claim, published outbox, authoritative parent states and
+immutable evidence together. The design also requires exact
+`ascii`/`ascii_bin` hexadecimal checks, a strict opaque source identity, one
+common supplier lock, bounded temp-file streaming, retained one-job uniqueness,
+a separately named three-column child FK index and deterministic qualification.
+The dedicated worker adds no automatic
 schedule. It does not add an outbox/claim table,
 migration, command, streaming parser change, capture implementation, producer,
 import approval, schedule enablement, lifecycle action or Catalog Sync behavior.
 
 The first complete generation in each source/cohort epoch is a comparison
-baseline only. Because the current V1 lifecycle contract requires
-`comparable=true`, the unchanged V4 threshold is met only by three later
-qualified comparable absences spanning at least 48 hours from the first of
-those three. Any gap, overlap or cohort expansion requires a new baseline.
+baseline only. An expected, authorized cohort expansion makes its complete
+enrollment/observation generation that new baseline; only unexpected drift
+emits `capture_cohort_changed`, freezes, and requires operator investigation.
+Because the current V1 lifecycle contract requires `comparable=true`, the
+unchanged V4 threshold is met only by three later qualified comparable absences
+spanning at least 48 hours from the first of those three. Any gap or overlap
+requires a later clean baseline, while each further authorized expansion resets
+comparability with its own baseline.
 C3D.1 remains blocked until a separately authorized implementation is deployed
 and enabled and that future-history window is collected. Supplier #3 work must
 not begin before this prerequisite is resolved.
