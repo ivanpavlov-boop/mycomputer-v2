@@ -418,8 +418,8 @@ exception closeout runs inside active `handle()` `try/catch/finally`; newly
 deserialized Laravel `failed()` is transport-only and cannot close
 `processing`, release the original lock, replay the importer, or rewrite
 evidence. Exact ownership/outbox checks, transactional cross-record rules and
-the canonical 41-row by 11-column SupplierImportRun/ImportJob/ImportHistory
-crash matrix close every terminal path without replay and explicitly
+the canonical 53-row by 11-column SupplierImportRun/ImportJob/ImportHistory plus
+monitor/alert/observer crash matrix closes every terminal path without replay and explicitly
 separates action-stopped republication from newly authorized terminalization.
 The future outbox adds
 `delivery_watchdog_at`, set from MySQL UTC plus exactly 4,320 seconds after
@@ -446,6 +446,11 @@ invented by the design.
 Every mutating recovery uses one authenticated-Filament authorization covering
 one complete action/operator/claim/outbox/key/parent tuple, server-computed
 pre-state fingerprint, 900-second expiry and 32-byte single-display stdin nonce.
+The pre-state contract is exclusively `expected_state_fingerprint_v2`: exactly
+20 ordered fields including `claimed_at`, one exact domain/NUL framing and a
+synthetic reproducible vector. It is distinct from the 16-field post-start
+resume fingerprint. The complete design inventory contains ten proposed tables
+and 21 cryptographic/digest identities.
 The five actions cover same-key publication, complete-expired-queued-owner
 release, stale terminalization, publication mismatch and abandoned processing.
 CLI derives the human principal from the
@@ -493,6 +498,13 @@ The persistence prerequisite remains local, unapproved, unimplemented and
 undeployed. No evidence candidate exists and no operational preview is
 authorized.
 
+Operational rollback is forward-only after deployment or protected-state use:
+it disables gates/workers but preserves all schema, monitor/alert state and
+immutable history. Destructive `down()` is limited to a confirmed `local` or
+`testing` one-run invocation whose complete ten-table evidence predicate is
+empty except for the exact pristine monitor singleton; any evidence, partial
+schema or unknown count fails closed before DDL.
+
 The first complete generation in each source/cohort epoch is a comparison
 baseline only. One consistent MySQL snapshot authorizes prior enrollments and
 applicable application identities before source work; the exact downloaded
@@ -511,15 +523,17 @@ and enabled and that future-history window is collected. Supplier #3 work must
 not begin before this prerequisite is resolved.
 
 The immutable-persistence rollout follows only the
-[71-row fine-grained checkpoint matrix](IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md#fine-grained-rollout-checkpoints).
-Each authorization, implementation, review, push/PR, CI, merge, deployment,
+[89-row fine-grained checkpoint matrix](IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md#fine-grained-rollout-checkpoints).
+Each authorization, implementation, review, push, remote verification, Draft
+PR, PR base/head verification, CI, merge, deployment,
 verification, enablement, import, candidate, preview and closeout operation is
 separate. No review authorizes merge; no merge authorizes deployment; no
 candidate preparation authorizes approval; and no result review authorizes
 closeout. Failure at one checkpoint cannot authorize the next.
 Monitor design approval, implementation authorization, repository verification,
 implementation, focused/database/security validation, independent review,
-remediation/re-review, push authorization, push, Draft PR creation, CI/review,
+remediation/re-review, push authorization, push, exact remote-SHA verification,
+Draft PR creation, PR base/head verification, CI, review,
 merge authorization, merge, disabled deployment verification and explicit
 monitor/sink/observer enablement are distinct ordered gates; none implies the
 next. Capture remains unavailable until the continuous health gate is fresh and

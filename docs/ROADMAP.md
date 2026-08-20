@@ -262,7 +262,7 @@ disabled. `CART-025` remains open.
    implementation approval remains closed.
 11. **Immutable supplier-offer snapshot persistence prerequisite - queued
     payload and terminal-recovery findings remediated locally.**
-    The thirteen-commit follow-up design has
+    The fourteen-commit follow-up design has
     transactional `supplier_import_dispatch_outbox` and a stable claim shared
     by both XML paths; pair-null orchestrated dispatch followed by owner-checked
     atomic feed/ImportJob allocation; early pair-bound legacy authorization
@@ -307,7 +307,7 @@ disabled. `CART-025` remains open.
     acknowledgement that absent operator action can remain nonterminal and
     critically alerted; one legal first authorized complete expired queued-owner CAS; an exact
     dry-run-first one-execution publication-mismatch command and idempotent
-    terminal repository; an explicit canonical 41-row by 11-column
+    terminal repository; an explicit canonical 53-row by 11-column
     SupplierImportRun/ImportJob/ImportHistory crash matrix; separate
     queue-delivery, logical-processing and outbox-publication attempts; a valid
     successful eighth publication, action-compatible failed/ambiguous recovery
@@ -323,14 +323,19 @@ disabled. `CART-025` remains open.
     frozen; no mutable membership reread; deterministic V4 gaps; bounded streaming;
     retained one-job uniqueness, nullable unique one-claim-per-orchestrated-run,
     a byte-exact immutable execution-path and exact parent-shape check, plus a
-    separate named composite child FK index; and 71 fine-grained rollout
+    separate named composite child FK index; an exclusive versioned 20-field
+    `expected_state_fingerprint_v2` including `claimed_at`; exact ten-table and
+    21-entry cryptographic/digest inventories; forward-only evidence-preserving
+    operational rollback with a fail-closed empty-schema downgrade guard; and
+    89 fine-grained rollout
     checkpoints with monitor design/implementation authorization, local
-    validation, independent PASS, push authorization/push, Draft PR/CI/review,
+    validation, independent PASS, push authorization, push, remote-SHA
+    verification, Draft PR creation, PR base/head verification, CI and review,
     merge, disabled deployment and monitor/sink/observer enablement gates. No runtime
     outbox/claim/recovery-authorization table,
     migration, queue setting, worker, command, parser change, capture hook, producer,
     historical backfill or operational evidence exists. C3D.1 remains blocked
-    until a fresh independent complete thirteen-commit review approves the design and later
+    until a fresh independent complete fourteen-commit review approves the design and later
     checkpoints collect one future baseline plus three qualified comparable
     snapshots in an unchanged cohort epoch over at least 48 hours from absence
     1. See
@@ -354,8 +359,9 @@ disabled. `CART-025` remains open.
 ### Immutable Persistence Rollout Checkpoints
 
 Item 11 follows only the
-[71-row fine-grained checkpoint matrix](IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md#fine-grained-rollout-checkpoints).
-Authorization, implementation, review, push/PR, CI, merge, deployment,
+[89-row fine-grained checkpoint matrix](IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md#fine-grained-rollout-checkpoints).
+Authorization, implementation, review, push authorization, push, remote-SHA
+verification, Draft PR creation, PR base/head verification, CI, merge, deployment,
 verification, enablement, each import, producer work, candidate preparation,
 human approval, preview, result review and closeout are separate rows. No row
 combines review/merge, merge/deployment, candidate preparation/approval,
@@ -809,7 +815,7 @@ by Phase 1D.2B and CART-023 remains open. Operational boundaries are documented 
    canonical authoritative parent-state recovery; none is implemented or
    enabled. The dedicated import worker adds no import or automatic-recovery
    schedule; only the domain-read-only monitor and its health observer have a
-   planned cadence. Complete the linked 71 fine-grained checkpoints in order; every
+   planned cadence. Complete the linked 89 fine-grained checkpoints in order; every
    authorization, technical action, review, PR, merge, deployment, enablement,
    import, candidate, preview and closeout remains separate. No backfill from
    mutable staging is allowed.

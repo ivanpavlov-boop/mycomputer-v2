@@ -53,9 +53,9 @@ terminalizes a pre-processing claim, outbox and applicable parents; a
 recoverable row that later exhausts requires a newly issued exact terminal
 authorization and is never terminalized by republish authority. Exact
 ownership/outbox checks,
-transactional cross-state rules, and the 41-row by 11-column canonical
-parent-state crash matrix prevent stranded or contradictory SupplierImportRun,
-ImportJob and ImportHistory states. The future outbox includes exact
+transactional cross-state rules, and the 53-row by 11-column canonical crash
+matrix prevent stranded or contradictory SupplierImportRun, ImportJob,
+ImportHistory, monitor, alert-delivery and observer states. The future outbox includes exact
 `delivery_watchdog_at` liveness state and
 `ix_import_dispatch_outbox_state_watchdog_id(state, delivery_watchdog_at, id)`.
 Acknowledged publication sets the watchdog from MySQL UTC plus exactly 4,320
@@ -136,11 +136,12 @@ authorized.
 ## Immutable Persistence Rollout Checkpoints
 
 The sole canonical rollout sequence is the
-[71-row fine-grained checkpoint matrix](IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md#fine-grained-rollout-checkpoints).
-It separately controls local review, push/PR authorization, PR creation, CI,
+[89-row fine-grained checkpoint matrix](IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md#fine-grained-rollout-checkpoints).
+It separately controls local review, push authorization, push, exact remote-SHA
+verification, Draft PR creation, PR base/head verification, CI,
 merge authorization, merge, implementation, monitor design approval,
 implementation authorization, local validation, security/database review,
-remediation/re-review, push authorization, push, Draft PR creation, monitor CI
+remediation/re-review, monitor CI
 and review, merge, disabled monitor deployment, explicit monitor/sink/observer
 enablement, post-deployment
 verification, enablement, every import, producer work, candidate preparation,

@@ -14,7 +14,7 @@ remain historical contracts. V4 remains the current semantic authority.
 
 The read-only C3D preview implementation was merged through PR #210 and
 deployed at `c22fc9a8dddf3c6778ab0b88e5a50cbc02fe3f21`. This persistence design
-is a local documentation-only thirteen-commit follow-up pending fresh independent
+is a local documentation-only fourteen-commit follow-up pending fresh independent
 complete-branch review. Its
 migration, parser/capture implementation, evidence preparation, operational
 execution, and closeout are not approved or implemented.
@@ -1030,7 +1030,8 @@ Redis integration tests proving all of these exact cases:
 16. every canonical outbox check rejects invalid state/field combinations;
 17. `recovery_required` is accepted only as an outbox state;
 18. outbox publication attempt nine is rejected;
-19. every one of the 36 crash rows uses canonical claim/outbox/parent states;
+19. every one of the 53 crash rows uses canonical claim/outbox/parent or
+    coordination states;
 20. every claim/outbox cross-record mismatch fails closed;
 21. the installed Laravel Worker honors `$tries = 8` because neither job
     defines or returns `retryUntil()`;
@@ -1146,8 +1147,19 @@ Redis integration tests proving all of these exact cases:
     synthetic vectors reproduce their documented SHA-256 identity;
 57. monitor, observer and alert coordination use the exact named MySQL columns,
     keys, checks, FK and generation-bound CAS contracts below; and
-58. the canonical 71-row rollout creates, validates, independently approves,
-    authorizes and pushes the monitor branch before creating its Draft PR.
+58. the canonical rollout creates, validates, independently approves,
+    authorizes and pushes the monitor branch, verifies the exact remote branch,
+    and only then creates its Draft PR;
+59. `expected_state_fingerprint_v2` has exactly 20 ordered fields including
+    `claimed_at`, rejects missing/unknown/reordered fields, and reproduces its
+    synthetic vector;
+60. the canonical crash matrix has exactly 53 rows and 11 columns;
+61. four dedicated monitor rows prove crash-before-cycle, persisted-cycle,
+    successor-generation and stale-writer behavior without domain mutation;
+62. six dedicated alert-delivery rows distinguish not-attempted, outcome-unknown,
+    successor-generation, stale-worker and acknowledged states; and
+63. dedicated observer-failure and uncertain-external-ACK rows retain fail-closed
+    admission and durable uncertainty.
 
 The same future MySQL/Redis suite must add focused watchdog, authorization, and
 mismatch coverage for exactly these cases:
@@ -1200,8 +1212,21 @@ mismatch coverage for exactly these cases:
 30. atomic expired-owner release commit, crash-after-commit and replay;
 31. warning/null-bucket alert canonical bytes and hash vector;
 32. critical/zero-bucket alert canonical bytes and hash vector; and
-33. monitor lease takeover, observer generation binding, stale alert-delivery
-    acknowledgement rejection and database-unreachable safety-unknown behavior.
+33. monitor lease acquisition followed by crash before successful cycle state;
+34. successful monitor-cycle persistence followed by process loss before a next
+    acquisition;
+35. expired monitor lease takeover by one successor generation;
+36. stale monitor wake and late state/heartbeat CAS rejection;
+37. alert-delivery lease acquisition followed by crash before an external call;
+38. external alert attempt followed by crash before durable acknowledgement;
+39. alert-delivery lease expiry while outcome remains distinguishable only as
+    not-attempted or unknown from durable facts;
+40. successor alert worker acquisition with a new delivery generation;
+41. late stale alert worker acknowledgement/retry rejection;
+42. acknowledged alert persistence followed by worker loss with no redelivery;
+43. independent observer failure and 120-second stale admission rejection; and
+44. uncertain external alert acknowledgement retained and retried only through
+    the stable idempotency identity.
 
 Those tests must also prove the exact field/check/index contract, the
 4,320-second MySQL-UTC grace, bounded deterministic candidate ordering, and the
@@ -1625,14 +1650,22 @@ CONSTRAINT chk_import_recovery_auth_expiry CHECK (
 )
 ```
 
-The expected-state fingerprint domain is exactly
-`supplier-import-dispatch-recovery-state-v1` and the digest is:
+The only expected-state fingerprint contract authorized for future
+implementation is `expected_state_fingerprint_v2`. The historical unversioned
+and `v1` wording is superseded context and is not implementable. The domain
+separator is exactly the 46 UTF-8/ASCII bytes of
+`mycomputer:supplier-recovery-expected-state:v2`, followed by one NUL byte
+(`0x00`). The digest is:
 
 ```text
-SHA-256(domain_separator || 0x00 || canonical_json_bytes)
+SHA-256(
+  "mycomputer:supplier-recovery-expected-state:v2" || 0x00 ||
+  canonical_json_bytes
+)
 ```
 
-The canonical object contains these keys in this exact order:
+The canonical object contains exactly these 20 keys in this exact order;
+`claimed_at` is security-relevant owner identity and may not be removed:
 
 ```text
 schema, authorization_action, execution_claim_id, dispatch_outbox_id,
@@ -1643,19 +1676,57 @@ delivery_watchdog_at, active_attempt_token_hash, claimed_at,
 attempt_lease_expires_at
 ```
 
-`schema` is exactly `supplier-import-dispatch-recovery-state-v1`. Strings are
-emitted without normalization; IDs and counters are base-10 JSON integers;
-every absent nullable value is literal JSON `null`; timestamps are UTC
-`YYYY-MM-DDTHH:MM:SS.ffffffZ`; and lowercase SHA-256 strings are exactly 64
-`[0-9a-f]` characters. Keys are never reordered or omitted, and the encoding
-has no insignificant whitespace or pretty printing. JSON booleans, floats,
-localized numbers and omitted nullable keys are invalid. Future PHP encoding
-uses exactly `JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE |
-JSON_THROW_ON_ERROR`. The raw canonical JSON serialization buffer exists only
-in bounded memory and is never printed, logged, included in dry-run output or
-persisted. The `logical_execution_key` itself remains durably persisted in the
-claim, outbox and authorization/result binding exactly as required by their
-schema and foreign keys; it is never printed or logged and is not a capability.
+| Position | Key | Exact JSON type and value contract | Nullable |
+| --- | --- | --- | --- |
+| 1 | `schema` | string; exactly `expected_state_fingerprint_v2` | no |
+| 2 | `authorization_action` | string; one exact value from the five-action authorization allowlist | no |
+| 3 | `execution_claim_id` | positive base-10 JSON integer within signed BIGINT | no |
+| 4 | `dispatch_outbox_id` | positive base-10 JSON integer within signed BIGINT | no |
+| 5 | `logical_execution_key` | string; exactly 64 lowercase hexadecimal characters | no |
+| 6 | `execution_path` | string; exactly `orchestrated` or `legacy_xml` | no |
+| 7 | `claim_state` | string; one exact canonical execution-claim state | no |
+| 8 | `outbox_state` | string; one exact canonical dispatch-outbox state | no |
+| 9 | `supplier_id` | positive base-10 JSON integer within signed BIGINT | no |
+| 10 | `supplier_import_run_id` | positive base-10 JSON integer within signed BIGINT, or JSON `null` where the path contract permits no run | yes |
+| 11 | `supplier_feed_id` | positive base-10 JSON integer within signed BIGINT, or JSON `null` before valid orchestrated allocation | yes |
+| 12 | `import_job_id` | positive base-10 JSON integer within signed BIGINT, or JSON `null` before valid orchestrated allocation | yes |
+| 13 | `import_history_id` | positive base-10 JSON integer within signed BIGINT, or JSON `null` before history allocation | yes |
+| 14 | `publication_attempt_count` | unsigned base-10 JSON integer in the canonical `0..8` range | no |
+| 15 | `delivery_attempt_count` | unsigned base-10 JSON integer in the canonical `0..8` range | no |
+| 16 | `transport_deadline_at` | string; MySQL UTC `YYYY-MM-DDTHH:MM:SS.ffffffZ` | no |
+| 17 | `delivery_watchdog_at` | the same UTC timestamp string, or JSON `null` where the state contract permits no watchdog | yes |
+| 18 | `active_attempt_token_hash` | string of exactly 64 lowercase hexadecimal characters, or JSON `null` | yes |
+| 19 | `claimed_at` | the same UTC timestamp string, or JSON `null`; it is one of the 20 fingerprint fields | yes |
+| 20 | `attempt_lease_expires_at` | the same UTC timestamp string, or JSON `null` | yes |
+
+The state machine still enforces every cross-field path, allocation, watchdog
+and complete-owner-tuple invariant before hashing. Nullable does not authorize
+an otherwise invalid partial tuple. All 20 keys are mandatory even when their
+value is `null`; a missing, duplicate, unknown, out-of-order or wrong-type key
+is rejected before comparison.
+
+Canonical JSON is UTF-8 without BOM, Unicode normalization, insignificant
+whitespace, line endings or trailing newline. Object keys use only the order
+above. Strings are emitted without semantic normalization; JSON quotation mark,
+reverse solidus and control bytes use the required JSON escapes, while solidus
+and Unicode characters are not additionally escaped. Null is the four ASCII
+bytes `null`. Integers use ASCII decimal digits with no sign, leading zero,
+decimal point, exponent or locale formatting. Booleans and floats are invalid.
+Future PHP constructs one insertion-ordered typed array and encodes it with
+exactly `JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE |
+JSON_THROW_ON_ERROR`. The raw canonical JSON buffer exists only in bounded
+memory and is never printed, logged, included in dry-run output or persisted.
+The `logical_execution_key` itself remains durably persisted in the claim,
+outbox and authorization/result binding exactly as required by their schema and
+foreign keys; it is never printed or logged and is not a capability.
+
+This synthetic vector is normative. The displayed JSON is exactly 791 bytes and
+has no trailing newline:
+
+```text
+{"schema":"expected_state_fingerprint_v2","authorization_action":"recover_expired_queued_ownership","execution_claim_id":42,"dispatch_outbox_id":77,"logical_execution_key":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","execution_path":"orchestrated","claim_state":"queued","outbox_state":"published","supplier_id":9,"supplier_import_run_id":501,"supplier_feed_id":12,"import_job_id":601,"import_history_id":701,"publication_attempt_count":2,"delivery_attempt_count":3,"transport_deadline_at":"2026-08-20T12:00:00.000000Z","delivery_watchdog_at":"2026-08-20T11:00:00.000000Z","active_attempt_token_hash":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","claimed_at":"2026-08-20T10:00:00.000000Z","attempt_lease_expires_at":"2026-08-20T11:10:00.000000Z"}
+31d1cf23a2fceac08d71c0103b3093af392f916921ef2221d860a7ecf9f7a62c
+```
 
 The five actions above are the complete mutating-recovery inventory. Every
 documented `--apply` path must consume one of them; no command has a prose-only,
@@ -2045,8 +2116,9 @@ recovery_reason_code, publication_attempt_count, delivery_attempt_count,
 transport_deadline_at, delivery_watchdog_at
 ```
 
-It uses the same JSON/timestamp/integer/null rules as the 19-field pre-start
-fingerprint. `schema` is exactly
+It uses the same byte-level JSON, string, timestamp, integer and null rules as
+`expected_state_fingerprint_v2`, but it is a separate 16-field contract with a
+different purpose, inventory and domain. `schema` is exactly
 `supplier-import-dispatch-recovery-resume-v1`; the digest is
 `SHA-256(domain_separator || 0x00 || canonical_json_bytes)`.
 
@@ -2473,7 +2545,10 @@ all capture/recovery gates remain disabled; (3) create alert-intent columns,
 checks and indexes; (4) add the named outbox FK; (5) deploy monitor/observer/sink
 code disabled; (6) run schema and CAS validation; (7) separately enable and
 verify monitor/sink/observer; and only then (8) consider later capture admission.
-Reverse order drops the alert FK/table before the monitor table.
+This additive order does not authorize a production reverse migration.
+Destructive `down()` behavior is governed exclusively by the fail-closed empty-
+schema predicate below; operational rollback is forward-only and leaves both
+coordination tables in place.
 
 If the shared database is unreachable, no writer can persist a fresh state and
 the application cannot claim that it read `failed` from the database. The
@@ -2913,6 +2988,26 @@ transaction. `present=true` rows carry validated source semantics.
 exact-match flags, and false conflict/blocker/duplicate flags. No absence row
 is inferred from a partial or frozen traversal.
 
+## Canonical Proposed Table Inventory
+
+The complete Phase 9C.6.5C.3D persistence design contains exactly these ten
+proposed additive tables. Existing-table constraint/index migrations are not
+additional proposed tables:
+
+1. `supplier_import_execution_claims`;
+2. `supplier_import_dispatch_outbox`;
+3. `supplier_import_dispatch_monitor_health`;
+4. `supplier_import_dispatch_alert_intents`;
+5. `supplier_import_dispatch_recovery_authorizations`;
+6. `supplier_import_dispatch_recovery_results`;
+7. `supplier_import_cohort_authorization_members`;
+8. `supplier_offer_snapshot_generations`;
+9. `supplier_offer_snapshot_enrollments`; and
+10. `supplier_offer_snapshot_observations`.
+
+Every reference to all proposed tables, schema guards, privacy scans,
+migration tests or capacity estimates means this exact ten-table inventory.
+
 ## Exact Index And Foreign-key Contract
 
 The future MySQL 8.4 additive migrations must create the exact named indexes
@@ -2924,11 +3019,13 @@ Creation order is the additive `import_jobs` ownership index, execution claims,
 the execution-path immutable trigger, dispatch outbox, dispatch recovery
 authorizations plus their UPDATE/DELETE triggers, dispatch recovery results plus
 their UPDATE/DELETE triggers, cohort authorization members, generation headers,
-enrollments, observations, and the additive ImportHistory range index. Rollback
-is the exact reverse order: each table's guards are dropped immediately before
-that table, and the path trigger is dropped before the claim table. Rollback
-fails closed while retained rows make a `RESTRICT` dependency non-empty; it
-never disables foreign-key checks or drops a parent first.
+enrollments, observations, and the additive ImportHistory range index. A
+destructive `down()` that has first passed the complete local/testing one-run
+empty-schema predicate uses the exact reverse order: each table's guards are
+dropped immediately before that table, and the path trigger is dropped before
+the claim table. The guarded downgrade fails closed while a `RESTRICT`
+dependency is non-empty; it never disables foreign-key checks or drops a parent
+first. This mechanical order is not an operational rollback path.
 
 ### `supplier_import_execution_claims`
 
@@ -3246,6 +3343,48 @@ approved MPN domain. A future supplier requiring MPN evidence needs a separate
 versioned contract. The hashes are pseudonymous, not anonymous, and remain
 restricted operational data. No secret or keyed hash is introduced.
 
+### Authoritative cryptographic and digest identity inventory
+
+This is the complete 21-entry inventory. `OperationalSupplierOfferIdentityHasher`
+uses UTF-8 bytes for its exact
+`supplier-offer-lifecycle-operational-preview-v1`, ASCII `0x7c`, bucket, ASCII
+`0x7c`, value framing. `CanonicalOnboardingData::encode()` recursively sorts
+object keys, preserves list order, normalizes decimals through the existing
+normalizer and emits compact UTF-8 JSON with unescaped solidus/Unicode. A row
+that says raw bytes has no domain separator or textual conversion. No identity
+outside this inventory is introduced by this design.
+
+| # | Identity | Purpose | Producer | Canonical bytes and domain | Algorithm | Persistence location | Immutability | Comparison point |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | `logical_execution_key` | stable execution and redelivery identity | authorization/allocation repository | 32 CSPRNG bytes encoded as 64 lowercase hexadecimal characters; no hash domain | random identity, not a digest | claim, copied to outbox and recovery audit tuple | immutable for the execution | every dispatch, owner admission and recovery tuple |
+| 2 | `active_attempt_token_hash` | current import owner proof | execution coordinator | exact in-memory random attempt-token bytes; no domain or text conversion | SHA-256 lowercase hexadecimal | execution claim | fixed for one owner tuple; cleared or replaced only by owner-generation CAS | owner acquisition, live closeout and stale-owner rejection |
+| 3 | `source_fingerprint` | exact downloaded-source identity | streaming source reader | exact downloaded file bytes; no domain | SHA-256 lowercase hexadecimal | execution claim and snapshot generation | first claim value write-once; generation copy immutable | same-key source verification and final generation binding |
+| 4 | `cohort_seed_fingerprint` | exact capture-start authorized membership | cohort authorization service | hasher `sample()` framing with bucket `snapshot_cohort_authorization_v1` and canonical JSON of version plus sorted member hashes | SHA-256 lowercase hexadecimal | execution claim | write-once with authorization members | capture start, restart and finalization member reconciliation |
+| 5 | `supplier_sku_hash` | pseudonymous supplier-offer identity | operational identity hasher | hasher namespace, bucket `supplier_sku`, lowercase-trimmed supplier key, ASCII `0x7c`, trimmed supplier SKU | SHA-256 lowercase hexadecimal | authorization members, enrollments and observations | immutable | membership uniqueness, cohort traversal and observation binding |
+| 6 | `dispatch_payload_hash` | byte-exact Redis payload binding | dispatch serializer | domain `mycomputer:supplier-dispatch-payload:v1`, one NUL, then the fixed-order canonical payload JSON | SHA-256 lowercase hexadecimal | dispatch outbox | immutable | every publish, republish and handler admission |
+| 7 | `lease_token_hash` | outbox publisher ownership | outbox publisher | exact in-memory random lease-token bytes; no domain or text conversion | SHA-256 lowercase hexadecimal | dispatch outbox | fixed for one lease; owner-CAS cleared or replaced on generation takeover | publication acknowledgement, retry and stale publisher rejection |
+| 8 | `expected_state_fingerprint` | pre-start recovery authorization CAS identity | recovery authorization issuer | `expected_state_fingerprint_v2`: domain `mycomputer:supplier-recovery-expected-state:v2`, one NUL, then the exact 20-field canonical JSON | SHA-256 lowercase hexadecimal | recovery authorization | immutable | Phase-A start revalidation only |
+| 9 | `authorization_nonce_hash` | one-time recovery capability proof | recovery authorization issuer | domain `supplier-import-dispatch-recovery-nonce-v1`, one NUL, then exact 32 raw nonce bytes | SHA-256 lowercase hexadecimal | recovery authorization | immutable and unique | constant-time nonce proof before any start/result write |
+| 10 | `resume_state_fingerprint` | post-start same-key republication identity | republish Phase-A transaction | domain `supplier-import-dispatch-recovery-resume-v1`, one NUL, then its exact 16-field canonical JSON | SHA-256 lowercase hexadecimal | recovery result `started` row only | immutable | Phase-B resume and boundary-stop validation |
+| 11 | `result_fingerprint` | immutable recovery event identity | recovery result repository | domain `supplier-import-dispatch-recovery-result-v1`, one NUL, then its exact fixed-order result JSON | SHA-256 lowercase hexadecimal | recovery result | immutable | duplicate/result replay and audit verification |
+| 12 | `monitor_owner_token_hash` | monitor lease-generation owner proof | watchdog monitor | exact in-memory random monitor-owner token bytes; no domain or text conversion | SHA-256 lowercase hexadecimal | monitor-health singleton | fixed for one monitor generation; cleared or replaced only by generation CAS | cycle success/failure and stale-monitor rejection |
+| 13 | `alert_identity` | durable idempotent logical alert identity | watchdog monitor | domain `supplier-import-dispatch-monitor-alert-v1`, one NUL, then exact six-key canonical alert JSON | SHA-256 lowercase hexadecimal | alert intent and external sink idempotency key | immutable | idempotent insertion, delivery and external acknowledgement |
+| 14 | `delivery_owner_token_hash` | alert-delivery lease owner proof | alert delivery worker | exact in-memory random delivery-owner token bytes; no domain or text conversion | SHA-256 lowercase hexadecimal | alert intent | fixed for one delivery generation; cleared or replaced only by generation CAS | ACK, retry, permanent failure and stale-worker rejection |
+| 15 | `snapshot_id` | V1 evidence projection identity | evidence adapter | hasher `sample()` framing with bucket `snapshot_generation_v1` and canonical JSON of stored supplier key plus ImportHistory ID | SHA-256 lowercase hexadecimal | derived V1 evidence output; not stored as a new table column | deterministic for immutable inputs | evidence projection identity check |
+| 16 | `cohort_fingerprint` | effective enrolled cohort identity | snapshot capture service | hasher `sample()` framing with bucket `snapshot_cohort_v1` and canonical JSON of sorted enrolled offer hashes | SHA-256 lowercase hexadecimal | snapshot generation | immutable after finalization | predecessor comparability and projection gate |
+| 17 | `observation_set_fingerprint` | complete physical observation-set identity | snapshot capture service | hasher `sample()` framing with bucket `snapshot_observation_set_v1` and canonical JSON of sorted observation fingerprints | SHA-256 lowercase hexadecimal | snapshot generation | immutable after finalization | count/set reconciliation and evidence projection |
+| 18 | `generation_fingerprint` | complete finalized header identity | snapshot capture service | hasher `sample()` framing with bucket `snapshot_generation_header_v1` and canonical JSON of every canonical final header field except storage ID, self-digest and `created_at` | SHA-256 lowercase hexadecimal | snapshot generation | immutable | finalization retry, header integrity and projection |
+| 19 | `enrollment_fingerprint` | first-enrollment provenance identity | snapshot capture service | hasher `sample()` framing with bucket `snapshot_enrollment_v1` and canonical JSON of supplier, source, offer hash, effective ImportHistory ID and provenance | SHA-256 lowercase hexadecimal | snapshot enrollment | immutable | idempotent enrollment insert and conflict detection |
+| 20 | `observation_fingerprint` | one physical offer observation identity | snapshot collector | hasher `sample()` framing with bucket `snapshot_observation_v1` and canonical semantic observation JSON including `present`, excluding storage keys/timestamps | SHA-256 lowercase hexadecimal | snapshot observation | immutable | observation uniqueness, set fingerprint and replay verification |
+| 21 | `reliable_manufacturer_mpn_hash` | reserved manufacturer-MPN identity | no authorized producer in APCOM V4 | no approved domain or bytes in this design | none authorized | nullable snapshot observation field | must remain null for APCOM V4 | any non-null value fails the current contract |
+
+The inventory count is contractual. Repeated persistence of one identity, such
+as `source_fingerprint` or `supplier_sku_hash`, remains one cryptographic
+contract rather than an invented second algorithm. The monitor and observer
+literal identity strings and numeric generations are not digests. Every
+ownership token hash is generation-bound coordination state, not durable proof
+of external delivery.
+
 Any equal offer hash with non-identical canonical identity input, or equal row
 fingerprint with non-identical canonical row input, is an integrity conflict.
 The generation freezes. Raw values must not be logged to diagnose it.
@@ -3286,8 +3425,10 @@ The exact affected proposed columns are:
 | --- | --- | --- |
 | `supplier_import_execution_claims` | `logical_execution_key` | `active_attempt_token_hash`, `source_fingerprint`, `cohort_seed_fingerprint` |
 | `supplier_import_dispatch_outbox` | `logical_execution_key`, `dispatch_payload_hash` | `lease_token_hash` |
+| `supplier_import_dispatch_monitor_health` | none | `monitor_owner_token_hash` |
+| `supplier_import_dispatch_alert_intents` | `alert_identity` | `delivery_owner_token_hash` |
 | `supplier_import_dispatch_recovery_authorizations` | `expected_state_fingerprint`, `authorization_nonce_hash` | none |
-| `supplier_import_dispatch_recovery_results` | `result_fingerprint` | none |
+| `supplier_import_dispatch_recovery_results` | `result_fingerprint` | `resume_state_fingerprint` |
 | `supplier_import_cohort_authorization_members` | `supplier_sku_hash` | none |
 | `supplier_offer_snapshot_generations` | `source_fingerprint`, `generation_fingerprint` | `cohort_fingerprint`, `observation_set_fingerprint` |
 | `supplier_offer_snapshot_enrollments` | `supplier_sku_hash`, `enrollment_fingerprint` | none |
@@ -3497,7 +3638,7 @@ failed.
 committed generation, enrollment, or observation.
 `N/A — legacy path has no SupplierImportRun` is abbreviated in cells as
 `legacy: N/A`. Every recovery query is bounded and owner-checked. This canonical
-matrix has exactly 41 data rows and 11 columns.
+matrix has exactly 53 data rows and 11 columns.
 Every `processing/published` or terminal-claim/`published` cell below implies a
 null `delivery_watchdog_at`; only a `queued/published` cell may carry the
 non-null watchdog, and every transition away from that pair clears it in the
@@ -3546,9 +3687,32 @@ same transaction.
 | 39. Expired-owner recovery crashes before or during its atomic transaction | both | unchanged | unchanged | unchanged | original complete expired `queued` tuple | original `published` watchdog tuple | none | rollback leaves no start/result/domain mutation; same unexpired `recover_expired_queued_ownership` may retry exact CAS | partial owner clearing, recovery reason without result, Redis or source work | retry only after rollback and tuple revalidation |
 | 40. Expired-owner authorization loses CAS to a successor/live owner | both | unchanged | unchanged | unchanged | successor complete `queued` tuple | `published` | none | exact old token/hash/timestamp predicate affects zero rows and records only a nonce-proven Phase-A rejection when canonical; successor continues | clearing successor, matching only expiry, half-bound repair, or reuse of stale fingerprint | inspect successor; old authorization cannot retry mutation |
 | 41. Expired-owner recovery commits before response or duplicate retry | both | unchanged | unchanged | unchanged | `queued`, all-null owner | `recovery_required` with `queued_ownership_lease_expired`, watchdog null | none | immutable `ownership_recovery_succeeded` proves complete commit; duplicate returns result; Redis requires a new `republish_same_key` authorization | second clear, implicit republication, terminalization or parent/evidence mutation under release authority | separately issue republish only if current boundaries and health permit |
+| 42. Monitor lease crash before successful cycle persistence | monitor coordination | unchanged | unchanged | unchanged | unchanged | unchanged | no supplier evidence; monitor row retains generation-bound complete lease and prior successful state | after the 240-second lease expires, one successor may acquire a new generation; derived health becomes stale or unknown at its exact freshness boundary | clearing the lease without generation/token CAS, advancing success fields, creating alerts from an incomplete cycle, or domain mutation | inspect monitor state; keep capture and recovery admission fail closed until a complete successor cycle and observer heartbeat commit |
+| 43. Successful monitor cycle persists but lease renewal or next acquisition does not | monitor coordination | unchanged | unchanged | unchanged | unchanged | unchanged | complete cycle, sink-health timestamp and required alert intents are durable; successful completion cleared the lease before process loss | current evidence remains healthy only inside the 600-second window and after matching observer binding; a later scheduler instance acquires the next generation normally | treating process liveness as durable health, extending timestamps, or mutating claims/outboxes | restore scheduling if needed and require the next complete cycle before freshness expires |
+| 44. Stale monitor wakes after a successor generation is acquired | monitor coordination | unchanged | unchanged | unchanged | unchanged | unchanged | monitor row contains successor generation and owner hash; old generation/token is stale | old worker exits; successor alone may complete or fail its generation | old worker query results, alerts, heartbeat or state writes | none unless successor also fails; preserve fail-closed freshness derivation |
+| 45. Stale monitor attempts heartbeat or state mutation | monitor coordination | unchanged | unchanged | unchanged | unchanged | unchanged | successor monitor generation, owner tuple and prior success evidence remain unchanged | exact generation/token/lease CAS affects zero rows and the stale worker exits | overwriting successor, refreshing success timestamps, clearing successor lease or changing admission state | investigate repeated stale writers without weakening the CAS |
+| 46. Alert-delivery lease crash before external attempt | alert coordination | unchanged | unchanged | unchanged | unchanged | unchanged | alert intent is `delivering` with incremented attempt count, generation-bound complete lease and no ACK; after process loss the database cannot prove that the call boundary was not crossed | retain unacknowledged uncertainty; after the five-minute lease expires, a successor retries the same `alert_identity` under a new generation | marking acknowledged, claiming durable non-attempt, changing logical identity or domain mutation | allow lease recovery; investigate only if retries exhaust |
+| 47. Alert worker crashes after external attempt but before ACK persistence | alert coordination | unchanged | unchanged | unchanged | unchanged | unchanged | intent remains `delivering` with complete lease and no durable ACK; external outcome is unknown | retain uncertainty; after expiry a successor retries idempotently with the same `alert_identity` | guessing delivered or undelivered, creating a new identity, or writing a synthetic ACK | verify sink idempotency and allow generation-bound retry |
+| 48. Alert-delivery lease expires | alert coordination | unchanged | unchanged | unchanged | unchanged | unchanged | expired `delivering` tuple retains attempt count, generation and no ACK; durable facts distinguish no acknowledged result, not external outcome | one successor atomically increments generation/attempt and replaces the complete owner tuple | clear-first repair, attempt rollback, identity replacement or simultaneous takeover | none unless attempt eight or permanent failure requires investigation |
+| 49. Successor alert worker acquires a new delivery generation | alert coordination | unchanged | unchanged | unchanged | unchanged | unchanged | intent remains `delivering` with successor generation/token and stable immutable payload/identity | successor performs at most the current idempotent attempt and owns ACK/retry CAS | old-generation mutation, duplicate intent, payload drift or domain mutation | monitor successor result and health gate |
+| 50. Old alert worker returns after successor acquisition | alert coordination | unchanged | unchanged | unchanged | unchanged | unchanged | successor delivery tuple and any successor result remain authoritative | old generation/token ACK, retry or failure CAS affects zero rows | accepting a late ACK into the successor generation or overwriting its result | inspect sink by stable identity only; do not mutate local evidence manually |
+| 51. Alert acknowledgement persists before worker loss | alert coordination | unchanged | unchanged | unchanged | unchanged | unchanged | intent is durably `acknowledged`, ACK time is non-null and owner/retry fields are null | duplicate delivery observes terminal acknowledged state and performs no external call | reacquiring delivery lease, redelivering or changing ACK evidence | none |
+| 52. Independent observer fails or stops updating | observer coordination | unchanged | unchanged | unchanged | unchanged | unchanged | monitor cycle/sink may remain fresh, but observer sequence/timestamp stop; after 120 seconds derived health is stale | restart probe; one short transaction must revalidate latest monitor generation/cycle and commit a fresh observer binding | monitor self-authorizing observer freshness, copying timestamps, or admitting capture/recovery while stale | keep protected admission closed until the new observer transaction succeeds |
+| 53. External alert ACK is uncertain without a durable local ACK | alert coordination | unchanged | unchanged | unchanged | unchanged | unchanged | durable intent preserves stable identity and an unacknowledged attempted state; sink may or may not have accepted | retain `outcome unknown`; retry only after lease rules permit and only with the same sink idempotency identity | converting uncertainty to acknowledged or permanent failure without allowed sink evidence, or suppressing the retry | inspect sink health; keep monitor integrity failed/stale where its contract requires until a bounded ACK succeeds |
+
+Rows 42 through 53 are coordination-only crash domains. They never mutate a
+SupplierImportRun, ImportJob, ImportHistory, execution claim, dispatch outbox,
+snapshot evidence, Product, `supplier_products`, schedule or Catalog Sync
+state. The durable alert classes are exact: `pending` before lease acquisition
+is not attempted; any crashed `delivering` generation without a persisted ACK
+is outcome unknown, even when the last in-process boundary was before the call;
+and `acknowledged` is the only delivered proof. Rows 46 and 47 remain separate
+crash boundaries but intentionally converge on the same conservative durable
+unknown state after process loss. Silence or transport ambiguity is never an
+acknowledgement.
 
 Rows 34 through 41 use these mandatory authorization crash subcases in addition
-to the canonical 41-row by 11-column matrix:
+to the canonical 53-row by 11-column matrix:
 
 | Crash/retry subcase | Exact durable result and next action |
 | --- | --- |
@@ -3890,7 +4054,8 @@ stand in for missing history from another supplier.
 
 ## Explicitly Prohibited Data And Writes
 
-All eight proposed tables may not contain raw supplier SKU, EAN/GTIN, MPN,
+All ten tables in the canonical proposed-table inventory may not contain raw
+supplier SKU, EAN/GTIN, MPN,
 product name, description, raw source record, XML, feed URL, credential, raw
 token, host path, container path, SEO, category, attribute, image, or
 application secret. Hashed attempt/lease tokens and approved pseudonymous
@@ -3980,96 +4145,126 @@ Rollback must never delete already captured history.
 
 ### Fine-grained rollout checkpoints
 
-This is the canonical 71-row fine-grained checkpoint matrix. Every
+This is the canonical 89-row fine-grained checkpoint matrix. Every
 authorization row records an
 explicit human/repository-owner decision and performs no technical action.
-Every action row permits only its named action. Review is not push/PR; review is
+Every action row permits only its named action. Review is not push or PR; review is
 not merge; merge is not deployment; deployment is not enablement; enablement is
 not import; candidate creation is not approval; approval is not preview; result
 review is not closeout. A failed row blocks every later row.
 
+Every one of the five PR-producing chains uses this invariant in separate
+checkpoints: local artifact and validation, independent review, exact push
+authorization, push, exact remote-branch SHA verification, Draft PR creation,
+PR base/head verification, CI, independent PR review, merge authorization and
+merge. Remote verification proves that the expected remote branch exists, its
+SHA equals the authorized local commit, no unexpected commit is present, and
+the intended base is still correct before PR creation. A Draft PR is never
+treated as proof that the authorized branch was pushed.
+
 | # | Checkpoint | Prerequisite | Separately responsible authorization | Permitted action | Result/artifact | Failure behavior | Next |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | Local design independent approval | complete local thirteen-commit design candidate | independent Security, Database and Catalog Sync Safety reviewers | review only | `APPROVED` verdict for exact diff | remediate locally; no push | 2 |
-| 2 | Authorize design push/Draft PR | checkpoint 1 approval | repository owner | authorize only the exact reviewed commit | recorded one-workflow authorization | remain local | 3 |
-| 3 | Create design Draft PR | checkpoint 2 authorization | Release/DevOps operator | push exact branch and open Draft PR | Draft PR with pinned head/base | stop; do not broaden scope | 4 |
-| 4 | Design PR CI/review approval | checkpoint 3 Draft PR | CI plus independent reviewers | checks and review only | green required checks and approval | remediate in a separately reviewed commit | 5 |
-| 5 | Authorize design merge | checkpoint 4 evidence | repository owner | authorize merge only | explicit merge authorization | PR remains open | 6 |
-| 6 | Merge design PR | checkpoint 5 authorization | Release/DevOps operator | merge exact approved PR | merge commit in `main` | stop without schema work | 7 |
-| 7 | Authorize schema implementation | checkpoint 6 merged design | repository owner with Database/Security scope | authorize additive schema work only | scoped implementation authorization | schema remains absent | 8 |
-| 8 | Implement/validate schema locally | checkpoint 7 authorization | implementation owner | add claim, outbox, evidence migrations/repositories and MySQL tests | local validated schema commit | keep capture absent/disabled | 9 |
-| 9 | Authorize capture/idempotency/outbox implementation | checkpoint 8 validated schema | repository owner with Security/Catalog Sync Safety scope | authorize runtime implementation only | scoped implementation authorization | runtime remains absent | 10 |
-| 10 | Implement/validate capture locally | checkpoint 9 authorization | implementation owner | implement disabled stable-key/outbox/coordinator/streaming/capture behavior and tests | local validated implementation commit | keep feature disabled | 11 |
-| 11 | Independent implementation review | checkpoint 10 exact diff and test evidence | independent Database, Security and Catalog Sync Safety reviewers | review only | approval or findings | remediate; no push | 12 |
-| 12 | Authorize implementation push/Draft PR | checkpoint 11 approval | repository owner | authorize exact reviewed commit only | recorded authorization | remain local | 13 |
-| 13 | Create implementation Draft PR | checkpoint 12 authorization | Release/DevOps operator | push/open Draft PR | pinned Draft PR | stop; no deployment | 14 |
-| 14 | Implementation PR CI/review approval | checkpoint 13 PR | CI plus independent reviewers | checks/review only | green MySQL/concurrency/crash/privacy tests and approval | remediate through review | 15 |
-| 15 | Authorize implementation merge | checkpoint 14 evidence | repository owner | authorize merge only | explicit merge authorization | PR remains open | 16 |
-| 16 | Merge implementation PR | checkpoint 15 authorization | Release/DevOps operator | merge exact approved PR | merge commit in `main` | stop; capture remains disabled | 17 |
-| 17 | Authorize staging deployment | checkpoint 16 merge and deploy plan | repository owner | authorize exact merged commit deployment only | deployment authorization | no VPS action | 18 |
-| 18 | Deploy implementation disabled | checkpoint 17 authorization | Release/DevOps operator | deploy exact `origin/main` with capture/reconcilers disabled | staging deployment evidence | rollback application state safely | 19 |
-| 19 | Independent post-deployment verification | checkpoint 18 deployment | independent Release/QA reviewer | read-only staging verification | containers/schema/flags/importer/Super Admin evidence | capture remains disabled | 20 |
-| 20 | Monitor/observer design review approval | checkpoint 19 plus the exact canonical monitor, observer, alert identity, schema, CAS and rollout design | independent Database, Security, Release and Catalog Sync Safety reviewers | review design only | approval pinned to exact design commit and canonical vectors/schema | remediate design; no implementation | 21 |
-| 21 | Authorize monitor/observer implementation | checkpoint 20 approval | repository owner with Database/Security/Catalog Sync Safety scope | authorize only disabled monitor, observer, sink adapter, schema and tests | scoped implementation authorization | implementation remains absent | 22 |
-| 22 | Verify implementation branch/repository state | checkpoint 21 authorization | implementation owner | create/verify exact branch from approved `origin/main`, clean tree and allowed scope | recorded base/head/scope checkpoint | stop on divergence; no edits | 23 |
-| 23 | Implement monitor/observer locally | checkpoint 22 verified state | implementation owner | implement disabled exact schema, monitor lease/CAS, observer, alert identity/sink and admission gate | local implementation candidate; no push/PR | keep schedule/capture/recovery disabled | 24 |
-| 24 | Run focused monitor/observer tests | checkpoint 23 candidate | QA/implementation owner | run exact unit/feature, zero-domain-mutation, lease/race, alert-vector and failure tests | focused green evidence | remediate locally; no push | 25 |
-| 25 | Validate database/migrations | checkpoint 24 green tests | independent Database reviewer | inspect additive/reverse order, MySQL 8.4 checks/indexes/FKs and CAS integration | database validation PASS or findings | remediate; no push | 26 |
-| 26 | Security and Catalog Sync safety audit | checkpoint 25 PASS | independent Security and Catalog Sync Safety reviewers | audit nonce/hash/privacy, sink boundaries, fail-closed gates and zero supplier/catalog mutation | security/safety PASS or findings | remediate; no push | 27 |
-| 27 | Independent implementation review | checkpoints 24 through 26 evidence and exact local diff | independent Release/QA plus prior mandatory reviewers | review implementation only | `PASS` or `BLOCKED` findings pinned to exact commit | no push or PR | 28 |
-| 28 | Remediate blocked monitor findings or record not-required | checkpoint 27 verdict | implementation owner | if BLOCKED, change only reviewed findings and rerun affected validation; if PASS, record explicit not-required evidence | remediated candidate or `NOT_REQUIRED` tied to checkpoint 27 PASS | remain local until independent PASS | 29 |
-| 29 | Independent monitor re-review/PASS | checkpoint 28 remediated candidate or not-required evidence | independent Database, Security, Release and Catalog Sync Safety reviewers | review exact final local commit and all evidence | final independent `PASS` pinned to exact commit | remediate through 28; no push | 30 |
-| 30 | Authorize monitor branch push | checkpoint 29 PASS | repository owner | authorize push of exact reviewed commit and branch only | one exact push authorization | remain local | 31 |
-| 31 | Push exact monitor branch | checkpoint 30 authorization | Release/DevOps operator | push only exact approved branch/commit; no PR mutation yet | remote branch pinned to reviewed commit | stop on remote divergence | 32 |
-| 32 | Create monitor Draft PR | checkpoint 31 verified remote branch | Release/DevOps operator | open one Draft PR against `main` with exact approved scope | Draft PR pinned to base/head | keep Draft; no merge/deploy | 33 |
-| 33 | Monitor Draft PR CI | checkpoint 32 Draft PR | GitHub Actions CI | run required backend/MySQL/security checks only | all required checks terminal-success | remediate through new review chain; no merge | 34 |
-| 34 | Monitor PR review approval | checkpoint 33 green CI and unchanged head | independent reviewers | review exact PR diff only | approvals with no unresolved findings | remain Draft/open until authorized transition/merge process | 35 |
-| 35 | Authorize monitor PR merge | checkpoint 34 approval and exact unchanged head | repository owner | authorize merge of exact approved PR only | explicit merge authorization | PR remains open | 36 |
-| 36 | Merge monitor PR | checkpoint 35 authorization | Release/DevOps operator | merge exact approved PR using repository strategy | merge commit in `main`; schedule/capture/recovery disabled | stop; no deployment | 37 |
-| 37 | Authorize disabled monitor staging deployment | checkpoint 36 merge plus reviewed deployment/rollback plan | repository owner | authorize exact merged commit deployment with schedules and capture/recovery disabled | exact deployment authorization | no VPS action | 38 |
-| 38 | Deploy monitor disabled | checkpoint 37 authorization | Release/DevOps operator | deploy exact `origin/main`, run migrations with monitor/observer/sink schedule disabled | schema/code present, singleton `unknown`, no scheduled monitor activity | rollback application state; keep all gates disabled | 39 |
-| 39 | Independent disabled-deployment verification | checkpoint 38 deployment | independent Release/QA/Database/Security reviewers | read-only schema/container/flag/privacy/zero-domain-mutation verification | deployment PASS pinned to exact commit and schema | rollback or remediate; no enablement | 40 |
-| 40 | Authorize monitor schedule/sink enablement | checkpoint 39 PASS and configured approved sink without documented secrets | repository owner with Security/Catalog Sync Safety approval | authorize only 300-second monitor and independent 60-second observer | exact enablement authorization | schedules remain disabled | 41 |
-| 41 | Enable and verify monitor/sink/observer | checkpoint 40 authorization | Release/Operations operator | enable only monitor and observer, verify canonical synthetic alert/ack and dual freshness; keep capture/recovery disabled | positive generations/sequences, fresh 600/120-second evidence, healthy probe, privacy and zero-domain-mutation proof | disable monitor/observer and keep capture/recovery disabled | 42 |
-| 42 | Authorize APCOM capture enablement | checkpoint 41 currently fresh derived `healthy` state, acknowledged sink and generation-bound observer heartbeat | repository owner with Catalog Sync Safety approval | authorize capture enablement only while the continuous dual-freshness gate remains healthy | one enablement authorization bound to current monitor and observer sequences | capture stays disabled | 43 |
-| 43 | Enable and verify capture | checkpoint 42 authorization plus revalidated healthy gate | Release/Operations operator | enable APCOM-specific gate and verify automatic rejection on synthetic stale/failed/unknown health; do not import | enabled only while healthy, verified fail-closed admission and default-off-import state | disable capture; no protected generation may start | 44 |
-| 44 | Authorize one future APCOM import | checkpoint 43 or prior verified import | repository owner/operator for one named execution | authorize exactly one manual import | pinned one-import authorization | no import | 45 |
-| 45 | Execute/verify authorized import | checkpoint 44 authorization | Supplier Import operator | run exactly one import and verify claim/outbox/generation | one qualified/frozen/failed generation or gap | no automatic retry; recover fail-closed | 44 or 46 |
-| 46 | Verify warm-up/readiness | sufficient checkpoint 45 generations | independent Product Data Quality/Catalog Sync Safety reviewer | read-only readiness evaluation | baseline plus three comparable absences and 48-hour proof, or not-ready result | wait for separately authorized imports | 47 |
-| 47 | Authorize evidence-producer implementation | checkpoint 46 ready evidence | repository owner | authorize producer code only | scoped authorization | producer remains absent | 48 |
-| 48 | Implement/validate producer locally | checkpoint 47 authorization | implementation owner | implement bounded read-only V1 producer and tests | local validated producer commit | no candidate | 49 |
-| 49 | Independent producer review | checkpoint 48 exact diff | independent Security/Product Data Quality/Catalog Sync Safety reviewers | review only | approval or findings | remediate; no push | 50 |
-| 50 | Authorize producer push/Draft PR | checkpoint 49 approval | repository owner | authorize exact reviewed commit | recorded authorization | remain local | 51 |
-| 51 | Create producer Draft PR | checkpoint 50 authorization | Release/DevOps operator | push/open Draft PR | pinned Draft PR | stop | 52 |
-| 52 | Producer PR CI/review approval | checkpoint 51 PR | CI plus independent reviewers | checks/review only | green checks and approval | remediate through review | 53 |
-| 53 | Authorize producer merge | checkpoint 52 evidence | repository owner | authorize merge only | merge authorization | PR remains open | 54 |
-| 54 | Merge producer PR | checkpoint 53 authorization | Release/DevOps operator | merge exact approved PR | merge commit in `main` | stop | 55 |
-| 55 | Authorize producer staging deployment | checkpoint 54 merge | repository owner | authorize exact deployment only | deployment authorization | no VPS action | 56 |
-| 56 | Deploy producer | checkpoint 55 authorization | Release/DevOps operator | deploy read-only producer from exact `origin/main` | deployment evidence | rollback application state | 57 |
-| 57 | Producer post-deployment verification | checkpoint 56 deployment | independent Release/QA reviewer | read-only verification | bounded/read-only/zero-mutation proof | block candidate work | 58 |
-| 58 | Authorize evidence-candidate preparation | checkpoint 57 proof | repository owner/human decision owner | authorize one candidate preparation only | candidate-preparation authorization | no candidate | 59 |
-| 59 | Prepare exact candidate | checkpoint 58 authorization | authorized evidence operator | create one pinned privacy-safe candidate | path, SHA-256 and evaluation timestamp | destroy/reject invalid candidate | 60 |
-| 60 | Human approval of exact candidate | checkpoint 59 artifact | named human decision owner | approve exact path/hash/timestamp only | recorded exact-candidate approval | reject/destroy candidate | 61 |
-| 61 | Authorize operational preview | checkpoint 60 approval | repository owner | authorize exactly one preview run | one-run authorization | no preview | 62 |
-| 62 | Execute one operational preview | checkpoint 61 authorization | authorized operator | run exactly one read-only C3D.1 preview | report and zero-mutation evidence | stop; rerun needs new authorization | 63 |
-| 63 | Independent operational-result review | checkpoint 62 report | independent Security/Product Data Quality/Catalog Sync Safety reviewers | review results only | approved result or findings | C3D.1 remains open | 64 |
-| 64 | Authorize documentation closeout | checkpoint 63 approval | repository owner | authorize documentation edits only | closeout authorization | no edits | 65 |
-| 65 | Implement closeout documentation | checkpoint 64 authorization | Documentation owner | update status/evidence docs only | local closeout commit | C3D.1 remains open | 66 |
-| 66 | Independent closeout review | checkpoint 65 exact diff | independent Documentation/Safety reviewers | review only | approval or findings | remediate; no push | 67 |
-| 67 | Authorize closeout push/Draft PR | checkpoint 66 approval | repository owner | authorize exact commit | recorded authorization | remain local | 68 |
-| 68 | Create closeout Draft PR | checkpoint 67 authorization | Release/DevOps operator | push/open Draft PR | pinned Draft PR | stop | 69 |
-| 69 | Closeout PR CI/review approval | checkpoint 68 PR | CI plus independent reviewers | checks/review only | green checks and approval | remediate through review | 70 |
-| 70 | Authorize closeout merge | checkpoint 69 evidence | repository owner | authorize merge only | merge authorization | PR remains open | 71 |
-| 71 | Merge closeout PR | checkpoint 70 authorization | Release/DevOps operator | merge exact approved documentation PR | closeout merge in `main` | C3D.1 remains open if merge fails | no later supplier phase without separate authorization |
+| 1 | Local design independent approval | complete local fourteen-commit design candidate and validation evidence | independent Security, Database and Catalog Sync Safety reviewers | review only | `APPROVED` verdict for exact diff | remediate locally; no push | 2 |
+| 2 | Authorize design branch push | checkpoint 1 approval | repository owner | authorize only the exact reviewed commit and branch | recorded push-only authorization | remain local | 3 |
+| 3 | Push exact design branch | checkpoint 2 authorization | Release/DevOps operator | push only the authorized branch/commit; no PR action | remote branch exists pending independent verification | stop on push failure | 4 |
+| 4 | Verify design remote branch | checkpoint 3 push | independent Release/DevOps verifier | prove remote SHA equals authorized local SHA, no extra commit exists and intended base is still `main` | exact remote branch verification evidence | stop on divergence; no PR | 5 |
+| 5 | Create design Draft PR | checkpoint 4 verified remote branch | Release/DevOps operator | open one Draft PR against `main` | Draft PR created; no readiness/merge action | close erroneous PR without broadening scope | 6 |
+| 6 | Verify design PR base/head | checkpoint 5 Draft PR | independent Release/DevOps verifier | verify exact base, head branch and head SHA | pinned PR base/head evidence | keep Draft and stop on mismatch | 7 |
+| 7 | Run design PR CI | checkpoint 6 verified PR | GitHub Actions CI | run required documentation/security checks | all required checks terminal-success | remediate in separately reviewed commit | 8 |
+| 8 | Independent design PR review | checkpoint 7 green CI and unchanged head | independent reviewers | review exact PR diff only | approval with no unresolved findings | keep PR open; remediate through full review chain | 9 |
+| 9 | Authorize design merge | checkpoint 8 approval | repository owner | authorize merge only | explicit merge authorization | PR remains open | 10 |
+| 10 | Merge design PR | checkpoint 9 authorization | Release/DevOps operator | merge exact approved PR | merge commit in `main` | stop without schema work | 11 |
+| 11 | Authorize schema implementation | checkpoint 10 merged design | repository owner with Database/Security scope | authorize additive schema work only | scoped implementation authorization | schema remains absent | 12 |
+| 12 | Implement/validate schema locally | checkpoint 11 authorization | implementation owner | add claim, outbox, evidence migrations/repositories and MySQL tests | local validated schema commit | keep capture absent/disabled | 13 |
+| 13 | Authorize capture/idempotency/outbox implementation | checkpoint 12 validated schema | repository owner with Security/Catalog Sync Safety scope | authorize runtime implementation only | scoped implementation authorization | runtime remains absent | 14 |
+| 14 | Implement/validate capture locally | checkpoint 13 authorization | implementation owner | implement disabled stable-key/outbox/coordinator/streaming/capture behavior and tests | local validated implementation commit | keep feature disabled | 15 |
+| 15 | Independent implementation review | checkpoint 14 exact diff and test evidence | independent Database, Security and Catalog Sync Safety reviewers | review only | approval or findings | remediate; no push | 16 |
+| 16 | Authorize implementation branch push | checkpoint 15 approval | repository owner | authorize exact reviewed commit and branch only | recorded push-only authorization | remain local | 17 |
+| 17 | Push exact implementation branch | checkpoint 16 authorization | Release/DevOps operator | push only authorized branch/commit; no PR action | remote branch exists pending verification | stop on push failure | 18 |
+| 18 | Verify implementation remote branch | checkpoint 17 push | independent Release/DevOps verifier | prove exact remote SHA, no extra commit and intended `main` base | exact remote branch verification evidence | stop on divergence; no PR | 19 |
+| 19 | Create implementation Draft PR | checkpoint 18 verified remote branch | Release/DevOps operator | open one Draft PR against `main` | Draft PR created | keep Draft; no deployment | 20 |
+| 20 | Verify implementation PR base/head | checkpoint 19 Draft PR | independent Release/DevOps verifier | verify exact base, head branch and head SHA | pinned PR base/head evidence | stop on mismatch; no CI assumption | 21 |
+| 21 | Run implementation PR CI | checkpoint 20 verified PR | GitHub Actions CI | run required MySQL/concurrency/crash/privacy checks | all required checks terminal-success | remediate through full review chain | 22 |
+| 22 | Independent implementation PR review | checkpoint 21 green CI and unchanged head | independent Database, Security and Catalog Sync Safety reviewers | review exact PR diff only | approval with no unresolved findings | keep PR open; remediate through full chain | 23 |
+| 23 | Authorize implementation merge | checkpoint 22 approval | repository owner | authorize merge only | explicit merge authorization | PR remains open | 24 |
+| 24 | Merge implementation PR | checkpoint 23 authorization | Release/DevOps operator | merge exact approved PR | merge commit in `main` | stop; capture remains disabled | 25 |
+| 25 | Authorize staging deployment | checkpoint 24 merge and deploy plan | repository owner | authorize exact merged commit deployment only | deployment authorization | no VPS action | 26 |
+| 26 | Deploy implementation disabled | checkpoint 25 authorization | Release/DevOps operator | deploy exact `origin/main` with capture/reconcilers disabled | staging deployment evidence | operational rollback preserves schema/evidence | 27 |
+| 27 | Independent post-deployment verification | checkpoint 26 deployment | independent Release/QA reviewer | read-only staging verification | containers/schema/flags/importer/Super Admin evidence | capture remains disabled | 28 |
+| 28 | Monitor/observer design review approval | checkpoint 27 plus exact canonical monitor, observer, alert identity, schema, CAS and rollout design | independent Database, Security, Release and Catalog Sync Safety reviewers | review design only | approval pinned to exact design commit and vectors/schema | remediate design; no implementation | 29 |
+| 29 | Authorize monitor/observer implementation | checkpoint 28 approval | repository owner with Database/Security/Catalog Sync Safety scope | authorize only disabled monitor, observer, sink adapter, schema and tests | scoped implementation authorization | implementation remains absent | 30 |
+| 30 | Verify implementation branch/repository state | checkpoint 29 authorization | implementation owner | create/verify exact branch from approved `origin/main`, clean tree and allowed scope | recorded base/head/scope checkpoint | stop on divergence; no edits | 31 |
+| 31 | Implement monitor/observer locally | checkpoint 30 verified state | implementation owner | implement disabled exact schema, monitor lease/CAS, observer, alert identity/sink and admission gate | local implementation candidate; no push or PR | keep schedule/capture/recovery disabled | 32 |
+| 32 | Run focused monitor/observer tests | checkpoint 31 candidate | QA/implementation owner | run exact zero-domain-mutation, lease/race, alert-vector and failure tests | focused green evidence | remediate locally; no push | 33 |
+| 33 | Validate database/migrations | checkpoint 32 green tests | independent Database reviewer | inspect additive schema, guarded empty-schema down, MySQL checks/indexes/FKs and CAS integration | database validation PASS or findings | remediate; no push | 34 |
+| 34 | Security and Catalog Sync safety audit | checkpoint 33 PASS | independent Security and Catalog Sync Safety reviewers | audit nonce/hash/privacy, sink boundaries, fail-closed gates and zero supplier/catalog mutation | security/safety PASS or findings | remediate; no push | 35 |
+| 35 | Independent monitor implementation review | checkpoints 32 through 34 evidence and exact local diff | independent Release/QA plus prior mandatory reviewers | review implementation only | `PASS` or `BLOCKED` pinned to exact commit | no push or PR | 36 |
+| 36 | Remediate blocked monitor findings or record not-required | checkpoint 35 verdict | implementation owner | if BLOCKED, remediate and rerun affected validation; if PASS, record `NOT_REQUIRED` | final candidate tied to verdict | remain local until independent PASS | 37 |
+| 37 | Independent monitor re-review/PASS | checkpoint 36 candidate or not-required evidence | independent Database, Security, Release and Catalog Sync Safety reviewers | review exact final local commit and evidence | final independent `PASS` pinned to exact commit | remediate through 36; no push | 38 |
+| 38 | Authorize monitor branch push | checkpoint 37 PASS | repository owner | authorize push of exact reviewed commit and branch only | push-only authorization | remain local | 39 |
+| 39 | Push exact monitor branch | checkpoint 38 authorization | Release/DevOps operator | push only exact approved branch/commit; no PR action | remote branch exists pending verification | stop on push failure | 40 |
+| 40 | Verify monitor remote branch | checkpoint 39 push | independent Release/DevOps verifier | prove exact remote SHA, no extra commit and intended `main` base | exact remote verification evidence | stop on divergence; no PR | 41 |
+| 41 | Create monitor Draft PR | checkpoint 40 verified remote branch | Release/DevOps operator | open one Draft PR against `main` | Draft PR created | keep Draft; no merge/deploy | 42 |
+| 42 | Verify monitor PR base/head | checkpoint 41 Draft PR | independent Release/DevOps verifier | verify exact base, head branch and head SHA | pinned PR base/head evidence | stop on mismatch | 43 |
+| 43 | Run monitor Draft PR CI | checkpoint 42 verified PR | GitHub Actions CI | run required backend/MySQL/security checks | all required checks terminal-success | remediate through full review chain | 44 |
+| 44 | Independent monitor PR review | checkpoint 43 green CI and unchanged head | independent reviewers | review exact PR diff only | approvals with no unresolved findings | remain Draft/open until merge authorization | 45 |
+| 45 | Authorize monitor PR merge | checkpoint 44 approval and exact unchanged head | repository owner | authorize merge of exact approved PR only | explicit merge authorization | PR remains open | 46 |
+| 46 | Merge monitor PR | checkpoint 45 authorization | Release/DevOps operator | merge exact approved PR using repository strategy | merge commit in `main`; schedules/capture/recovery disabled | stop; no deployment | 47 |
+| 47 | Authorize disabled monitor staging deployment | checkpoint 46 merge plus reviewed deployment/rollback plan | repository owner | authorize exact merged commit deployment with schedules and capture/recovery disabled | exact deployment authorization | no VPS action | 48 |
+| 48 | Deploy monitor disabled | checkpoint 47 authorization | Release/DevOps operator | deploy exact `origin/main`, run migrations with monitor/observer/sink disabled | schema/code present, singleton `unknown`, no scheduled monitor activity | operational rollback keeps schema/evidence and all gates disabled | 49 |
+| 49 | Independent disabled-deployment verification | checkpoint 48 deployment | independent Release/QA/Database/Security reviewers | read-only schema/container/flag/privacy/zero-domain-mutation verification | deployment PASS pinned to exact commit/schema | rollback operational state or remediate; no enablement | 50 |
+| 50 | Authorize monitor schedule/sink enablement | checkpoint 49 PASS and configured approved sink without documented secrets | repository owner with Security/Catalog Sync Safety approval | authorize only 300-second monitor and independent 60-second observer | exact enablement authorization | schedules remain disabled | 51 |
+| 51 | Enable and verify monitor/sink/observer | checkpoint 50 authorization | Release/Operations operator | enable monitor/observer and verify canonical synthetic alert/ACK plus dual freshness; keep capture/recovery disabled | positive generations/sequences, fresh 600/120-second evidence and zero-domain-mutation proof | disable monitor/observer and keep capture/recovery disabled | 52 |
+| 52 | Authorize APCOM capture enablement | checkpoint 51 currently fresh derived `healthy` state and acknowledged sink/observer | repository owner with Catalog Sync Safety approval | authorize capture enablement only while continuous gate remains healthy | authorization bound to current monitor/observer sequences | capture stays disabled | 53 |
+| 53 | Enable and verify capture | checkpoint 52 authorization plus revalidated healthy gate | Release/Operations operator | enable APCOM-specific gate and verify rejection on stale/failed/unknown health; do not import | enabled only while healthy and default-off import verified | disable capture; no protected generation may start | 54 |
+| 54 | Authorize one future APCOM import | checkpoint 53 or prior verified import | repository owner/operator for one named execution | authorize exactly one manual import | pinned one-import authorization | no import | 55 |
+| 55 | Execute/verify authorized import | checkpoint 54 authorization | Supplier Import operator | run exactly one import and verify claim/outbox/generation | one qualified/frozen/failed generation or gap | no automatic retry; recover fail closed | 54 or 56 |
+| 56 | Verify warm-up/readiness | sufficient checkpoint 55 generations | independent Product Data Quality/Catalog Sync Safety reviewer | read-only readiness evaluation | baseline plus three comparable absences and 48-hour proof, or not-ready result | wait for separately authorized imports | 57 |
+| 57 | Authorize evidence-producer implementation | checkpoint 56 ready evidence | repository owner | authorize producer code only | scoped authorization | producer remains absent | 58 |
+| 58 | Implement/validate producer locally | checkpoint 57 authorization | implementation owner | implement bounded read-only V1 producer and tests | local validated producer commit | no candidate | 59 |
+| 59 | Independent producer review | checkpoint 58 exact diff and test evidence | independent Security/Product Data Quality/Catalog Sync Safety reviewers | review only | approval or findings | remediate; no push | 60 |
+| 60 | Authorize producer branch push | checkpoint 59 approval | repository owner | authorize exact reviewed commit and branch only | push-only authorization | remain local | 61 |
+| 61 | Push exact producer branch | checkpoint 60 authorization | Release/DevOps operator | push only exact branch/commit; no PR action | remote branch exists pending verification | stop on push failure | 62 |
+| 62 | Verify producer remote branch | checkpoint 61 push | independent Release/DevOps verifier | prove exact remote SHA, no extra commit and intended `main` base | exact remote verification evidence | stop on divergence; no PR | 63 |
+| 63 | Create producer Draft PR | checkpoint 62 verified remote branch | Release/DevOps operator | open one Draft PR against `main` | Draft PR created | keep Draft | 64 |
+| 64 | Verify producer PR base/head | checkpoint 63 Draft PR | independent Release/DevOps verifier | verify exact base, head branch and head SHA | pinned PR base/head evidence | stop on mismatch | 65 |
+| 65 | Run producer PR CI | checkpoint 64 verified PR | GitHub Actions CI | run required checks | all required checks terminal-success | remediate through full review chain | 66 |
+| 66 | Independent producer PR review | checkpoint 65 green CI and unchanged head | independent reviewers | review exact PR diff only | approval with no unresolved findings | keep PR open | 67 |
+| 67 | Authorize producer merge | checkpoint 66 approval | repository owner | authorize merge only | merge authorization | PR remains open | 68 |
+| 68 | Merge producer PR | checkpoint 67 authorization | Release/DevOps operator | merge exact approved PR | merge commit in `main` | stop | 69 |
+| 69 | Authorize producer staging deployment | checkpoint 68 merge | repository owner | authorize exact deployment only | deployment authorization | no VPS action | 70 |
+| 70 | Deploy producer | checkpoint 69 authorization | Release/DevOps operator | deploy read-only producer from exact `origin/main` | deployment evidence | operational rollback preserves schema/evidence | 71 |
+| 71 | Producer post-deployment verification | checkpoint 70 deployment | independent Release/QA reviewer | read-only verification | bounded/read-only/zero-mutation proof | block candidate work | 72 |
+| 72 | Authorize evidence-candidate preparation | checkpoint 71 proof | repository owner/human decision owner | authorize one candidate preparation only | candidate-preparation authorization | no candidate | 73 |
+| 73 | Prepare exact candidate | checkpoint 72 authorization | authorized evidence operator | create one pinned privacy-safe candidate | path, SHA-256 and evaluation timestamp | destroy/reject invalid candidate | 74 |
+| 74 | Human approval of exact candidate | checkpoint 73 artifact | named human decision owner | approve exact path/hash/timestamp only | recorded exact-candidate approval | reject/destroy candidate | 75 |
+| 75 | Authorize operational preview | checkpoint 74 approval | repository owner | authorize exactly one preview run | one-run authorization | no preview | 76 |
+| 76 | Execute one operational preview | checkpoint 75 authorization | authorized operator | run exactly one read-only C3D.1 preview | report and zero-mutation evidence | stop; rerun needs new authorization | 77 |
+| 77 | Independent operational-result review | checkpoint 76 report | independent Security/Product Data Quality/Catalog Sync Safety reviewers | review results only | approved result or findings | C3D.1 remains open | 78 |
+| 78 | Authorize documentation closeout | checkpoint 77 approval | repository owner | authorize documentation edits only | closeout authorization | no edits | 79 |
+| 79 | Implement closeout documentation | checkpoint 78 authorization | Documentation owner | update status/evidence docs only | local closeout commit | C3D.1 remains open | 80 |
+| 80 | Independent closeout review | checkpoint 79 exact diff and test evidence | independent Documentation/Safety reviewers | review only | approval or findings | remediate; no push | 81 |
+| 81 | Authorize closeout branch push | checkpoint 80 approval | repository owner | authorize exact reviewed commit and branch only | push-only authorization | remain local | 82 |
+| 82 | Push exact closeout branch | checkpoint 81 authorization | Release/DevOps operator | push only exact branch/commit; no PR action | remote branch exists pending verification | stop on push failure | 83 |
+| 83 | Verify closeout remote branch | checkpoint 82 push | independent Release/DevOps verifier | prove exact remote SHA, no extra commit and intended `main` base | exact remote verification evidence | stop on divergence; no PR | 84 |
+| 84 | Create closeout Draft PR | checkpoint 83 verified remote branch | Release/DevOps operator | open one Draft PR against `main` | Draft PR created | keep Draft | 85 |
+| 85 | Verify closeout PR base/head | checkpoint 84 Draft PR | independent Release/DevOps verifier | verify exact base, head branch and head SHA | pinned PR base/head evidence | stop on mismatch | 86 |
+| 86 | Run closeout PR CI | checkpoint 85 verified PR | GitHub Actions CI | run required documentation/security checks | all required checks terminal-success | remediate through full review chain | 87 |
+| 87 | Independent closeout PR review | checkpoint 86 green CI and unchanged head | independent reviewers | review exact PR diff only | approval with no unresolved findings | keep PR open | 88 |
+| 88 | Authorize closeout merge | checkpoint 87 approval | repository owner | authorize merge only | merge authorization | PR remains open | 89 |
+| 89 | Merge closeout PR | checkpoint 88 authorization | Release/DevOps operator | merge exact approved documentation PR | closeout merge in `main` | C3D.1 remains open if merge fails | no later supplier phase without separate authorization |
 
-The 71-row dependency audit has no forward-created prerequisite. In particular,
+The 89-row dependency audit has zero missing prerequisite references, zero
+forward prerequisite references and zero cycles. All five PR-producing chains
+have separate push authorization, push, remote-SHA verification, Draft PR,
+PR-base/head verification, CI, review, merge authorization and merge rows. In particular,
 monitor implementation authorization precedes branch verification and edits;
 local tests, database validation, safety audit and independent PASS precede push
-authorization; push precedes Draft PR creation; CI/review and merge authorization
+authorization; push precedes Draft PR creation; CI and review plus merge authorization
 precede merge; and deployment authorization plus disabled verification precede
-schedule/sink enablement. Checkpoint 28 is explicit: it is either a remediation
-artifact after BLOCKED or recorded `NOT_REQUIRED` after checkpoint 27 PASS, and
-checkpoint 29 independently pins the final exact commit in both cases. No PR,
+schedule/sink enablement. Checkpoint 36 is explicit: it is either a remediation
+artifact after BLOCKED or recorded `NOT_REQUIRED` after checkpoint 35 PASS, and
+checkpoint 37 independently pins the final exact commit in both cases. No PR,
 commit, push, approval or implementation is assumed to exist before its creating
 or authorizing row.
 
@@ -4084,11 +4279,79 @@ activation.
 Capture activation is not import authorization. Import completion is not
 evidence approval.
 
-Rollback disables only the capture gate. It does not remove schema or captured
-rows, rewrite history, modify staging, touch Products, or change Catalog Sync.
-Failure before commit rolls back all three evidence-table inserts and removes
-temporary capture state. Failure after commit requires a forward fix because
-the committed generation is immutable.
+### Forward-only operational rollback and bounded schema downgrade
+
+Operational rollback and migration `down()` are different operations. The only
+rollback permitted after this phase is deployed or has processed any protected
+state is **forward-only operational rollback**. It disables capture, new
+protected-generation admission, recovery issuance/execution, monitor scheduling
+and observer activity through their reviewed forward configuration/state
+controls. It leaves all ten tables, FKs, triggers, rows and uncertain states in
+place. Recovery authorization/results, cohort authorization, snapshot history,
+alert intents and the last monitor/observer state remain queryable. Operational
+rollback never drops schema, rewrites history, clears an uncertain ACK, modifies
+staging, touches Products or changes Catalog Sync. Failure before a transaction
+commit rolls back that transaction's inserts and temporary state; failure after
+commit requires a forward fix because committed evidence is immutable.
+
+A schema downgrade is only an install-time/local-test escape hatch for an unused
+schema. Future destructive `down()` code must evaluate the entire guard before
+the first trigger, FK, index or table is dropped. It may proceed only when all
+of these predicates are true:
+
+1. the runtime environment is exactly `local` or `testing`;
+2. an explicit process-scoped one-run confirmation
+   `SUPPLIER_SNAPSHOT_EMPTY_SCHEMA_DOWN_CONFIRMED=true` was supplied to that
+   migration invocation and is false/absent by default;
+3. capture, protected-generation admission, recovery, monitor and observer
+   schedules are all disabled;
+4. all ten canonical tables and their expected guard-visible columns exist, so
+   a missing/partial/unreadable schema cannot be interpreted as zero rows;
+5. execution claims, dispatch outboxes, alert intents, recovery authorizations,
+   recovery results, cohort authorization members, snapshot generations,
+   snapshot enrollments and snapshot observations each contain zero rows; and
+6. the monitor table contains exactly one pristine install row with `id=1`,
+   both generations/sequences zero, `integrity_state=unknown`, every success,
+   failure and lease field null, and no other row.
+
+Any false, unknown, unreadable or partially evaluated predicate rejects the
+whole downgrade before DDL. `production`, `staging` and every unrecognized
+environment reject destructive down regardless of row counts or a supplied
+confirmation. Data emptiness is mandatory and environment naming alone is
+never sufficient. The confirmation authorizes only that one empty-schema
+invocation and is not a persistent feature flag.
+
+When and only when the complete predicate passes, development/test downgrade
+may remove the named alert FK, guarded triggers and ten empty/pristine tables in
+dependency-safe reverse order. That mechanical order is not an operational
+rollback recipe. No operator command, deploy rollback or feature disablement
+may invoke it after protected evidence exists.
+
+The retention hierarchy is exact:
+
+| Class | Members | Retention rule |
+| --- | --- | --- |
+| immutable/audit-retained | recovery authorizations/results, cohort authorization members, snapshot generations/enrollments/observations, every alert intent including unknown-ACK and permanent-failure state | preserve through operational rollback; deletion needs a later explicit retention design |
+| operational coordination retained after activation | execution claims/outboxes and the monitor singleton including generations, freshness, failure and lease state | mutable only by canonical CAS while active; preserve through operational rollback and incident review |
+| disposable before activation only | nine empty tables plus the exact pristine monitor singleton described by the guard | may be removed only by the complete local/testing one-run empty-schema predicate |
+
+Future migration tests are mandatory and use synthetic data only:
+
+1. **Empty schema:** migrate up; verify all ten tables and the exact pristine
+   monitor singleton; supply the one-run testing confirmation; migrate down;
+   prove success; migrate up again.
+2. **Evidence exists:** separately seed each protected domain named in predicate
+   5 and each non-pristine monitor-state class; every destructive down is
+   rejected before DDL and all rows, tables, FKs and triggers remain intact.
+3. **Operational rollback:** with synthetic evidence present, disable the
+   forward gates/workers; prove no protected table is dropped and every row is
+   still queryable.
+4. **Partial evidence/schema:** test mixed populated domains, a missing expected
+   table/column, unreadable counts, malformed/pristine-monitor mismatch and a
+   partially prepared schema; every case fails closed before the first drop.
+5. **Environment/confirmation:** production, staging, unknown environment,
+   absent confirmation and persistent-config-only confirmation all reject even
+   when tables are empty.
 
 ## Future Implementation Map
 
@@ -4189,13 +4452,12 @@ outbox recovery/terminal fields, the exact immutable dispatch-recovery
 authorization/result tables and exact UPDATE/DELETE guards, the execution-path
 write-once trigger, four write-once capture-start authorization
 fields, and the exact immutable cohort authorization-member table/index defined
-above. Every reverse migration must first drop alert-intent FKs and the
-alert-intent/monitor-health coordination tables, then dependent
-result/authorization FKs and tables before the outbox/claim parents, and restore
-no redundant run index. The
-result and authorization mutation triggers are dropped before their respective
-tables, and the execution-path trigger is dropped before the claim table.
-Migration tests must audit `SHOW CREATE
+above. No reverse migration may drop any of those objects unless the complete
+local/testing one-run empty-schema predicate passes before the first DDL. A
+failed guard leaves every trigger, FK, index, table and row intact. Only after a
+passing empty-schema guard may mechanical dependency order remove the alert FK,
+append-only guards, child tables and parents; it restores no redundant run
+index. Migration tests must audit `SHOW CREATE
 TABLE` and `information_schema.statistics`; an implicit FK index fails
 acceptance. The owner repository must use one MySQL-generated timestamp CAS for
 the 4,200-second database lease and fail closed before work on every
@@ -4227,12 +4489,13 @@ watchdog monitor owns only indexed read-only detection and notifications. The
 outbox reconciler may mutate an exact stale-payload execution only through an
 unexpired immutable authorization and records the immutable result, while the exact
 publication-mismatch command owns only one explicitly identified execution.
-MySQL/Redis integration tests must prove every 58-item acceptance criterion and
-all 33 focused watchdog/authorization/mismatch cases above. These are planned
+MySQL/Redis integration tests must prove every 63-item acceptance criterion and
+all 44 focused watchdog/authorization/mismatch cases above. These are planned
 implementation requirements only; this documentation commit changes no
 runtime, queue, Docker, environment, schema, worker, or feature-flag value.
 
-Implementation remains split by the 71 checkpoints above. Review, push/PR,
+Implementation remains split by the 89 checkpoints above. Review, push,
+remote-branch verification, Draft PR creation, PR base/head verification,
 merge, deployment, enablement, import, candidate preparation, candidate
 approval, preview, result review, and closeout never share one authorization.
 

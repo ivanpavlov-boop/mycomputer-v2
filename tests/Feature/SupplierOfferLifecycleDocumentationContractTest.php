@@ -107,6 +107,10 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
         $this->assertStringNotContainsString('dispatch_payload_unobserved', $design);
         $this->assertStringContainsString('supplier-import-dispatch-recovery-resume-v1', $design);
         $this->assertStringContainsString('Phase B, committed-start resume', $design);
+        $this->assertStringContainsString('expected_state_fingerprint_v2', $design);
+        $this->assertStringContainsString('mycomputer:supplier-recovery-expected-state:v2', $design);
+        $this->assertStringNotContainsString('supplier-import-dispatch-recovery-state-v1', $design);
+        $this->assertStringNotContainsString('19-field', $design);
 
         foreach ([
             'republish_same_key',
@@ -137,7 +141,9 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
             'uq_import_dispatch_alert_identity',
             'fk_import_dispatch_alert_outbox',
             'chk_import_dispatch_alert_state_tuple',
-            'The 71-row dependency audit has no forward-created prerequisite',
+            'The 89-row dependency audit has zero missing prerequisite references',
+            'forward-only operational rollback',
+            'SUPPLIER_SNAPSHOT_EMPTY_SCHEMA_DOWN_CONFIRMED=true',
         ] as $needle) {
             $this->assertStringContainsString($needle, $design);
         }
@@ -184,10 +190,16 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
         $protocolRows = $tableRows('| Ownership and payload observation | Transport/response boundary | Permitted protocol outcome |');
         $crashRows = $tableRows('| Boundary | Path | SupplierImportRun | ImportJob | ImportHistory | Claim | Outbox | Evidence | Allowed recovery | Prohibited actions | Required operator action |');
         $rolloutRows = $tableRows('| # | Checkpoint | Prerequisite | Separately responsible authorization | Permitted action | Result/artifact | Failure behavior | Next |');
+        $stateFieldRows = $tableRows('| Position | Key | Exact JSON type and value contract | Nullable |');
+        $digestRows = $tableRows('| # | Identity | Purpose | Producer | Canonical bytes and domain | Algorithm | Persistence location | Immutability | Comparison point |');
+        $hexStorageRows = $tableRows('| Table | Non-null lowercase hexadecimal columns | Nullable lowercase hexadecimal columns |');
 
         $this->assertCount(14, $protocolRows);
-        $this->assertCount(41, $crashRows);
-        $this->assertCount(71, $rolloutRows);
+        $this->assertCount(53, $crashRows);
+        $this->assertCount(89, $rolloutRows);
+        $this->assertCount(20, $stateFieldRows);
+        $this->assertCount(21, $digestRows);
+        $this->assertCount(10, $hexStorageRows);
 
         foreach ([3 => $protocolRows, 11 => $crashRows, 8 => $rolloutRows] as $expectedColumns => $rows) {
             foreach ($rows as $row) {
@@ -196,8 +208,148 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
         }
 
         $this->assertStringContainsString('exactly 14 data rows and 3 columns', $design);
-        $this->assertStringContainsString('exactly 41 data rows and 11 columns', $design);
-        $this->assertStringContainsString('canonical 71-row fine-grained checkpoint matrix', $design);
+        $this->assertStringContainsString('exactly 53 data rows and 11 columns', $design);
+        $this->assertStringContainsString('canonical 89-row fine-grained checkpoint matrix', $design);
+
+        $this->assertSame(
+            [
+                'schema',
+                'authorization_action',
+                'execution_claim_id',
+                'dispatch_outbox_id',
+                'logical_execution_key',
+                'execution_path',
+                'claim_state',
+                'outbox_state',
+                'supplier_id',
+                'supplier_import_run_id',
+                'supplier_feed_id',
+                'import_job_id',
+                'import_history_id',
+                'publication_attempt_count',
+                'delivery_attempt_count',
+                'transport_deadline_at',
+                'delivery_watchdog_at',
+                'active_attempt_token_hash',
+                'claimed_at',
+                'attempt_lease_expires_at',
+            ],
+            array_map(
+                static fn (string $row): string => trim(explode('|', trim($row, '|'))[1], ' `'),
+                $stateFieldRows,
+            ),
+        );
+
+        $expectedStateJson = '{"schema":"expected_state_fingerprint_v2","authorization_action":"recover_expired_queued_ownership","execution_claim_id":42,"dispatch_outbox_id":77,"logical_execution_key":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","execution_path":"orchestrated","claim_state":"queued","outbox_state":"published","supplier_id":9,"supplier_import_run_id":501,"supplier_feed_id":12,"import_job_id":601,"import_history_id":701,"publication_attempt_count":2,"delivery_attempt_count":3,"transport_deadline_at":"2026-08-20T12:00:00.000000Z","delivery_watchdog_at":"2026-08-20T11:00:00.000000Z","active_attempt_token_hash":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","claimed_at":"2026-08-20T10:00:00.000000Z","attempt_lease_expires_at":"2026-08-20T11:10:00.000000Z"}';
+        $expectedStateHash = '31d1cf23a2fceac08d71c0103b3093af392f916921ef2221d860a7ecf9f7a62c';
+
+        $this->assertSame(791, strlen($expectedStateJson));
+        $this->assertStringContainsString($expectedStateJson, $design);
+        $this->assertStringContainsString($expectedStateHash, $design);
+        $this->assertSame(
+            $expectedStateHash,
+            hash('sha256', "mycomputer:supplier-recovery-expected-state:v2\0".$expectedStateJson),
+        );
+
+        $this->assertSame(
+            [
+                'supplier_import_execution_claims',
+                'supplier_import_dispatch_outbox',
+                'supplier_import_dispatch_monitor_health',
+                'supplier_import_dispatch_alert_intents',
+                'supplier_import_dispatch_recovery_authorizations',
+                'supplier_import_dispatch_recovery_results',
+                'supplier_import_cohort_authorization_members',
+                'supplier_offer_snapshot_generations',
+                'supplier_offer_snapshot_enrollments',
+                'supplier_offer_snapshot_observations',
+            ],
+            (static function (string $contents): array {
+                preg_match(
+                    '/## Canonical Proposed Table Inventory(?<inventory>.*?)## Exact Index And Foreign-key Contract/s',
+                    $contents,
+                    $matches,
+                );
+                preg_match_all('/^\d+\. `([^`]+)`/m', $matches['inventory'] ?? '', $tables);
+
+                return $tables[1] ?? [];
+            })($design),
+        );
+
+        foreach ([
+            'Monitor lease crash before successful cycle persistence',
+            'Alert-delivery lease crash before external attempt',
+            'Independent observer fails or stops updating',
+            'External alert ACK is uncertain without a durable local ACK',
+        ] as $boundary) {
+            $this->assertTrue(
+                collect($crashRows)->contains(
+                    static fn (string $row): bool => str_contains($row, $boundary),
+                ),
+                "Missing canonical crash boundary: {$boundary}",
+            );
+        }
+
+        $rolloutNames = array_map(
+            static fn (string $row): string => trim(explode('|', trim($row, '|'))[1]),
+            $rolloutRows,
+        );
+        $prChains = [
+            ['Authorize design branch push', 'Push exact design branch', 'Verify design remote branch', 'Create design Draft PR', 'Verify design PR base/head', 'Run design PR CI', 'Independent design PR review', 'Authorize design merge', 'Merge design PR'],
+            ['Authorize implementation branch push', 'Push exact implementation branch', 'Verify implementation remote branch', 'Create implementation Draft PR', 'Verify implementation PR base/head', 'Run implementation PR CI', 'Independent implementation PR review', 'Authorize implementation merge', 'Merge implementation PR'],
+            ['Authorize monitor branch push', 'Push exact monitor branch', 'Verify monitor remote branch', 'Create monitor Draft PR', 'Verify monitor PR base/head', 'Run monitor Draft PR CI', 'Independent monitor PR review', 'Authorize monitor PR merge', 'Merge monitor PR'],
+            ['Authorize producer branch push', 'Push exact producer branch', 'Verify producer remote branch', 'Create producer Draft PR', 'Verify producer PR base/head', 'Run producer PR CI', 'Independent producer PR review', 'Authorize producer merge', 'Merge producer PR'],
+            ['Authorize closeout branch push', 'Push exact closeout branch', 'Verify closeout remote branch', 'Create closeout Draft PR', 'Verify closeout PR base/head', 'Run closeout PR CI', 'Independent closeout PR review', 'Authorize closeout merge', 'Merge closeout PR'],
+        ];
+
+        foreach ($prChains as $chain) {
+            $positions = array_map(
+                static fn (string $checkpoint): int|false => array_search($checkpoint, $rolloutNames, true),
+                $chain,
+            );
+
+            $this->assertNotContains(false, $positions);
+            $this->assertSame(range($positions[0], $positions[0] + count($chain) - 1), $positions);
+        }
+
+        foreach ($rolloutRows as $index => $row) {
+            $cells = array_map('trim', explode('|', trim($row, '|')));
+            $checkpoint = $index + 1;
+
+            $this->assertSame($checkpoint, (int) $cells[0]);
+
+            preg_match_all('/checkpoint(?:s)?\s+(\d+)(?:\s+through\s+(\d+))?/', $cells[2], $references, PREG_SET_ORDER);
+
+            foreach ($references as $reference) {
+                $first = (int) $reference[1];
+                $last = isset($reference[2]) && $reference[2] !== '' ? (int) $reference[2] : $first;
+
+                foreach (range($first, $last) as $dependency) {
+                    $this->assertGreaterThanOrEqual(1, $dependency);
+                    $this->assertLessThan($checkpoint, $dependency);
+                    $this->assertArrayHasKey($dependency - 1, $rolloutRows);
+                }
+            }
+        }
+
+        foreach ([
+            'Rollback disables only the capture gate',
+            'Reverse order drops the alert FK/table before the monitor table',
+            'Every reverse migration must first drop',
+        ] as $supersededRollbackContract) {
+            $this->assertStringNotContainsString($supersededRollbackContract, $design);
+        }
+
+        foreach ([
+            'leaves all ten tables, FKs, triggers, rows and uncertain states',
+            'Any false, unknown, unreadable or partially evaluated predicate rejects',
+            '**Empty schema:**',
+            '**Evidence exists:**',
+            '**Operational rollback:**',
+            '**Partial evidence/schema:**',
+        ] as $rollbackContract) {
+            $this->assertStringContainsString($rollbackContract, $design);
+        }
 
         $alertVectors = [
             '{"schema":"supplier-import-dispatch-alert-v1","alert_type":"dispatch_watchdog_overdue","dispatch_outbox_id":101,"delivery_watchdog_at":"2026-08-20T10:15:30.123456Z","severity":"warning","critical_bucket":null}' => '0784419b016bd71a2ad912c752ab64d5405899f261a22fa78c75f5a300002fe0',
@@ -243,14 +395,18 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
             $this->assertStringNotContainsString('53 fine-grained checkpoints', $contents);
             $this->assertStringNotContainsString('protocol table remains 12 outcomes', $contents);
             $this->assertStringNotContainsString('36-by-11 crash matrix', $contents);
-            $this->assertStringContainsString('71-row fine-grained checkpoint matrix', $contents);
+            $this->assertStringNotContainsString('41-row by 11-column', $contents);
+            $this->assertStringNotContainsString('41-by-11', $contents);
+            $this->assertStringNotContainsString('71-row fine-grained checkpoint matrix', $contents);
+            $this->assertStringNotContainsString('19-field', $contents);
+            $this->assertStringContainsString('89-row fine-grained checkpoint matrix', $contents);
         }
 
         foreach (['docs/PHASES.md', 'docs/ROADMAP.md'] as $document) {
             $contents = file_get_contents(base_path($document));
 
             $this->assertIsString($contents);
-            $this->assertMatchesRegularExpression('/71(?: fine-grained)? checkpoints/', $contents);
+            $this->assertMatchesRegularExpression('/89(?: fine-grained)? checkpoints/', $contents);
         }
     }
 }
