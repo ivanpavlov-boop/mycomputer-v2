@@ -1005,7 +1005,7 @@ The later implementation is not acceptable without focused tests proving:
   observation set.
 
 Allocation and transport acceptance is not complete without MySQL 8.4 and
-Redis integration tests proving all of these exact cases:
+MySQL/Redis/provider-adapter integration tests proving all of these exact cases:
 
 1. unrelated queues retain `retry_after=1300`;
 2. only `redis_supplier_import` / `supplier-imports` uses
@@ -1119,13 +1119,10 @@ Redis integration tests proving all of these exact cases:
     nonce, state or expiry mismatch;
 50. the exact authorized command records at most one `started` event and one
     terminal result; B0 validates the immutable post-start baseline before the
-    first B1 reservation, every physical Redis call consumes one committed
-    publication ordinal/generation/token first, a reservation enters its call
-    boundary at most once, stale workers lose CAS, and publication success is
-    recorded only after Redis acknowledgement in the same transaction as
-    `durable_success`, `published` plus the new watchdog; database-only actions
-    commit start/mutation/result together, and an identical rerun returns the
-    stored terminal event without mutation;
+    first B1 reservation; every physical Redis effect requires one committed DB
+    ordinal plus one consumed Redis-side generation/token/payload fence; the
+    same fence cannot publish twice; stale A creates zero effects after B
+    advances the external fence; and local CAS alone is never accepted as proof;
 51. after the 1,800-second operator objective, an unstarted same-key
     republication is rejected, a started republication action-stops without
     terminalization, and only a newly issued exact terminal authorization may
@@ -1151,7 +1148,9 @@ Redis integration tests proving all of these exact cases:
     `supplier-import-dispatch-monitor-alert-v1` byte sequence and both canonical
     synthetic vectors reproduce their documented SHA-256 identity;
 57. monitor, observer and alert coordination use the exact named MySQL columns,
-    keys, checks, FK and generation-bound CAS contracts below; and
+    keys, checks, FK and generation-bound CAS contracts below, while a provider
+    becomes ready only with a stored matching `sink_contract_key` and proven
+    native fencing or provider-enforced durable idempotency; and
 58. all five PR-producing rollout chains separately establish/implement a
     candidate, validate it, independently review it, remediate or record
     not-required, obtain fresh independent PASS, authorize and perform push,
@@ -1159,20 +1158,26 @@ Redis integration tests proving all of these exact cases:
 59. `expected_state_fingerprint_v2` has exactly 20 ordered fields including
     `claimed_at`, rejects missing/unknown/reordered fields, and reproduces its
     synthetic vector;
-60. the canonical crash matrix has exactly 66 rows and 11 columns;
+60. the canonical 66-row by 11-column crash matrix explicitly pauses Redis
+    worker A after local CAS, advances B's Redis fence, resumes A, and requires
+    `stale_generation` plus zero A publish effects; it separately covers crashes
+    before external advance and after advance before DB reconciliation;
 61. four dedicated monitor rows prove crash-before-cycle, persisted-cycle,
     successor-generation and stale-writer behavior without domain mutation;
-62. ten dedicated alert-delivery rows distinguish attempts below eight,
-    attempt-eight reservation, unknown exhausted, successor-generation,
-    stale-worker and acknowledged states; and
-63. dedicated observer-failure and uncertain-external-ACK rows retain fail-closed
-    admission and durable uncertainty; and
-64. an eighth alert attempt with unknown outcome CASes exactly to
-    `delivery_outcome_unknown_exhausted`, remains at count eight, permits no
-    automatic retry or attempt nine, and is neither `acknowledged` nor
-    `permanent_failed` without authoritative evidence.
+62. ten dedicated alert-delivery rows distinguish unsupported providers,
+    native fencing, provider idempotency, attempts below eight, attempt-eight
+    unknown, successor generation, stale-worker and acknowledged states;
+63. the alert adversarial case pauses A after its last local DB authority step,
+    supersedes it with B, resumes A at the provider boundary, and observes either
+    native stale rejection with zero A effects or at most one total logical
+    effect under provider idempotency; database rows alone are insufficient; and
+64. attempt-eight unknown outcome becomes
+    `delivery_outcome_unknown_exhausted` at count eight only after native fence
+    retirement or under the unchanged provider idempotency identity; it opens no
+    lease or attempt nine, creates no additional logical effect, and is neither
+    `acknowledged` nor `permanent_failed` without authoritative evidence.
 
-The same future MySQL/Redis suite must add focused watchdog, authorization, and
+The same future MySQL/Redis/provider-adapter suite must add focused watchdog, authorization, and
 mismatch coverage for exactly these cases:
 
 1. acknowledged publication whose Redis payload is missing;
@@ -1231,32 +1236,45 @@ mismatch coverage for exactly these cases:
     acquisition;
 35. expired monitor lease takeover by one successor generation;
 36. stale monitor wake and late state/heartbeat CAS rejection;
-37. alert-delivery lease acquisition below attempt eight followed by crash before
-    an external call;
-38. external alert attempt below eight followed by crash before durable
-    acknowledgement;
-39. below-eight alert-delivery lease expiry with the outcome retained as
-    unknown from durable facts;
-40. successor alert worker acquisition with a new delivery generation;
-41. late stale alert worker acknowledgement/retry/call rejection;
-42. acknowledged alert persistence followed by worker loss with no redelivery;
+37. unsupported or unverified alert provider failing capability/readiness before
+    delivery-lease acquisition;
+38. native alert fence installation followed by crash before DB confirmation,
+    with provider receipt reconciliation and no fence rollback;
+39. provider-idempotency attempt below eight followed by lost response, with the
+    same `alert_identity` and at most one logical provider effect;
+40. successor alert worker acquisition plus native external-fence advancement,
+    or unchanged provider idempotency identity;
+41. adversarial alert test pausing A after the last local DB authority step,
+    allowing B takeover, resuming A at the provider boundary, and asserting
+    native stale rejection/zero A effects or provider total logical effects
+    `<= 1` from an external fake/receipt counter;
+42. acknowledged alert persistence followed by worker loss with no additional
+    logical effect;
 43. independent observer failure and 120-second stale admission rejection;
 44. uncertain external alert acknowledgement below eight retained and retried
-    only through the stable idempotency identity and next ordinal;
-45. attempt-eight reservation followed by crash before the external call;
-46. attempt-eight external call followed by crash before durable ACK;
-47. exact expired generation/token/no-ACK CAS to
+    only through the same provider idempotency identity or next native-fenced
+    generation;
+45. attempt-eight reservation followed by crash before native fence retirement
+    or provider-idempotent external call;
+46. attempt-eight external effect possibly admitted followed by crash before
+    durable ACK;
+47. native retirement or unchanged idempotency identity followed by exact
+    expired generation/token/no-ACK DB CAS to
     `delivery_outcome_unknown_exhausted` with count eight;
 48. no lease acquisition, automatic retry or attempt nine from unknown-exhausted;
-49. no false `acknowledged` or `permanent_failed` transition from uncertainty;
-50. one physical Redis call requiring one committed publication reservation and
-    counter increment first;
-51. one-use `reserved -> call_boundary_entered` generation/token CAS before
-    every Redis call;
-52. stale publication worker call/result/counter CAS rejection after successor
-    classification or reservation; and
-53. final Redis attempt unknown outcome closing only republish authority and
-    requiring a separately issued exact terminal action.
+49. no false `acknowledged`/`permanent_failed` transition and no additional
+    logical provider effect from uncertainty;
+50. one physical Redis effect requiring one committed DB reservation/count
+    increment and one atomically consumed server-side fence;
+51. crash after DB reservation but before Redis fence advancement, and crash
+    after Redis fence advancement but before DB confirmation, both reconciled
+    without claiming a missing fence or rolling Redis backward;
+52. adversarial Redis test pausing A after local call-boundary CAS and before
+    Redis, allowing B to retire/advance the Redis fence, resuming A, and asserting
+    `stale_generation` plus external publish effect count for A exactly zero; and
+53. final Redis attempt unknown outcome requiring confirmed Redis retirement,
+    closing only republish authority, and requiring separately issued exact
+    terminal action.
 
 Those tests must also prove the exact field/check/index contract, the
 4,320-second MySQL-UTC grace, bounded deterministic candidate ordering, and the
@@ -1292,11 +1310,12 @@ delivery_watchdog_at TIMESTAMP(6) NULL
 | `state` | varchar(32) ASCII | `pending` | `pending`, `leased`, `published`, `recovery_required`, or `terminal_failed` | public contract |
 | `attempt_count` | unsigned smallint | `0` | Bounded outbox publication attempts; maximum 8 | aggregate |
 | `publication_attempt_generation` | unsigned bigint | `0` | Monotonic physical-publication generation; increments with every durable reservation | aggregate |
-| `publication_attempt_state` | varchar(32) ASCII | `none` | Latest physical publication attempt: `none`, `reserved`, `call_boundary_entered`, `durable_success`, `durable_failure`, or `outcome_unknown` | public contract |
+| `publication_attempt_state` | varchar(32) ASCII | `none` | Latest physical publication attempt: `none`, `reserved` (external fence pending), `external_fence_installed`, `call_boundary_entered`, `durable_success`, `durable_failure`, or `outcome_unknown` | public contract |
 | `publication_attempt_token_hash` | `CHAR(64) CHARACTER SET ascii COLLATE ascii_bin` | nullable | SHA-256 of the in-memory one-attempt authority token | pseudonymous |
 | `publication_attempt_reserved_at` | timestamp(6) | nullable | MySQL-UTC durable reservation instant | operational metadata |
 | `publication_attempt_lease_expires_at` | timestamp(6) | nullable | Five-minute authority boundary for the exact generation | operational metadata |
-| `publication_call_boundary_at` | timestamp(6) | nullable | MySQL-UTC marker committed immediately before the one permitted Redis invocation | operational metadata |
+| `publication_external_fence_installed_at` | timestamp(6) | nullable | MySQL-UTC confirmation that Redis reports the exact generation/token/payload fence as installed; never proof by local sequencing alone | operational metadata |
+| `publication_call_boundary_at` | timestamp(6) | nullable | MySQL-UTC audit marker before the one permitted Redis-side atomic invocation; not the external-effect fence | operational metadata |
 | `publication_attempt_resolved_at` | timestamp(6) | nullable | MySQL-UTC durable success, failure, or unknown classification instant | operational metadata |
 | `delivery_attempt_count` | unsigned smallint | `0` | Cumulative dequeued handler deliveries for the logical execution; maximum 8 and never reset | aggregate |
 | `lease_owner_key` | varchar(96) CHARACTER SET ascii COLLATE ascii_bin | nullable | Random per-invocation owner label; no host/user name | pseudonymous |
@@ -1449,6 +1468,7 @@ CONSTRAINT chk_import_outbox_publication_attempt_state CHECK (
     BINARY publication_attempt_state IN (
         BINARY _ascii'none',
         BINARY _ascii'reserved',
+        BINARY _ascii'external_fence_installed',
         BINARY _ascii'call_boundary_entered',
         BINARY _ascii'durable_success',
         BINARY _ascii'durable_failure',
@@ -1463,6 +1483,7 @@ CONSTRAINT chk_import_outbox_publication_attempt_tuple CHECK (
         AND publication_attempt_token_hash IS NULL
         AND publication_attempt_reserved_at IS NULL
         AND publication_attempt_lease_expires_at IS NULL
+        AND publication_external_fence_installed_at IS NULL
         AND publication_call_boundary_at IS NULL
         AND publication_attempt_resolved_at IS NULL
     )
@@ -1473,6 +1494,18 @@ CONSTRAINT chk_import_outbox_publication_attempt_tuple CHECK (
         AND publication_attempt_token_hash IS NOT NULL
         AND publication_attempt_reserved_at IS NOT NULL
         AND publication_attempt_lease_expires_at > publication_attempt_reserved_at
+        AND publication_external_fence_installed_at IS NULL
+        AND publication_call_boundary_at IS NULL
+        AND publication_attempt_resolved_at IS NULL
+    )
+    OR (
+        publication_attempt_state = 'external_fence_installed'
+        AND publication_attempt_generation > 0
+        AND attempt_count > 0
+        AND publication_attempt_token_hash IS NOT NULL
+        AND publication_attempt_reserved_at IS NOT NULL
+        AND publication_attempt_lease_expires_at > publication_attempt_reserved_at
+        AND publication_external_fence_installed_at >= publication_attempt_reserved_at
         AND publication_call_boundary_at IS NULL
         AND publication_attempt_resolved_at IS NULL
     )
@@ -1483,7 +1516,8 @@ CONSTRAINT chk_import_outbox_publication_attempt_tuple CHECK (
         AND publication_attempt_token_hash IS NOT NULL
         AND publication_attempt_reserved_at IS NOT NULL
         AND publication_attempt_lease_expires_at > publication_attempt_reserved_at
-        AND publication_call_boundary_at >= publication_attempt_reserved_at
+        AND publication_external_fence_installed_at >= publication_attempt_reserved_at
+        AND publication_call_boundary_at >= publication_external_fence_installed_at
         AND publication_attempt_resolved_at IS NULL
     )
     OR (
@@ -1493,7 +1527,8 @@ CONSTRAINT chk_import_outbox_publication_attempt_tuple CHECK (
         AND publication_attempt_token_hash IS NULL
         AND publication_attempt_reserved_at IS NOT NULL
         AND publication_attempt_lease_expires_at > publication_attempt_reserved_at
-        AND publication_call_boundary_at >= publication_attempt_reserved_at
+        AND publication_external_fence_installed_at >= publication_attempt_reserved_at
+        AND publication_call_boundary_at >= publication_external_fence_installed_at
         AND publication_attempt_resolved_at >= publication_call_boundary_at
     )
     OR (
@@ -1504,8 +1539,15 @@ CONSTRAINT chk_import_outbox_publication_attempt_tuple CHECK (
         AND publication_attempt_reserved_at IS NOT NULL
         AND publication_attempt_lease_expires_at > publication_attempt_reserved_at
         AND (
+            publication_external_fence_installed_at IS NULL
+            OR publication_external_fence_installed_at >= publication_attempt_reserved_at
+        )
+        AND (
             publication_call_boundary_at IS NULL
-            OR publication_call_boundary_at >= publication_attempt_reserved_at
+            OR (
+                publication_external_fence_installed_at IS NOT NULL
+                AND publication_call_boundary_at >= publication_external_fence_installed_at
+            )
         )
         AND publication_attempt_resolved_at >= publication_attempt_reserved_at
     )
@@ -1649,44 +1691,118 @@ Irreconcilable parent/key failures close under the separately authorized
 delivery count or transport deadline.
 
 The publication-attempt tuple is a transactional/application CAS contract in
-addition to the same-row checks above. Every physical Redis publication,
-initial or recovery, requires one committed reservation first. The reservation
-atomically verifies the exact current claim/outbox/action tuple and allowed
-budget, requires `attempt_count = N` with `N < 8`, increments
-`attempt_count = N + 1` and `publication_attempt_generation` by one, writes a
-fresh random token hash, sets `publication_attempt_state = reserved`, and sets
-the reservation/lease timestamps while clearing the call/resolution timestamps.
-The transaction commits before Redis can be invoked. Initial publishing also
-binds its existing outbox lease; recovery publishing binds the exact started
-authorization. Neither path increments `attempt_count` anywhere else.
+addition to the same-row checks above, but local CAS is explicitly insufficient
+as an external-effect fence. Every physical Redis publication, initial or
+recovery, requires one committed reservation first. The reservation atomically
+verifies the exact current claim/outbox/action tuple and allowed budget, requires
+`attempt_count = N` with `N < 8`, increments `attempt_count = N + 1` and
+`publication_attempt_generation` by one, writes a fresh random token hash, sets
+`publication_attempt_state = reserved` (external fence pending), and sets the
+reservation/lease timestamps while clearing fence/call/resolution timestamps.
+The transaction commits before any Redis external operation. Initial publishing
+also binds its existing outbox lease; recovery publishing binds the exact
+started authorization. Neither path increments `attempt_count` anywhere else.
 
-Only the exact unexpired generation/token may CAS `reserved ->
-call_boundary_entered`; that transaction commits
-`publication_call_boundary_at` immediately before the one permitted Redis
-primitive. There is no asynchronous yield or reconstructable permit between
-the successful CAS and invocation, and the holder must refuse the call when its
-lease deadline has passed. A generation may enter this boundary once and may
-authorize at most one physical call. Success/failure acknowledgement binds the
-same generation/token and changes the tuple to `durable_success` or
-`durable_failure`, clears the token, and writes the resolution timestamp. A
-stale generation affects zero rows and cannot call, acknowledge, fail, alter
-counters, or overwrite a successor.
+Direct worker use of an unguarded Redis `PUBLISH`, queue push, or separate
+`GET/check` followed by publication is forbidden. The external boundary is the
+versioned Redis Function (or byte-equivalent atomic Lua script)
+`supplier_import_publish_fenced_v1`. Its single Redis-side fence key is
+`supplier-import:dispatch-fence:v1:{<logical_execution_key>}` and contains the
+schema, logical key, current generation, `publication_attempt_token_hash`,
+`dispatch_payload_hash`, authority state, and external-boundary result. The
+existing token hash is a 64-character opaque pseudonymous fencing identity; the
+raw attempt token is not transmitted to Redis, logged, placed in process
+arguments, or persisted anywhere new. No twenty-third digest identity is
+introduced.
 
-A reserved or call-boundary generation left unresolved after verified owner
-loss and lease expiry consumes its attempt permanently. One exact CAS binds the
-generation, token hash, reserved timestamp, optional call-boundary timestamp,
-expiry and null resolution, then writes `outcome_unknown`, clears the token and
-sets the resolution timestamp without calling Redis. It never decrements or
-reuses the ordinal. When budget remains and every action boundary is still
-valid, the same started logical `republish_same_key` action may reserve only the
-next ordinal under a new generation and the unchanged logical execution key.
-At attempt eight, `outcome_unknown` permits no further reservation and closes
-the republish result as
-`publish_failed/dispatch_publication_attempts_exhausted`; any terminal domain
+The fence key starts absent because its logical execution key is allocated at
+runtime. There is no impossible per-execution generation-zero bootstrap. The
+only legal absent-key transitions require the exact committed DB tuple
+`publication_attempt_generation = 1`, `publication_attempt_state = reserved`
+and all fence/call/result timestamps null: server-side atomic advance installs
+generation one as `authorized_unused`, while retirement installs generation one
+directly as `retired_unknown`. Repeating advance after a lost installation
+response is safe because the still-`reserved` DB tuple could not have entered
+the publish Function; it recreates no prior queue effect. Those operations race
+on Redis itself. If
+advance wins, the attempt remains externally capable until publish or retirement
+wins; no local successor/terminal decision may claim otherwise. If retirement
+wins, a delayed advance for the same generation returns `not_authorized` and
+cannot make the tombstone publishable. Every other absent, evicted, rolled-back,
+malformed, or conflicting Redis key is loss of fence state, not first-generation
+initialization. In particular, any DB generation greater than one, or any DB
+state at/after `external_fence_installed`, makes publication readiness `unknown`
+and rejects every automatic publish. Recovery after that loss requires a
+separately designed operator procedure that stops every publisher process and
+reconciles all DB attempts; this phase authorizes no automatic reconstruction or
+fence rollback.
+
+Fence installation is the Redis-side atomic operation
+`supplier_import_advance_fence_v1`. It receives the exact logical key,
+generation `N`, token hash, payload hash, and predecessor generation `N - 1`.
+The caller first re-reads the committed DB reservation and the dedicated Redis
+ACL permits only this service path. On an absent key Redis accepts only
+generation one. On an existing key it accepts `N = current_generation + 1` or
+an exact equal-generation replay that is still `authorized_unused`; an equal
+generation already `consumed` returns `already_consumed`, and one already
+`retired_unknown` returns `not_authorized`, without changing state. It rejects a
+lower generation as `stale_generation`, a jump as `generation_gap`, and any
+equal-generation token/payload mismatch as `invalid_fence`. Acceptance
+atomically sets generation `N` to `authorized_unused`. A stale caller cannot
+lower, skip, revive, or recreate the fence. The DB records
+`external_fence_installed` and
+`publication_external_fence_installed_at` only after that exact Redis result or
+a read-only reconciliation proves the same Redis tuple. Redis generation is
+never rolled back to match MySQL.
+
+Only the exact DB generation/token may then CAS
+`external_fence_installed -> call_boundary_entered`. That local transition is
+an audit and result-binding marker, not the safety proof. The worker calls
+`supplier_import_publish_fenced_v1`, which atomically, on the Redis server,
+requires the current generation, exact token/payload hashes and
+`authorized_unused`; it changes the fence to `consumed` and performs the exact
+queue publication in the same Redis operation. A second call returns
+`already_consumed` without a second publication. A lower generation returns
+`stale_generation`, a wrong hash returns `invalid_fence`, expired/retired state
+returns `not_authorized`, and no rejected result creates a publish side effect.
+The worker may be preempted, suspended or stopped between any local instructions:
+the Redis Function, not process scheduling, enforces the external effect.
+
+Success/failure acknowledgement still binds the same DB generation/token and
+changes the tuple to `durable_success` or `durable_failure`, clears the token,
+and writes the resolution timestamp. Lost Redis response is reconciled against
+the exact Redis fence tuple: `consumed` proves only that Redis admitted the
+external operation, not that a handler processed it; absent/conflicting Redis
+state remains unknown. A stale generation affects zero DB rows, while the Redis
+Function independently prevents its external effect after a successor fence is
+installed.
+
+An unresolved generation is retired at Redis before DB authority is cleared.
+The atomic `supplier_import_retire_fence_v1` operation either retires the exact
+current generation, installs absent generation one, or installs generation
+`N = current + 1` directly as `retired_unknown` without ever making it
+publishable. Only after Redis confirms
+that tombstone, or read-only reconciliation proves it, may exact DB CAS classify
+the generation `outcome_unknown`, clear the token and set the resolution time.
+If the process crashes before Redis retirement, DB state remains unresolved and
+no successor or terminal classification may claim the old external authority is
+fenced. If it crashes after Redis retirement but before DB confirmation,
+recovery observes the exact monotonic Redis tombstone and completes the DB CAS;
+it never rolls Redis back. Redis unavailability, DB uncertainty, missing fence
+state, or tuple disagreement fails closed with no publication.
+
+When budget remains and every action boundary is valid, the same started
+`republish_same_key` action may reserve only the next ordinal under a new DB
+generation, then must advance and confirm the Redis fence before publication.
+After successor generation `N + 1` is installed, a resumed worker from `N`
+receives `stale_generation` and creates zero external publish effects. At
+attempt eight, the retired `outcome_unknown` state permits no further
+reservation and closes only the republish result as
+`publish_failed/dispatch_publication_attempts_exhausted`; terminal domain
 mutation still requires a new exact `terminalize_stale_dispatch`
-authorization. Thus one physical Redis call always has one durable reservation,
-one reservation never permits multiple calls, and publication attempt nine is
-impossible.
+authorization. One physical Redis effect therefore has one committed DB
+reservation and one Redis-consumed fence, one fence can create at most one
+effect, and publication attempt nine is impossible.
 
 | Reason code | Exact state/result boundary |
 | --- | --- |
@@ -2278,12 +2394,16 @@ different purpose, inventory and domain. `schema` is exactly
 `supplier-import-dispatch-recovery-resume-v1`; the digest is
 `SHA-256(domain_separator || 0x00 || canonical_json_bytes)`.
 
-Immediately before every Redis call, the exact unexpired B1 generation/token
-must commit `reserved -> call_boundary_entered` while transactionally
-revalidating the monitor gate, publication and delivery budgets, immutable
-deadline and response window. If any boundary is no longer valid, it performs
-no Redis call, resolves the reservation without reusing its consumed ordinal,
-and commits the corresponding sequence-2 `action_stopped` event. That event
+After B1, the exact reservation must install and reconcile its monotonic
+Redis-side fence before local state may become `external_fence_installed`.
+Immediately before the Redis Function call, the exact unexpired B1
+generation/token must commit `external_fence_installed ->
+call_boundary_entered` while transactionally revalidating the monitor gate,
+publication and delivery budgets, immutable deadline and response window. This
+local CAS never claims to fence the external effect. If any boundary is no
+longer valid, the Redis generation is retired first and then the DB reservation
+is resolved without reusing its consumed ordinal; only afterward may the
+corresponding sequence-2 `action_stopped` event commit. That event
 preserves `queued/recovery_required`, parents, counters and evidence, and closes
 only the `republish_same_key` authorization. It never writes a terminal claim/
 outbox/parent result. Once that stop event commits, a new authorization is
@@ -2293,30 +2413,34 @@ boundaries and attempt budget remain valid, otherwise the exact
 authorization cannot continue, no compatible stop can commit, and a new action
 cannot later be issued.
 
-The boundary decision is the MySQL-UTC check committed immediately before the
-external call. If that check passes and Redis accepts before time later crosses
-a boundary, recording `republish_succeeded` remains compatible because it
-acknowledges only the already-authorized republication. If Redis acceptance is
-unknown after a crash, the expired exact attempt tuple is first classified
-`outcome_unknown` without a Redis call. When a later resume finds a closed
-boundary, Phase B does not reserve or publish again: it commits
+The boundary decision combines the MySQL-UTC local authority check with the
+atomic Redis generation/token/payload fence at the actual effect boundary. If
+both accept, recording `republish_succeeded` remains compatible because it
+acknowledges only the authorized republication. If the Redis response is
+unknown after a crash, the exact Redis fence is inspected and retired before
+the DB attempt can be classified `outcome_unknown`. When a later resume finds a
+closed boundary, Phase B does not reserve or publish again: after external
+retirement is confirmed it commits
 `action_stopped`, leaves `queued/recovery_required`, and any accepted stale
 payload no-ops against that state. When every boundary remains open and the
 counter is below eight, only a fresh B1 reservation for the next ordinal may
 permit another idempotent same-key call. A different terminal action always
 requires a newly issued authorization.
 
-`republish_succeeded` is inserted only after Redis acknowledges the byte-exact
-same payload; that event, `publication_attempt_state = durable_success`, the
+`republish_succeeded` is inserted only after the Redis Function acknowledges
+one consumed byte-exact same-payload fence; that event,
+`publication_attempt_state = durable_success`, the
 exact `pending|recovery_required -> published` outbox transition, required
 `pending_dispatch -> queued` claim transition and new watchdog commit together
 under the exact attempt generation/token. The authorized manual path holds the
-supplier Redis lock and uses the dedicated publication-attempt reservation;
-the immutable started tuple alone is not a physical-call reservation. Redis
-acceptance followed by a database-acknowledgement crash is deliberately first
-classified `outcome_unknown`; only a newly reserved next ordinal may publish
-the same key/payload again under Phase B while every boundary remains valid. No
-actor guesses whether the first external effect occurred. Claim uniqueness and
+supplier Redis lock, uses the dedicated publication-attempt reservation, and
+installs the external Redis fence; the immutable started tuple and local call-
+boundary CAS alone are not physical-call authority. Redis acceptance followed
+by a database-acknowledgement crash is reconciled from the exact consumed fence
+when available and otherwise retained as `outcome_unknown`; only after Redis
+retirement and a newly reserved next ordinal/fence may the same key/payload
+publish under Phase B. No actor guesses whether the first external effect
+occurred. Claim uniqueness and
 delivery admission make accepted copies converge on the same execution.
 `publish_failed` commits only with authoritative preserved
 `queued/recovery_required` state and a sequence-2 result. Even a failed eighth
@@ -2341,7 +2465,8 @@ Crash and retry behavior is exact:
 - immediately after committed `republish_same_key` start and before any
   reservation, the same authorization resumes only through Phase B0;
 - a crash after reservation consumes that ordinal; after verified owner loss
-  and lease expiry, exact generation/token CAS classifies it `outcome_unknown`;
+  and lease expiry, Redis-side retirement and exact generation/token DB CAS
+  classify it `outcome_unknown`;
 - after Redis acceptance but before completion evidence, Phase B never reuses
   that generation; only a fresh next-ordinal reservation may publish the same
   canonical bytes idempotently while all boundaries remain open;
@@ -2361,7 +2486,7 @@ The complete action-specific boundary contract is normative:
 
 | Canonical action | Issue predicate and expected-state fingerprint | Phase-A CAS and committed `started` state | Phase-B continuation | Allowed external effect | Permitted sequence-2 event/result | Boundary or timeout behavior | Retry and competing authorization behavior |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `republish_same_key` | exact issue-time row above; fingerprint includes the complete target, counters, timestamps and all-null owner tuple | normalize only the authorized pending/leased, `recovery_required`, or due null-owner published source to the exact pending or `queued/recovery_required` resume tuple; preserve parents/key/deadline/budgets; insert `started` plus resume fingerprint atomically | B0 validates the unchanged baseline once; B1 durably increments the physical-attempt count and generation, writes one token-bound reservation, and commits before Redis; only that exact unexpired reservation may enter the one-call boundary | publish the original canonical key/payload bytes to Redis once per committed reservation; no other mutation or external call | `republish_succeeded/dispatch_republished_same_key`, `publish_failed/dispatch_publication_failed|dispatch_publication_attempts_exhausted`, or one allowlisted `action_stopped` code | before-call boundary failure performs no external effect and records `action_stopped`; unresolved expired reservation becomes `outcome_unknown`; next call needs the next ordinal; final unknown exhausts only republish authority; never terminalizes claim/outbox/parents | pre-start retry repeats Phase A; post-start retry uses B0 only before first reservation and then the exact attempt generation/state; stale generation loses CAS; terminal result is returned idempotently; all competing issuance/start remains blocked until sequence 2 commits |
+| `republish_same_key` | exact issue-time row above; fingerprint includes the complete target, counters, timestamps and all-null owner tuple | normalize only the authorized pending/leased, `recovery_required`, or due null-owner published source to the exact pending or `queued/recovery_required` resume tuple; preserve parents/key/deadline/budgets; insert `started` plus resume fingerprint atomically | B0 validates the unchanged baseline once; B1 durably increments the physical-attempt count/generation and commits one token-bound `reserved` tuple; the Redis fence must advance and reconcile before the local audit boundary | `supplier_import_publish_fenced_v1` publishes the original key/payload at most once only after exact Redis-side generation/token/payload admission; no direct publish | `republish_succeeded/dispatch_republished_same_key`, `publish_failed/dispatch_publication_failed|dispatch_publication_attempts_exhausted`, or one allowlisted `action_stopped` code | pre-fence failure makes no effect; Redis retirement precedes DB unknown/stop; next call needs next ordinal/fence; final unknown exhausts only republish authority; never terminalizes claim/outbox/parents | pre-start retry repeats Phase A; post-start retry uses B0 only before first reservation and then reconciles exact DB/Redis attempt state; successor fence makes stale Redis call return `stale_generation`; terminal result is idempotent; competing issuance/start remains blocked until sequence 2 commits |
 | `recover_expired_queued_ownership` | exact complete expired `queued/published` owner tuple, open response/transport boundaries, no evidence and fresh monitor; fingerprint binds token hash, `claimed_at` and lease expiry | under supplier lock and fixed row locks, compare-and-set the exact expired tuple, clear all three owner fields, clear watchdog, set only outbox `published -> recovery_required` with `queued_ownership_lease_expired`, preserve claim/parents/key/counters, and insert start plus success atomically | none; database-only | none | `ownership_recovery_succeeded/queued_ownership_lease_expired` | rollback leaves the original complete owner tuple; successor/live/half-bound owner or any boundary change rejects with zero mutation | same authorization returns terminal result; stale authorization loses exact-tuple CAS; after success a newly issued `republish_same_key` is required for Redis |
 | `terminalize_stale_dispatch` | exact due pre-processing tuple whose deadline, delivery, response or publication-attempt boundary requires one allowlisted terminal reason; complete expired owner is allowed only when bound in fingerprint | atomically insert start, CAS exact tuple, clear owner/watchdog/recovery fields, terminalize claim/outbox/applicable parents with the authorized reason, and insert terminal success | none; database-only | none | `terminalization_succeeded` with only its five action-compatible terminal codes | a changed/live/half-bound owner or recovered boundary rejects; no fallback to republication | rollback permits same unexpired authorization retry; committed result is idempotent; every other action requires new issuance |
 | `terminalize_publication_mismatch` | exact eligible pre-processing mismatch tuple and `dispatch_publication_mismatch` fingerprint | atomically insert start, run the exact one-target mismatch terminal CAS and insert terminal success | none; database-only | none | `terminalization_succeeded/dispatch_publication_mismatch` | any active owner, parent/key/evidence mismatch or noncanonical state rejects without mutation | rollback retries same authorization; exact already-terminal replay returns no-op; cannot republish |
@@ -2396,14 +2521,18 @@ accepted. The stored lowercase hexadecimal digest is `result_fingerprint`.
 After the authorization transaction commits, an immediate publisher may lease
 the pending row, but it may publish the original serialized job to Redis only
 after the same transaction durably reserves the exact physical publication
-ordinal/generation/token. Its separate call-boundary CAS commits before the one
-Redis invocation. Publication success is acknowledged by one owner-token- and
+ordinal/generation/token, the external Redis fence is atomically installed and
+reconciled, and the one-use Redis Function admits the effect. Its separate local
+call-boundary CAS is audit state, never the fence. Publication success is
+acknowledged by one owner-token- and
 publication-generation-checked transaction that changes the
 outbox from `leased` (or `pending` when a fast handler adopts it) to `published`
-and the claim from `pending_dispatch` to `queued`. A crash before or after the
-external call consumes the reserved ordinal and is classified through the exact
-attempt tuple after owner loss; a duplicate publication requires the next
-durably reserved ordinal and the same payload/key. Claim uniqueness and terminal
+and the claim from `pending_dispatch` to `queued`. A crash before fence
+installation leaves external authority unconfirmed; a crash after Redis fence
+advancement is reconciled without rollback; and a crash after the one-use
+operation consumes the ordinal and is classified through both the Redis fence
+and exact DB tuple. A duplicate publication requires the next durably reserved
+ordinal/fence and the same payload/key. Claim uniqueness and terminal
 checks make an accepted duplicate harmless. Every acknowledged initial or
 recovery publication sets
 `delivery_watchdog_at = UTC_TIMESTAMP(6) + INTERVAL 4320 SECOND` in the same
@@ -2426,12 +2555,14 @@ opaque claim/outbox IDs, and supplier numeric ID where the existing privacy
 policy permits that ID. Supplier name, source identity, URL, path, raw offer
 identity, logical execution key, payload, token, nonce, and hashes are forbidden.
 
-The monitoring, durable heartbeat and acknowledged alert contract are mandatory
-before capture can be enabled. The repository currently has no approved
-external alert provider, so implementation may not invent credentials or claim
-readiness. A provider-neutral `SupplierImportDispatchAlertSink` with a configured
-implementation, bounded health acknowledgement and idempotent delivery is an
-implementation prerequisite.
+The monitoring, durable heartbeat and externally safe alert contract are
+mandatory before capture can be enabled. The repository currently has no
+selected or approved external alert provider, so implementation may not invent
+credentials or claim readiness. A provider-neutral
+`SupplierImportDispatchAlertSink` interface is insufficient by itself: a
+concrete adapter is eligible only after its actual external-effect boundary
+passes the capability gate below. Unsupported or unverified providers keep sink
+readiness and monitor integrity fail-closed.
 
 The scheduler runs every 300 seconds through `everyFiveMinutes()` with overlap
 prevention. The monitor remains read-only for claims, outboxes, parents,
@@ -2527,18 +2658,85 @@ a4cfd7d96ada0678b7054d3bfe2f62a1b423a98bb9507ce7e664a9c549b14f31
 No identity or payload contains source, supplier name, logical key, dispatch
 payload, token, nonce, authorization value or authorization/result hash.
 
-Delivery semantics are durable at-least-once intent with idempotent external
-acknowledgement, not false at-most-once transport. The sink receives the stable
-identity, severity and privacy-safe payload, must acknowledge that identity
-within 10 seconds, and must treat duplicate identity as the same alert. Timeout
-or transient failure retries on later monitor cycles after 300, 900 and 1,800
-seconds, then every 1,800 seconds up to eight attempts. An authoritative
-negative permanent response marks the intent `permanent_failed`. An eighth
-attempt with no durable local ACK and no authoritative negative response is
-never called failed or delivered; after exact lease-expiry classification it is
-`delivery_outcome_unknown_exhausted`. Both states make monitor integrity
-`failed`. Acknowledged intents are immutable except for retention controlled by
-a later design. Silence is never treated as acknowledgement.
+Delivery semantics are durable at-least-once intent with at-most-one logical
+external alert effect per `alert_identity`, not false at-most-once API transport.
+The sink receives the stable identity, severity and privacy-safe payload, must
+acknowledge that identity within 10 seconds, and must bind every generation to
+one of the approved external-effect modes below. Timeout or transient failure
+retries on later monitor cycles after 300, 900 and 1,800 seconds, then every
+1,800 seconds up to eight attempts. An authoritative negative permanent
+response marks the intent `permanent_failed`. An eighth attempt with no durable
+local ACK and no authoritative negative response is never called failed or
+delivered; after its mode-specific external fence/identity treatment and exact
+lease-expiry classification it is `delivery_outcome_unknown_exhausted`. Both
+permanent failure and unknown exhausted make monitor integrity `failed`.
+Acknowledged intents are immutable except for retention controlled by a later
+design. Silence is never treated as acknowledgement.
+
+#### External alert-effect capability gate
+
+A local DB generation/lease check immediately before an API call is not an
+external-effect fence. A worker may be OS-preempted, suspended, stopped or
+descheduled between any two userspace instructions. Every selected adapter must
+therefore declare exactly one non-secret `sink_contract_key` containing adapter,
+mode and contract version and prove one of these modes at the actual provider or
+owned-gateway effect boundary:
+
+1. **`native_generation_fence`.** The boundary atomically binds
+   `alert_identity`, `delivery_generation`, the opaque
+   `delivery_owner_token_hash`, and payload identity. It monotonically installs
+   or retires generations and rejects an older generation before creating an
+   alert effect. The same provider-side record also has a permanent
+   `logical_effect_consumed` latch for that `alert_identity`: the first admitted
+   effect sets it atomically, generation advancement or retirement never clears
+   it, and every later generation returns the same authoritative receipt or an
+   explicit already-consumed result without another logical effect.
+   Equal-generation replay is one-use. The exact stale/already-consumed
+   responses, retry rules and authoritative receipt model belong to the adapter
+   contract. Attempt-eight unknown classification requires confirmed retirement
+   of generation eight; that retirement preserves the logical-effect latch and
+   is not attempt nine.
+2. **`provider_enforced_idempotency`.** The boundary receives the existing
+   non-secret `alert_identity` as its provider idempotency key for every local
+   generation. The provider's documented durable idempotency lifetime must
+   exceed the complete delivery, recovery and operational-inspection horizon;
+   process restart, worker replacement and a late stale request must still
+   create at most one logical alert effect. A local generation never creates a
+   new provider key. Duplicate/ambiguous responses do not synthesize local ACK.
+
+An owned gateway is not a third mode. It is eligible only when its provider-side
+effect boundary enforces one of those two contracts; moving the local race into
+another process is forbidden. A provider supporting neither mode is
+`unsupported`, cannot acquire a delivery lease, cannot report healthy, and
+keeps capture and every safety-dependent operation disabled. There is no best-
+effort fallback.
+
+For native fencing, successor B first obtains the new durable DB generation,
+then advances the provider/gateway fence, and only after exact confirmation may
+local state claim A is externally fenced or B call the provider. A crash before
+external advancement leaves A potentially capable and retains fail-closed
+`delivering`/unhealthy state. A crash after external advancement but before DB
+confirmation is reconciled from the provider's exact generation receipt and
+never rolls the external fence backward. A resumed A is rejected before effect.
+If A won the provider race and consumed the logical effect before B's fence
+advance, B observes the permanent consumed latch and cannot create a second
+effect; if B advanced first, A is stale. Thus both Redis-serialized
+interleavings preserve at most one logical alert effect.
+
+For provider idempotency, a late stale API request may physically reach the
+provider, including after local attempt eight became unknown exhausted, but it
+must use the unchanged `alert_identity` and cannot create an additional or
+conflicting logical effect. Local uncertainty remains until authoritative
+provider evidence binds that identity to a positive result. No late response
+opens a ninth attempt, replaces the identity, or turns ambiguity into success.
+
+Before sink readiness may become healthy, rollout evidence must identify the
+provider, adapter/version, exact `sink_contract_key`, selected mode and provider
+contract; run adapter integration, duplicate/idempotency where applicable, and
+adversarial stale-worker tests; obtain independent review; and bind every
+successful monitor cycle to the currently configured contract key. Credentials,
+provider response bodies and raw owner tokens remain absent from rows, logs,
+process arguments and evidence.
 
 The independent liveness observer is the dedicated scheduler-container Docker
 healthcheck, running every 60 seconds outside the scheduler process. It invokes
@@ -2604,6 +2802,7 @@ table or duplicate heartbeat concept.
 | `cycle_sequence` | `BIGINT UNSIGNED NOT NULL DEFAULT 0` | increments by exactly one only on a complete successful cycle |
 | `last_successful_cycle_at` | `TIMESTAMP(6) NULL` | matching successful-cycle statement time |
 | `last_successful_sink_health_at` | `TIMESTAMP(6) NULL` | same statement time after bounded sink acknowledgement |
+| `last_successful_sink_contract_key` | `VARCHAR(128) CHARACTER SET ascii COLLATE ascii_bin NULL` | exact non-secret adapter/mode/version descriptor proven by the matching successful cycle; derived health requires equality with current configured contract |
 | `observer_identity` | `VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL`, exactly `supplier-import-dispatch-observer-v1` | immutable |
 | `observer_sequence` | `BIGINT UNSIGNED NOT NULL DEFAULT 0` | increments by exactly one only on a successful observer transaction |
 | `observed_monitor_generation` | `BIGINT UNSIGNED NOT NULL DEFAULT 0` | generation observed by the last successful observer |
@@ -2625,7 +2824,7 @@ chk_import_dispatch_monitor_identity        exact monitor and observer literals
 chk_import_dispatch_monitor_integrity_state exact four-state allowlist
 chk_import_dispatch_monitor_owner_tuple     all three lease fields null, or all non-null with lowercase-hex hash and acquired_at < expires_at
 chk_import_dispatch_monitor_generation      last_successful_monitor_generation <= monitor_generation
-chk_import_dispatch_monitor_success_tuple   cycle_sequence = 0 iff successful generation/timestamps are zero/null; otherwise all are positive/non-null
+chk_import_dispatch_monitor_success_tuple   cycle_sequence = 0 iff successful generation/timestamps/contract key are zero/null; otherwise all are positive/non-null
 chk_import_dispatch_monitor_observer_tuple  observer_sequence = 0 iff observed generation/sequence are zero and timestamp null; otherwise all are positive/non-null and do not exceed successful monitor generation/cycle
 chk_import_dispatch_monitor_stored_healthy  stored healthy requires positive successful cycle, equal cycle/sink timestamps and null failure code
 ```
@@ -2639,7 +2838,9 @@ owner-token hash plus MySQL-UTC acquisition/expiry. Successful completion uses
 monitor_owner_token_hash=:hash AND monitor_lease_expires_at >=
 UTC_TIMESTAMP(6)`, increments `cycle_sequence` by one, copies generation to
 `last_successful_monitor_generation`, writes both equal success timestamps,
-sets stored `healthy`, clears failure and the complete lease tuple. Failure uses
+stores the exact currently proven non-secret `sink_contract_key`, sets stored
+`healthy`, clears failure and the complete lease tuple. Derived health also
+requires that stored key to equal the configured adapter capability. Failure uses
 the same owner/generation CAS, writes `failed`, clears the lease and does not
 advance success fields. A stale lease holder therefore cannot overwrite a
 successor.
@@ -2719,14 +2920,20 @@ The attempt-eight unknown-outcome transition is exact. It starts only from
 `delivery_state = delivering`, `attempt_count = 8`, the complete exact current
 delivery generation/token/acquisition/expiry tuple, `acknowledged_at IS NULL`,
 an expired lease (or separately proven current-owner loss), and no authoritative
-sink result. One database CAS writes
-`delivery_outcome_unknown_exhausted`, preserves `attempt_count = 8`, clears the
-complete lease and retry time, leaves `acknowledged_at` null, and writes only the
-allowlisted uncertainty code. It makes no external call and never increments to
-nine. A pending/takeover query excludes this state, so no worker can acquire a
-new automatic delivery lease. A stale attempt-eight worker must revalidate its
-generation and lease immediately before its external boundary; after expiry or
-CAS loss it cannot call or update the row.
+sink result. Under native fencing, the classifier must first retire generation
+eight at the provider/gateway boundary and reconcile that exact receipt; a
+crash before retirement leaves the DB intent `delivering`, while a crash after
+retirement is recoverable without fence rollback. Under provider idempotency,
+the unchanged `alert_identity` already limits every late request to the same
+logical effect. Only then does one database CAS write
+`delivery_outcome_unknown_exhausted`, preserve `attempt_count = 8`, clear the
+complete lease and retry time, leave `acknowledged_at` null, and write only the
+allowlisted uncertainty code. The classifier makes no alert-delivery call and
+never increments to nine. A pending/takeover query excludes this state, so no
+worker can acquire a new automatic delivery lease. A stale native-fence worker
+is rejected at the provider boundary; an idempotency-mode worker may reach the
+API but cannot create an additional logical alert effect. Either stale worker
+also loses every DB result CAS.
 
 This is terminal only for automatic delivery, not proof of delivery or failure.
 It cannot transition to `permanent_failed`, and it cannot synthesize an ACK.
@@ -2734,17 +2941,36 @@ Only a separately designed and authorized reconciliation may change it to
 `acknowledged`, and only when authoritative provider evidence binds the exact
 `alert_identity` to a positive accepted result; that future CAS would preserve
 attempt eight and record the provider-backed acknowledgement time. The current
-provider-neutral contract supplies no such lookup, so the state remains
+provider-neutral contract selects no provider and supplies no such lookup, so
+the state remains
 unresolved, auditable and fail-closed and keeps monitor admission unhealthy
 until explicit operational remediation. No reset, identity replacement,
 counter decrement, automatic retry, or ninth attempt is permitted.
+
+#### External side-effect boundary inventory
+
+This phase has exactly three mutating external coordination/effect surfaces:
+
+| External operation | Last local durable authority | External-boundary enforcement | Stale behavior | Executable proof required |
+| --- | --- | --- | --- | --- |
+| Redis queue publication | committed DB attempt reservation plus confirmed `external_fence_installed` tuple | `supplier_import_publish_fenced_v1` atomically checks monotonic generation/token/payload, consumes one-use authority and performs the queue publication | lower generation, wrong token, consumed, retired, missing or conflicting state creates zero publish effects | suspend A after local call-boundary CAS, advance B's Redis fence, resume A, and assert stale result plus zero A publish effects |
+| external alert delivery | current DB alert delivery generation/lease and configured `sink_contract_key` | selected adapter proves native provider/gateway fencing or provider-enforced durable idempotency at the actual logical-effect boundary | native mode rejects stale before effect; idempotency mode permits API arrival but total logical effects for `alert_identity` remain at most one | suspend A after local DB check, supersede with B, resume A, and assert native rejection or provider receipt count `<= 1` |
+| supplier Redis lock acquire/renew/release | current execution attempt tuple and random lock owner token | Redis-native atomic acquire/compare-renew/compare-delete; domain writes separately require exact MySQL owner CAS | stale release cannot delete a successor lock and stale domain CAS affects zero rows | existing lock-owner concurrency tests plus MySQL owner-CAS tests |
+
+Remote source reads are non-mutating inputs, not external effects. Database
+writes are governed by the documented transactions/CAS and are not relabeled as
+external calls. Any future mutating external operation must add the same five-
+column answer before implementation; local sequencing alone is never accepted.
 
 Future additive migration order is exact: (1) create the singleton monitor
 table and checks/keys; (2) insert only its `unknown`, generation-zero row while
 all capture/recovery gates remain disabled; (3) create alert-intent columns,
 checks and indexes; (4) add the named outbox FK; (5) deploy monitor/observer/sink
-code disabled; (6) run schema and CAS validation; (7) separately enable and
-verify monitor/sink/observer; and only then (8) consider later capture admission.
+code disabled; (6) run schema, Redis Function, atomic first-generation
+initialization/retirement, loss-state and provider-capability validation; (7)
+select and independently approve one exact sink contract, then separately enable
+and verify monitor/sink/observer; and only then (8) consider later capture
+admission.
 This additive order does not authorize a production reverse migration.
 Destructive `down()` behavior is governed exclusively by the fail-closed empty-
 schema predicate below; operational rollback is forward-only and leaves both
@@ -2951,7 +3177,7 @@ URLs, paths, credentials, raw product identifiers, or source data.
 | null owner; no durable progress and watchdog not due | any | no mutation; detection grace remains active; delivery/observation is unknown |
 | null owner; no durable progress and watchdog due for less than 1,800 seconds | budget and deadline valid | monitor warning; the operator may issue exactly one action: `republish_same_key` permits supplier-locked `published -> recovery_required` with `dispatch_durable_progress_stalled` and bounded same-key republication, while `terminalize_stale_dispatch` permits only fail-closed terminalization; one authorization never performs both; delivery/observation is never inferred |
 | null owner; no durable progress and watchdog due for 1,800 seconds or more | any | monitor critical; republication is forbidden and an exact authorization may only atomically terminalize with the actual transport reason or `dispatch_watchdog_response_expired`; delivery/observation remains unknown |
-| null owner; due watchdog with no operator action | any | domain-read-only monitor cycles and durable alert intents continue only while monitor/sink/observer health is current; stale, failed or unknown health rejects every protected admission; no domain mutation occurs and terminalization is not guaranteed |
+| null owner; due watchdog with no operator action | any | domain-read-only monitor cycles and durable alert intents continue only while monitor/sink/observer health is current and the configured adapter has a proven native-fence or provider-idempotency `sink_contract_key`; unsupported/unverified providers fail closed, stale native generations are rejected externally, and idempotency-mode calls cannot create a second logical alert effect |
 | complete unexpired owner | any | active-owner continuation; watchdog/reconciler and duplicates affect zero rows |
 | complete expired owner | budget/deadline valid and response objective open | only `recover_expired_queued_ownership` may perform the legal first mutation: complete-tuple CAS clears ownership, writes `queued_ownership_lease_expired`, commits `ownership_recovery_succeeded`, and ends; a new `republish_same_key` authorization is required for Redis |
 | complete expired owner | transport exhausted or response objective expired | only `terminalize_stale_dispatch` may bind the complete tuple and atomically terminalize claim, outbox and applicable parents; no clear-first step or autonomous mutation |
@@ -2961,11 +3187,11 @@ URLs, paths, credentials, raw product identifiers, or source data.
 | publication mismatch in an eligible canonical pre-processing pair | no active owner and no evidence | exact `terminalize_publication_mismatch` authorization permits the one-execution command to perform atomic terminal failure; identical rerun is `already_terminal_noop` |
 | exact expired `processing/published` ownership tuple | exact expected-state fingerprint, authenticated issue/start authority, complete expired owner, canonical parents and no terminal generation | only `terminalize_abandoned_processing` may CAS the exact tuple, fail the bound history/job/run and claim, preserve the published outbox, clear ownership, and commit `terminalization_succeeded/processing_lease_abandoned`; a crash rolls back atomically, a retry returns the result, and a live/successor/competing owner affects zero rows and requires operator reinspection |
 | stale payload after a recovery or terminal winner | any | state/key/owner revalidation rejects work; terminal delivery returns the stored no-op |
-| committed `republish_same_key` start with exact unchanged baseline and no physical reservation | monitor healthy, publication/delivery budget available, deadline future and response window open | Phase B0 validates the immutable resume fingerprint and Phase B1 atomically reserves only attempt `N + 1`, increments count/generation, writes the fresh token-bound lease and commits before Redis; no reservation means no physical call |
-| exact `reserved` publication attempt generation | all boundaries remain valid and the exact token/lease is current | only that generation may CAS once to `call_boundary_entered`; the commit precedes and authorizes exactly one original-key/payload Redis invocation; reuse, late generation, and call-before-commit are forbidden |
-| exact `call_boundary_entered` publication attempt generation | Redis returns while the exact generation/token remains authoritative | positive ACK commits `durable_success`, compatible outbox/claim/watchdog changes and `republish_succeeded`; authoritative failure commits `durable_failure` and `publish_failed`; neither result may be written by a stale generation |
-| expired unresolved `reserved` or `call_boundary_entered` generation with `attempt_count < 8` | owner loss proven; external outcome not durable; all action boundaries remain open | exact generation/token/timestamp CAS consumes the ordinal as `outcome_unknown` without Redis; only a fresh next-ordinal B1 reservation under the same logical action/key may permit another physical call |
-| expired unresolved `reserved` or `call_boundary_entered` generation with `attempt_count = 8` | owner loss proven; no durable ACK or authoritative failure | exact CAS writes final `outcome_unknown`, no Redis call and no attempt nine; `republish_same_key` records only `publish_failed/dispatch_publication_attempts_exhausted`; terminal domain mutation requires a new `terminalize_stale_dispatch` authorization |
+| committed `republish_same_key` start with exact unchanged baseline and no physical reservation | monitor healthy, publication/delivery budget available, deadline future and response window open | Phase B0 validates the immutable resume fingerprint and Phase B1 atomically reserves attempt `N + 1`, increments count/generation and commits `reserved`/external-fence-pending before Redis; no reservation means no external fence or publish |
+| exact `reserved` publication attempt generation | all boundaries remain valid and the exact DB token/lease is current | `supplier_import_advance_fence_v1` accepts only current-plus-one generation bound to token/payload, atomically installs `authorized_unused`, and exact reconciliation permits DB `external_fence_installed`; crash before advance leaves the old generation capable and fail-closed, while crash after advance never rolls Redis back |
+| exact `external_fence_installed` or `call_boundary_entered` publication attempt generation | Redis fence reports exact current generation/token/payload | local call-boundary CAS is audit only; `supplier_import_publish_fenced_v1` atomically consumes the Redis authority and publishes once; same generation returns `already_consumed`, lower generation returns `stale_generation`, and rejected calls create zero effects before compatible DB success/failure reconciliation |
+| expired unresolved `reserved`, `external_fence_installed` or `call_boundary_entered` generation with `attempt_count < 8` | owner loss proven; external outcome not durable; all action boundaries remain open | `supplier_import_retire_fence_v1` first installs/reconciles a monotonic non-publishable tombstone; only then DB CAS writes `outcome_unknown`; a fresh next ordinal must advance the Redis fence before another effect, and stale A is rejected at Redis after B's advance |
+| expired unresolved attempt generation with `attempt_count = 8` | owner loss proven; no durable ACK or authoritative failure | exact Redis retirement precedes final DB `outcome_unknown`; no publish or attempt nine follows; `republish_same_key` records only `publish_failed/dispatch_publication_attempts_exhausted`, and domain terminalization requires new `terminalize_stale_dispatch` authority |
 | committed `republish_same_key` start with exact resume tuple | any monitor, state, budget, deadline or response boundary invalid before the next external call | no Redis call and no domain terminalization; commit the exact `action_stopped` result, release authorization ownership, then require a new action-specific authorization for the current canonical state |
 
 This table contains exactly 19 data rows and 3 columns. Merely reaching
@@ -3568,14 +3794,14 @@ outside this inventory is introduced by this design.
 | 5 | `supplier_sku_hash` | pseudonymous supplier-offer identity | operational identity hasher | hasher namespace, bucket `supplier_sku`, lowercase-trimmed supplier key, ASCII `0x7c`, trimmed supplier SKU | SHA-256 lowercase hexadecimal | authorization members, enrollments and observations | immutable | membership uniqueness, cohort traversal and observation binding |
 | 6 | `dispatch_payload_hash` | byte-exact Redis payload binding | dispatch serializer | domain `mycomputer:supplier-dispatch-payload:v1`, one NUL, then the fixed-order canonical payload JSON | SHA-256 lowercase hexadecimal | dispatch outbox | immutable | every publish, republish and handler admission |
 | 7 | `lease_token_hash` | outbox publisher ownership | outbox publisher | exact in-memory random lease-token bytes; no domain or text conversion | SHA-256 lowercase hexadecimal | dispatch outbox | fixed for one lease; owner-CAS cleared or replaced on generation takeover | publication acknowledgement, retry and stale publisher rejection |
-| 8 | `publication_attempt_token_hash` | one physical Redis publication authority | initial/recovery publication reservation | exact in-memory random publication-attempt token bytes; no domain or text conversion | SHA-256 lowercase hexadecimal | dispatch outbox | fixed for one publication generation; cleared only by exact result/unknown CAS or replaced by next-generation reservation | call-boundary entry, durable result and stale-publication-worker rejection |
+| 8 | `publication_attempt_token_hash` | one DB and Redis-side physical publication fencing identity | initial/recovery publication reservation | exact in-memory random publication-attempt token bytes; no domain or text conversion | SHA-256 lowercase hexadecimal | dispatch outbox and opaque copy in the Redis fence key; raw token remains memory-only | fixed for one publication generation; Redis fence is monotonic and DB hash clears only after external retirement/result reconciliation | Redis fence install, one-use publish, retirement, durable result and stale-generation rejection |
 | 9 | `expected_state_fingerprint` | pre-start recovery authorization CAS identity | recovery authorization issuer | `expected_state_fingerprint_v2`: domain `mycomputer:supplier-recovery-expected-state:v2`, one NUL, then the exact 20-field canonical JSON | SHA-256 lowercase hexadecimal | recovery authorization | immutable | Phase-A start revalidation only |
 | 10 | `authorization_nonce_hash` | one-time recovery capability proof | recovery authorization issuer | domain `supplier-import-dispatch-recovery-nonce-v1`, one NUL, then exact 32 raw nonce bytes | SHA-256 lowercase hexadecimal | recovery authorization | immutable and unique | constant-time nonce proof before any start/result write |
 | 11 | `resume_state_fingerprint` | post-start same-key republication identity | republish Phase-A transaction | domain `supplier-import-dispatch-recovery-resume-v1`, one NUL, then its exact 16-field canonical JSON | SHA-256 lowercase hexadecimal | recovery result `started` row only | immutable | Phase-B0 baseline validation before first physical-attempt reservation |
 | 12 | `result_fingerprint` | immutable recovery event identity | recovery result repository | domain `supplier-import-dispatch-recovery-result-v1`, one NUL, then its exact fixed-order result JSON | SHA-256 lowercase hexadecimal | recovery result | immutable | duplicate/result replay and audit verification |
 | 13 | `monitor_owner_token_hash` | monitor lease-generation owner proof | watchdog monitor | exact in-memory random monitor-owner token bytes; no domain or text conversion | SHA-256 lowercase hexadecimal | monitor-health singleton | fixed for one monitor generation; cleared or replaced only by generation CAS | cycle success/failure and stale-monitor rejection |
-| 14 | `alert_identity` | durable idempotent logical alert identity | watchdog monitor | domain `supplier-import-dispatch-monitor-alert-v1`, one NUL, then exact six-key canonical alert JSON | SHA-256 lowercase hexadecimal | alert intent and external sink idempotency key | immutable | idempotent insertion, delivery and external acknowledgement |
-| 15 | `delivery_owner_token_hash` | alert-delivery lease owner proof | alert delivery worker | exact in-memory random delivery-owner token bytes; no domain or text conversion | SHA-256 lowercase hexadecimal | alert intent | fixed for one delivery generation; cleared or replaced only by generation CAS | ACK, retry, permanent failure, unknown-exhausted classification and stale-worker rejection |
+| 14 | `alert_identity` | durable logical alert identity and provider idempotency identity | watchdog monitor | domain `supplier-import-dispatch-monitor-alert-v1`, one NUL, then exact six-key canonical alert JSON | SHA-256 lowercase hexadecimal | alert intent and, in idempotency mode, the provider idempotency key | immutable across every local generation | idempotent insertion, provider logical-effect deduplication and external acknowledgement |
+| 15 | `delivery_owner_token_hash` | alert-delivery DB owner proof and native-fence opaque generation identity | alert delivery worker | exact in-memory random delivery-owner token bytes; no domain or text conversion | SHA-256 lowercase hexadecimal | alert intent and opaque native-fence binding where supported; raw token remains memory-only | fixed for one delivery generation; cleared or replaced only by generation CAS | native fence install/retirement, ACK, retry, permanent failure and unknown-exhausted classification |
 | 16 | `snapshot_id` | V1 evidence projection identity | evidence adapter | hasher `sample()` framing with bucket `snapshot_generation_v1` and canonical JSON of stored supplier key plus ImportHistory ID | SHA-256 lowercase hexadecimal | derived V1 evidence output; not stored as a new table column | deterministic for immutable inputs | evidence projection identity check |
 | 17 | `cohort_fingerprint` | effective enrolled cohort identity | snapshot capture service | hasher `sample()` framing with bucket `snapshot_cohort_v1` and canonical JSON of sorted enrolled offer hashes | SHA-256 lowercase hexadecimal | snapshot generation | immutable after finalization | predecessor comparability and projection gate |
 | 18 | `observation_set_fingerprint` | complete physical observation-set identity | snapshot capture service | hasher `sample()` framing with bucket `snapshot_observation_set_v1` and canonical JSON of sorted observation fingerprints | SHA-256 lowercase hexadecimal | snapshot generation | immutable after finalization | count/set reconciliation and evidence projection |
@@ -3890,15 +4116,15 @@ same transaction.
 | 36. Explicit publication-mismatch terminal resolution and rerun | both | applicable orchestrated run atomically `failed`; legacy: N/A | applicable bound job atomically `failed` | applicable same-execution history atomically `failed` | eligible pre-processing claim atomically `terminal_failed` | atomically `terminal_failed` | none | exact `terminalize_publication_mismatch` authorization tuple under supplier and row locks records `dispatch_publication_mismatch`; identical rerun returns `already_terminal_noop` | broad selection, active-owner race, parent/key/operator guess, source/import/staging/evidence work, or conflicting terminal rewrite | run the one-execution dry-run, issue the exact authorization in authenticated admin, then separately apply with authorization ID and protected stdin nonce if still canonical |
 | 37. Republish start commits, then a boundary closes before B1 reservation | both | unchanged | unchanged | unchanged | `queued`, null owner | `recovery_required`, exact resume fingerprint still matches and no new physical-attempt reservation exists | none | same authorization makes no Redis call and commits only action-compatible `action_stopped`; after that terminal result a new current-state authorization may issue | terminalization, boundary override, attempt increment, reuse of Phase A, another key or another action under the old authorization | issue a new `republish_same_key` only if all boundaries are valid, otherwise issue `terminalize_stale_dispatch` |
 | 38. Crash before Phase B0 validation or B1 reservation | both | unchanged | unchanged | unchanged | `queued`, null owner | `recovery_required`; sequence-1 start and original resume fingerprint are durable; publication-attempt tuple remains at its prior resolved baseline | none | the same authorization reruns B0; only successful B0 plus atomic B1 may reserve an ordinal | Redis call, counter increment outside B1, second start, or fictional changed fingerprint | retry the same authorization while its boundaries remain valid |
-| 39. Phase B1 reservation commits before Redis | both | unchanged | unchanged | unchanged | `queued`, null owner | `recovery_required`; `attempt_count=N+1`, fresh publication generation/token, `reserved`, call boundary null | none | only the exact unexpired reservation may attempt `reserved -> call_boundary_entered`; the ordinal is already consumed | Redis before commit, second physical call under the reservation, decrement/reuse, or competing generation | continue only through the exact reserved generation |
-| 40. Crash after reservation and before call-boundary CAS | both | unchanged | unchanged | unchanged | `queued`, null owner | exact `reserved` tuple; call boundary and durable result null | none | after proven owner loss/expiry, exact CAS classifies the consumed ordinal `outcome_unknown` without Redis | assuming no call, reusing the ordinal, direct next call, or stale-token mutation | classify the exact tuple, then evaluate whether a next ordinal is legal |
-| 41. Call-boundary CAS commits and worker disappears before durable result | both | unchanged | unchanged | unchanged | `queued`, null owner | exact `call_boundary_entered` tuple; external call may or may not have happened | none | after proven owner loss/expiry, exact CAS classifies `outcome_unknown`; no call may occur under that generation again | guessing success/failure, replaying the same reservation, or clearing authority without CAS | preserve uncertainty and inspect current boundaries |
-| 42. Redis success occurs before durable success transaction | both | unchanged | unchanged | unchanged | `queued`, null owner | remains `recovery_required/call_boundary_entered` until database result; external acceptance is not durable locally | none | unresolved expiry becomes `outcome_unknown`; only a new ordinal may later publish the same key idempotently | writing success without exact generation/token, reusing the reservation, or inferring handler work | allow exact success CAS while authority is current; otherwise classify unknown |
-| 43. Redis authoritative failure occurs before durable failure transaction | both | unchanged | unchanged | unchanged | `queued`, null owner | remains `recovery_required/call_boundary_entered` until database result | none | exact current generation may commit `durable_failure/publish_failed`; after owner loss it becomes `outcome_unknown`, not invented failure | writing failure from stale authority, decrementing count, or silently retrying same reservation | persist exact failure while authoritative or classify unknown after expiry |
-| 44. Unresolved publication attempt lease expires | both | unchanged | unchanged | unchanged | `queued`, null owner | exact `reserved` or `call_boundary_entered` generation remains with consumed count and no resolution | none | one successor CAS binds every attempt field, writes `outcome_unknown`, clears token, and performs no Redis call | clear-first repair, counter rollback, same-ordinal retry, or guessed external result | classify uncertainty before any next-attempt decision |
-| 45. Next physical publication attempt is allowed after unknown result | both | unchanged | unchanged | unchanged | `queued`, null owner | prior latest generation is `outcome_unknown`, count below 8, no terminal result | none | B1 atomically reserves exactly the next ordinal/generation under the same logical action/key after all boundaries are revalidated | unchanged-fingerprint fiction, ordinal reuse/skip, new key/payload, or call-before-reservation | continue only through the new exact reservation |
-| 46. Final publication attempt becomes outcome unknown | both | unchanged | unchanged | unchanged | `queued`, null owner | attempt eight is `outcome_unknown`, no durable ACK/failure, no active token | none | no further reservation; record only `publish_failed/dispatch_publication_attempts_exhausted`; separate terminal authorization is required | attempt nine, false success/failure, or terminalization under republish authority | inspect transport, then issue exact terminal action if still canonical |
-| 47. Stale publication worker returns after classification or successor reservation | both | unchanged | unchanged | unchanged | `queued`, null owner | current attempt generation/state/token differs from stale worker | none | stale call-boundary/result CAS affects zero rows and worker exits without Redis | late Redis call, success/failure write, counter mutation, or successor overwrite | investigate repeated stale workers without weakening generation fencing |
+| 39. Phase B1 reservation commits with external fence pending | both | unchanged | unchanged | unchanged | `queued`, null owner | `recovery_required`; count/generation/token incremented, `reserved`, fence/call/result timestamps null | none | only exact DB tuple may request current-plus-one `supplier_import_advance_fence_v1`; no direct publish | Redis publish before committed reservation/fence, ordinal reuse/skip, or arbitrary fence jump | continue through exact fence installation or retire after owner loss |
+| 40. Crash after DB reservation and before Redis fence advancement | both | unchanged | unchanged | unchanged | `queued`, null owner | exact `reserved`/external-fence-pending tuple; Redis remains predecessor generation | none | do not claim stale A is fenced and do not publish; after owner loss atomically install a non-publishable Redis tombstone before DB unknown | local-only unknown classification, direct next attempt, missing-key bootstrap, or assumed external exclusion | retain fail-closed state until Redis retirement is proven |
+| 41. Crash after Redis fence advancement but before DB confirmation | both | unchanged | unchanged | unchanged | `queued`, null owner | DB remains `reserved`; Redis reports exact generation/token/payload `authorized_unused` | none | read-only Redis reconciliation permits exact DB `external_fence_installed`; Redis is never rolled back | reinstalling predecessor, publishing before DB confirmation, or treating a missing/conflicting key as installed | reconcile exact tuple or keep publication blocked |
+| 42. Worker A pauses after local call-boundary CAS; B takes over and advances Redis fence | both | unchanged | unchanged | unchanged | `queued`, null owner | DB current generation belongs to B; Redis current generation is B and A is lower | none | resumed A invokes `supplier_import_publish_fenced_v1`, receives `stale_generation`, creates zero Redis publish effects, and loses DB result CAS | relying on local CAS, accepting A's publish, lowering fence, or counting only DB rows | adversarial test asserts Redis-side effect counter for A is zero |
+| 43. Redis one-use publish succeeds but client loses response before DB success | both | unchanged | unchanged | unchanged | `queued`, null owner | DB remains `call_boundary_entered`; Redis exact fence is `consumed` | none | reconcile consumed receipt as external admission only; exact DB success may commit when authoritative, otherwise retire/classify unknown without reusing generation | second call, inferred handler work, new payload/key, or invented failure | preserve receipt and reconcile exact DB/Redis tuple |
+| 44. Unresolved publication attempt lease expires | both | unchanged | unchanged | unchanged | `queued`, null owner | exact reserved/installed/call-boundary DB tuple and Redis generation remain unresolved | none | `supplier_import_retire_fence_v1` first creates/reconciles monotonic tombstone; only then DB CAS writes `outcome_unknown` and clears token | clear-first DB repair, Redis rollback, same-ordinal retry, guessed result, or automatic missing-key bootstrap | retire externally, reconcile, then evaluate next ordinal |
+| 45. Next physical publication attempt is allowed after unknown result | both | unchanged | unchanged | unchanged | `queued`, null owner | prior generation is DB `outcome_unknown` and Redis retired, count below 8 | none | B1 reserves exactly next ordinal; Redis advances current-plus-one to `authorized_unused`; only confirmed successor fence may publish | unchanged-fingerprint fiction, ordinal reuse/skip, arbitrary fence jump, or publish-before-fence | continue only through new exact DB and Redis tuples |
+| 46. Final publication attempt becomes outcome unknown | both | unchanged | unchanged | unchanged | `queued`, null owner | attempt eight is externally retired and DB `outcome_unknown`, no ACK/failure/token | none | no further reservation or Redis fence advance; record only `publish_failed/dispatch_publication_attempts_exhausted`; separate terminal authorization required | attempt nine, false result, fence rollback, or republish-authority terminalization | inspect transport, then issue exact terminal action if canonical |
+| 47. Stale publication worker returns after external retirement or successor fence | both | unchanged | unchanged | unchanged | `queued`, null owner | Redis reports retired/successor generation and DB tuple differs from stale A | none | Redis rejects A as `stale_generation`/`not_authorized` with zero publish effects; DB result/counter CAS also affects zero rows | late external effect, success/failure write, counter mutation, or successor overwrite | investigate repeated stale workers without weakening external fencing |
 | 48. Unknown publication result followed by a closed action boundary | both | unchanged | unchanged | unchanged | `queued`, null owner | remains `recovery_required`; consumed attempt is `outcome_unknown` | none | Phase B reserves no next attempt and commits action-compatible `action_stopped`; later action requires new authorization | guessing outcome, cross-action terminalization, or another external call after boundary | inspect canonical rows, then authorize only the current action |
 | 49. Expired-owner recovery crashes before or during its atomic transaction | both | unchanged | unchanged | unchanged | original complete expired `queued` tuple | original `published` watchdog tuple | none | rollback leaves no start/result/domain mutation; same unexpired `recover_expired_queued_ownership` may retry exact CAS | partial owner clearing, recovery reason without result, Redis or source work | retry only after rollback and tuple revalidation |
 | 50. Expired-owner authorization loses CAS to a successor/live owner | both | unchanged | unchanged | unchanged | successor complete `queued` tuple | `published` | none | exact old token/hash/timestamp predicate affects zero rows and records only a nonce-proven Phase-A rejection when canonical; successor continues | clearing successor, matching only expiry, half-bound repair, or reuse of stale fingerprint | inspect successor; old authorization cannot retry mutation |
@@ -3908,16 +4134,16 @@ same transaction.
 | 54. Stale monitor wakes after a successor generation is acquired | monitor coordination | unchanged | unchanged | unchanged | unchanged | unchanged | monitor row contains successor generation and owner hash; old generation/token is stale | old worker exits; successor alone may complete or fail its generation | old worker query results, alerts, heartbeat or state writes | none unless successor also fails; preserve fail-closed freshness derivation |
 | 55. Stale monitor attempts heartbeat or state mutation | monitor coordination | unchanged | unchanged | unchanged | unchanged | unchanged | successor monitor generation, owner tuple and prior success evidence remain unchanged | exact generation/token/lease CAS affects zero rows and the stale worker exits | overwriting successor, refreshing success timestamps, clearing successor lease or changing admission state | investigate repeated stale writers without weakening the CAS |
 | 56. Alert-delivery lease crash before external attempt at count below 8 | alert coordination | unchanged | unchanged | unchanged | unchanged | unchanged | alert intent is `delivering` with incremented count, generation-bound complete lease and no ACK; process loss makes call occurrence unprovable | retain uncertainty; after lease expiry a successor may reserve only the next attempt with the same `alert_identity` | marking acknowledged/failed, claiming durable non-attempt, changing identity or domain mutation | allow bounded lease recovery while count remains below 8 |
-| 57. Alert worker crashes after external attempt below count 8 but before ACK persistence | alert coordination | unchanged | unchanged | unchanged | unchanged | unchanged | intent remains `delivering` with complete lease and no durable ACK; external outcome is unknown | after expiry a successor retries idempotently under a new generation/attempt | guessing delivered or undelivered, creating a new identity, or writing a synthetic ACK | verify sink idempotency and allow bounded generation retry |
-| 58. Alert-delivery lease below count 8 expires | alert coordination | unchanged | unchanged | unchanged | unchanged | unchanged | expired `delivering` tuple retains attempt count, generation and no ACK | one successor atomically increments generation/attempt and replaces the complete owner tuple | clear-first repair, attempt rollback, identity replacement or simultaneous takeover | none unless the next ordinal is eight |
-| 59. Successor alert worker acquires a new delivery generation | alert coordination | unchanged | unchanged | unchanged | unchanged | unchanged | intent remains `delivering` with successor generation/token and stable immutable payload/identity | successor performs at most the current idempotent attempt and owns ACK/retry CAS | old-generation mutation, duplicate intent, payload drift or domain mutation | monitor successor result and health gate |
-| 60. Old alert worker returns after successor acquisition | alert coordination | unchanged | unchanged | unchanged | unchanged | unchanged | successor delivery tuple and any successor result remain authoritative | old generation/token ACK, retry or failure CAS affects zero rows and expired local authority forbids a call | accepting a late ACK, making a late call, or overwriting successor result | inspect sink by stable identity only; do not mutate local evidence manually |
-| 61. Alert acknowledgement persists before worker loss | alert coordination | unchanged | unchanged | unchanged | unchanged | unchanged | intent is durably `acknowledged`, ACK time is non-null and owner/retry fields are null | duplicate delivery observes terminal acknowledged state and performs no external call | reacquiring delivery lease, redelivering or changing ACK evidence | none |
-| 62. Independent observer fails or stops updating | observer coordination | unchanged | unchanged | unchanged | unchanged | unchanged | monitor cycle/sink may remain fresh, but observer sequence/timestamp stop; after 120 seconds derived health is stale | restart probe; one short transaction must revalidate latest monitor generation/cycle and commit a fresh observer binding | monitor self-authorizing observer freshness, copying timestamps, or admitting capture/recovery while stale | keep protected admission closed until the new observer transaction succeeds |
-| 63. External alert ACK is uncertain without a durable local ACK below attempt 8 | alert coordination | unchanged | unchanged | unchanged | unchanged | unchanged | durable intent preserves stable identity and unacknowledged attempted state; sink may or may not have accepted | retain outcome unknown; retry only after lease rules permit, at the next ordinal, and with the same sink idempotency identity | converting uncertainty to acknowledged/permanent failure or suppressing bounded retry | inspect sink health; keep monitor integrity failed/stale where required until ACK succeeds |
-| 64. Alert attempt 8 is reserved and worker disappears before the external call | alert coordination | unchanged | unchanged | unchanged | unchanged | unchanged | exact `delivering`, `attempt_count=8`, complete generation/lease, null ACK; durable state cannot prove the call boundary was not crossed | wait for lease expiry; no successor acquisition or increment is legal | assuming not attempted, reusing ordinal eight, incrementing to nine, or synthetic failure/ACK | keep monitor admission failed and classify the exact tuple after expiry |
-| 65. Alert attempt 8 may have reached the sink and crashes before durable ACK | alert coordination | unchanged | unchanged | unchanged | unchanged | unchanged | exact attempt-eight `delivering` tuple, expired lease, null ACK and no authoritative sink result | one no-call CAS binds generation/token/timestamps and writes `delivery_outcome_unknown_exhausted`, count 8, null owner/retry/ACK | `delivered`, `permanent_failed`, attempt nine, new lease, identity replacement or external retry | preserve auditable uncertainty; reconcile only with exact authoritative positive sink evidence |
-| 66. Alert unknown-exhausted state is revisited | alert coordination | unchanged | unchanged | unchanged | unchanged | unchanged | `delivery_outcome_unknown_exhausted`, count exactly 8, no active lease/retry/ACK | automatic retry is terminally prohibited; provider-neutral design leaves it unresolved and monitor gate unhealthy | ninth call, counter reset, failure invention, ACK invention or automatic state clearing | explicit operational remediation only; a future evidence-backed reconciliation requires separate design/authorization |
+| 57. Unsupported or unverified alert provider is configured | alert coordination | unchanged | unchanged | unchanged | unchanged | unchanged | no approved `sink_contract_key`; provider capability evidence absent | sink readiness is `unknown/failed`, no delivery lease or provider call, monitor admission closed | best-effort fallback, generic interface claim, invented credentials, or healthy state | select and prove native fencing or provider idempotency through governed rollout |
+| 58. Native alert fence advances and worker crashes before DB confirmation | alert coordination | unchanged | unchanged | unchanged | unchanged | unchanged | DB retains prior delivering tuple; provider/gateway receipt proves exact new generation | reconcile exact receipt without rolling provider fence backward; no call until confirmation | assuming local CAS fenced A, predecessor reinstall, or provider call before confirmation | reconcile or keep sink unhealthy |
+| 59. Provider-idempotent alert call loses its response below count 8 | alert coordination | unchanged | unchanged | unchanged | unchanged | unchanged | intent remains unacknowledged; provider may hold one effect under stable `alert_identity` | retain uncertainty; later generation uses the same provider idempotency key and total logical effects remain at most one | new key per generation, invented ACK/failure, or duplicate logical effect | inspect authoritative provider evidence if available; otherwise remain fail-closed |
+| 60. Successor alert worker acquires generation B | alert coordination | unchanged | unchanged | unchanged | unchanged | unchanged | successor DB tuple is current and immutable payload/identity unchanged | native mode advances provider fence before B call; idempotency mode retains exact `alert_identity`; only B owns DB result CAS | claiming native fence before external confirmation, identity drift, or domain mutation | run selected adapter boundary and monitor health |
+| 61. Alert worker A pauses after local DB check and resumes after B takeover | alert coordination | unchanged | unchanged | unchanged | unchanged | unchanged | B/local terminal tuple is authoritative | native mode rejects A before effect; idempotency mode may accept API traffic but external receipt count for the logical identity remains `<= 1`; A loses DB CAS | treating DB CAS as external proof, accepting conflicting duplicate effect, new idempotency key, or stale ACK | adversarial integration test observes provider/gateway effect counter, not only DB rows |
+| 62. Alert acknowledgement persists before worker loss | alert coordination | unchanged | unchanged | unchanged | unchanged | unchanged | intent is durably `acknowledged`, ACK time non-null and owner/retry null | duplicate native/idempotent delivery creates no additional logical effect and cannot reacquire lease | redelivery under new identity, changing ACK evidence, or unproven success | none |
+| 63. Independent observer fails or stops updating | observer coordination | unchanged | unchanged | unchanged | unchanged | unchanged | monitor/sink may remain fresh, but observer sequence/timestamp stop; after 120 seconds derived health is stale | restart probe; transaction must revalidate latest monitor generation/cycle and exact current `sink_contract_key` | monitor self-authorizing observer freshness or admitting protected activity while stale | keep protected admission closed until observer succeeds |
+| 64. Alert attempt 8 is reserved and worker disappears before provider boundary | alert coordination | unchanged | unchanged | unchanged | unchanged | unchanged | exact `delivering`, count 8, complete generation/lease, null ACK | native mode must retire generation eight before final classification; idempotency mode retains same identity; no successor attempt | assuming no call, reusing ordinal eight, attempt nine, or synthetic result | keep monitor unhealthy and perform mode-specific retirement/identity handling after expiry |
+| 65. Alert attempt 8 may have created the logical effect and crashes before durable ACK | alert coordination | unchanged | unchanged | unchanged | unchanged | unchanged | exact attempt-eight tuple expired, null ACK and no authoritative provider result | native retirement or unchanged provider-idempotency identity precedes exact DB `delivery_outcome_unknown_exhausted`; local uncertainty remains | false delivered/permanent failure, attempt nine, identity replacement, or additional logical effect | preserve uncertainty; reconcile only with positive exact provider evidence |
+| 66. Alert unknown-exhausted state is revisited | alert coordination | unchanged | unchanged | unchanged | unchanged | unchanged | `delivery_outcome_unknown_exhausted`, count 8, no lease/retry/ACK; external mode remains bound | automatic lease/attempt nine prohibited; native stale call rejected, idempotent late API call cannot add a logical effect, and monitor gate stays unhealthy | counter reset, new key, duplicate logical effect, failure/ACK invention, or automatic clearing | explicit operational remediation; evidence-backed reconciliation needs separate design/authorization |
 
 Rows 52 through 66 are coordination-only crash domains. They never mutate a
 SupplierImportRun, ImportJob, ImportHistory, execution claim, dispatch outbox,
@@ -4404,10 +4630,10 @@ treated as proof that the authorized branch was pushed.
 | 15 | Authorize schema implementation | checkpoint 14 merged design | repository owner with Database/Security scope | authorize additive schema work only | scoped implementation authorization | schema remains absent | 16 |
 | 16 | Implement schema candidate locally | checkpoint 15 authorization | implementation owner | add claim, outbox, evidence migrations/repositories and MySQL tests | local schema candidate | keep capture absent/disabled | 17 |
 | 17 | Validate schema candidate | checkpoint 16 candidate | QA/Database owner | run migration, MySQL, rollback, CAS and syntax validation | schema validation evidence | remediate; no runtime implementation | 18 |
-| 18 | Authorize capture/idempotency/outbox implementation | checkpoint 17 validated schema | repository owner with Security/Catalog Sync Safety scope | authorize runtime implementation only | scoped implementation authorization | runtime remains absent | 19 |
-| 19 | Implement capture candidate locally | checkpoint 18 authorization | implementation owner | implement disabled stable-key/outbox/coordinator/streaming/capture behavior and tests | local implementation candidate | keep feature disabled | 20 |
-| 20 | Validate complete implementation candidate | checkpoint 19 candidate | QA/Database/Security owners | run focused, MySQL, concurrency, crash, privacy and zero-mutation validation | complete implementation validation evidence | remediate; no review/push | 21 |
-| 21 | Independent implementation review | checkpoint 20 green validation and exact diff | independent Database, Security and Catalog Sync Safety reviewers | review exact candidate only | `PASS` or `BLOCKED` pinned to exact SHA | no push or PR | 22 |
+| 18 | Authorize capture/idempotency/outbox implementation | checkpoint 17 validated schema | repository owner with Security/Catalog Sync Safety scope | authorize runtime plus Redis first-generation initialization/ACL/Function implementation only; no provider selection | scoped implementation authorization | runtime remains absent | 19 |
+| 19 | Implement capture candidate locally | checkpoint 18 authorization | implementation owner | implement disabled stable-key/outbox/coordinator/streaming/capture plus `supplier_import_advance_fence_v1`, `supplier_import_publish_fenced_v1`, retirement/reconciliation and tests | local implementation candidate with server-side Redis external fence | keep feature disabled; direct publish is forbidden | 20 |
+| 20 | Validate complete implementation candidate | checkpoint 19 candidate | QA/Database/Security owners | run focused, MySQL/Redis, crash/privacy/zero-mutation tests including suspended A after local CAS, B fence advance, resumed A stale rejection and Redis effect count zero | complete implementation and adversarial external-effect evidence | remediate; no review/push | 21 |
+| 21 | Independent implementation review | checkpoint 20 green validation and exact diff | independent Database, Redis, Security and Catalog Sync Safety reviewers | review exact candidate, Redis Function/ACL/first-generation initialization/loss behavior and external effect counter evidence | `PASS` or `BLOCKED` pinned to exact SHA; stale external publish must be disproven | no push or PR | 22 |
 | 22 | Remediate blocked implementation findings or record not-required | checkpoint 21 verdict | implementation owner | if BLOCKED, remediate and rerun affected validation; if PASS, record `NOT_REQUIRED` | final implementation candidate | remain local | 23 |
 | 23 | Fresh independent implementation re-review/PASS | checkpoint 22 candidate or not-required evidence | independent Database, Security and Catalog Sync Safety reviewers | review exact final candidate/evidence | final independent `PASS` pinned to exact SHA | remediate through checkpoint 22; no push | 24 |
 | 24 | Authorize implementation branch push | checkpoint 23 PASS | repository owner | authorize exact reviewed commit and branch only | recorded push-only authorization | remain local | 25 |
@@ -4422,14 +4648,14 @@ treated as proof that the authorized branch was pushed.
 | 33 | Authorize staging deployment | checkpoint 32 merge and deploy plan | repository owner | authorize exact merged commit deployment only | deployment authorization | no VPS action | 34 |
 | 34 | Deploy implementation disabled | checkpoint 33 authorization | Release/DevOps operator | deploy exact `origin/main` with capture/reconcilers disabled | staging deployment evidence | operational rollback preserves schema/evidence | 35 |
 | 35 | Independent post-deployment verification | checkpoint 34 deployment | independent Release/QA reviewer | read-only staging verification | containers/schema/flags/importer/Super Admin evidence | capture remains disabled | 36 |
-| 36 | Monitor/observer design review approval | checkpoint 35 plus exact canonical monitor, observer, alert identity, schema, CAS and rollout design | independent Database, Security, Release and Catalog Sync Safety reviewers | review design only | approval pinned to exact design commit and vectors/schema | remediate design; no implementation | 37 |
+| 36 | Monitor/observer design review approval | checkpoint 35 plus exact monitor/observer/alert identity/schema/CAS, provider capability gate and rollout design | independent Database, Security, Release and Catalog Sync Safety reviewers | review native-fence/provider-idempotency modes, unsupported-provider closure and external-effect oracle | approval pinned to exact design commit, vectors/schema and capability contract | remediate design; no implementation | 37 |
 | 37 | Authorize monitor/observer implementation | checkpoint 36 approval | repository owner with Database/Security/Catalog Sync Safety scope | authorize only disabled monitor, observer, sink adapter, schema and tests | scoped implementation authorization | implementation remains absent | 38 |
 | 38 | Verify monitor implementation branch/repository state | checkpoint 37 authorization | implementation owner | create/verify exact branch from approved `origin/main`, clean tree and allowed scope | recorded base/head/scope checkpoint | stop on divergence; no edits | 39 |
-| 39 | Implement monitor/observer candidate locally | checkpoint 38 verified state | implementation owner | implement disabled exact schema, monitor lease/CAS, observer, alert identity/sink and admission gate | local implementation candidate; no push or PR | keep schedule/capture/recovery disabled | 40 |
-| 40 | Run focused monitor/observer validation | checkpoint 39 candidate | QA/implementation owner | run exact zero-domain-mutation, lease/race, alert-vector and failure tests | focused green evidence | remediate locally; no push | 41 |
+| 39 | Implement monitor/observer candidate locally | checkpoint 38 verified state | implementation owner | implement disabled schema, monitor lease/CAS, observer, alert identity, capability-gated adapter and admission gate; unsupported provider cannot lease or report healthy | local implementation candidate with exact `sink_contract_key`; no push/PR | keep schedule/capture/recovery disabled | 40 |
+| 40 | Run focused monitor/observer validation | checkpoint 39 candidate | QA/implementation owner | run zero-domain-mutation, lease/race/vector/failure tests plus paused A, B takeover, resumed provider call and native zero-A-effect or idempotent total-effect `<= 1` assertion | focused green adapter integration and external-effect evidence | remediate locally; no push | 41 |
 | 41 | Validate monitor database/migrations | checkpoint 40 green tests | independent Database reviewer | inspect additive schema, guarded empty-schema down, MySQL checks/indexes/FKs and CAS integration | database validation PASS or findings | remediate; no push | 42 |
-| 42 | Validate monitor security and Catalog Sync safety | checkpoint 41 PASS | independent Security and Catalog Sync Safety reviewers | audit nonce/hash/privacy, sink boundaries, fail-closed gates and zero supplier/catalog mutation | security/safety PASS or findings | remediate; no push | 43 |
-| 43 | Independent monitor implementation review | checkpoints 40 through 42 evidence and exact local diff | independent Release/QA plus prior mandatory reviewers | review implementation only | `PASS` or `BLOCKED` pinned to exact commit | no push or PR | 44 |
+| 42 | Validate monitor security and Catalog Sync safety | checkpoint 41 PASS | independent Security and Catalog Sync Safety reviewers | audit hashes/privacy, provider capability/version/idempotency horizon or native fence, unsupported-provider closure, fail-closed gates and zero supplier/catalog mutation | security/safety PASS plus recorded adapter contract evidence or findings | remediate; no push | 43 |
+| 43 | Independent monitor implementation review | checkpoints 40 through 42 evidence and exact local diff | independent Release/QA plus prior mandatory reviewers | review selected mode, provider contract and adversarial external-effect evidence, not DB state alone | `PASS` or `BLOCKED` pinned to exact commit and `sink_contract_key` | no push or PR | 44 |
 | 44 | Remediate blocked monitor findings or record not-required | checkpoint 43 verdict | implementation owner | if BLOCKED, remediate and rerun affected validation; if PASS, record `NOT_REQUIRED` | final candidate tied to verdict | remain local until independent PASS | 45 |
 | 45 | Independent monitor re-review/PASS | checkpoint 44 candidate or not-required evidence | independent Database, Security, Release and Catalog Sync Safety reviewers | review exact final local commit and evidence | final independent `PASS` pinned to exact commit | remediate through checkpoint 44; no push | 46 |
 | 46 | Authorize monitor branch push | checkpoint 45 PASS | repository owner | authorize push of exact reviewed commit and branch only | push-only authorization | remain local | 47 |
@@ -4444,9 +4670,9 @@ treated as proof that the authorized branch was pushed.
 | 55 | Authorize disabled monitor staging deployment | checkpoint 54 merge plus reviewed deployment/rollback plan | repository owner | authorize exact merged commit deployment with schedules and capture/recovery disabled | exact deployment authorization | no VPS action | 56 |
 | 56 | Deploy monitor disabled | checkpoint 55 authorization | Release/DevOps operator | deploy exact `origin/main`, run migrations with monitor/observer/sink disabled | schema/code present, singleton `unknown`, no scheduled monitor activity | operational rollback keeps schema/evidence and all gates disabled | 57 |
 | 57 | Independent disabled-deployment verification | checkpoint 56 deployment | independent Release/QA/Database/Security reviewers | read-only schema/container/flag/privacy/zero-domain-mutation verification | deployment PASS pinned to exact commit/schema | rollback operational state or remediate; no enablement | 58 |
-| 58 | Authorize monitor schedule/sink enablement | checkpoint 57 PASS and configured approved sink without documented secrets | repository owner with Security/Catalog Sync Safety approval | authorize only 300-second monitor and independent 60-second observer | exact enablement authorization | schedules remain disabled | 59 |
-| 59 | Enable and verify monitor/sink/observer | checkpoint 58 authorization | Release/Operations operator | enable monitor/observer and verify canonical synthetic alert/ACK plus dual freshness; keep capture/recovery disabled | positive generations/sequences, fresh 600/120-second evidence and zero-domain-mutation proof | disable monitor/observer and keep capture/recovery disabled | 60 |
-| 60 | Authorize APCOM capture enablement | checkpoint 59 currently fresh derived `healthy` state and acknowledged sink/observer | repository owner with Catalog Sync Safety approval | authorize capture enablement only while continuous gate remains healthy | authorization bound to current monitor/observer sequences | capture stays disabled | 61 |
+| 58 | Authorize monitor schedule/sink enablement | checkpoint 57 PASS plus selected provider, approved native/idempotency mode, exact adapter/version/contract, stale-worker/duplicate test evidence and independent review | repository owner with Security/Catalog Sync Safety approval | authorize only exact `sink_contract_key`, 300-second monitor and 60-second observer; credentials remain secret | enablement authorization pinned to provider capability evidence | schedules remain disabled when any evidence is missing | 59 |
+| 59 | Enable and verify monitor/sink/observer | checkpoint 58 authorization | Release/Operations operator | enable exact adapter and verify capability descriptor, stale-worker oracle, duplicate/idempotency where applicable, synthetic alert/ACK and dual freshness; keep capture/recovery disabled | stored matching `sink_contract_key`, positive sequences, fresh 600/120-second evidence, external-effect proof and zero-domain mutation | disable adapter/monitor/observer and keep capture/recovery disabled | 60 |
+| 60 | Authorize APCOM capture enablement | checkpoint 59 currently fresh derived `healthy`, matching `sink_contract_key`, acknowledged sink and observer | repository owner with Catalog Sync Safety approval | authorize capture only while continuous monitor/observer/provider-capability and Redis-fence readiness gates remain healthy | authorization bound to current monitor/observer sequences, sink contract and Redis fence readiness | capture stays disabled | 61 |
 | 61 | Enable and verify capture | checkpoint 60 authorization plus revalidated healthy gate | Release/Operations operator | enable APCOM-specific gate and verify rejection on stale/failed/unknown health; do not import | enabled only while healthy and default-off import verified | disable capture; no protected generation may start | 62 |
 | 62 | Authorize one future APCOM import | checkpoint 61 or prior verified import | repository owner/operator for one named execution | authorize exactly one manual import | pinned one-import authorization | no import | 63 |
 | 63 | Execute/verify authorized import | checkpoint 62 authorization | Supplier Import operator | run exactly one import and verify claim/outbox/generation | one qualified/frozen/failed generation or gap | no automatic retry; recover fail closed | 62 or 64 |
@@ -4709,7 +4935,14 @@ The later runtime implementation must add the dedicated
 `SUPPLIER_IMPORT_QUEUE_RETRY_AFTER=3900`, and dedicated Docker worker while
 leaving the shared `REDIS_QUEUE_RETRY_AFTER=1300` and unrelated worker queues
 unchanged. Both job paths and outbox payload publication must route explicitly
-to that connection/queue. Startup validation must prove the exact
+to that connection/queue. It must use a restricted Redis ACL and implement the
+reviewed absent-key generation-one rule inside the exact atomic
+`supplier_import_advance_fence_v1`,
+`supplier_import_publish_fenced_v1` and `supplier_import_retire_fence_v1`
+operations. Direct queue publication, arbitrary missing-fence reconstruction
+outside those exact generation-one operations and separate check/publish
+commands are prohibited. Startup validation
+must prove exact Redis Function version/readiness plus the
 `3600 < 3900 < 4200 < 4320` hierarchy, 60-second bootstrap bound, and queue
 isolation before capture can be enabled.
 
@@ -4730,8 +4963,10 @@ watchdog monitor owns only indexed read-only detection and notifications. The
 outbox reconciler may mutate an exact stale-payload execution only through an
 unexpired immutable authorization and records the immutable result, while the exact
 publication-mismatch command owns only one explicitly identified execution.
-MySQL/Redis integration tests must prove every 64-item acceptance criterion and
-all 53 focused watchdog/authorization/mismatch cases above. These are planned
+MySQL/Redis/provider-adapter integration tests must prove every 64-item
+acceptance criterion and all 53 focused watchdog/authorization/mismatch cases
+above, including external-effect counters at both suspended-worker boundaries.
+These are planned
 implementation requirements only; this documentation commit changes no
 runtime, queue, Docker, environment, schema, worker, or feature-flag value.
 

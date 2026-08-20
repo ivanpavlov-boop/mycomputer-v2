@@ -150,8 +150,18 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
             'publication_attempt_token_hash',
             'publication_attempt_reserved_at',
             'publication_attempt_lease_expires_at',
+            'publication_external_fence_installed_at',
             'publication_call_boundary_at',
             'publication_attempt_resolved_at',
+            'supplier_import_advance_fence_v1',
+            'supplier_import_publish_fenced_v1',
+            'supplier_import_retire_fence_v1',
+            'supplier-import:dispatch-fence:v1:{<logical_execution_key>}',
+            'last_successful_sink_contract_key',
+            'sink_contract_key',
+            'native_generation_fence',
+            'provider_enforced_idempotency',
+            'External side-effect boundary inventory',
             'The 103-row dependency audit checks 104 prerequisite edges',
             'forward-only operational rollback',
             'SUPPLIER_SNAPSHOT_EMPTY_SCHEMA_DOWN_CONFIRMED=true',
@@ -221,15 +231,15 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
         $this->assertStringContainsString('exactly 19 data rows and 3 columns', $design);
         $this->assertStringContainsString('exactly 66 data rows and 11 columns', $design);
         $this->assertStringContainsString('canonical 103-row fine-grained checkpoint matrix', $design);
-        $this->assertStringContainsString('every 64-item acceptance criterion', $design);
-        $this->assertStringContainsString('all 53 focused watchdog/authorization/mismatch cases', $design);
+        $this->assertStringContainsString('every 64-item acceptance criterion', $normalizedDesign);
+        $this->assertStringContainsString('all 53 focused watchdog/authorization/mismatch cases', $normalizedDesign);
         $this->assertStringNotContainsString('every 63-item acceptance criterion', $design);
         $this->assertStringNotContainsString('all 44 focused watchdog/authorization/mismatch cases', $design);
 
         $this->assertSame(
             1,
             preg_match(
-                '/Redis integration tests proving all of these exact cases:\n\n(?<cases>.*?)\n\nThe same future MySQL\/Redis suite must add focused/s',
+                '/MySQL\/Redis\/provider-adapter integration tests proving all of these exact cases:\n\n(?<cases>.*?)\n\nThe same future MySQL\/Redis\/provider-adapter suite must add focused/s',
                 $design,
                 $acceptancePlan,
             ),
@@ -240,21 +250,33 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
         $this->assertSame(
             1,
             preg_match(
-                '/The same future MySQL\/Redis suite must add focused watchdog, authorization, and\n.*?exactly these cases:\n\n(?<cases>.*?)\n\nThose tests must also prove/s',
+                '/The same future MySQL\/Redis\/provider-adapter suite must add focused watchdog, authorization, and\n.*?exactly these cases:\n\n(?<cases>.*?)\n\nThose tests must also prove/s',
                 $design,
                 $focusedPlan,
             ),
         );
         preg_match_all('/^(\d+)\./m', $focusedPlan['cases'], $focusedNumbers);
         $this->assertSame(range(1, 53), array_map('intval', $focusedNumbers[1]));
+        $normalizedFocusedPlan = preg_replace('/\s+/', ' ', $focusedPlan['cases']);
+        $this->assertIsString($normalizedFocusedPlan);
+        foreach ([
+            'adversarial Redis test pausing A after local call-boundary CAS and before Redis, allowing B to retire/advance the Redis fence, resuming A, and asserting `stale_generation` plus external publish effect count for A exactly zero',
+            'adversarial alert test pausing A after the last local DB authority step, allowing B takeover, resuming A at the provider boundary, and asserting native stale rejection/zero A effects or provider total logical effects `<= 1` from an external fake/receipt counter',
+        ] as $externalRaceContract) {
+            $this->assertStringContainsString($externalRaceContract, $normalizedFocusedPlan);
+        }
 
         foreach ([
-            '`delivery_outcome_unknown_exhausted`, preserves `attempt_count = 8`',
+            '`delivery_outcome_unknown_exhausted`, preserve `attempt_count = 8`',
             'no worker can acquire a new automatic delivery lease',
             'terminal only for automatic delivery, not proof of delivery or failure',
             'It cannot transition to `permanent_failed`',
             'it cannot synthesize an ACK',
             'No reset, identity replacement, counter decrement, automatic retry, or ninth attempt is permitted',
+            'A stale native-fence worker is rejected at the provider boundary',
+            'an idempotency-mode worker may reach the API but cannot create an additional logical alert effect',
+            'the first admitted effect sets it atomically, generation advancement or retirement never clears it',
+            'If A won the provider race and consumed the logical effect before B\'s fence advance, B observes the permanent consumed latch and cannot create a second effect',
         ] as $attemptEightContract) {
             $this->assertStringContainsString($attemptEightContract, $normalizedDesign);
         }
@@ -267,12 +289,18 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
         foreach ([
             'Every physical Redis publication, initial or recovery, requires one committed reservation first',
             'increments `attempt_count = N + 1` and `publication_attempt_generation` by one',
-            'The transaction commits before Redis can be invoked',
-            'Only the exact unexpired generation/token may CAS `reserved ->',
-            'A generation may enter this boundary once and may authorize at most one physical call',
-            'A stale generation affects zero rows and cannot call',
+            'The transaction commits before any Redis external operation',
+            'local CAS is explicitly insufficient as an external-effect fence',
+            'Direct worker use of an unguarded Redis `PUBLISH`, queue push, or separate `GET/check` followed by publication is forbidden',
+            'There is no impossible per-execution generation-zero bootstrap',
+            'The only legal absent-key transitions require the exact committed DB tuple `publication_attempt_generation = 1`, `publication_attempt_state = reserved` and all fence/call/result timestamps null',
+            'If retirement wins, a delayed advance for the same generation returns `not_authorized`',
+            'Every other absent, evicted, rolled-back, malformed, or conflicting Redis key is loss of fence state',
+            'the Redis Function, not process scheduling, enforces the external effect',
+            'A second call returns `already_consumed` without a second publication',
+            'After successor generation `N + 1` is installed, a resumed worker from `N` receives `stale_generation` and creates zero external publish effects',
             'B1 does not pretend that the original resume fingerprint is unchanged',
-            'one physical Redis call always has one durable reservation',
+            'One physical Redis effect therefore has one committed DB reservation and one Redis-consumed fence',
         ] as $publicationReservationContract) {
             $this->assertStringContainsString($publicationReservationContract, $normalizedDesign);
         }
@@ -281,6 +309,14 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
             'its immutable started tuple is the durable reservation',
             $design,
         );
+        foreach ([
+            'There is no asynchronous yield',
+            'cannot be interrupted between the successful CAS and invocation',
+            'no scheduling point between the final CAS and the external call',
+            'install the reviewed generation-zero fence while publishers are stopped',
+        ] as $unsafeSchedulingClaim) {
+            $this->assertStringNotContainsString($unsafeSchedulingClaim, $design);
+        }
 
         $this->assertSame(
             1,
@@ -325,23 +361,33 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
                 static fn (string $row): bool => str_contains($row, 'committed `republish_same_key` start with exact unchanged baseline')
                     && str_contains($row, 'Phase B0')
                     && str_contains($row, 'Phase B1')
-                    && str_contains($row, 'commits before Redis'),
+                    && str_contains($row, 'external-fence-pending before Redis'),
             ),
             'The protocol matrix lacks the B0/B1 reservation-before-call outcome.',
         );
         $this->assertTrue(
             collect($protocolRows)->contains(
-                static fn (string $row): bool => str_contains($row, 'exact `reserved` publication attempt generation')
-                    && str_contains($row, '`call_boundary_entered`')
-                    && str_contains($row, 'exactly one'),
+                static fn (string $row): bool => str_contains($row, '`external_fence_installed` or `call_boundary_entered`')
+                    && str_contains($row, '`supplier_import_publish_fenced_v1`')
+                    && str_contains($row, '`already_consumed`')
+                    && str_contains($row, '`stale_generation`')
+                    && str_contains($row, 'zero effects'),
             ),
-            'The protocol matrix lacks the one-use physical-call boundary.',
+            'The protocol matrix lacks the Redis-side one-use and stale-generation boundary.',
+        );
+        $this->assertTrue(
+            collect($protocolRows)->contains(
+                static fn (string $row): bool => str_contains($row, 'configured adapter has a proven native-fence or provider-idempotency')
+                    && str_contains($row, 'unsupported/unverified providers fail closed')
+                    && str_contains($row, 'cannot create a second logical alert effect'),
+            ),
+            'The protocol matrix lacks the provider capability gate.',
         );
         $this->assertTrue(
             collect($protocolRows)->contains(
                 static fn (string $row): bool => str_contains($row, '`attempt_count = 8`')
-                    && str_contains($row, 'final `outcome_unknown`')
-                    && str_contains($row, 'no attempt nine'),
+                    && str_contains($row, 'final DB `outcome_unknown`')
+                    && str_contains($row, 'no publish or attempt nine'),
             ),
             'The protocol matrix lacks the final unknown publication outcome.',
         );
@@ -415,7 +461,7 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
             'Monitor lease crash before successful cycle persistence',
             'Alert-delivery lease crash before external attempt',
             'Independent observer fails or stops updating',
-            'External alert ACK is uncertain without a durable local ACK',
+            'Alert attempt 8 may have created the logical effect and crashes before durable ACK',
         ] as $boundary) {
             $this->assertTrue(
                 collect($crashRows)->contains(
@@ -426,12 +472,15 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
         }
 
         foreach ([
-            'Alert attempt 8 is reserved and worker disappears before the external call',
-            'Alert attempt 8 may have reached the sink and crashes before durable ACK',
+            'Alert attempt 8 is reserved and worker disappears before provider boundary',
+            'Alert attempt 8 may have created the logical effect and crashes before durable ACK',
             'Alert unknown-exhausted state is revisited',
-            'Phase B1 reservation commits before Redis',
-            'Crash after reservation and before call-boundary CAS',
-            'Stale publication worker returns after classification or successor reservation',
+            'Phase B1 reservation commits with external fence pending',
+            'Crash after DB reservation and before Redis fence advancement',
+            'Crash after Redis fence advancement but before DB confirmation',
+            'Worker A pauses after local call-boundary CAS; B takes over and advances Redis fence',
+            'Stale publication worker returns after external retirement or successor fence',
+            'Alert worker A pauses after local DB check and resumes after B takeover',
         ] as $newBoundary) {
             $this->assertTrue(
                 collect($crashRows)->contains(
@@ -439,6 +488,22 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
                 ),
                 "Missing A1/A2 crash boundary: {$newBoundary}",
             );
+        }
+
+        $redisRaceRow = collect($crashRows)->first(
+            static fn (string $row): bool => str_contains($row, 'Worker A pauses after local call-boundary CAS'),
+        );
+        $this->assertIsString($redisRaceRow);
+        foreach (['B takes over', '`stale_generation`', 'zero Redis publish effects', 'effect counter for A is zero'] as $marker) {
+            $this->assertStringContainsString($marker, $redisRaceRow);
+        }
+
+        $alertRaceRow = collect($crashRows)->first(
+            static fn (string $row): bool => str_contains($row, 'Alert worker A pauses after local DB check'),
+        );
+        $this->assertIsString($alertRaceRow);
+        foreach (['after B takeover', 'native mode rejects A before effect', 'external receipt count for the logical identity', '`<= 1`', 'effect counter'] as $marker) {
+            $this->assertStringContainsString($marker, $alertRaceRow);
         }
 
         $rolloutNames = array_map(
@@ -463,6 +528,32 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
 
             for ($index = 1; $index < count($positions); $index++) {
                 $this->assertGreaterThan($positions[$index - 1], $positions[$index]);
+            }
+        }
+
+        $rolloutByCheckpoint = collect($rolloutRows)->mapWithKeys(
+            static function (string $row): array {
+                $cells = array_map('trim', explode('|', trim($row, '|')));
+
+                return [(int) $cells[0] => $row];
+            },
+        );
+        foreach ([
+            19 => ['supplier_import_advance_fence_v1', 'supplier_import_publish_fenced_v1', 'retirement/reconciliation', 'direct publish is forbidden'],
+            20 => ['suspended A after local CAS', 'B fence advance', 'resumed A stale rejection', 'Redis effect count zero'],
+            21 => ['Redis Function/ACL/first-generation initialization/loss behavior', 'external effect counter evidence'],
+            39 => ['capability-gated adapter', 'unsupported provider cannot lease or report healthy'],
+            40 => ['paused A', 'B takeover', 'resumed provider call', 'total-effect `<= 1`'],
+            42 => ['provider capability/version/idempotency horizon or native fence', 'unsupported-provider closure'],
+            43 => ['provider contract', 'adversarial external-effect evidence, not DB state alone'],
+            58 => ['selected provider', 'approved native/idempotency mode', 'stale-worker/duplicate test evidence'],
+            59 => ['stale-worker oracle', 'stored matching `sink_contract_key`', 'external-effect proof'],
+            60 => ['provider-capability and Redis-fence readiness gates'],
+        ] as $checkpoint => $markers) {
+            $this->assertTrue($rolloutByCheckpoint->has($checkpoint));
+
+            foreach ($markers as $marker) {
+                $this->assertStringContainsString($marker, $rolloutByCheckpoint->get($checkpoint));
             }
         }
 

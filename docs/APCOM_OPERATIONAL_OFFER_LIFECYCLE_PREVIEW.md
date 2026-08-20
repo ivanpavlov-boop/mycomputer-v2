@@ -73,13 +73,15 @@ than 600 seconds plus a separately persisted observer heartbeat no older than
 120 seconds from the independent 60-second container probe;
 `stale`, `failed` and `unknown` reject capture, protected-generation start,
 authorization issuance and mutating recovery start. Alert delivery is durable
-at-least-once intent with byte-canonical privacy-safe idempotency and external ACK, not
-false at-most-once delivery. An eighth alert attempt without durable ACK or
-authoritative negative evidence CASes to
-`delivery_outcome_unknown_exhausted` at count eight, remains neither
-acknowledged nor permanently failed, permits no automatic retry or ninth call,
-and keeps the safety gate unhealthy pending separately designed evidence-backed
-reconciliation. No alert provider or credentials are selected here.
+at-least-once intent with at-most-one logical external effect per stable
+`alert_identity`, not false at-most-once API transport. A concrete adapter is
+eligible only with provider/gateway native generation fencing or durable
+provider-enforced idempotency; unsupported providers keep readiness unhealthy.
+An eighth alert attempt without durable ACK or authoritative negative evidence
+becomes `delivery_outcome_unknown_exhausted` at count eight only under that
+external-effect contract, remains neither acknowledged nor permanently failed,
+opens no automatic retry or ninth attempt, and keeps the safety gate unhealthy.
+No alert provider or credentials are selected here.
 The exact NUL-delimited alert domain, six-key JSON object and two synthetic hash
 vectors are defined only in the canonical persistence design.
 
@@ -94,11 +96,13 @@ Result rows bind the complete tuple by composite FK and canonical fingerprint.
 Republish uses distinct pre-start validation and one immutable post-start resume
 fingerprint. Phase B0 validates that baseline only before the first physical
 attempt; Phase B1 durably increments the attempt count/generation and commits a
-token-bound reservation before every Redis call, followed by a one-use
-call-boundary CAS. A lost reservation is consumed as `outcome_unknown`; only a
-fresh next ordinal may idempotently publish the byte-exact same canonical
-payload while every boundary remains valid, and no stale generation may call or
-write a result. A boundary failure action-stops the
+token-bound reservation. A Redis-native atomic monotonic fence must then be
+installed, and its one-use Function checks generation/token/payload while
+consuming authority and publishing in one server operation. The local call-
+boundary CAS is audit state, not the external fence. Unknown classification
+requires Redis retirement first; after successor fence advancement, stale A is
+rejected at Redis with zero publish effect and also cannot write a DB result. A
+boundary failure action-stops the
 republish without terminalizing and releases the target for a newly issued exact
 action. The other four database-only actions commit start, their exact mutation
 and compatible result together. Complete expired queued ownership has one legal

@@ -439,12 +439,14 @@ successful cycle and sink acknowledgement no older than 600 seconds plus a
 separately persisted observer heartbeat no older than 120 seconds from the
 independent 60-second container probe. `stale`, `failed` or `unknown`
 health rejects capture, protected-generation start, authorization issuance and
-mutating recovery start. External delivery uses durable at-least-once intent,
-stable idempotency and generation-bound ACK; no provider or credential is
-invented by the design. Attempt-eight uncertainty becomes exact
-`delivery_outcome_unknown_exhausted` at count eight, is neither acknowledged nor
-permanently failed, cannot acquire another lease or attempt nine, and keeps
-admission unhealthy until separately designed evidence-backed reconciliation.
+mutating recovery start. External delivery requires an adapter capability gate:
+provider/gateway native generation fencing or durable provider-enforced
+idempotency under the same `alert_identity`. Unsupported providers cannot become
+ready, and no provider or credential is invented by the design. Attempt-eight
+uncertainty becomes `delivery_outcome_unknown_exhausted` at count eight only
+under that external-effect contract, is neither acknowledged nor permanently
+failed, cannot acquire another lease or attempt nine, and keeps admission
+unhealthy until separately designed evidence-backed reconciliation.
 
 Every mutating recovery uses one authenticated-Filament authorization covering
 one complete action/operator/claim/outbox/key/parent tuple, server-computed
@@ -462,11 +464,13 @@ authorization and accepts no operator override. Result rows have composite
 relational and fingerprint binding. Same-key publication has exact pre-start
 validation and a durable post-start resume fingerprint. B0 validates that
 baseline before the first attempt; B1 commits a counter-incrementing generation/
-token reservation before each physical Redis call and one-use call-boundary
-CAS. An unresolved expired reservation is consumed as `outcome_unknown`; only
-the next ordinal may repeat the byte-identical idempotent payload while all
-action boundaries remain valid, and stale workers cannot call or overwrite a
-successor. A later boundary closes only the republish
+token reservation, then an atomic Redis-side monotonic fence and one-use publish
+Function enforce the actual effect boundary. Local call-boundary CAS alone is
+insufficient. Unknown classification requires Redis retirement; only the next
+ordinal may advance the fence and repeat the byte-identical payload while all
+boundaries remain valid. After successor advancement, stale workers receive
+Redis stale rejection with zero publish effect and cannot overwrite a DB
+result. A later boundary closes only the republish
 authorization through `action_stopped`; it never grants terminal authority.
 Database-only actions commit start, their exact mutation and compatible result
 atomically. Complete expired queued ownership has one legal first authorized

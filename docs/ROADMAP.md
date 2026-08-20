@@ -290,18 +290,23 @@ disabled. `CART-025` remains open.
     generation-bound heartbeat and byte-canonical privacy-safe alert-intent
     coordination with exact MySQL keys/checks/FK, an independently observed
     600-second monitor/sink gate, separately persisted 120-second independent-
-    observer gate, and provider-neutral durable at-least-once
-    idempotent alert/ACK semantics with exact attempt-eight
-    `delivery_outcome_unknown_exhausted`, no false ACK/failure and no ninth
-    call; immutable complete action/operator/claim/
+    observer gate, and a fail-closed alert-provider capability gate requiring
+    native external generation fencing or durable provider-enforced idempotency
+    under the stable `alert_identity`; unsupported providers cannot become
+    ready, attempt-eight `delivery_outcome_unknown_exhausted` creates no ninth
+    attempt or additional logical alert effect, and no provider is selected by
+    this design; immutable complete action/operator/claim/
     outbox/key/parent recovery authority issued in authenticated Filament and
     expiring after 900 seconds, a 32-byte single-display nonce accepted only
     through stdin, composite result binding, and ordered immutable `started`
     plus terminal lifecycle events; `dispatch_durable_progress_stalled`
     expressly proves no durable progress rather than no delivery; exact
     pre-start and post-start resume fingerprints for same-key publication,
-    followed by a committed counter-incrementing generation/token reservation
-    and one-use call-boundary CAS before every physical Redis call;
+    followed by a committed counter-incrementing generation/token reservation,
+    atomic Redis-side monotonic fence advancement/retirement and one-use
+    server-side publication; local call-boundary CAS is audit state rather than
+    an external-effect fence, and suspended stale A creates zero Redis publish
+    effects after successor B advances the fence;
     action-specific stop without cross-action terminalization after a started
     boundary closes; machine-enforced authorization for complete-expired-owner
     release, stale terminalization, publication mismatch and abandoned
