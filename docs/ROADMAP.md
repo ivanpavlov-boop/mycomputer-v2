@@ -258,17 +258,124 @@ disabled. `CART-025` remains open.
    source/staging evidence and zero-mutation guarantees are documented. No
    import, schedule re-enable, or Catalog Sync approval exists.
 10. **APCOM Authoritative Human Decision Evidence and Profile Approval Gate -
-   next/pending, not started.** It requires authoritative evidence and explicit
-   human decisions before any future execution design.
-11. Select Supplier #3 only after a reviewed readiness matrix and explicit human
+   documentation decisions complete.** V4 is the semantic authority, while
+   implementation approval remains closed.
+11. **Immutable supplier-offer snapshot persistence prerequisite - queued
+    payload and terminal-recovery findings remediated locally.**
+    The complete-branch follow-up design has
+    transactional `supplier_import_dispatch_outbox` and a stable claim shared
+    by both XML paths; pair-null orchestrated dispatch followed by owner-checked
+    atomic feed/ImportJob allocation; early pair-bound legacy authorization
+    through the same allocation contract; explicit `pending_dispatch`,
+    `queued`, `processing` and terminal states; dedicated
+    `redis_supplier_import` / `supplier-imports` routing and worker at
+    `retry_after=3900` while unrelated Redis work remains at
+    `retry_after=1300`; exact
+    `3600 < 3900 < 4200 < 4320` job/retry/DB-lease/Redis-TTL timing; one MySQL
+    UTC ownership-tuple CAS within a 60-second bootstrap; in-handle owner-proven
+    exception closeout; newly deserialized transport-only `failed()`; `$tries=8`
+    without `retryUntil()`; an immutable MySQL-UTC-plus-24-hour outbox deadline
+    and non-resetting cumulative delivery budget; direct terminal claim/outbox/
+    parent closeout at delivery-budget or deadline exhaustion; recoverable-only
+    `recovery_required` with a separately authorized exact terminal path;
+    fixed-order
+    ownership/outbox transactions requiring `published` before
+    processing/finalization; a 4,320-second MySQL-UTC `delivery_watchdog_at`
+    present only for the exact `queued/published` pair and selected by
+    `ix_import_dispatch_outbox_state_watchdog_id(state, delivery_watchdog_at, id)`;
+    payload observation, admission, lock contention, release, duplicate
+    delivery and `failed()` never refresh that watchdog, and only a later
+    acknowledged same-key publication may re-establish it;
+    a scheduled 300-second monitor restricted to dedicated heartbeat and
+    generation-bound heartbeat and byte-canonical privacy-safe alert-intent
+    coordination with exact MySQL keys/checks/FK, an independently observed
+    600-second monitor/sink gate, separately persisted 120-second independent-
+    observer gate, and a fail-closed alert-provider capability gate requiring
+    native external generation fencing or durable provider-enforced idempotency
+    under the stable `alert_identity`; unsupported providers cannot become
+    ready, attempt-eight `delivery_outcome_unknown_exhausted` creates no ninth
+    attempt or additional logical alert effect, and no provider is selected by
+    this design; immutable complete action/operator/claim/
+    outbox/key/parent recovery authority issued in authenticated Filament and
+    expiring after 900 seconds, a 32-byte single-display nonce accepted only
+    through stdin, composite result binding, and ordered immutable `started`
+    plus terminal lifecycle events; `dispatch_durable_progress_stalled`
+    expressly proves no durable progress rather than no delivery; exact
+    pre-start and post-start resume fingerprints for same-key publication,
+    followed by a committed counter-incrementing generation/token reservation,
+    atomic Redis-side monotonic fence advancement/retirement and one-use
+    server-side publication; local call-boundary CAS is audit state rather than
+    an external-effect fence, and suspended stale A creates zero Redis publish
+    effects after successor B advances the fence;
+    action-specific stop without cross-action terminalization after a started
+    boundary closes; machine-enforced authorization for complete-expired-owner
+    release, stale terminalization, publication mismatch and abandoned
+    processing; fail-closed-only newly authorized terminalization after the
+    response objective; exact alert domain/bytes and two synthetic vectors;
+    explicit
+    acknowledgement that absent operator action can remain nonterminal and
+    critically alerted; one legal first authorized complete expired queued-owner CAS; an exact
+    dry-run-first one-execution publication-mismatch command and idempotent
+    terminal repository; an explicit canonical 66-row by 11-column
+    SupplierImportRun/ImportJob/ImportHistory crash matrix; separate
+    queue-delivery, logical-processing and outbox-publication attempts; a valid
+    successful eighth publication, action-compatible failed/ambiguous recovery
+    publication followed by separately authorized terminalization, and no ninth
+    attempt; no
+    importer replay after non-repeatable staging mutation; atomic authoritative
+    parent/history/evidence/claim finalization; separate live-owner raw-token and
+    abandoned-owner new-lock/expired-tuple APIs; exact `ascii`/`ascii_bin`
+    hexadecimal checks; immutable consistent-snapshot capture-start cohort
+    authorization fields and hashed members before source work; immutable
+    enrollment and physical observations; exact-source-only authorized
+    enrollment-generation baselines with deterministic authorization drift
+    frozen; no mutable membership reread; deterministic V4 gaps; bounded streaming;
+    retained one-job uniqueness, nullable unique one-claim-per-orchestrated-run,
+    a byte-exact immutable execution-path and exact parent-shape check, plus a
+    separate named composite child FK index; an exclusive versioned 20-field
+    `expected_state_fingerprint_v2` including `claimed_at`; exact ten-table and
+    22-entry cryptographic/digest inventories; forward-only evidence-preserving
+    operational rollback with a fail-closed empty-schema downgrade guard; and
+    103 fine-grained rollout
+    checkpoints with all five PR chains separating candidate/implementation,
+    validation, independent review, remediation/fresh PASS, push authorization, push, remote-SHA
+    verification, Draft PR creation, PR base/head verification, CI and review,
+    merge, disabled deployment and monitor/sink/observer enablement gates. No runtime
+    outbox/claim/recovery-authorization table,
+    migration, queue setting, worker, command, parser change, capture hook, producer,
+    historical backfill or operational evidence exists. C3D.1 remains blocked
+    until a fresh independent aggregate review of the complete branch approves the design and later
+    checkpoints collect one future baseline plus three qualified comparable
+    snapshots in an unchanged cohort epoch over at least 48 hours from absence
+    1. See
+    `docs/IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md`.
+    The underlying read-only C3D tooling was already merged and deployed at
+    `c22fc9a8dddf3c6778ab0b88e5a50cbc02fe3f21`; the persistence design itself is
+    local, documentation-only, unapproved and undeployed. The planned dedicated
+    worker adds no automatic schedule. No evidence candidate exists, no
+    operational preview is authorized, and Supplier #3 remains unselected and
+    unstarted.
+12. Select Supplier #3 only after a reviewed readiness matrix and explicit human
    decision; ASBIS remains Supplier #2.
-12. Supplier #3 preview-only integration.
-13. Controlled `supplier_products` staging apply.
-14. Post-apply verification.
-15. Repeat the same controlled sequence for the remaining current suppliers.
-16. Supplier category and canonical mappings.
-17. Controlled manual CREATE sync.
-18. Optional controlled UPDATE pilot later.
+13. Supplier #3 preview-only integration.
+14. Controlled `supplier_products` staging apply.
+15. Post-apply verification.
+16. Repeat the same controlled sequence for the remaining current suppliers.
+17. Supplier category and canonical mappings.
+18. Controlled manual CREATE sync.
+19. Optional controlled UPDATE pilot later.
+
+### Immutable Persistence Rollout Checkpoints
+
+Item 11 follows only the
+[103-row fine-grained checkpoint matrix](IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md#fine-grained-rollout-checkpoints).
+Authorization, candidate/implementation, validation, independent review,
+remediation/fresh PASS, push authorization, push, remote-SHA
+verification, Draft PR creation, PR base/head verification, CI, merge, deployment,
+verification, enablement, each import, producer work, candidate preparation,
+human approval, preview, result review and closeout are separate rows. No row
+combines review/merge, merge/deployment, candidate preparation/approval,
+approval/preview or result review/closeout. Failure blocks every later row.
 
 Every future supplier must use the same onboarding pipeline rather than an
 uncontrolled one-off importer:
@@ -696,14 +803,36 @@ by Phase 1D.2B and CART-023 remains open. Operational boundaries are documented 
    `b2b4fb95f1d2bfe2382fe6cab9a8462fa6f7e277`, CI #322 succeeded, and VPS was
    synced and verified. APCOM schedule remains disabled; Catalog Sync UPDATE,
    Sync All, and automatic sync remain disabled.
-4. Review the locally completed C3D immutable-input operational preview
-   implementation. The APCOM-only CLI evaluator is deterministic,
-   non-persistent and zero-mutation, and reuses the existing synthetic policy
-   authority. It has not been pushed, merged, deployed, operationally executed
-   or run with real APCOM evidence. Offer/Product writes, storefront/search/
-   sitemap/noindex behavior, retention cleanup, persistence, schedule changes,
-   import and Catalog Sync remain blocked; staging/VPS execution needs a
-   separate explicit gate. C3D remains before Supplier #3 selection.
+4. Keep the merged PR #210 C3D evaluator dormant. It is deterministic,
+   non-persistent and zero-mutation, but no outbox/claim, qualified immutable
+   history or producer exists. The local prerequisite design also requires
+   dedicated `redis_supplier_import` / `supplier-imports` routing at
+   `retry_after=3900` while unrelated Redis queues retain
+   `retry_after=1300`; exact
+   `3600 < 3900 < 4200 < 4320` job/retry/DB-lease/Redis-TTL timing; one MySQL
+   UTC complete ownership-tuple CAS; in-handle owner-proven closeout;
+   transport-only `failed()`; `$tries=8` without `retryUntil()`; immutable
+   MySQL-UTC-plus-24-hour deadline and cumulative delivery budget; canonical
+   outbox-only `recovery_required`; processing/finalization gated on
+   `outbox.state=published`; exact ownership/outbox checks; the 4,320-second
+   indexed acknowledged-payload watchdog cleared outside `queued/published`;
+   continuously gated scheduled monitoring with generation-bound durable
+   heartbeat, canonical acknowledged alert intent and independent liveness
+   observation plus exact immutable action-compatible manual recovery
+   authorization/result; separately authorized expired `queued/published`
+   release/terminal CAS; one non-null orchestrated claim per run with exact
+   path/parent shape; the exact one-execution publication-mismatch command; and
+   canonical authoritative parent-state recovery; none is implemented or
+   enabled. The dedicated import worker adds no import or automatic-recovery
+   schedule; only the domain-read-only monitor and its health observer have a
+   planned cadence. Complete the linked 103 fine-grained checkpoints in order; every
+   authorization, technical action, review, PR, merge, deployment, enablement,
+   import, candidate, preview and closeout remains separate. No backfill from
+   mutable staging is allowed.
+   Offer/Product writes, lifecycle application, retention cleanup, schedule
+   changes and Catalog Sync remain blocked. Expected authorized cohort expansion
+   uses its complete enrollment generation as a new baseline; unexpected drift
+   freezes. C3D.1 remains before Supplier #3 selection.
 5. Select Supplier #3 only after a reviewed readiness matrix and explicit human
    decision; ASBIS remains Supplier #2.
 6. Phase 9C.6.6 Multi-Supplier Category Mapping Review.

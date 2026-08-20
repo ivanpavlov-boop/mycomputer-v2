@@ -18,7 +18,7 @@ Phase 9C.6.5C.1 and 9C.6.5C.2 operational sequence. Phase 9C.6.5C.3 local-only
 normalization planning, C.3A official/observed semantics tooling, and the
 C.3A.2 operational review closeout are complete read-only stages. No feed
 profile, import, or Catalog Sync action is approved. Supplier #3 remains
-unselected.
+unselected and unstarted.
 
 ## Intended Pipeline
 
@@ -342,16 +342,19 @@ remains disabled, and images remain prohibited.
 
 ## Phase 9C.6.5C.3D Missing Offer Lifecycle Preview
 
-Phase 9C.6.5C.3D is local/in-review synthetic tooling. It defines qualified
-full-snapshot absence tracking, three consecutive observations plus a 48-hour
-duration, reappearance validation, multi-supplier offer aggregation, future
+Phase 9C.6.5C.3D is merged and deployed synthetic read-only tooling at
+`c22fc9a8dddf3c6778ab0b88e5a50cbc02fe3f21`. It defines qualified
+full-snapshot absence tracking, three consecutive qualified missing snapshots
+plus a 48-hour duration, reappearance validation, multi-supplier offer
+aggregation, future
 visibility/archival policy, deletion prohibition, and retention planning. It
 also has a documented input-driven operational evidence contract for review:
 immutable versioned evidence, explicit `evaluated_at`, CLI-only evaluation,
 stable deterministic output, no persistence, and fail-closed import
-concurrency checks. Operational preview implementation remains unapproved. The
-current tooling does not read real supplier XML, modify any database table, use
-a scheduler, alter the storefront, Scout, sitemap, robots, or Catalog Sync. See
+concurrency checks. No real APCOM evidence has been processed and operational
+execution remains unapproved. The current tooling does not read real supplier
+XML, modify any database table, use a scheduler, alter the storefront, Scout,
+sitemap, robots, or Catalog Sync. See
 [Supplier Offer Missing Lifecycle Policy](SUPPLIER_OFFER_MISSING_LIFECYCLE_POLICY.md),
 [Catalog Product Visibility And Archival Policy](CATALOG_PRODUCT_VISIBILITY_ARCHIVAL_POLICY.md),
 and [Supplier Technical Retention Policy](SUPPLIER_TECHNICAL_RETENTION_POLICY.md).
@@ -370,3 +373,182 @@ source-only preview classification, supplier-SKU-only `partno`, zero-price
 review, and APCOM-specific 24-hour freshness semantics. Documentation merge is
 a prerequisite only; the implementation gate remains closed and the current
 tooling and supplier onboarding flow remain non-persistent and non-executable.
+
+## Phase 9C.6.5C.3D.1-PRE.A Immutable Snapshot Persistence Design
+
+The confirmed C3D.1 blocker is the absence of a qualified immutable historical
+source. `supplier_products`, ImportHistory aggregate context, mutable feed
+items, logs and current timestamps cannot prove historical absence,
+reappearance or chronology. They must not be backfilled into evidence.
+
+[Immutable Supplier Offer Snapshot Persistence Design](IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md)
+defines a documentation-only prerequisite: future imports may first persist one
+capture-start authorization header and immutable hashed seed set, then add one
+final append-only generation header, immutable first-enrollment cohort rows and an
+exhaustive physical privacy-safe hashed presence/absence set without changing
+staging semantics. A separate stable parent-execution claim shared by both XML
+job paths prevents concurrent or sequential redelivery from creating another
+ImportHistory or snapshot generation; terminal delivery is a no-op, and
+different source bytes for the same key fail closed. Transactional
+`supplier_import_dispatch_outbox` is the durable database-to-Redis handoff.
+Claims use `pending_dispatch`, `queued`, `processing`, and immutable terminal
+states. Orchestrated claims remain feed/job pair-null until the queue owner
+performs one atomic allocation; legacy claims remain early pair-bound through
+the same allocation repository. The future queue timing is exactly
+`3600 < 3900 < 4200 < 4320`: job timeout, dedicated
+`redis_supplier_import` / `supplier-imports` retry-after, MySQL ownership lease,
+and Redis lock TTL. The general Redis connection and worker retain
+`retry_after=1300` and cannot consume the supplier queue. After Redis
+acquisition, one MySQL UTC CAS writes the complete
+hashed-token/`claimed_at`/lease-expiry ownership tuple within 60 seconds before
+any allocation or source work; the DB lease-expiry-plus-30 contention delay
+fits inside Redis TTL padding. Both jobs use `$tries=8` without
+`retryUntil()`. The canonical outbox deadline is created once from MySQL UTC
+plus 24 hours, and neither it nor the durable cumulative eight-delivery budget
+can be reset by release, retry, reconciliation or republication.
+
+Recoverable pre-processing failure moves only a queued claim's published outbox
+to canonical `recovery_required` while its deadline and delivery budget remain
+valid. Delivery eight or deadline expiry at ordinary delivery admission
+atomically terminalizes claim, outbox and applicable parents. A previously
+recoverable row whose boundary later expires remains unchanged until a newly
+issued `terminalize_stale_dispatch` authorization; republish authority cannot
+perform that action. Owner-proven
+exception closeout runs inside active `handle()` `try/catch/finally`; newly
+deserialized Laravel `failed()` is transport-only and cannot close
+`processing`, release the original lock, replay the importer, or rewrite
+evidence. Exact ownership/outbox checks, transactional cross-record rules and
+the canonical 66-row by 11-column SupplierImportRun/ImportJob/ImportHistory plus
+monitor/alert/observer crash matrix closes every terminal path without replay and explicitly
+separates action-stopped republication from newly authorized terminalization.
+The future outbox adds
+`delivery_watchdog_at`, set from MySQL UTC plus exactly 4,320 seconds after
+acknowledged publication, and the exact
+`ix_import_dispatch_outbox_state_watchdog_id(state, delivery_watchdog_at, id)`.
+The marker is non-null only for exact `queued/published` and is cleared on every
+departure. Delivery admission, lock contention, release, duplicate delivery
+and `failed()` never refresh it. A due null-owner row proves only no durable
+processing progress, even when `delivery_attempt_count` proves that `handle()`
+ran; it uses `dispatch_durable_progress_stalled`, never an unobserved claim.
+
+The future 300-second monitor writes only dedicated heartbeat and durable
+privacy-safe alert-intent coordination with exact generation-bound lease/CAS,
+named MySQL checks/indexes/FK, and a byte-canonical six-key alert identity with
+two synthetic SHA-256 vectors. Fresh `healthy` state requires a
+successful cycle and sink acknowledgement no older than 600 seconds plus a
+separately persisted observer heartbeat no older than 120 seconds from the
+independent 60-second container probe. `stale`, `failed` or `unknown`
+health rejects capture, protected-generation start, authorization issuance and
+mutating recovery start. External delivery requires an adapter capability gate:
+provider/gateway native generation fencing or durable provider-enforced
+idempotency under the same `alert_identity`. Unsupported providers cannot become
+ready, and no provider or credential is invented by the design. Attempt-eight
+uncertainty becomes `delivery_outcome_unknown_exhausted` at count eight only
+under that external-effect contract, is neither acknowledged nor permanently
+failed, cannot acquire another lease or attempt nine, and keeps admission
+unhealthy until separately designed evidence-backed reconciliation.
+
+Every mutating recovery uses one authenticated-Filament authorization covering
+one complete action/operator/claim/outbox/key/parent tuple, server-computed
+pre-state fingerprint, 900-second expiry and 32-byte single-display stdin nonce.
+The pre-state contract is exclusively `expected_state_fingerprint_v2`: exactly
+20 ordered fields including `claimed_at`, one exact domain/NUL framing and a
+synthetic reproducible vector. It is distinct from the 16-field post-start
+resume fingerprint. The complete design inventory contains ten proposed tables
+and 22 cryptographic/digest identities, including the generation-bound physical
+publication-attempt token hash.
+The five actions cover same-key publication, complete-expired-queued-owner
+release, stale terminalization, publication mismatch and abandoned processing.
+CLI derives the human principal from the
+authorization and accepts no operator override. Result rows have composite
+relational and fingerprint binding. Same-key publication has exact pre-start
+validation and a durable post-start resume fingerprint. B0 validates that
+baseline before the first attempt; B1 commits a counter-incrementing generation/
+token reservation, then an atomic Redis-side monotonic fence and one-use publish
+Function enforce the actual effect boundary. Local call-boundary CAS alone is
+insufficient. Unknown classification requires Redis retirement; only the next
+ordinal may advance the fence and repeat the byte-identical payload while all
+boundaries remain valid. After successor advancement, stale workers receive
+Redis stale rejection with zero publish effect and cannot overwrite a DB
+result. A later boundary closes only the republish
+authorization through `action_stopped`; it never grants terminal authority.
+Database-only actions commit start, their exact mutation and compatible result
+atomically. Complete expired queued ownership has one legal first authorized
+CAS mutation and cannot be cleared first. After the 1,800-second response
+objective, an unstarted republish is forbidden, a started republish action-stops,
+and terminalization requires a newly issued exact action. The dry-run-first
+publication-mismatch and abandoned-processing apply paths have no prose-only
+authorization exception. Queue-delivery,
+logical-processing and
+outbox-publication attempts remain separate. A successful eighth publication is
+valid; a failed or ambiguous eighth publication closes the republish result and
+requires a separate terminal authorization, and attempt nine is prohibited.
+Processing and live-owner terminal
+finalization require `outbox.state = published`; a recoverable event must
+complete authorized `recovery_required -> published` acknowledgement before later ownership.
+Importer replay stops permanently at the first non-repeatable staging mutation.
+Abandoned processing uses a separate CLI-only API: it acquires a new supplier
+lock and proves an expired persisted `processing/published` tuple without the
+lost raw token, then closes authoritative parents and claim together as a
+failed gap with the outbox still `published`. Successful/frozen evidence finalization commits
+ImportHistory, claim, published outbox, authoritative parent states and
+immutable evidence together. The design also requires exact
+`ascii`/`ascii_bin` hexadecimal checks, a strict opaque source identity, one
+common supplier lock, bounded temp-file streaming, retained one-job uniqueness,
+a nullable unique claim-to-run key, the exact execution-path/parent-shape
+check with byte-exact immutable `execution_path`, a separately named
+three-column child FK index and deterministic
+qualification.
+The dedicated import worker adds no import or automatic-recovery schedule; the
+only planned automatic cadence is the watchdog monitor and independent health
+observer, both restricted from supplier/catalog domain mutation. This design
+does not add a runtime outbox/claim/recovery-authorization table, migration,
+watchdog monitor, recovery repository, command, streaming parser change,
+capture implementation, producer, import approval, lifecycle action or Catalog
+Sync behavior.
+The persistence prerequisite remains local, unapproved, unimplemented and
+undeployed. No evidence candidate exists and no operational preview is
+authorized.
+
+Operational rollback is forward-only after deployment or protected-state use:
+it disables gates/workers but preserves all schema, monitor/alert state and
+immutable history. Destructive `down()` is limited to a confirmed `local` or
+`testing` one-run invocation whose complete ten-table evidence predicate is
+empty except for the exact pristine monitor singleton; any evidence, partial
+schema or unknown count fails closed before DDL.
+
+The first complete generation in each source/cohort epoch is a comparison
+baseline only. One consistent MySQL snapshot authorizes prior enrollments and
+applicable application identities before source work; the exact downloaded
+source may add validated source-only identities, and finalization does not
+reread mutable membership. An authorized expansion makes its complete
+enrollment/observation generation that new baseline; only a deterministic
+authorization mismatch emits `capture_cohort_changed`, freezes, and requires
+operator investigation.
+Because the current V1 lifecycle contract requires `comparable=true`, the
+unchanged V4 threshold is met only by three later qualified comparable absences
+spanning at least 48 hours from the first of those three. Any gap or overlap
+requires a later clean baseline, while each further authorized expansion resets
+comparability with its own baseline.
+C3D.1 remains blocked until a separately authorized implementation is deployed
+and enabled and that future-history window is collected. Supplier #3 work must
+not begin before this prerequisite is resolved.
+
+The immutable-persistence rollout follows only the
+[103-row fine-grained checkpoint matrix](IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md#fine-grained-rollout-checkpoints).
+Each PR chain separately records candidate/implementation, validation,
+independent review, remediation-or-not-required, fresh independent PASS, push
+authorization, push, remote verification, Draft
+PR, PR base/head verification, CI, merge, deployment,
+verification, enablement, import, candidate, preview and closeout operation is
+separate. No review authorizes merge; no merge authorizes deployment; no
+candidate preparation authorizes approval; and no result review authorizes
+closeout. Failure at one checkpoint cannot authorize the next.
+Monitor design approval, implementation authorization, repository verification,
+implementation, focused/database/security validation, independent review,
+remediation/re-review, push authorization, push, exact remote-SHA verification,
+Draft PR creation, PR base/head verification, CI, review,
+merge authorization, merge, disabled deployment verification and explicit
+monitor/sink/observer enablement are distinct ordered gates; none implies the
+next. Capture remains unavailable until the continuous health gate is fresh and
+healthy.
