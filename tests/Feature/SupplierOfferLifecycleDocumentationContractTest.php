@@ -103,10 +103,13 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
         ];
 
         $this->assertIsString($design);
+        $normalizedDesign = preg_replace('/\s+/', ' ', $design);
+        $this->assertIsString($normalizedDesign);
         $this->assertStringContainsString('dispatch_durable_progress_stalled', $design);
         $this->assertStringNotContainsString('dispatch_payload_unobserved', $design);
         $this->assertStringContainsString('supplier-import-dispatch-recovery-resume-v1', $design);
-        $this->assertStringContainsString('Phase B, committed-start resume', $design);
+        $this->assertStringContainsString('Phase B0, committed-start resume validation', $design);
+        $this->assertStringContainsString('Phase B1, physical-attempt reservation', $design);
         $this->assertStringContainsString('expected_state_fingerprint_v2', $design);
         $this->assertStringContainsString('mycomputer:supplier-recovery-expected-state:v2', $design);
         $this->assertStringNotContainsString('supplier-import-dispatch-recovery-state-v1', $design);
@@ -141,7 +144,15 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
             'uq_import_dispatch_alert_identity',
             'fk_import_dispatch_alert_outbox',
             'chk_import_dispatch_alert_state_tuple',
-            'The 89-row dependency audit has zero missing prerequisite references',
+            'delivery_outcome_unknown_exhausted',
+            'publication_attempt_generation',
+            'publication_attempt_state',
+            'publication_attempt_token_hash',
+            'publication_attempt_reserved_at',
+            'publication_attempt_lease_expires_at',
+            'publication_call_boundary_at',
+            'publication_attempt_resolved_at',
+            'The 103-row dependency audit checks 104 prerequisite edges',
             'forward-only operational rollback',
             'SUPPLIER_SNAPSHOT_EMPTY_SCHEMA_DOWN_CONFIRMED=true',
         ] as $needle) {
@@ -149,7 +160,7 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
         }
 
         $this->assertMatchesRegularExpression(
-            '/It never writes a\s+terminal claim\/outbox\/parent result\./',
+            '/It never writes a\s+terminal claim\/\s*outbox\/\s*parent result\./',
             $design,
         );
         $this->assertMatchesRegularExpression(
@@ -194,11 +205,11 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
         $digestRows = $tableRows('| # | Identity | Purpose | Producer | Canonical bytes and domain | Algorithm | Persistence location | Immutability | Comparison point |');
         $hexStorageRows = $tableRows('| Table | Non-null lowercase hexadecimal columns | Nullable lowercase hexadecimal columns |');
 
-        $this->assertCount(14, $protocolRows);
-        $this->assertCount(53, $crashRows);
-        $this->assertCount(89, $rolloutRows);
+        $this->assertCount(19, $protocolRows);
+        $this->assertCount(66, $crashRows);
+        $this->assertCount(103, $rolloutRows);
         $this->assertCount(20, $stateFieldRows);
-        $this->assertCount(21, $digestRows);
+        $this->assertCount(22, $digestRows);
         $this->assertCount(10, $hexStorageRows);
 
         foreach ([3 => $protocolRows, 11 => $crashRows, 8 => $rolloutRows] as $expectedColumns => $rows) {
@@ -207,9 +218,133 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
             }
         }
 
-        $this->assertStringContainsString('exactly 14 data rows and 3 columns', $design);
-        $this->assertStringContainsString('exactly 53 data rows and 11 columns', $design);
-        $this->assertStringContainsString('canonical 89-row fine-grained checkpoint matrix', $design);
+        $this->assertStringContainsString('exactly 19 data rows and 3 columns', $design);
+        $this->assertStringContainsString('exactly 66 data rows and 11 columns', $design);
+        $this->assertStringContainsString('canonical 103-row fine-grained checkpoint matrix', $design);
+        $this->assertStringContainsString('every 64-item acceptance criterion', $design);
+        $this->assertStringContainsString('all 53 focused watchdog/authorization/mismatch cases', $design);
+        $this->assertStringNotContainsString('every 63-item acceptance criterion', $design);
+        $this->assertStringNotContainsString('all 44 focused watchdog/authorization/mismatch cases', $design);
+
+        $this->assertSame(
+            1,
+            preg_match(
+                '/Redis integration tests proving all of these exact cases:\n\n(?<cases>.*?)\n\nThe same future MySQL\/Redis suite must add focused/s',
+                $design,
+                $acceptancePlan,
+            ),
+        );
+        preg_match_all('/^(\d+)\./m', $acceptancePlan['cases'], $acceptanceNumbers);
+        $this->assertSame(range(1, 64), array_map('intval', $acceptanceNumbers[1]));
+
+        $this->assertSame(
+            1,
+            preg_match(
+                '/The same future MySQL\/Redis suite must add focused watchdog, authorization, and\n.*?exactly these cases:\n\n(?<cases>.*?)\n\nThose tests must also prove/s',
+                $design,
+                $focusedPlan,
+            ),
+        );
+        preg_match_all('/^(\d+)\./m', $focusedPlan['cases'], $focusedNumbers);
+        $this->assertSame(range(1, 53), array_map('intval', $focusedNumbers[1]));
+
+        foreach ([
+            '`delivery_outcome_unknown_exhausted`, preserves `attempt_count = 8`',
+            'no worker can acquire a new automatic delivery lease',
+            'terminal only for automatic delivery, not proof of delivery or failure',
+            'It cannot transition to `permanent_failed`',
+            'it cannot synthesize an ACK',
+            'No reset, identity replacement, counter decrement, automatic retry, or ninth attempt is permitted',
+        ] as $attemptEightContract) {
+            $this->assertStringContainsString($attemptEightContract, $normalizedDesign);
+        }
+
+        $this->assertStringNotContainsString(
+            'exhausted eighth attempt marks the intent `permanent_failed`',
+            $design,
+        );
+
+        foreach ([
+            'Every physical Redis publication, initial or recovery, requires one committed reservation first',
+            'increments `attempt_count = N + 1` and `publication_attempt_generation` by one',
+            'The transaction commits before Redis can be invoked',
+            'Only the exact unexpired generation/token may CAS `reserved ->',
+            'A generation may enter this boundary once and may authorize at most one physical call',
+            'A stale generation affects zero rows and cannot call',
+            'B1 does not pretend that the original resume fingerprint is unchanged',
+            'one physical Redis call always has one durable reservation',
+        ] as $publicationReservationContract) {
+            $this->assertStringContainsString($publicationReservationContract, $normalizedDesign);
+        }
+
+        $this->assertStringNotContainsString(
+            'its immutable started tuple is the durable reservation',
+            $design,
+        );
+
+        $this->assertSame(
+            1,
+            preg_match(
+                '/CONSTRAINT chk_import_recovery_auth_action CHECK \((?<actions>.*?)\n\),/s',
+                $design,
+                $canonicalActions,
+            ),
+        );
+        preg_match_all("/BINARY _ascii'([^']+)'/", $canonicalActions['actions'], $actionValues);
+        $this->assertSame(
+            [
+                'republish_same_key',
+                'recover_expired_queued_ownership',
+                'terminalize_stale_dispatch',
+                'terminalize_publication_mismatch',
+                'terminalize_abandoned_processing',
+            ],
+            $actionValues[1],
+        );
+
+        foreach ($actionValues[1] as $action) {
+            $this->assertTrue(
+                collect($protocolRows)->contains(
+                    static fn (string $row): bool => str_contains($row, "`{$action}`"),
+                ),
+                "Canonical recovery action missing from protocol matrix: {$action}",
+            );
+        }
+
+        $this->assertTrue(
+            collect($protocolRows)->contains(
+                static fn (string $row): bool => str_contains($row, '`terminalize_abandoned_processing`')
+                    && str_contains($row, '`processing/published`')
+                    && str_contains($row, 'processing_lease_abandoned'),
+            ),
+            'The protocol matrix lacks the dedicated abandoned-processing outcome.',
+        );
+
+        $this->assertTrue(
+            collect($protocolRows)->contains(
+                static fn (string $row): bool => str_contains($row, 'committed `republish_same_key` start with exact unchanged baseline')
+                    && str_contains($row, 'Phase B0')
+                    && str_contains($row, 'Phase B1')
+                    && str_contains($row, 'commits before Redis'),
+            ),
+            'The protocol matrix lacks the B0/B1 reservation-before-call outcome.',
+        );
+        $this->assertTrue(
+            collect($protocolRows)->contains(
+                static fn (string $row): bool => str_contains($row, 'exact `reserved` publication attempt generation')
+                    && str_contains($row, '`call_boundary_entered`')
+                    && str_contains($row, 'exactly one'),
+            ),
+            'The protocol matrix lacks the one-use physical-call boundary.',
+        );
+        $this->assertTrue(
+            collect($protocolRows)->contains(
+                static fn (string $row): bool => str_contains($row, '`attempt_count = 8`')
+                    && str_contains($row, 'final `outcome_unknown`')
+                    && str_contains($row, 'no attempt nine'),
+            ),
+            'The protocol matrix lacks the final unknown publication outcome.',
+        );
 
         $this->assertSame(
             [
@@ -290,16 +425,32 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
             );
         }
 
+        foreach ([
+            'Alert attempt 8 is reserved and worker disappears before the external call',
+            'Alert attempt 8 may have reached the sink and crashes before durable ACK',
+            'Alert unknown-exhausted state is revisited',
+            'Phase B1 reservation commits before Redis',
+            'Crash after reservation and before call-boundary CAS',
+            'Stale publication worker returns after classification or successor reservation',
+        ] as $newBoundary) {
+            $this->assertTrue(
+                collect($crashRows)->contains(
+                    static fn (string $row): bool => str_contains($row, $newBoundary),
+                ),
+                "Missing A1/A2 crash boundary: {$newBoundary}",
+            );
+        }
+
         $rolloutNames = array_map(
             static fn (string $row): string => trim(explode('|', trim($row, '|'))[1]),
             $rolloutRows,
         );
         $prChains = [
-            ['Authorize design branch push', 'Push exact design branch', 'Verify design remote branch', 'Create design Draft PR', 'Verify design PR base/head', 'Run design PR CI', 'Independent design PR review', 'Authorize design merge', 'Merge design PR'],
-            ['Authorize implementation branch push', 'Push exact implementation branch', 'Verify implementation remote branch', 'Create implementation Draft PR', 'Verify implementation PR base/head', 'Run implementation PR CI', 'Independent implementation PR review', 'Authorize implementation merge', 'Merge implementation PR'],
-            ['Authorize monitor branch push', 'Push exact monitor branch', 'Verify monitor remote branch', 'Create monitor Draft PR', 'Verify monitor PR base/head', 'Run monitor Draft PR CI', 'Independent monitor PR review', 'Authorize monitor PR merge', 'Merge monitor PR'],
-            ['Authorize producer branch push', 'Push exact producer branch', 'Verify producer remote branch', 'Create producer Draft PR', 'Verify producer PR base/head', 'Run producer PR CI', 'Independent producer PR review', 'Authorize producer merge', 'Merge producer PR'],
-            ['Authorize closeout branch push', 'Push exact closeout branch', 'Verify closeout remote branch', 'Create closeout Draft PR', 'Verify closeout PR base/head', 'Run closeout PR CI', 'Independent closeout PR review', 'Authorize closeout merge', 'Merge closeout PR'],
+            ['Establish current local design candidate', 'Validate local design candidate', 'Independent local design review', 'Remediate blocked design findings or record not-required', 'Fresh independent design re-review/PASS', 'Authorize design branch push', 'Push exact design branch', 'Verify design remote branch', 'Create design Draft PR', 'Verify design PR base/head', 'Run design PR CI', 'Independent design PR review', 'Authorize design merge', 'Merge design PR'],
+            ['Authorize schema implementation', 'Implement schema candidate locally', 'Validate schema candidate', 'Authorize capture/idempotency/outbox implementation', 'Implement capture candidate locally', 'Validate complete implementation candidate', 'Independent implementation review', 'Remediate blocked implementation findings or record not-required', 'Fresh independent implementation re-review/PASS', 'Authorize implementation branch push', 'Push exact implementation branch', 'Verify implementation remote branch', 'Create implementation Draft PR', 'Verify implementation PR base/head', 'Run implementation PR CI', 'Independent implementation PR review', 'Authorize implementation merge', 'Merge implementation PR'],
+            ['Authorize monitor/observer implementation', 'Verify monitor implementation branch/repository state', 'Implement monitor/observer candidate locally', 'Run focused monitor/observer validation', 'Validate monitor database/migrations', 'Validate monitor security and Catalog Sync safety', 'Independent monitor implementation review', 'Remediate blocked monitor findings or record not-required', 'Independent monitor re-review/PASS', 'Authorize monitor branch push', 'Push exact monitor branch', 'Verify monitor remote branch', 'Create monitor Draft PR', 'Verify monitor PR base/head', 'Run monitor Draft PR CI', 'Independent monitor PR review', 'Authorize monitor PR merge', 'Merge monitor PR'],
+            ['Authorize evidence-producer implementation', 'Implement producer candidate locally', 'Validate producer candidate', 'Independent producer review', 'Remediate blocked producer findings or record not-required', 'Fresh independent producer re-review/PASS', 'Authorize producer branch push', 'Push exact producer branch', 'Verify producer remote branch', 'Create producer Draft PR', 'Verify producer PR base/head', 'Run producer PR CI', 'Independent producer PR review', 'Authorize producer merge', 'Merge producer PR'],
+            ['Authorize documentation closeout', 'Implement closeout documentation candidate', 'Validate closeout documentation candidate', 'Independent closeout review', 'Remediate blocked closeout findings or record not-required', 'Fresh independent closeout re-review/PASS', 'Authorize closeout branch push', 'Push exact closeout branch', 'Verify closeout remote branch', 'Create closeout Draft PR', 'Verify closeout PR base/head', 'Run closeout PR CI', 'Independent closeout PR review', 'Authorize closeout merge', 'Merge closeout PR'],
         ];
 
         foreach ($prChains as $chain) {
@@ -309,8 +460,17 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
             );
 
             $this->assertNotContains(false, $positions);
-            $this->assertSame(range($positions[0], $positions[0] + count($chain) - 1), $positions);
+
+            for ($index = 1; $index < count($positions); $index++) {
+                $this->assertGreaterThan($positions[$index - 1], $positions[$index]);
+            }
         }
+
+        $this->assertNotContains('Implement/validate schema locally', $rolloutNames);
+        $this->assertNotContains('Implement/validate capture locally', $rolloutNames);
+        $this->assertNotContains('Implement/validate producer locally', $rolloutNames);
+
+        $prerequisiteEdges = 0;
 
         foreach ($rolloutRows as $index => $row) {
             $cells = array_map('trim', explode('|', trim($row, '|')));
@@ -325,12 +485,15 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
                 $last = isset($reference[2]) && $reference[2] !== '' ? (int) $reference[2] : $first;
 
                 foreach (range($first, $last) as $dependency) {
+                    $prerequisiteEdges++;
                     $this->assertGreaterThanOrEqual(1, $dependency);
                     $this->assertLessThan($checkpoint, $dependency);
                     $this->assertArrayHasKey($dependency - 1, $rolloutRows);
                 }
             }
         }
+
+        $this->assertSame(104, $prerequisiteEdges);
 
         foreach ([
             'Rollback disables only the capture gate',
@@ -391,6 +554,7 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
             $this->assertStringNotContainsString('49 checkpoints', $contents);
             $this->assertStringNotContainsString('eleven-commit', $contents);
             $this->assertStringNotContainsString('twelve-commit', $contents);
+            $this->assertStringNotContainsString('fourteen-commit', $contents);
             $this->assertStringNotContainsString('53-row fine-grained checkpoint matrix', $contents);
             $this->assertStringNotContainsString('53 fine-grained checkpoints', $contents);
             $this->assertStringNotContainsString('protocol table remains 12 outcomes', $contents);
@@ -398,15 +562,20 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
             $this->assertStringNotContainsString('41-row by 11-column', $contents);
             $this->assertStringNotContainsString('41-by-11', $contents);
             $this->assertStringNotContainsString('71-row fine-grained checkpoint matrix', $contents);
+            $this->assertStringNotContainsString('14 by 3', $contents);
+            $this->assertStringNotContainsString('53-row by 11-column', $contents);
+            $this->assertStringNotContainsString('53-by-11', $contents);
+            $this->assertStringNotContainsString('89-row fine-grained checkpoint matrix', $contents);
+            $this->assertStringNotContainsString('89 fine-grained checkpoints', $contents);
             $this->assertStringNotContainsString('19-field', $contents);
-            $this->assertStringContainsString('89-row fine-grained checkpoint matrix', $contents);
+            $this->assertStringContainsString('103-row fine-grained checkpoint matrix', $contents);
         }
 
         foreach (['docs/PHASES.md', 'docs/ROADMAP.md'] as $document) {
             $contents = file_get_contents(base_path($document));
 
             $this->assertIsString($contents);
-            $this->assertMatchesRegularExpression('/89(?: fine-grained)? checkpoints/', $contents);
+            $this->assertMatchesRegularExpression('/103(?: fine-grained)? checkpoints/', $contents);
         }
     }
 }

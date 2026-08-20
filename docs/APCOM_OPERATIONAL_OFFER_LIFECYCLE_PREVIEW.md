@@ -53,7 +53,7 @@ terminalizes a pre-processing claim, outbox and applicable parents; a
 recoverable row that later exhausts requires a newly issued exact terminal
 authorization and is never terminalized by republish authority. Exact
 ownership/outbox checks,
-transactional cross-state rules, and the 53-row by 11-column canonical crash
+transactional cross-state rules, and the 66-row by 11-column canonical crash
 matrix prevent stranded or contradictory SupplierImportRun, ImportJob,
 ImportHistory, monitor, alert-delivery and observer states. The future outbox includes exact
 `delivery_watchdog_at` liveness state and
@@ -74,7 +74,12 @@ than 600 seconds plus a separately persisted observer heartbeat no older than
 `stale`, `failed` and `unknown` reject capture, protected-generation start,
 authorization issuance and mutating recovery start. Alert delivery is durable
 at-least-once intent with byte-canonical privacy-safe idempotency and external ACK, not
-false at-most-once delivery. No alert provider or credentials are selected here.
+false at-most-once delivery. An eighth alert attempt without durable ACK or
+authoritative negative evidence CASes to
+`delivery_outcome_unknown_exhausted` at count eight, remains neither
+acknowledged nor permanently failed, permits no automatic retry or ninth call,
+and keeps the safety gate unhealthy pending separately designed evidence-backed
+reconciliation. No alert provider or credentials are selected here.
 The exact NUL-delimited alert domain, six-key JSON object and two synthetic hash
 vectors are defined only in the canonical persistence design.
 
@@ -87,9 +92,13 @@ only authorization ID plus a 32-byte
 single-display nonce through stdin and never invents a current Laravel user.
 Result rows bind the complete tuple by composite FK and canonical fingerprint.
 Republish uses distinct pre-start validation and one immutable post-start resume
-fingerprint; after ambiguous Redis acknowledgement it may idempotently publish
-the byte-exact same canonical payload only while every boundary remains valid,
-and never guesses the external result. A boundary failure action-stops the
+fingerprint. Phase B0 validates that baseline only before the first physical
+attempt; Phase B1 durably increments the attempt count/generation and commits a
+token-bound reservation before every Redis call, followed by a one-use
+call-boundary CAS. A lost reservation is consumed as `outcome_unknown`; only a
+fresh next ordinal may idempotently publish the byte-exact same canonical
+payload while every boundary remains valid, and no stale generation may call or
+write a result. A boundary failure action-stops the
 republish without terminalizing and releases the target for a newly issued exact
 action. The other four database-only actions commit start, their exact mutation
 and compatible result together. Complete expired queued ownership has one legal
@@ -136,8 +145,10 @@ authorized.
 ## Immutable Persistence Rollout Checkpoints
 
 The sole canonical rollout sequence is the
-[89-row fine-grained checkpoint matrix](IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md#fine-grained-rollout-checkpoints).
-It separately controls local review, push authorization, push, exact remote-SHA
+[103-row fine-grained checkpoint matrix](IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md#fine-grained-rollout-checkpoints).
+Across all five PR chains it separately controls candidate/implementation,
+validation, independent review, remediation-or-not-required, fresh independent
+PASS, push authorization, push, exact remote-SHA
 verification, Draft PR creation, PR base/head verification, CI,
 merge authorization, merge, implementation, monitor design approval,
 implementation authorization, local validation, security/database review,

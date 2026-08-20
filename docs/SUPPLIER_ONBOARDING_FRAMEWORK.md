@@ -418,7 +418,7 @@ exception closeout runs inside active `handle()` `try/catch/finally`; newly
 deserialized Laravel `failed()` is transport-only and cannot close
 `processing`, release the original lock, replay the importer, or rewrite
 evidence. Exact ownership/outbox checks, transactional cross-record rules and
-the canonical 53-row by 11-column SupplierImportRun/ImportJob/ImportHistory plus
+the canonical 66-row by 11-column SupplierImportRun/ImportJob/ImportHistory plus
 monitor/alert/observer crash matrix closes every terminal path without replay and explicitly
 separates action-stopped republication from newly authorized terminalization.
 The future outbox adds
@@ -441,7 +441,10 @@ independent 60-second container probe. `stale`, `failed` or `unknown`
 health rejects capture, protected-generation start, authorization issuance and
 mutating recovery start. External delivery uses durable at-least-once intent,
 stable idempotency and generation-bound ACK; no provider or credential is
-invented by the design.
+invented by the design. Attempt-eight uncertainty becomes exact
+`delivery_outcome_unknown_exhausted` at count eight, is neither acknowledged nor
+permanently failed, cannot acquire another lease or attempt nine, and keeps
+admission unhealthy until separately designed evidence-backed reconciliation.
 
 Every mutating recovery uses one authenticated-Filament authorization covering
 one complete action/operator/claim/outbox/key/parent tuple, server-computed
@@ -450,15 +453,20 @@ The pre-state contract is exclusively `expected_state_fingerprint_v2`: exactly
 20 ordered fields including `claimed_at`, one exact domain/NUL framing and a
 synthetic reproducible vector. It is distinct from the 16-field post-start
 resume fingerprint. The complete design inventory contains ten proposed tables
-and 21 cryptographic/digest identities.
+and 22 cryptographic/digest identities, including the generation-bound physical
+publication-attempt token hash.
 The five actions cover same-key publication, complete-expired-queued-owner
 release, stale terminalization, publication mismatch and abandoned processing.
 CLI derives the human principal from the
 authorization and accepts no operator override. Result rows have composite
 relational and fingerprint binding. Same-key publication has exact pre-start
-validation and a durable post-start resume fingerprint; ambiguous external
-acceptance repeats only the byte-identical idempotent payload while all action
-boundaries remain valid. A later boundary closes only the republish
+validation and a durable post-start resume fingerprint. B0 validates that
+baseline before the first attempt; B1 commits a counter-incrementing generation/
+token reservation before each physical Redis call and one-use call-boundary
+CAS. An unresolved expired reservation is consumed as `outcome_unknown`; only
+the next ordinal may repeat the byte-identical idempotent payload while all
+action boundaries remain valid, and stale workers cannot call or overwrite a
+successor. A later boundary closes only the republish
 authorization through `action_stopped`; it never grants terminal authority.
 Database-only actions commit start, their exact mutation and compatible result
 atomically. Complete expired queued ownership has one legal first authorized
@@ -523,8 +531,10 @@ and enabled and that future-history window is collected. Supplier #3 work must
 not begin before this prerequisite is resolved.
 
 The immutable-persistence rollout follows only the
-[89-row fine-grained checkpoint matrix](IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md#fine-grained-rollout-checkpoints).
-Each authorization, implementation, review, push, remote verification, Draft
+[103-row fine-grained checkpoint matrix](IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md#fine-grained-rollout-checkpoints).
+Each PR chain separately records candidate/implementation, validation,
+independent review, remediation-or-not-required, fresh independent PASS, push
+authorization, push, remote verification, Draft
 PR, PR base/head verification, CI, merge, deployment,
 verification, enablement, import, candidate, preview and closeout operation is
 separate. No review authorizes merge; no merge authorizes deployment; no
