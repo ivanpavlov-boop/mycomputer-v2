@@ -110,6 +110,7 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
 
         foreach ([
             'republish_same_key',
+            'recover_expired_queued_ownership',
             'terminalize_stale_dispatch',
             'terminalize_publication_mismatch',
             'terminalize_abandoned_processing',
@@ -124,13 +125,99 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
             'SupplierImportDispatchMonitorGate',
             'supplier-import-dispatch-observer-v1',
             'suppliers:observe-import-dispatch-monitor-health --quiet',
-            'observer timestamp no more than 120 seconds old',
+            'chk_import_recovery_result_action_event_code',
+            'action_stopped/republish_response_window_expired_after_start',
+            'ownership_recovery_succeeded/queued_ownership_lease_expired',
+            'supplier-import-dispatch-monitor-alert-v1',
+            'supplier-import-dispatch-alert-v1',
+            '0784419b016bd71a2ad912c752ab64d5405899f261a22fa78c75f5a300002fe0',
+            'a4cfd7d96ada0678b7054d3bfe2f62a1b423a98bb9507ce7e664a9c549b14f31',
+            'uq_import_dispatch_monitor_identity',
+            'chk_import_dispatch_monitor_owner_tuple',
+            'uq_import_dispatch_alert_identity',
+            'fk_import_dispatch_alert_outbox',
+            'chk_import_dispatch_alert_state_tuple',
+            'The 71-row dependency audit has no forward-created prerequisite',
         ] as $needle) {
             $this->assertStringContainsString($needle, $design);
         }
 
         $this->assertMatchesRegularExpression(
+            '/It never writes a\s+terminal claim\/outbox\/parent result\./',
+            $design,
+        );
+        $this->assertMatchesRegularExpression(
+            '/There is no\s+unauthenticated clear-first step\./',
+            $design,
+        );
+
+        $this->assertSame(
+            1,
+            preg_match(
+                "/\\(BINARY authorization_action = BINARY _ascii'republish_same_key'(?<republish>.*?)\\n    OR\\n    \\(BINARY authorization_action = BINARY _ascii'recover_expired_queued_ownership'/s",
+                $design,
+                $actionConstraint,
+            ),
+        );
+        $this->assertStringContainsString("event_kind = BINARY _ascii'republish_succeeded'", $actionConstraint['republish']);
+        $this->assertStringContainsString("event_kind = BINARY _ascii'publish_failed'", $actionConstraint['republish']);
+        $this->assertStringContainsString("event_kind = BINARY _ascii'action_stopped'", $actionConstraint['republish']);
+        $this->assertStringNotContainsString("event_kind = BINARY _ascii'terminalization_succeeded'", $actionConstraint['republish']);
+
+        $tableRows = static function (string $header) use ($design): array {
+            $lines = preg_split('/\\R/', $design);
+            $headerIndex = array_search($header, $lines, true);
+
+            if ($headerIndex === false) {
+                return [];
+            }
+
+            $rows = [];
+
+            for ($index = $headerIndex + 2; isset($lines[$index]) && str_starts_with($lines[$index], '|'); $index++) {
+                $rows[] = $lines[$index];
+            }
+
+            return $rows;
+        };
+
+        $protocolRows = $tableRows('| Ownership and payload observation | Transport/response boundary | Permitted protocol outcome |');
+        $crashRows = $tableRows('| Boundary | Path | SupplierImportRun | ImportJob | ImportHistory | Claim | Outbox | Evidence | Allowed recovery | Prohibited actions | Required operator action |');
+        $rolloutRows = $tableRows('| # | Checkpoint | Prerequisite | Separately responsible authorization | Permitted action | Result/artifact | Failure behavior | Next |');
+
+        $this->assertCount(14, $protocolRows);
+        $this->assertCount(41, $crashRows);
+        $this->assertCount(71, $rolloutRows);
+
+        foreach ([3 => $protocolRows, 11 => $crashRows, 8 => $rolloutRows] as $expectedColumns => $rows) {
+            foreach ($rows as $row) {
+                $this->assertCount($expectedColumns, explode('|', trim($row, '|')));
+            }
+        }
+
+        $this->assertStringContainsString('exactly 14 data rows and 3 columns', $design);
+        $this->assertStringContainsString('exactly 41 data rows and 11 columns', $design);
+        $this->assertStringContainsString('canonical 71-row fine-grained checkpoint matrix', $design);
+
+        $alertVectors = [
+            '{"schema":"supplier-import-dispatch-alert-v1","alert_type":"dispatch_watchdog_overdue","dispatch_outbox_id":101,"delivery_watchdog_at":"2026-08-20T10:15:30.123456Z","severity":"warning","critical_bucket":null}' => '0784419b016bd71a2ad912c752ab64d5405899f261a22fa78c75f5a300002fe0',
+            '{"schema":"supplier-import-dispatch-alert-v1","alert_type":"dispatch_watchdog_overdue","dispatch_outbox_id":202,"delivery_watchdog_at":"2026-08-20T10:45:30.000000Z","severity":"critical","critical_bucket":0}' => 'a4cfd7d96ada0678b7054d3bfe2f62a1b423a98bb9507ce7e664a9c549b14f31',
+        ];
+
+        foreach ($alertVectors as $canonicalJson => $expectedHash) {
+            $this->assertStringContainsString($canonicalJson, $design);
+            $this->assertSame(
+                $expectedHash,
+                hash('sha256', "supplier-import-dispatch-monitor-alert-v1\0".$canonicalJson),
+            );
+        }
+
+        $this->assertMatchesRegularExpression(
             '/`stale`,\s+`failed`\s+and\s+`unknown`\s+always fail closed/',
+            $design,
+        );
+        $this->assertMatchesRegularExpression(
+            '/observer timestamp no more\s+than 120 seconds old/',
             $design,
         );
 
@@ -151,13 +238,19 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
             $this->assertStringNotContainsString('49 fine-grained checkpoints', $contents);
             $this->assertStringNotContainsString('49 checkpoints', $contents);
             $this->assertStringNotContainsString('eleven-commit', $contents);
+            $this->assertStringNotContainsString('twelve-commit', $contents);
+            $this->assertStringNotContainsString('53-row fine-grained checkpoint matrix', $contents);
+            $this->assertStringNotContainsString('53 fine-grained checkpoints', $contents);
+            $this->assertStringNotContainsString('protocol table remains 12 outcomes', $contents);
+            $this->assertStringNotContainsString('36-by-11 crash matrix', $contents);
+            $this->assertStringContainsString('71-row fine-grained checkpoint matrix', $contents);
         }
 
         foreach (['docs/PHASES.md', 'docs/ROADMAP.md'] as $document) {
             $contents = file_get_contents(base_path($document));
 
             $this->assertIsString($contents);
-            $this->assertMatchesRegularExpression('/53(?: fine-grained)? checkpoints/', $contents);
+            $this->assertMatchesRegularExpression('/71(?: fine-grained)? checkpoints/', $contents);
         }
     }
 }

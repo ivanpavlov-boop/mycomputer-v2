@@ -409,15 +409,19 @@ can be reset by release, retry, reconciliation or republication.
 
 Recoverable pre-processing failure moves only a queued claim's published outbox
 to canonical `recovery_required` while its deadline and delivery budget remain
-valid. Delivery eight or deadline expiry instead atomically terminalizes claim,
-outbox and applicable parents; the reconciler terminalizes a previously
-recoverable row when either boundary later expires. Owner-proven
+valid. Delivery eight or deadline expiry at ordinary delivery admission
+atomically terminalizes claim, outbox and applicable parents. A previously
+recoverable row whose boundary later expires remains unchanged until a newly
+issued `terminalize_stale_dispatch` authorization; republish authority cannot
+perform that action. Owner-proven
 exception closeout runs inside active `handle()` `try/catch/finally`; newly
 deserialized Laravel `failed()` is transport-only and cannot close
 `processing`, release the original lock, replay the importer, or rewrite
 evidence. Exact ownership/outbox checks, transactional cross-record rules and
-the canonical 36-row by 11-column SupplierImportRun/ImportJob/ImportHistory
-crash matrix close every terminal path without replay. The future outbox adds
+the canonical 41-row by 11-column SupplierImportRun/ImportJob/ImportHistory
+crash matrix close every terminal path without replay and explicitly
+separates action-stopped republication from newly authorized terminalization.
+The future outbox adds
 `delivery_watchdog_at`, set from MySQL UTC plus exactly 4,320 seconds after
 acknowledged publication, and the exact
 `ix_import_dispatch_outbox_state_watchdog_id(state, delivery_watchdog_at, id)`.
@@ -428,31 +432,41 @@ processing progress, even when `delivery_attempt_count` proves that `handle()`
 ran; it uses `dispatch_durable_progress_stalled`, never an unobserved claim.
 
 The future 300-second monitor writes only dedicated heartbeat and durable
-privacy-safe alert-intent coordination. Fresh `healthy` state requires a
+privacy-safe alert-intent coordination with exact generation-bound lease/CAS,
+named MySQL checks/indexes/FK, and a byte-canonical six-key alert identity with
+two synthetic SHA-256 vectors. Fresh `healthy` state requires a
 successful cycle and sink acknowledgement no older than 600 seconds plus a
 separately persisted observer heartbeat no older than 120 seconds from the
 independent 60-second container probe. `stale`, `failed` or `unknown`
 health rejects capture, protected-generation start, authorization issuance and
 mutating recovery start. External delivery uses durable at-least-once intent,
-stable idempotency and ACK; no provider or credential is invented by the design.
+stable idempotency and generation-bound ACK; no provider or credential is
+invented by the design.
 
 Every mutating recovery uses one authenticated-Filament authorization covering
 one complete action/operator/claim/outbox/key/parent tuple, server-computed
 pre-state fingerprint, 900-second expiry and 32-byte single-display stdin nonce.
-The four actions cover same-key publication, stale terminalization, publication
-mismatch and abandoned processing. CLI derives the human principal from the
+The five actions cover same-key publication, complete-expired-queued-owner
+release, stale terminalization, publication mismatch and abandoned processing.
+CLI derives the human principal from the
 authorization and accepts no operator override. Result rows have composite
 relational and fingerprint binding. Same-key publication has exact pre-start
 validation and a durable post-start resume fingerprint; ambiguous external
-acceptance repeats only the byte-identical idempotent payload. Database-only
-actions commit start, mutation and terminal result atomically. After the
-1,800-second response objective, republication is forbidden. The dry-run-first
+acceptance repeats only the byte-identical idempotent payload while all action
+boundaries remain valid. A later boundary closes only the republish
+authorization through `action_stopped`; it never grants terminal authority.
+Database-only actions commit start, their exact mutation and compatible result
+atomically. Complete expired queued ownership has one legal first authorized
+CAS mutation and cannot be cleared first. After the 1,800-second response
+objective, an unstarted republish is forbidden, a started republish action-stops,
+and terminalization requires a newly issued exact action. The dry-run-first
 publication-mismatch and abandoned-processing apply paths have no prose-only
 authorization exception. Queue-delivery,
 logical-processing and
 outbox-publication attempts remain separate. A successful eighth publication is
-valid; only a failed or ambiguous eighth publication is terminal, and attempt
-nine is prohibited. Processing and live-owner terminal
+valid; a failed or ambiguous eighth publication closes the republish result and
+requires a separate terminal authorization, and attempt nine is prohibited.
+Processing and live-owner terminal
 finalization require `outbox.state = published`; a recoverable event must
 complete authorized `recovery_required -> published` acknowledgement before later ownership.
 Importer replay stops permanently at the first non-repeatable staging mutation.
@@ -497,13 +511,16 @@ and enabled and that future-history window is collected. Supplier #3 work must
 not begin before this prerequisite is resolved.
 
 The immutable-persistence rollout follows only the
-[53-row fine-grained checkpoint matrix](IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md#fine-grained-rollout-checkpoints).
+[71-row fine-grained checkpoint matrix](IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md#fine-grained-rollout-checkpoints).
 Each authorization, implementation, review, push/PR, CI, merge, deployment,
 verification, enablement, import, candidate, preview and closeout operation is
 separate. No review authorizes merge; no merge authorizes deployment; no
 candidate preparation authorizes approval; and no result review authorizes
 closeout. Failure at one checkpoint cannot authorize the next.
-Independent monitor implementation review, monitor merge, disabled monitor
-deployment and explicit monitor/sink/observer enablement are four distinct
-gates; none implies the next. Capture remains unavailable until the continuous
-health gate is fresh and healthy.
+Monitor design approval, implementation authorization, repository verification,
+implementation, focused/database/security validation, independent review,
+remediation/re-review, push authorization, push, Draft PR creation, CI/review,
+merge authorization, merge, disabled deployment verification and explicit
+monitor/sink/observer enablement are distinct ordered gates; none implies the
+next. Capture remains unavailable until the continuous health gate is fresh and
+healthy.

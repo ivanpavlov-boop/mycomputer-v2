@@ -50,9 +50,10 @@ deserialized Laravel `failed()` is transport-only: it cannot close
 evidence. `recovery_required` is a recoverable outbox-only state while deadline
 and delivery budget remain valid. Delivery eight or deadline expiry directly
 terminalizes a pre-processing claim, outbox and applicable parents; a
-recoverable row that later exhausts is terminalized by the reconciler. Exact
+recoverable row that later exhausts requires a newly issued exact terminal
+authorization and is never terminalized by republish authority. Exact
 ownership/outbox checks,
-transactional cross-state rules, and the 36-row by 11-column canonical
+transactional cross-state rules, and the 41-row by 11-column canonical
 parent-state crash matrix prevent stranded or contradictory SupplierImportRun,
 ImportJob and ImportHistory states. The future outbox includes exact
 `delivery_watchdog_at` liveness state and
@@ -65,34 +66,44 @@ processing progress, never that the payload was unobserved; the canonical reason
 is `dispatch_durable_progress_stalled`.
 
 The future 300-second monitor remains read-only for supplier/import/catalog
-domain rows but writes bounded dedicated heartbeat and alert-intent coordination.
+domain rows but writes bounded dedicated heartbeat and alert-intent coordination
+using generation-bound monitor/delivery leases and exact MySQL checks/indexes/FK.
 `healthy` requires a fresh successful cycle and sink acknowledgement no older
 than 600 seconds plus a separately persisted observer heartbeat no older than
 120 seconds from the independent 60-second container probe;
 `stale`, `failed` and `unknown` reject capture, protected-generation start,
 authorization issuance and mutating recovery start. Alert delivery is durable
-at-least-once intent with stable privacy-safe idempotency and external ACK, not
+at-least-once intent with byte-canonical privacy-safe idempotency and external ACK, not
 false at-most-once delivery. No alert provider or credentials are selected here.
+The exact NUL-delimited alert domain, six-key JSON object and two synthetic hash
+vectors are defined only in the canonical persistence design.
 
 Every mutating recovery uses one immutable complete action/operator/claim/
 outbox/key/parent authorization issued only in authenticated Filament by an
-active Super Admin. The server computes the pre-state fingerprint. Four actions
-cover same-key publication, stale terminalization, publication mismatch and
-abandoned processing. CLI accepts only authorization ID plus a 32-byte
+active Super Admin. The server computes the pre-state fingerprint. Five actions
+cover same-key publication, complete-expired-queued-owner release, stale
+terminalization, publication mismatch and abandoned processing. CLI accepts
+only authorization ID plus a 32-byte
 single-display nonce through stdin and never invents a current Laravel user.
 Result rows bind the complete tuple by composite FK and canonical fingerprint.
 Republish uses distinct pre-start validation and one immutable post-start resume
-fingerprint; after ambiguous Redis acknowledgement it may only idempotently
-publish the byte-exact same canonical payload, never guess the external result.
-The other three database-only actions commit start, mutation and terminal result
-together. Before the 1,800-second response objective, authority may permit
-bounded same-key recovery; afterward republication is forbidden and only exact
-fail-closed terminalization is available. The dry-run-first publication-
+fingerprint; after ambiguous Redis acknowledgement it may idempotently publish
+the byte-exact same canonical payload only while every boundary remains valid,
+and never guesses the external result. A boundary failure action-stops the
+republish without terminalizing and releases the target for a newly issued exact
+action. The other four database-only actions commit start, their exact mutation
+and compatible result together. Complete expired queued ownership has one legal
+first mutation through `recover_expired_queued_ownership`; it cannot be cleared
+before authorization. Before the 1,800-second response objective, authority may
+permit bounded same-key recovery; afterward an unstarted republish is forbidden,
+a started republish action-stops, and only a newly issued exact fail-closed
+terminalization action may terminalize. The dry-run-first publication-
 mismatch and abandoned-processing apply commands also require their exact
 action-specific authorization and protected nonce. Queue-delivery, logical-processing and
 outbox-publication attempts remain separate. A successful eighth publication is
-valid; only a failed or ambiguous eighth publication terminalizes, and no ninth
-attempt exists. Processing requires the canonical
+valid; a failed or ambiguous eighth publication closes only the republish result
+and a separate terminal authorization performs terminalization; no ninth attempt
+exists. Processing requires the canonical
 outbox to be `published`; recovery must complete
 authorized `recovery_required -> published` acknowledgement before a handler can acquire
 ownership. Live-owner finalization requires the raw token and owned Redis lock;
@@ -125,10 +136,12 @@ authorized.
 ## Immutable Persistence Rollout Checkpoints
 
 The sole canonical rollout sequence is the
-[53-row fine-grained checkpoint matrix](IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md#fine-grained-rollout-checkpoints).
+[71-row fine-grained checkpoint matrix](IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md#fine-grained-rollout-checkpoints).
 It separately controls local review, push/PR authorization, PR creation, CI,
-merge authorization, merge, implementation, independent monitor review,
-monitor merge, disabled monitor deployment, explicit monitor/sink/observer
+merge authorization, merge, implementation, monitor design approval,
+implementation authorization, local validation, security/database review,
+remediation/re-review, push authorization, push, Draft PR creation, monitor CI
+and review, merge, disabled monitor deployment, explicit monitor/sink/observer
 enablement, post-deployment
 verification, enablement, every import, producer work, candidate preparation,
 human approval, one preview, result review and documentation closeout. No row
