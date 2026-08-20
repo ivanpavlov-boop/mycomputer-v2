@@ -262,7 +262,7 @@ disabled. `CART-025` remains open.
    implementation approval remains closed.
 11. **Immutable supplier-offer snapshot persistence prerequisite - queued
     payload and terminal-recovery findings remediated locally.**
-    The ten-commit follow-up design has
+    The eleven-commit follow-up design has
     transactional `supplier_import_dispatch_outbox` and a stable claim shared
     by both XML paths; pair-null orchestrated dispatch followed by owner-checked
     atomic feed/ImportJob allocation; early pair-bound legacy authorization
@@ -282,10 +282,14 @@ disabled. `CART-025` remains open.
     processing/finalization; a 4,320-second MySQL-UTC `delivery_watchdog_at`
     present only for the exact `queued/published` pair and selected by
     `ix_import_dispatch_outbox_state_watchdog_id(state, delivery_watchdog_at, id)`;
+    payload observation, admission, lock contention, release, duplicate
+    delivery and `failed()` never refresh that watchdog, and only a later
+    acknowledged same-key publication may re-establish it;
     a read-only scheduled 300-second monitor with due warning, 1,800-second
     critical threshold and 900-second critical repetition; immutable
-    exact-pair/fingerprint/action recovery authority expiring after 900 seconds
-    plus one immutable result; operator-authorized
+    exact-pair/fingerprint/action recovery authority expiring after 900 seconds,
+    a 32-byte single-display nonce accepted only through stdin, and ordered
+    immutable `started` plus terminal lifecycle result events; operator-authorized
     `dispatch_payload_unobserved` same-key recovery only before the response
     objective and fail-closed-only terminalization afterward; explicit
     acknowledgement that absent operator action can remain nonterminal and
@@ -305,12 +309,14 @@ disabled. `CART-025` remains open.
     enrollment-generation baselines with deterministic authorization drift
     frozen; no mutable membership reread; deterministic V4 gaps; bounded streaming;
     retained one-job uniqueness, nullable unique one-claim-per-orchestrated-run,
-    an exact execution-path/parent-shape check, plus a separate named composite
-    child FK index; and 49 fine-grained rollout checkpoints. No runtime
+    a byte-exact immutable execution-path and exact parent-shape check, plus a
+    separate named composite child FK index; and 53 fine-grained rollout
+    checkpoints with independent monitor review, merge, disabled deployment and
+    read-only schedule-enablement gates. No runtime
     outbox/claim/recovery-authorization table,
     migration, queue setting, worker, command, parser change, capture hook, producer,
     historical backfill or operational evidence exists. C3D.1 remains blocked
-    until a fresh independent complete ten-commit review approves the design and later
+    until a fresh independent complete eleven-commit review approves the design and later
     checkpoints collect one future baseline plus three qualified comparable
     snapshots in an unchanged cohort epoch over at least 48 hours from absence
     1. See
@@ -334,7 +340,7 @@ disabled. `CART-025` remains open.
 ### Immutable Persistence Rollout Checkpoints
 
 Item 11 follows only the
-[49-row fine-grained checkpoint matrix](IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md#fine-grained-rollout-checkpoints).
+[53-row fine-grained checkpoint matrix](IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md#fine-grained-rollout-checkpoints).
 Authorization, implementation, review, push/PR, CI, merge, deployment,
 verification, enablement, each import, producer work, candidate preparation,
 human approval, preview, result review and closeout are separate rows. No row

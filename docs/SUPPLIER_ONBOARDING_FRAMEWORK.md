@@ -423,10 +423,16 @@ acknowledged publication, and the exact
 `ix_import_dispatch_outbox_state_watchdog_id(state, delivery_watchdog_at, id)`
 for bounded stale-payload detection. The marker is non-null only for the exact
 cross-record `queued/published` pair and is cleared atomically on processing,
-recovery-required and every terminal/finalized transition. A future scheduled
+recovery-required and every terminal/finalized transition. Payload observation,
+delivery admission, lock contention, release, duplicate delivery and `failed()`
+never refresh it; only a later acknowledged same-key publication may
+re-establish it. A future scheduled
 read-only monitor emits privacy-safe warning/critical evidence but performs no
 mutation and creates no recovery authority. Manual recovery requires an exact
-immutable 900-second authorization and immutable result. Same-key recovery
+immutable 900-second authorization bound to the canonical state fingerprint,
+a 32-byte single-display nonce supplied only through stdin, and ordered
+immutable lifecycle result events. Every valid mutating attempt appends
+`started` before mutation and exactly one terminal event. Same-key recovery
 with `dispatch_payload_unobserved` is permitted only before the 1,800-second
 operator-response objective; afterward republication is forbidden and an
 exact authorization may only terminalize fail closed. Without operator action,
@@ -452,7 +458,8 @@ immutable evidence together. The design also requires exact
 `ascii`/`ascii_bin` hexadecimal checks, a strict opaque source identity, one
 common supplier lock, bounded temp-file streaming, retained one-job uniqueness,
 a nullable unique claim-to-run key, the exact execution-path/parent-shape
-check, a separately named three-column child FK index and deterministic
+check with byte-exact immutable `execution_path`, a separately named
+three-column child FK index and deterministic
 qualification.
 The dedicated import worker adds no import or automatic-recovery schedule; the
 only planned automatic cadence is the read-only watchdog monitor. This design
@@ -482,9 +489,12 @@ and enabled and that future-history window is collected. Supplier #3 work must
 not begin before this prerequisite is resolved.
 
 The immutable-persistence rollout follows only the
-[49-row fine-grained checkpoint matrix](IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md#fine-grained-rollout-checkpoints).
+[53-row fine-grained checkpoint matrix](IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md#fine-grained-rollout-checkpoints).
 Each authorization, implementation, review, push/PR, CI, merge, deployment,
 verification, enablement, import, candidate, preview and closeout operation is
 separate. No review authorizes merge; no merge authorizes deployment; no
 candidate preparation authorizes approval; and no result review authorizes
 closeout. Failure at one checkpoint cannot authorize the next.
+Independent monitor implementation review, monitor merge, disabled monitor
+deployment and explicit read-only monitor schedule enablement are four distinct
+gates; none implies the next.

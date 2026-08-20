@@ -59,12 +59,18 @@ ImportJob and ImportHistory states. The future outbox includes the exact
 `ix_import_dispatch_outbox_state_watchdog_id(state, delivery_watchdog_at, id)`.
 Acknowledged publication sets the watchdog from MySQL UTC plus exactly 4,320
 seconds, and every departure from the exact cross-record `queued/published`
-pair clears it atomically. The future scheduled
+pair clears it atomically. Payload observation, delivery admission, lock
+contention, release, duplicate delivery and `failed()` never refresh it; only a
+later acknowledged same-key publication may re-establish it. The future scheduled
 `suppliers:monitor-import-dispatch-watchdogs` command only detects due rows and
 emits privacy-safe warning/critical evidence; it neither mutates rows nor
 creates recovery authority. Manual recovery requires one immutable,
 exact-pair/fingerprint/action-bound authorization that expires after 900
-seconds and one immutable result. Before the 1,800-second operator-response
+seconds, a 32-byte single-display nonce accepted only through stdin, and
+ordered immutable lifecycle result events. The authorization binds the exact
+canonical recovery state fingerprint and every valid mutating attempt appends
+`started` before any mutation, followed by exactly one terminal event. Before
+the 1,800-second operator-response
 objective, that authority may permit same-key recovery with
 `dispatch_payload_unobserved`; afterward republication is forbidden and only
 exact fail-closed terminalization is available. If the operator takes no
@@ -85,7 +91,8 @@ ownership. Live-owner finalization requires the raw token and owned Redis lock;
 the separate abandoned-owner API uses a new supplier lock and an expired
 persisted `processing/published` tuple without the lost raw token. Final evidence, ImportHistory, claim, published outbox, and
 authoritative parent transitions share one fixed-order database transaction.
-Exact `ascii`/`ascii_bin` lowercase-hexadecimal checks,
+Exact `ascii`/`ascii_bin` lowercase-hexadecimal checks, byte-exact immutable
+`execution_path` values,
 `uq_import_execution_claim_run`, the exact
 `chk_import_execution_claim_path_parent` parent-shape check, retained one-job
 uniqueness, a separate named three-column child FK index, a common supplier
@@ -109,9 +116,11 @@ authorized.
 ## Immutable Persistence Rollout Checkpoints
 
 The sole canonical rollout sequence is the
-[49-row fine-grained checkpoint matrix](IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md#fine-grained-rollout-checkpoints).
+[53-row fine-grained checkpoint matrix](IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md#fine-grained-rollout-checkpoints).
 It separately controls local review, push/PR authorization, PR creation, CI,
-merge authorization, merge, implementation, deployment, post-deployment
+merge authorization, merge, implementation, independent monitor review,
+monitor merge, disabled monitor deployment, explicit read-only monitor schedule
+enablement, post-deployment
 verification, enablement, every import, producer work, candidate preparation,
 human approval, one preview, result review and documentation closeout. No row
 combines review with merge, merge with deployment, candidate creation with
