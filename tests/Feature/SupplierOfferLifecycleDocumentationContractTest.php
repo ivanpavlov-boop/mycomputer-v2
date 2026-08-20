@@ -90,4 +90,74 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
             $this->assertStringContainsString('APCOM_MISSING_OFFER_DECISIONS_V4.md', $contents);
         }
     }
+
+    public function test_c3d_snapshot_recovery_design_closes_aggregate_review_contracts(): void
+    {
+        $design = file_get_contents(base_path('docs/IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md'));
+        $documents = [
+            'docs/APCOM_OPERATIONAL_OFFER_LIFECYCLE_PREVIEW.md',
+            'docs/IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md',
+            'docs/PHASES.md',
+            'docs/ROADMAP.md',
+            'docs/SUPPLIER_ONBOARDING_FRAMEWORK.md',
+        ];
+
+        $this->assertIsString($design);
+        $this->assertStringContainsString('dispatch_durable_progress_stalled', $design);
+        $this->assertStringNotContainsString('dispatch_payload_unobserved', $design);
+        $this->assertStringContainsString('supplier-import-dispatch-recovery-resume-v1', $design);
+        $this->assertStringContainsString('Phase B, committed-start resume', $design);
+
+        foreach ([
+            'republish_same_key',
+            'terminalize_stale_dispatch',
+            'terminalize_publication_mismatch',
+            'terminalize_abandoned_processing',
+            'authenticated Filament action',
+            'uq_import_recovery_auth_complete_tuple',
+            'fk_import_recovery_result_complete_auth_tuple',
+            'mycomputer:supplier-dispatch-payload:v1',
+            'd2a1b00c8b6d70393fdd65b246daa6e7e0c3cbba7c4ac1ff13fa38e9e34d59d0',
+            '471b08a6da920cc82c9612f15fa812546ffa32daf1a8d499eaadecf3d9a2334e',
+            'supplier_import_dispatch_monitor_health',
+            'supplier_import_dispatch_alert_intents',
+            'SupplierImportDispatchMonitorGate',
+            'supplier-import-dispatch-observer-v1',
+            'suppliers:observe-import-dispatch-monitor-health --quiet',
+            'observer timestamp no more than 120 seconds old',
+        ] as $needle) {
+            $this->assertStringContainsString($needle, $design);
+        }
+
+        $this->assertMatchesRegularExpression(
+            '/`stale`,\s+`failed`\s+and\s+`unknown`\s+always fail closed/',
+            $design,
+        );
+
+        $this->assertStringContainsString(
+            'The `logical_execution_key` itself remains durably persisted',
+            $design,
+        );
+        $this->assertStringNotContainsString(
+            'The raw canonical JSON and logical execution key exist only',
+            $design,
+        );
+
+        foreach ($documents as $document) {
+            $contents = file_get_contents(base_path($document));
+
+            $this->assertIsString($contents);
+            $this->assertStringNotContainsString('dispatch_payload_unobserved', $contents);
+            $this->assertStringNotContainsString('49 fine-grained checkpoints', $contents);
+            $this->assertStringNotContainsString('49 checkpoints', $contents);
+            $this->assertStringNotContainsString('eleven-commit', $contents);
+        }
+
+        foreach (['docs/PHASES.md', 'docs/ROADMAP.md'] as $document) {
+            $contents = file_get_contents(base_path($document));
+
+            $this->assertIsString($contents);
+            $this->assertMatchesRegularExpression('/53(?: fine-grained)? checkpoints/', $contents);
+        }
+    }
 }

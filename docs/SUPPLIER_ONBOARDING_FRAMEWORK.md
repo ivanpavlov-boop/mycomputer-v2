@@ -420,34 +420,41 @@ the canonical 36-row by 11-column SupplierImportRun/ImportJob/ImportHistory
 crash matrix close every terminal path without replay. The future outbox adds
 `delivery_watchdog_at`, set from MySQL UTC plus exactly 4,320 seconds after
 acknowledged publication, and the exact
-`ix_import_dispatch_outbox_state_watchdog_id(state, delivery_watchdog_at, id)`
-for bounded stale-payload detection. The marker is non-null only for the exact
-cross-record `queued/published` pair and is cleared atomically on processing,
-recovery-required and every terminal/finalized transition. Payload observation,
-delivery admission, lock contention, release, duplicate delivery and `failed()`
-never refresh it; only a later acknowledged same-key publication may
-re-establish it. A future scheduled
-read-only monitor emits privacy-safe warning/critical evidence but performs no
-mutation and creates no recovery authority. Manual recovery requires an exact
-immutable 900-second authorization bound to the canonical state fingerprint,
-a 32-byte single-display nonce supplied only through stdin, and ordered
-immutable lifecycle result events. Every valid mutating attempt appends
-`started` before mutation and exactly one terminal event. Same-key recovery
-with `dispatch_payload_unobserved` is permitted only before the 1,800-second
-operator-response objective; afterward republication is forbidden and an
-exact authorization may only terminalize fail closed. Without operator action,
-the execution can remain nonterminal and critically alerted. A separate
-owner-independent repository resolves a complete expired queued owner under a
-new supplier lock and complete-tuple CAS only through that authority. The exact
-dry-run-first `suppliers:resolve-import-publication-mismatch` command can
-terminalize only one explicitly identified eligible pre-processing execution;
-an identical rerun is a no-op and every conflict fails closed. Queue-delivery,
+`ix_import_dispatch_outbox_state_watchdog_id(state, delivery_watchdog_at, id)`.
+The marker is non-null only for exact `queued/published` and is cleared on every
+departure. Delivery admission, lock contention, release, duplicate delivery
+and `failed()` never refresh it. A due null-owner row proves only no durable
+processing progress, even when `delivery_attempt_count` proves that `handle()`
+ran; it uses `dispatch_durable_progress_stalled`, never an unobserved claim.
+
+The future 300-second monitor writes only dedicated heartbeat and durable
+privacy-safe alert-intent coordination. Fresh `healthy` state requires a
+successful cycle and sink acknowledgement no older than 600 seconds plus a
+separately persisted observer heartbeat no older than 120 seconds from the
+independent 60-second container probe. `stale`, `failed` or `unknown`
+health rejects capture, protected-generation start, authorization issuance and
+mutating recovery start. External delivery uses durable at-least-once intent,
+stable idempotency and ACK; no provider or credential is invented by the design.
+
+Every mutating recovery uses one authenticated-Filament authorization covering
+one complete action/operator/claim/outbox/key/parent tuple, server-computed
+pre-state fingerprint, 900-second expiry and 32-byte single-display stdin nonce.
+The four actions cover same-key publication, stale terminalization, publication
+mismatch and abandoned processing. CLI derives the human principal from the
+authorization and accepts no operator override. Result rows have composite
+relational and fingerprint binding. Same-key publication has exact pre-start
+validation and a durable post-start resume fingerprint; ambiguous external
+acceptance repeats only the byte-identical idempotent payload. Database-only
+actions commit start, mutation and terminal result atomically. After the
+1,800-second response objective, republication is forbidden. The dry-run-first
+publication-mismatch and abandoned-processing apply paths have no prose-only
+authorization exception. Queue-delivery,
 logical-processing and
 outbox-publication attempts remain separate. A successful eighth publication is
 valid; only a failed or ambiguous eighth publication is terminal, and attempt
 nine is prohibited. Processing and live-owner terminal
 finalization require `outbox.state = published`; a recoverable event must
-complete `recovery_required -> leased -> published` before later ownership.
+complete authorized `recovery_required -> published` acknowledgement before later ownership.
 Importer replay stops permanently at the first non-repeatable staging mutation.
 Abandoned processing uses a separate CLI-only API: it acquires a new supplier
 lock and proves an expired persisted `processing/published` tuple without the
@@ -462,7 +469,8 @@ check with byte-exact immutable `execution_path`, a separately named
 three-column child FK index and deterministic
 qualification.
 The dedicated import worker adds no import or automatic-recovery schedule; the
-only planned automatic cadence is the read-only watchdog monitor. This design
+only planned automatic cadence is the watchdog monitor and independent health
+observer, both restricted from supplier/catalog domain mutation. This design
 does not add a runtime outbox/claim/recovery-authorization table, migration,
 watchdog monitor, recovery repository, command, streaming parser change,
 capture implementation, producer, import approval, lifecycle action or Catalog
@@ -496,5 +504,6 @@ separate. No review authorizes merge; no merge authorizes deployment; no
 candidate preparation authorizes approval; and no result review authorizes
 closeout. Failure at one checkpoint cannot authorize the next.
 Independent monitor implementation review, monitor merge, disabled monitor
-deployment and explicit read-only monitor schedule enablement are four distinct
-gates; none implies the next.
+deployment and explicit monitor/sink/observer enablement are four distinct
+gates; none implies the next. Capture remains unavailable until the continuous
+health gate is fresh and healthy.

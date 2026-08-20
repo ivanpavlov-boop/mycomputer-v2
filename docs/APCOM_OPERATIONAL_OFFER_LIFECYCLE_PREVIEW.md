@@ -54,39 +54,47 @@ recoverable row that later exhausts is terminalized by the reconciler. Exact
 ownership/outbox checks,
 transactional cross-state rules, and the 36-row by 11-column canonical
 parent-state crash matrix prevent stranded or contradictory SupplierImportRun,
-ImportJob and ImportHistory states. The future outbox includes the exact
-`delivery_watchdog_at` liveness marker and
+ImportJob and ImportHistory states. The future outbox includes exact
+`delivery_watchdog_at` liveness state and
 `ix_import_dispatch_outbox_state_watchdog_id(state, delivery_watchdog_at, id)`.
 Acknowledged publication sets the watchdog from MySQL UTC plus exactly 4,320
-seconds, and every departure from the exact cross-record `queued/published`
-pair clears it atomically. Payload observation, delivery admission, lock
-contention, release, duplicate delivery and `failed()` never refresh it; only a
-later acknowledged same-key publication may re-establish it. The future scheduled
-`suppliers:monitor-import-dispatch-watchdogs` command only detects due rows and
-emits privacy-safe warning/critical evidence; it neither mutates rows nor
-creates recovery authority. Manual recovery requires one immutable,
-exact-pair/fingerprint/action-bound authorization that expires after 900
-seconds, a 32-byte single-display nonce accepted only through stdin, and
-ordered immutable lifecycle result events. The authorization binds the exact
-canonical recovery state fingerprint and every valid mutating attempt appends
-`started` before any mutation, followed by exactly one terminal event. Before
-the 1,800-second operator-response
-objective, that authority may permit same-key recovery with
-`dispatch_payload_unobserved`; afterward republication is forbidden and only
-exact fail-closed terminalization is available. If the operator takes no
-action, a critically alerted execution can remain nonterminal, so the design claims protocol
-boundedness only after an authorized command starts, not autonomous
-terminalization. A separate `ExpiredQueuedImportTerminalRepository` resolves a
-complete expired pre-processing owner without the lost raw token only through
-that authority. The exact CLI-only,
-dry-run-first `suppliers:resolve-import-publication-mismatch` command selects
-one claim/outbox/key and uses `PublicationMismatchTerminalRepository` for
-idempotent terminal resolution. Queue-delivery, logical-processing and
+seconds, and every departure from exact `queued/published` clears it atomically.
+Observation, admission, lock contention, release, duplicate delivery and
+`failed()` never refresh it. A due null-owner row proves only lack of durable
+processing progress, never that the payload was unobserved; the canonical reason
+is `dispatch_durable_progress_stalled`.
+
+The future 300-second monitor remains read-only for supplier/import/catalog
+domain rows but writes bounded dedicated heartbeat and alert-intent coordination.
+`healthy` requires a fresh successful cycle and sink acknowledgement no older
+than 600 seconds plus a separately persisted observer heartbeat no older than
+120 seconds from the independent 60-second container probe;
+`stale`, `failed` and `unknown` reject capture, protected-generation start,
+authorization issuance and mutating recovery start. Alert delivery is durable
+at-least-once intent with stable privacy-safe idempotency and external ACK, not
+false at-most-once delivery. No alert provider or credentials are selected here.
+
+Every mutating recovery uses one immutable complete action/operator/claim/
+outbox/key/parent authorization issued only in authenticated Filament by an
+active Super Admin. The server computes the pre-state fingerprint. Four actions
+cover same-key publication, stale terminalization, publication mismatch and
+abandoned processing. CLI accepts only authorization ID plus a 32-byte
+single-display nonce through stdin and never invents a current Laravel user.
+Result rows bind the complete tuple by composite FK and canonical fingerprint.
+Republish uses distinct pre-start validation and one immutable post-start resume
+fingerprint; after ambiguous Redis acknowledgement it may only idempotently
+publish the byte-exact same canonical payload, never guess the external result.
+The other three database-only actions commit start, mutation and terminal result
+together. Before the 1,800-second response objective, authority may permit
+bounded same-key recovery; afterward republication is forbidden and only exact
+fail-closed terminalization is available. The dry-run-first publication-
+mismatch and abandoned-processing apply commands also require their exact
+action-specific authorization and protected nonce. Queue-delivery, logical-processing and
 outbox-publication attempts remain separate. A successful eighth publication is
 valid; only a failed or ambiguous eighth publication terminalizes, and no ninth
 attempt exists. Processing requires the canonical
 outbox to be `published`; recovery must complete
-`recovery_required -> leased -> published` before a handler can acquire
+authorized `recovery_required -> published` acknowledgement before a handler can acquire
 ownership. Live-owner finalization requires the raw token and owned Redis lock;
 the separate abandoned-owner API uses a new supplier lock and an expired
 persisted `processing/published` tuple without the lost raw token. Final evidence, ImportHistory, claim, published outbox, and
@@ -103,7 +111,8 @@ and finalization never rereads mutable membership. An authorized expansion makes
 its complete enrollment generation the new non-comparable baseline; only a
 deterministic authorization mismatch emits `capture_cohort_changed` and freezes.
 The dedicated import worker adds no import or automatic-recovery schedule; the
-only planned automatic cadence is the read-only watchdog monitor. No runtime
+only planned automatic cadence is the watchdog monitor and independent health
+observer, neither of which mutates supplier/catalog domain state. No runtime
 outbox/claim/recovery-authorization table, migration, watchdog monitor,
 recovery repository, command, parser change, capture implementation,
 historical backfill or evidence producer exists yet. C3D.1 remains blocked until the fine-grained
@@ -119,7 +128,7 @@ The sole canonical rollout sequence is the
 [53-row fine-grained checkpoint matrix](IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md#fine-grained-rollout-checkpoints).
 It separately controls local review, push/PR authorization, PR creation, CI,
 merge authorization, merge, implementation, independent monitor review,
-monitor merge, disabled monitor deployment, explicit read-only monitor schedule
+monitor merge, disabled monitor deployment, explicit monitor/sink/observer
 enablement, post-deployment
 verification, enablement, every import, producer work, candidate preparation,
 human approval, one preview, result review and documentation closeout. No row

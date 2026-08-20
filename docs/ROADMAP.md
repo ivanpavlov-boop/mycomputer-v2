@@ -262,7 +262,7 @@ disabled. `CART-025` remains open.
    implementation approval remains closed.
 11. **Immutable supplier-offer snapshot persistence prerequisite - queued
     payload and terminal-recovery findings remediated locally.**
-    The eleven-commit follow-up design has
+    The twelve-commit follow-up design has
     transactional `supplier_import_dispatch_outbox` and a stable claim shared
     by both XML paths; pair-null orchestrated dispatch followed by owner-checked
     atomic feed/ImportJob allocation; early pair-bound legacy authorization
@@ -285,13 +285,20 @@ disabled. `CART-025` remains open.
     payload observation, admission, lock contention, release, duplicate
     delivery and `failed()` never refresh that watchdog, and only a later
     acknowledged same-key publication may re-establish it;
-    a read-only scheduled 300-second monitor with due warning, 1,800-second
-    critical threshold and 900-second critical repetition; immutable
-    exact-pair/fingerprint/action recovery authority expiring after 900 seconds,
-    a 32-byte single-display nonce accepted only through stdin, and ordered
-    immutable `started` plus terminal lifecycle result events; operator-authorized
-    `dispatch_payload_unobserved` same-key recovery only before the response
-    objective and fail-closed-only terminalization afterward; explicit
+    a scheduled 300-second monitor restricted to dedicated heartbeat and
+    privacy-safe alert-intent coordination, an independently observed
+    600-second monitor/sink gate, separately persisted 120-second independent-
+    observer gate, and provider-neutral durable at-least-once
+    idempotent alert/ACK semantics; immutable complete action/operator/claim/
+    outbox/key/parent recovery authority issued in authenticated Filament and
+    expiring after 900 seconds, a 32-byte single-display nonce accepted only
+    through stdin, composite result binding, and ordered immutable `started`
+    plus terminal lifecycle events; `dispatch_durable_progress_stalled`
+    expressly proves no durable progress rather than no delivery; exact
+    pre-start and post-start resume fingerprints for same-key publication;
+    machine-enforced authorization for stale terminalization, publication
+    mismatch and abandoned processing; fail-closed-only terminalization after
+    the response objective; explicit
     acknowledgement that absent operator action can remain nonterminal and
     critically alerted; owner-independent complete expired queued-owner CAS; an exact
     dry-run-first one-execution publication-mismatch command and idempotent
@@ -312,11 +319,11 @@ disabled. `CART-025` remains open.
     a byte-exact immutable execution-path and exact parent-shape check, plus a
     separate named composite child FK index; and 53 fine-grained rollout
     checkpoints with independent monitor review, merge, disabled deployment and
-    read-only schedule-enablement gates. No runtime
+    monitor/sink/observer enablement gates. No runtime
     outbox/claim/recovery-authorization table,
     migration, queue setting, worker, command, parser change, capture hook, producer,
     historical backfill or operational evidence exists. C3D.1 remains blocked
-    until a fresh independent complete eleven-commit review approves the design and later
+    until a fresh independent complete twelve-commit review approves the design and later
     checkpoints collect one future baseline plus three qualified comparable
     snapshots in an unchanged cohort epoch over at least 48 hours from absence
     1. See
@@ -786,14 +793,15 @@ by Phase 1D.2B and CART-023 remains open. Operational boundaries are documented 
    outbox-only `recovery_required`; processing/finalization gated on
    `outbox.state=published`; exact ownership/outbox checks; the 4,320-second
    indexed acknowledged-payload watchdog cleared outside `queued/published`;
-   read-only scheduled monitoring plus exact immutable manual recovery
-   authorization/result; owner-independent expired `queued/published`
+   continuously gated scheduled monitoring with durable heartbeat, acknowledged
+   alert intent and independent liveness observation plus exact immutable manual
+   recovery authorization/result; owner-independent expired `queued/published`
    recovery/terminal CAS; one non-null orchestrated claim per run with exact
    path/parent shape; the exact one-execution publication-mismatch command; and
    canonical authoritative parent-state recovery; none is implemented or
    enabled. The dedicated import worker adds no import or automatic-recovery
-   schedule; only the read-only monitor has a planned cadence.
-   Complete the linked 49 fine-grained checkpoints in order; every
+   schedule; only the domain-read-only monitor and its health observer have a
+   planned cadence. Complete the linked 53 fine-grained checkpoints in order; every
    authorization, technical action, review, PR, merge, deployment, enablement,
    import, candidate, preview and closeout remains separate. No backfill from
    mutable staging is allowed.
