@@ -28,6 +28,10 @@ Redis write, recovery action, monitor schedule, provider call, supplier import,
 Catalog Sync action, Product mutation, `supplier_products` mutation, deployment,
 or feature activation.
 
+The independent planning-review findings RPR-001 and RPR-002 are closed here
+only as implementation-boundary and dependency-order corrections. They do not
+change any approved canonical design contract.
+
 ## Existing runtime inventory
 
 ### Supplier-import entry points and execution
@@ -45,7 +49,7 @@ or feature activation.
 | `app/Services/Suppliers/SupplierImportScheduleService.php` | Selects due suppliers and calculates next-run timestamps | Existing import scheduling only; it does not provide protected admission or monitor health |
 | `app/Services/Suppliers/SupplierImportSafetyService.php` | Evaluates current row-count/drop safety after import | Existing staging safety projection; it is not immutable snapshot qualification |
 | `app/Services/Suppliers/SupplierImportReportService.php` | Persists the mutable `SupplierImportRun.report` projection | May rebuild only non-authoritative report details after canonical terminal commit |
-| `app/Services/Suppliers/SupplierImportNotificationService.php` | Sends current import notifications | Not the canonical watchdog alert sink or provider capability boundary |
+| `app/Services/Suppliers/SupplierImportNotificationService.php` | Sends current import notifications and updates `suppliers.last_import_notification_at` | EXISTS only for the legacy/unprotected transition path; PROHIBITED in protected execution and never the canonical watchdog alert sink or provider capability boundary |
 | `app/Services/Suppliers/SupplierImportCapabilityAuditService.php` | Read-only inventory/readiness audit of current import capabilities | Useful regression inventory; it does not authorize protected execution |
 | `app/Http/Controllers/Api/V1/Admin/SupplierImportController.php` | Manual and force orchestrated dispatch | Existing authorization surface; no recovery authorization is present here |
 | `app/Filament/Resources/Suppliers/Tables/SuppliersTable.php` | Manual/force import actions | Existing human import entry point; it is not a recovery-authorization screen |
@@ -200,6 +204,7 @@ The canonical helper locations are:
 | Freshness admission | MISSING | No 600-second monitor/sink plus 120-second observer gate |
 | Durable alert intent | MISSING | No canonical alert identity or state machine |
 | Provider capability gate | MISSING | No selected provider and no proven external-effect capability |
+| Legacy completion notification | EXISTS / CONFLICTING | May remain only in the legacy/unprotected transition path; protected execution must bypass it with zero legacy email dispatch and zero `last_import_notification_at` mutation |
 | Operational rollback | PARTIAL | Existing feature flags show fail-closed patterns, but snapshot/recovery/monitor gates and the complete schema-down guard do not exist |
 | MySQL CI | EXISTS | CI runs the backend against MySQL 8.4 |
 | Redis CI | MISSING | CI does not start Redis and uses array cache/sync queue |
@@ -208,6 +213,22 @@ These are expected implementation gaps, not an implementation design conflict.
 The current direct path can remain available only while the new protected path
 and capture gates are disabled. Activation must be a later, separately
 authorized rollout after every dependency is merged and independently proven.
+
+### Protected external-effect boundary
+
+Protected execution remains limited to exactly the three mutating external
+coordination/effect surfaces approved by the canonical design:
+
+1. fenced Redis queue publication;
+2. fenced/idempotent canonical alert delivery; and
+3. owner-token-checked supplier Redis lock acquire/renew/release.
+
+Legacy `SupplierImportNotificationService` is not a fourth protected effect. It
+exists only in the legacy/unprotected transition path and is prohibited in the
+protected path. No protected email/provider send may bypass durable alert
+intents, and no canonical protected alert delivery is possible until Phase X
+plus a separately reviewed provider capability satisfy the approved external
+boundary contract.
 
 ## Dependency graph
 
@@ -218,16 +239,26 @@ approved design
       -> III snapshot persistence core
       -> IV execution claim/allocation/outbox core
           -> V Redis fencing and isolated queue transport
-          -> VI common coordinator and protected importer integration
-              -> VII recovery authorization
-                  -> VIII database-only recovery actions
-                  -> IX fenced same-key republication
-              -> X monitor/observer/alert coordination
-                  -> XI integration, evidence producer and disabled rollout gates
+              -> VI common coordinator and protected importer integration
+                  -> monitor-readiness contract plus unavailable implementation
+                  -> VII recovery authorization
+                      -> VIII database-only recovery actions
+                      -> IX fenced same-key republication
+                  -> X monitor/observer/alert coordination
+                      -> DB-backed monitor-readiness implementation
+  -> III + VIII + IX + X
+      -> XI integration, evidence producer and disabled rollout gates
 ```
 
-Phase XI requires III through X. No later phase may compensate for a failed
-earlier invariant. Every phase follows its own local implementation,
+Phase VI owns the application-facing monitor-readiness contract and binds its
+unavailable implementation. For monitor readiness, Phases VII through IX depend
+only on that existing contract and remain fail closed; their other prerequisites
+remain unchanged. Phase VII requires VI, Phase VIII requires VI plus VII, Phase
+IX requires V plus VI plus VII, and Phase X requires the schema/models,
+claim/outbox and coordinator foundations through VI. Phase X supplies the
+DB-backed implementation without changing the contract. Phase XI requires III
+through X. There is no circular dependency, and no later phase may compensate
+for a failed earlier invariant. Every phase follows its own local implementation,
 validation, independent review, remediation-or-not-required, fresh independent
 PASS, push authorization, push, remote verification, Draft PR, CI, PR review,
 merge authorization, and merge boundary. Deployment and activation remain
@@ -312,6 +343,9 @@ implementation candidate, but ownership is fixed as follows.
 
 **Phase VI**
 
+- `app/Contracts/Suppliers/SupplierImportDispatchMonitorReadiness.php`;
+- `app/Services/Suppliers/UnavailableSupplierImportDispatchMonitorReadiness.php`;
+- the fail-closed container binding in `app/Providers/AppServiceProvider.php`;
 - `app/Jobs/RunSupplierImportJob.php`;
 - `app/Jobs/ProcessSupplierImportRunJob.php`;
 - `app/Jobs/ProcessXmlSupplierFeed.php`;
@@ -360,7 +394,10 @@ implementation candidate, but ownership is fixed as follows.
 
 **Phase X**
 
-- `app/Services/Suppliers/SupplierImportDispatchMonitorGate.php`;
+- `app/Services/Suppliers/DbBackedSupplierImportDispatchMonitorReadiness.php`;
+- replacement of the Phase VI unavailable binding in
+  `app/Providers/AppServiceProvider.php` only after the DB-backed implementation
+  exists;
 - `app/Services/Suppliers/SupplierImportDispatchAlertSink.php`;
 - monitor/observer/alert repositories and provider capability value objects;
 - `app/Console/Commands/MonitorSupplierImportDispatchWatchdogs.php`;
@@ -542,7 +579,10 @@ Sync Safety review.
 ### Phase VI - Common protected execution coordinator
 
 **Goal.** Make both import job types use one owner-checked coordinator when,
-and only when, protected admission is explicitly enabled after rollout.
+and only when, protected admission is explicitly enabled after rollout. It also
+establishes the fail-closed monitor-readiness contract required by later
+recovery phases and excludes the legacy completion-notification path from every
+protected execution.
 
 **Planned components.** `SupplierImportDeliveryAdmissionService`,
 `SupplierImportExecutionCoordinator`, `SupplierImportInHandleFailureService`,
@@ -553,6 +593,14 @@ legacy dispatch entry points. The protected job contract becomes `$tries=8`,
 24-hour MySQL deadline, cumulative delivery budget, 4,200-second DB lease and
 4,320-second Redis lock/watchdog TTL boundary.
 
+The exact application-facing readiness contract is
+`SupplierImportDispatchMonitorReadiness`, with the single safety API
+`isReadyForProtectedActivity(): bool`. Phase VI binds
+`UnavailableSupplierImportDispatchMonitorReadiness`, which always returns
+`false`. It does not inspect a config flag, environment variable, process
+presence or static state. No protected operation may bypass this contract or
+substitute a config-only readiness decision.
+
 Before any importer side effect, the coordinator must own the supplier lock,
 bind one complete MySQL owner tuple, require `queued/published`, allocate/bind
 the history, commit capture-start authorization, bind the source fingerprint,
@@ -560,22 +608,45 @@ and CAS to `processing`. In-handle exceptions retain raw token/lock proof.
 Newly deserialized `failed()` is transport-only and cannot close processing.
 `forceRelease()` is removed from the protected path.
 
+When the protected path owns an execution, orchestrator completion bypasses
+`SupplierImportNotificationService` completely. Successful, failed, duplicate
+and stale protected deliveries dispatch zero legacy `SendEmailJob` instances
+and do not update `suppliers.last_import_notification_at`. The existing legacy
+notification behavior may remain unchanged only while execution remains on the
+legacy/unprotected path. There is no hybrid path. Any future protected
+notification is owned exclusively by the Phase X durable alert-intent contract
+and a later provider adapter proving `native_generation_fence` or
+`provider_enforced_idempotency`; Phase VI performs no canonical alert delivery.
+
 **Tests.** Sequential/concurrent duplicate delivery, lock contention,
 deadlock/timeout/zero-row CAS, two paths, source fingerprint reuse/conflict,
 crash boundaries, failed callback races, no importer replay after processing,
 atomic finalization, exhaustive evidence, and existing XML/CSV staging-only
-behavior. Real MySQL and Redis are required.
+behavior. Add explicit successful/failed protected-execution assertions that
+legacy `SendEmailJob` dispatch count is zero and
+`last_import_notification_at` is unchanged; repeat them for duplicate/stale
+workers. Separately preserve the legacy notification regression while the
+protected gate is disabled. Protected success/failure tests may bind an explicit
+test-only readiness double returning true after their synthetic prerequisites;
+that double is never a runtime fallback. Test the production readiness binding
+and every protected safety-sensitive entry point with the unavailable
+implementation returning false and producing zero protected effects. Real
+MySQL and Redis are required.
 
-**Gates.** Protected admission and capture remain false by default. Startup
-requires schema, monitor, observer, queue timing, Redis fencing and capture
+**Gates.** Protected admission and capture remain false by default. The Phase
+VI readiness binding is unavailable/fail-closed. Startup requires schema,
+DB-backed monitor, observer, sink, queue timing, Redis fencing and capture
 readiness before either can become true in a later operational authorization.
 
-**Exclusions.** No recovery action, monitor schedule, alert provider, Product
-write, Catalog Sync, or automatic activation.
+**Exclusions.** No recovery action, DB-backed monitor logic, monitor schedule,
+alert provider, canonical alert delivery, legacy protected-path completion
+notification, Product write, Catalog Sync, or automatic activation.
 
 **Mutation boundary.** When later enabled, existing import engines may continue
 their existing `supplier_products` staging writes under the new ownership
 boundary. No new staging semantics and no `products` mutation are authorized.
+Protected execution never mutates `suppliers.last_import_notification_at`
+through the legacy notification flow.
 
 **PR gate.** Independent Database, Redis/Queue, Supplier Import, Security, QA,
 and Catalog Sync Safety review.
@@ -600,11 +671,15 @@ released promptly.
 last-active-Super-Admin preservation, all five action predicates, 900-second
 expiry, nonce uniqueness/constant-time verification, tuple FKs, conflicting
 authorization, sequence guards, cross-action result rejection, secret scans,
-and no target mutation while execution is disabled.
+and no target mutation while execution is disabled. With
+`UnavailableSupplierImportDispatchMonitorReadiness`, issuance is rejected and
+all target/authorization/result rows remain unchanged.
 
 **Gates.** `recovery_issuance_enabled=false` and
 `recovery_execution_enabled=false` by default. Issuance additionally requires
-fresh derived monitor health.
+`SupplierImportDispatchMonitorReadiness::isReadyForProtectedActivity()` to
+return true. The Phase VI default returns false; config alone cannot satisfy
+this requirement.
 
 **Exclusions.** No recovery mutation, Redis call, provider, import, Product, or
 staging write.
@@ -629,10 +704,13 @@ the exact authorization/result framework and fixed lock order.
 owner races, rollback/replay, no clear-first operation, action/result
 compatibility, parent terminalization, watchdog clearing, one-target dry-run,
 no broad selector, no importer replay, and zero snapshot/Product/staging writes.
+With unavailable monitor readiness, every Phase-A mutation is rejected before
+`started` and all domain/recovery rows remain unchanged.
 
 **Gates.** Execution remains false by default and requires a current unexpired
 authorization, nonce proof, active Super Admin continuity before `started`,
-fresh monitor admission, supplier lock and exact row locks.
+the Phase VI monitor-readiness contract returning true, supplier lock and exact
+row locks. There is no config-only escape hatch.
 
 **Exclusions.** `republish_same_key`, any Redis effect, new import key,
 automatic action, source access, Catalog Sync, Product or staging mutation.
@@ -654,10 +732,14 @@ and uses the original byte-identical payload through the exact fence.
 boundary closure before call, `action_stopped`, attempt eight, unknown result,
 external retirement, successor generation, stale worker zero effect, competing
 authorization, idempotent terminal result and proof that republish never
-terminalizes claim/outbox/parents.
+terminalizes claim/outbox/parents. With unavailable monitor readiness, Phase A
+is rejected with zero DB mutation; an unavailable or newly stale readiness
+check before Phase B produces zero Redis calls and zero external effects.
 
-**Gates.** Recovery execution and Redis readiness must both pass; monitor/sink
-and observer freshness are rechecked before each external call.
+**Gates.** Recovery execution and Redis readiness must both pass;
+`SupplierImportDispatchMonitorReadiness` must return true at mutation admission
+and immediately before each external call. The unavailable binding always
+fails closed, and no config-only value can replace the readiness result.
 
 **Exclusions.** New logical key/event, attempt nine, direct publish,
 cross-action terminalization, importer call, source access, Product/staging
@@ -669,11 +751,13 @@ Supplier Import, and Catalog Sync Safety review.
 ### Phase X - Monitor, observer and alert coordination
 
 **Goal.** Implement the domain-read-only watchdog monitor, independent
-observer, monitor admission gate and durable alert-intent state machine while
-leaving provider delivery and scheduling disabled.
+observer, DB-backed implementation of the Phase VI monitor-readiness contract,
+and durable alert-intent state machine while leaving provider delivery and
+scheduling disabled.
 
-**Planned components.** `SupplierImportDispatchMonitorGate`, monitor/observer
-repositories and commands, `MonitorSupplierImportDispatchWatchdogs`,
+**Planned components.**
+`DbBackedSupplierImportDispatchMonitorReadiness`, monitor/observer repositories
+and commands, `MonitorSupplierImportDispatchWatchdogs`,
 `ObserveSupplierImportDispatchMonitorHealth`, alert serializer/repository,
 `SupplierImportDispatchAlertSink` capability interface, and an explicit
 unsupported/unavailable adapter.
@@ -689,7 +773,10 @@ approved alert digest vectors remain exact.
 generation takeover/stale CAS, observer independence/freshness, privacy-safe
 output, zero domain writes/jobs, durable alert identity, lease takeover,
 attempt budget, provider unsupported closure, and
-`delivery_outcome_unknown_exhausted` invariants.
+`delivery_outcome_unknown_exhausted` invariants. The DB-backed readiness
+implementation returns true only for the exact current healthy monitor,
+observer and sink evidence. `stale`, `failed`, `unknown`, DB unavailable,
+generation/lease mismatch and unsupported provider states return false.
 
 **Provider boundary.** No provider is selected. A future provider-specific PR
 must prove exactly one capability mode at the real effect boundary:
@@ -698,7 +785,10 @@ provider readiness is false, no delivery lease/provider call is allowed, and
 monitor integrity cannot become operationally ready.
 
 **Gates.** `monitor_schedule_enabled=false`, `observer_schedule_enabled=false`,
-and `alert_delivery_enabled=false`. Health is derived, not overridden.
+and `alert_delivery_enabled=false`. Health is derived, not overridden. Phase X
+may bind the DB-backed implementation, but it is eligible to return true only
+after canonical monitor/observer/sink prerequisites pass. Recovery remains
+inactive until that evidence exists and a separate activation is authorized.
 
 **Exclusions.** No claim/outbox/parent/evidence/staging/Product mutation, no
 recovery issuance, no provider credentials/call, no import, and no Catalog
@@ -948,6 +1038,17 @@ Deployment never flips a gate. Operational rollback turns forward gates off
 and preserves all coordination/evidence. Catalog Sync flags are separate and
 never used as snapshot/import gates.
 
+The binding lifecycle is exact: Phase VI introduces
+`SupplierImportDispatchMonitorReadiness` and binds
+`UnavailableSupplierImportDispatchMonitorReadiness`; Phase X supplies and may
+bind `DbBackedSupplierImportDispatchMonitorReadiness`. Code/config deployment,
+`MONITOR_ENABLED=true`, schedule enablement, process liveness, or any equivalent
+environment/config value is never readiness evidence. Only the DB-backed
+implementation may return true, and only from the canonical fresh
+monitor/observer/sink and integrity predicates. Recovery gates remain
+inactivatable until that evidence exists and activation is separately
+authorized.
+
 ## Test traceability
 
 The canonical source remains the approved design; executable tests will carry
@@ -993,6 +1094,17 @@ Additional suites retain the 19-outcome protocol matrix, 66-row crash matrix,
 supplier-import regressions, Filament authorization, secret scans, and
 zero-mutation assertions.
 
+### Planning-review remediation traceability
+
+| Finding | Owning phases | Required future executable proof |
+| --- | --- | --- |
+| RPR-001 protected notification boundary | VI, X and future provider PR | Protected success/failure/duplicate/stale execution bypasses `SupplierImportNotificationService`, dispatches zero legacy `SendEmailJob` instances and preserves `last_import_notification_at`; the gate-disabled legacy path retains its current behavior; any future protected notification originates from one durable alert intent and passes only through a proven provider capability |
+| RPR-002 readiness contract and unavailable default | VI | Container resolution returns `SupplierImportDispatchMonitorReadiness` backed by `UnavailableSupplierImportDispatchMonitorReadiness`; `isReadyForProtectedActivity()` is false for every protected entry point with zero effects |
+| RPR-002 issuance admission | VII | Unavailable readiness rejects issuance and creates/updates zero target, authorization or result rows |
+| RPR-002 DB-only mutation admission | VIII | Unavailable readiness rejects every Phase-A start before mutation and leaves claim/outbox/parents/results unchanged |
+| RPR-002 republication admission/effect | IX | Unavailable readiness rejects Phase A; unavailable/stale readiness before Phase B makes zero Redis calls and zero external effects |
+| RPR-002 DB-backed readiness | X | Only exact fresh healthy monitor/observer/sink evidence returns true; stale, failed, unknown, DB unavailable, lease/generation mismatch and unsupported-provider states return false |
+
 ## Catalog Sync and data-ownership safety
 
 The implementation preserves:
@@ -1016,11 +1128,11 @@ CATALOG_SYNC_AUTO_ENABLED=false
 - No supplier image import, category overwrite, attribute overwrite, retention
   cleanup, lifecycle application or automatic replacement import is allowed.
 
-| Future phase | May mutate `products`? | May mutate `supplier_products`? |
-| --- | --- | --- |
-| I-V | no | no |
-| VI | no | only through the unchanged existing importer after separate protected-path activation; no new fields/semantics |
-| VII-XI | no | no |
+| Future phase | May mutate `products`? | May mutate `supplier_products`? | May protected execution mutate `suppliers.last_import_notification_at` through the legacy notification flow? |
+| --- | --- | --- | --- |
+| I-V | no | no | no |
+| VI | no | only through the unchanged existing importer after separate protected-path activation; no new fields/semantics | no; legacy notification behavior exists only while the legacy/unprotected path is selected |
+| VII-XI | no | no | no |
 
 Tests use isolated synthetic databases. This planning artifact performs no data
 mutation.
@@ -1051,6 +1163,9 @@ mutation.
    enablement/import/evidence candidate/preview are distinct authorizations.
 10. **No backfill.** Existing mutable staging cannot be transformed into
     historical immutable evidence.
+11. **Legacy notification isolation.** Protected execution must bypass the
+    existing completion notification and Supplier timestamp mutation. Phase X
+    durable alert intents are the only future protected notification source.
 
 No inspected repository constraint makes the approved design impossible.
 There is therefore no `IMPLEMENTATION DESIGN CONFLICT` at planning time.
@@ -1062,6 +1177,12 @@ its dependencies are merged into current `main`. No phase authorization implies
 push, PR, merge, deployment, feature enablement, import, candidate preparation,
 preview or closeout. The canonical 103-checkpoint governance remains the source
 of truth for those operational transitions.
+
+Phase VI must merge before VII through X because it owns the readiness
+interface and unavailable binding. VII through IX may then merge behind that
+binding but cannot become active. Phase X supplies the DB-backed binding; even
+that merge does not activate recovery without canonical fresh evidence and a
+separate operational authorization.
 
 The first safe next action after this plan is a fresh independent read-only
 review of this document against the approved design and current runtime. Runtime
