@@ -233,12 +233,16 @@ return new class extends Migration
 
     public function down(): void
     {
-        CanonicalSupplierSnapshotSchema::assertDestructiveDownAllowed();
-        CanonicalSupplierSnapshotSchema::dropTriggers([
-            'trg_import_recovery_result_no_update',
-            'trg_import_recovery_result_no_delete',
-        ]);
-        Schema::drop('supplier_import_dispatch_recovery_results');
+        CanonicalSupplierSnapshotSchema::runDestructiveDownStep(
+            '2026_08_20_120006_create_supplier_import_dispatch_recovery_results_table',
+            function (): void {
+                CanonicalSupplierSnapshotSchema::dropTriggers([
+                    'trg_import_recovery_result_no_update',
+                    'trg_import_recovery_result_no_delete',
+                ]);
+                Schema::drop('supplier_import_dispatch_recovery_results');
+            },
+        );
     }
 
     private static function requiredHex(string $column): string

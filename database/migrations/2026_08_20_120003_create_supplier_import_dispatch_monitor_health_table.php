@@ -125,7 +125,9 @@ return new class extends Migration
 
     public function down(): void
     {
-        CanonicalSupplierSnapshotSchema::assertDestructiveDownAllowed();
-        Schema::drop('supplier_import_dispatch_monitor_health');
+        CanonicalSupplierSnapshotSchema::runDestructiveDownStep(
+            '2026_08_20_120003_create_supplier_import_dispatch_monitor_health_table',
+            fn () => Schema::drop('supplier_import_dispatch_monitor_health'),
+        );
     }
 };

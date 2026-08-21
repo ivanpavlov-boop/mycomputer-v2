@@ -9,8 +9,9 @@ use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Schema;
+use PDO;
+use PDOException;
 use ReflectionClass;
-use RuntimeException;
 use Tests\TestCase;
 use Throwable;
 
@@ -18,6 +19,18 @@ require_once __DIR__.'/../../database/migrations/support/CanonicalSupplierSnapsh
 
 final class CanonicalSupplierSnapshotSchemaMigrationTest extends TestCase
 {
+    private const CHECK_INVENTORY_SHA256 = 'a705540a21477f791c105cb1e871c749ffacc1477732f22a96f6fa45c1c22538';
+
+    private const TRIGGER_INVENTORY_SHA256 = '4a4d7fc3921fff163efcb8f0b921bfa9b59c98019c7e938751bd1e01ba7003bc';
+
+    private const GENERATED_GUARD_INVENTORY_SHA256 = 'fa986b77b80d675c1c4583485ca9af5b26c6a50b782114178e7d0463f7afc398';
+
+    private const SECURITY_COLUMN_INVENTORY_SHA256 = 'e549fbe5760da29b100adab235990b4949e28039620a174d712646b9001cbb98';
+
+    private const DOWN_CAPABILITY_ENV = 'SUPPLIER_SNAPSHOT_EMPTY_SCHEMA_DOWN_CAPABILITY';
+
+    private const FIRST_DOWN_MIGRATION = '2026_08_20_120011_add_supplier_range_index_to_import_histories';
+
     /** @var list<string> */
     private const CANONICAL_TABLES = [
         'supplier_import_execution_claims',
@@ -32,6 +45,40 @@ final class CanonicalSupplierSnapshotSchemaMigrationTest extends TestCase
         'supplier_offer_snapshot_observations',
     ];
 
+    /** @var array<string, string> */
+    private const SECURITY_COLUMNS = [
+        'supplier_import_cohort_authorization_members.supplier_sku_hash' => 'NO',
+        'supplier_import_dispatch_alert_intents.alert_identity' => 'NO',
+        'supplier_import_dispatch_alert_intents.delivery_owner_token_hash' => 'YES',
+        'supplier_import_dispatch_monitor_health.monitor_owner_token_hash' => 'YES',
+        'supplier_import_dispatch_outbox.dispatch_payload_hash' => 'NO',
+        'supplier_import_dispatch_outbox.lease_token_hash' => 'YES',
+        'supplier_import_dispatch_outbox.logical_execution_key' => 'NO',
+        'supplier_import_dispatch_outbox.publication_attempt_token_hash' => 'YES',
+        'supplier_import_dispatch_recovery_authorizations.authorization_nonce_hash' => 'NO',
+        'supplier_import_dispatch_recovery_authorizations.expected_state_fingerprint' => 'NO',
+        'supplier_import_dispatch_recovery_authorizations.logical_execution_key' => 'NO',
+        'supplier_import_dispatch_recovery_results.logical_execution_key' => 'NO',
+        'supplier_import_dispatch_recovery_results.result_fingerprint' => 'NO',
+        'supplier_import_dispatch_recovery_results.resume_state_fingerprint' => 'YES',
+        'supplier_import_execution_claims.active_attempt_token_hash' => 'YES',
+        'supplier_import_execution_claims.cohort_seed_fingerprint' => 'YES',
+        'supplier_import_execution_claims.logical_execution_key' => 'NO',
+        'supplier_import_execution_claims.source_fingerprint' => 'YES',
+        'supplier_offer_snapshot_enrollments.enrollment_fingerprint' => 'NO',
+        'supplier_offer_snapshot_enrollments.supplier_sku_hash' => 'NO',
+        'supplier_offer_snapshot_generations.cohort_fingerprint' => 'YES',
+        'supplier_offer_snapshot_generations.generation_fingerprint' => 'NO',
+        'supplier_offer_snapshot_generations.observation_set_fingerprint' => 'YES',
+        'supplier_offer_snapshot_generations.source_fingerprint' => 'NO',
+        'supplier_offer_snapshot_observations.observation_fingerprint' => 'NO',
+        'supplier_offer_snapshot_observations.reliable_manufacturer_mpn_hash' => 'YES',
+        'supplier_offer_snapshot_observations.supplier_sku_hash' => 'NO',
+    ];
+
+    /** @var list<string> */
+    private array $issuedDownCapabilities = [];
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -43,6 +90,12 @@ final class CanonicalSupplierSnapshotSchemaMigrationTest extends TestCase
 
     protected function tearDown(): void
     {
+        foreach ($this->issuedDownCapabilities as $capability) {
+            CanonicalSupplierSnapshotSchema::revokeDestructiveDownCapability($capability);
+        }
+        $this->clearDownCapabilityEnvironment();
+        $this->resetDownGuard();
+
         if (DB::getDriverName() === 'mysql') {
             DB::setDefaultConnection((string) config('database.default'));
             $this->artisan('migrate:fresh', ['--force' => true])->assertExitCode(0);
@@ -175,20 +228,45 @@ final class CanonicalSupplierSnapshotSchemaMigrationTest extends TestCase
             ]);
         }, 'duplicate');
 
-        config(['database.connections.snapshot_schema_second' => config('database.connections.mysql')]);
-        DB::purge('snapshot_schema_second');
+    }
+
+    public function test_mysql_restrictive_fk_races_use_distinct_transactions_and_exact_errors(): void
+    {
+        $this->artisan('migrate:fresh', ['--force' => true])->assertExitCode(0);
+
+        config([
+            'database.connections.snapshot_schema_race_a' => config('database.connections.mysql'),
+            'database.connections.snapshot_schema_race_b' => config('database.connections.mysql'),
+        ]);
+        DB::purge('snapshot_schema_race_a');
+        DB::purge('snapshot_schema_race_b');
+
+        $connectionA = DB::connection('snapshot_schema_race_a');
+        $connectionB = DB::connection('snapshot_schema_race_b');
+        $pdoA = $connectionA->getPdo();
+        $pdoB = $connectionB->getPdo();
+        $timeoutA = (int) $connectionA->scalar('SELECT @@SESSION.innodb_lock_wait_timeout');
+        $timeoutB = (int) $connectionB->scalar('SELECT @@SESSION.innodb_lock_wait_timeout');
+
         try {
-            $this->assertNotNull(DB::connection('snapshot_schema_second')->selectOne('SELECT 1 AS connected'));
-            $this->assertQueryRejected(function () use ($fixture): void {
-                DB::connection('snapshot_schema_second')
-                    ->table('supplier_import_dispatch_outbox')
-                    ->where('id', $fixture['outbox_id'])
-                    ->delete();
-            }, 'foreign key constraint');
-            $this->assertDatabaseHas('supplier_import_dispatch_outbox', ['id' => $fixture['outbox_id']]);
+            $this->assertNotSame(
+                (int) $connectionA->scalar('SELECT CONNECTION_ID()'),
+                (int) $connectionB->scalar('SELECT CONNECTION_ID()'),
+            );
+            $connectionA->statement('SET SESSION innodb_lock_wait_timeout = 1');
+            $connectionB->statement('SET SESSION innodb_lock_wait_timeout = 1');
+
+            $this->assertParentDeleteWinsRace($pdoA, $pdoB);
+            $this->assertChildInsertWinsRace($pdoA, $pdoB);
         } finally {
-            DB::disconnect('snapshot_schema_second');
-            DB::purge('snapshot_schema_second');
+            $this->rollbackPdo($pdoA);
+            $this->rollbackPdo($pdoB);
+            $connectionA->statement('SET SESSION innodb_lock_wait_timeout = '.$timeoutA);
+            $connectionB->statement('SET SESSION innodb_lock_wait_timeout = '.$timeoutB);
+            DB::disconnect('snapshot_schema_race_a');
+            DB::disconnect('snapshot_schema_race_b');
+            DB::purge('snapshot_schema_race_a');
+            DB::purge('snapshot_schema_race_b');
         }
     }
 
@@ -198,6 +276,7 @@ final class CanonicalSupplierSnapshotSchemaMigrationTest extends TestCase
         $historicalPath = sys_get_temp_dir().DIRECTORY_SEPARATOR.$database.'_migrations';
         $originalEnvironment = app()->environment();
         $originalConfirmation = getenv('SUPPLIER_SNAPSHOT_EMPTY_SCHEMA_DOWN_CONFIRMED');
+        $originalCapability = getenv(self::DOWN_CAPABILITY_ENV);
         $originalDefaultConnection = DB::getDefaultConnection();
 
         try {
@@ -207,15 +286,15 @@ final class CanonicalSupplierSnapshotSchemaMigrationTest extends TestCase
             $this->migrateHistoricalThenPhase($historicalPath);
             DB::setDefaultConnection('snapshot_schema_phase_i');
 
-            $this->resetDownGuard();
-            putenv('SUPPLIER_SNAPSHOT_EMPTY_SCHEMA_DOWN_CONFIRMED');
-            $this->assertGuardRejectedContaining('explicit process confirmation is missing');
+            $this->clearDownCapabilityEnvironment();
+            $this->assertGuardRejectedContaining('one-use invocation capability is missing or malformed');
 
-            putenv('SUPPLIER_SNAPSHOT_EMPTY_SCHEMA_DOWN_CONFIRMED=true');
+            $this->issueDownCapability();
             app()->detectEnvironment(static fn (): string => 'production');
             $this->assertGuardRejectedContaining('environment must be exactly local or testing');
             app()->detectEnvironment(static fn () => $originalEnvironment);
 
+            $this->issueDownCapability();
             config(['supplier_snapshot_capture.monitor_schedule_enabled' => true]);
             $this->assertGuardRejectedContaining('forward gate supplier_snapshot_capture.monitor_schedule_enabled is not disabled');
             config(['supplier_snapshot_capture.monitor_schedule_enabled' => false]);
@@ -225,6 +304,7 @@ final class CanonicalSupplierSnapshotSchemaMigrationTest extends TestCase
                 'trg_snapshot_observation_no_delete',
             ]);
             Schema::drop('supplier_offer_snapshot_observations');
+            $this->issueDownCapability();
             $this->assertGuardRejectedContaining('expected table supplier_offer_snapshot_observations is missing');
             foreach (array_diff(self::CANONICAL_TABLES, ['supplier_offer_snapshot_observations']) as $table) {
                 $this->assertTrue(Schema::hasTable($table));
@@ -235,6 +315,7 @@ final class CanonicalSupplierSnapshotSchemaMigrationTest extends TestCase
             $this->migrateHistoricalThenPhase($historicalPath);
             DB::setDefaultConnection('snapshot_schema_phase_i');
             $this->seedProtectedGraph('snapshot_schema_phase_i');
+            $this->issueDownCapability();
             $message = $this->guardRejectionMessage();
             foreach (array_diff(self::CANONICAL_TABLES, ['supplier_import_dispatch_monitor_health']) as $table) {
                 $this->assertStringContainsString($table, $message);
@@ -249,6 +330,7 @@ final class CanonicalSupplierSnapshotSchemaMigrationTest extends TestCase
             DB::table('supplier_import_dispatch_monitor_health')->where('id', 1)->update([
                 'integrity_state' => 'stale',
             ]);
+            $this->issueDownCapability();
             $this->assertGuardRejectedContaining('monitor singleton column integrity_state is not pristine');
             $this->assertSame(10, collect(self::CANONICAL_TABLES)->filter(
                 static fn (string $table): bool => Schema::hasTable($table),
@@ -258,9 +340,22 @@ final class CanonicalSupplierSnapshotSchemaMigrationTest extends TestCase
             $this->recreateTemporaryDatabase($database);
             $this->migrateHistoricalThenPhase($historicalPath);
             DB::setDefaultConnection('snapshot_schema_phase_i');
-            $before = $this->canonicalCreateStatements();
-            $this->resetDownGuard();
             putenv('SUPPLIER_SNAPSHOT_EMPTY_SCHEMA_DOWN_CONFIRMED=true');
+            config(['supplier_snapshot_capture.destructive_down_confirmed' => true]);
+            CanonicalSupplierSnapshotSchema::revokeDestructiveDownCapability(str_repeat('a', 64));
+            putenv(self::DOWN_CAPABILITY_ENV.'='.str_repeat('a', 64));
+            $this->assertGuardRejectedContaining('capability artifact is missing or already consumed');
+            $this->assertSame(10, collect(self::CANONICAL_TABLES)->filter(
+                static fn (string $table): bool => Schema::hasTable($table),
+            )->count());
+            config(['supplier_snapshot_capture.destructive_down_confirmed' => null]);
+
+            DB::setDefaultConnection($originalDefaultConnection);
+            $this->recreateTemporaryDatabase($database);
+            $this->migrateHistoricalThenPhase($historicalPath);
+            DB::setDefaultConnection('snapshot_schema_phase_i');
+            $before = $this->canonicalCreateStatements();
+            $consumedCapability = $this->issueDownCapability();
             DB::setDefaultConnection($originalDefaultConnection);
 
             $this->assertSame(0, Artisan::call('migrate:rollback', [
@@ -287,15 +382,113 @@ final class CanonicalSupplierSnapshotSchemaMigrationTest extends TestCase
             DB::setDefaultConnection('snapshot_schema_phase_i');
             $this->assertSame($before, $this->canonicalCreateStatements());
             $this->assertPristineMonitor();
+
+            DB::table('supplier_import_dispatch_monitor_health')->where('id', 1)->update([
+                'integrity_state' => 'stale',
+            ]);
+            config(['supplier_snapshot_capture.monitor_schedule_enabled' => true]);
+            putenv('SUPPLIER_SNAPSHOT_EMPTY_SCHEMA_DOWN_CONFIRMED=true');
+            $this->clearDownCapabilityEnvironment();
+            $this->assertGuardRejectedContaining('one-use invocation capability is missing or malformed');
+            $this->assertFalse(getenv(self::DOWN_CAPABILITY_ENV));
+            $this->assertTrue((bool) config('supplier_snapshot_capture.monitor_schedule_enabled'));
+            $this->assertSame('stale', DB::table('supplier_import_dispatch_monitor_health')->value('integrity_state'));
+            $this->assertTrue($this->indexExists('import_jobs', 'uq_import_job_id_supplier_feed'));
+            $this->assertTrue($this->indexExists('import_histories', 'ix_import_history_supplier_id'));
+            $this->assertSame(10, collect(self::CANONICAL_TABLES)->filter(
+                static fn (string $table): bool => Schema::hasTable($table),
+            )->count());
+            CanonicalSupplierSnapshotSchema::revokeDestructiveDownCapability($consumedCapability);
         } finally {
             app()->detectEnvironment(static fn () => $originalEnvironment);
             config(['supplier_snapshot_capture.monitor_schedule_enabled' => false]);
+            config(['supplier_snapshot_capture.destructive_down_confirmed' => null]);
             $this->resetDownGuard();
             if ($originalConfirmation === false) {
                 putenv('SUPPLIER_SNAPSHOT_EMPTY_SCHEMA_DOWN_CONFIRMED');
             } else {
                 putenv('SUPPLIER_SNAPSHOT_EMPTY_SCHEMA_DOWN_CONFIRMED='.$originalConfirmation);
             }
+            if ($originalCapability === false) {
+                $this->clearDownCapabilityEnvironment();
+            } else {
+                putenv(self::DOWN_CAPABILITY_ENV.'='.$originalCapability);
+            }
+            DB::setDefaultConnection($originalDefaultConnection);
+            DB::disconnect('snapshot_schema_phase_i');
+            DB::purge('snapshot_schema_phase_i');
+            $this->dropTemporaryDatabase($database);
+            File::deleteDirectory($historicalPath);
+        }
+    }
+
+    public function test_failed_scope_and_out_of_sequence_steps_cannot_reuse_authorization(): void
+    {
+        $database = 'phase_i_scope_'.getmypid().'_'.strtolower(bin2hex(random_bytes(4)));
+        $historicalPath = sys_get_temp_dir().DIRECTORY_SEPARATOR.$database.'_migrations';
+        $originalDefaultConnection = DB::getDefaultConnection();
+        $blocker = null;
+        $originalLockTimeout = null;
+
+        try {
+            $this->createTemporaryDatabase($database);
+            $this->configureTemporaryConnection($database);
+            $this->copyHistoricalMigrations($historicalPath);
+            $this->migrateHistoricalThenPhase($historicalPath);
+            DB::setDefaultConnection('snapshot_schema_phase_i');
+
+            config(['database.connections.snapshot_schema_scope_blocker' => array_merge(
+                config('database.connections.mysql'),
+                ['database' => $database],
+            )]);
+            DB::purge('snapshot_schema_scope_blocker');
+            $blocker = DB::connection('snapshot_schema_scope_blocker');
+            $originalLockTimeout = (int) DB::scalar('SELECT @@SESSION.lock_wait_timeout');
+            DB::statement('SET SESSION lock_wait_timeout = 1');
+            $blocker->beginTransaction();
+            $blocker->select('SELECT id FROM import_histories LIMIT 1 FOR UPDATE');
+            $this->issueDownCapability();
+
+            $this->assertStringContainsStringIgnoringCase(
+                'lock wait timeout',
+                $this->guardRejectionMessage(),
+            );
+            $blocker->rollBack();
+            $this->clearDownCapabilityEnvironment();
+            $this->assertTrue($this->indexExists('import_histories', 'ix_import_history_supplier_id'));
+            $this->assertGuardRejectedContaining('one-use invocation capability is missing or malformed');
+            $this->assertSame(10, collect(self::CANONICAL_TABLES)->filter(
+                static fn (string $table): bool => Schema::hasTable($table),
+            )->count());
+            DB::statement('SET SESSION lock_wait_timeout = '.$originalLockTimeout);
+            DB::disconnect('snapshot_schema_scope_blocker');
+            DB::purge('snapshot_schema_scope_blocker');
+
+            DB::setDefaultConnection($originalDefaultConnection);
+            $this->recreateTemporaryDatabase($database);
+            $this->migrateHistoricalThenPhase($historicalPath);
+            DB::setDefaultConnection('snapshot_schema_phase_i');
+            $migration = DB::table('migrations')->where('migration', self::FIRST_DOWN_MIGRATION)->first();
+            $this->assertNotNull($migration);
+            DB::table('migrations')->where('migration', self::FIRST_DOWN_MIGRATION)->delete();
+            $this->issueDownCapability();
+
+            $this->assertGuardRejectedContaining('rollback sequence must begin with '.self::FIRST_DOWN_MIGRATION);
+            $this->assertTrue(Schema::hasTable('supplier_offer_snapshot_observations'));
+            $this->assertTrue($this->indexExists('import_histories', 'ix_import_history_supplier_id'));
+            DB::table('migrations')->insert((array) $migration);
+        } finally {
+            if ($blocker !== null && $blocker->transactionLevel() > 0) {
+                $blocker->rollBack();
+            }
+            if ($originalLockTimeout !== null) {
+                DB::setDefaultConnection('snapshot_schema_phase_i');
+                DB::statement('SET SESSION lock_wait_timeout = '.$originalLockTimeout);
+            }
+            DB::disconnect('snapshot_schema_scope_blocker');
+            DB::purge('snapshot_schema_scope_blocker');
+            $this->resetDownGuard();
+            $this->clearDownCapabilityEnvironment();
             DB::setDefaultConnection($originalDefaultConnection);
             DB::disconnect('snapshot_schema_phase_i');
             DB::purge('snapshot_schema_phase_i');
@@ -496,31 +689,17 @@ final class CanonicalSupplierSnapshotSchemaMigrationTest extends TestCase
 
     private function assertCheckInventory(): void
     {
-        $required = [
-            'chk_import_execution_claim_path_parent',
-            'chk_import_claim_processing_owner',
-            'chk_import_outbox_publication_attempt_tuple',
-            'chk_import_outbox_state_fields',
-            'chk_import_dispatch_monitor_singleton',
-            'chk_import_dispatch_monitor_owner_tuple',
-            'chk_import_dispatch_alert_state_tuple',
-            'chk_import_recovery_auth_action',
-            'chk_import_recovery_auth_expiry',
-            'chk_import_recovery_result_event',
-            'chk_import_recovery_result_action_event_code',
-            'chk_import_cohort_auth_supplier_sku_hash',
-            'chk_snapshot_generation_qualification_tuple',
-            'chk_snapshot_generation_count_reconciliation',
-            'chk_snapshot_enrollment_source',
-            'chk_snapshot_observation_absent_semantics',
-        ];
-
         $actual = collect(DB::select(<<<'SQL'
-            SELECT CONSTRAINT_NAME AS constraint_name
-            FROM information_schema.TABLE_CONSTRAINTS
-            WHERE CONSTRAINT_SCHEMA = DATABASE()
-                AND CONSTRAINT_TYPE = 'CHECK'
-                AND TABLE_NAME IN (
+            SELECT tc.TABLE_NAME AS table_name,
+                   tc.CONSTRAINT_NAME AS constraint_name,
+                   cc.CHECK_CLAUSE AS expression
+            FROM information_schema.TABLE_CONSTRAINTS tc
+            INNER JOIN information_schema.CHECK_CONSTRAINTS cc
+                ON cc.CONSTRAINT_SCHEMA = tc.CONSTRAINT_SCHEMA
+                AND cc.CONSTRAINT_NAME = tc.CONSTRAINT_NAME
+            WHERE tc.CONSTRAINT_SCHEMA = DATABASE()
+                AND tc.CONSTRAINT_TYPE = 'CHECK'
+                AND tc.TABLE_NAME IN (
                     'supplier_import_execution_claims',
                     'supplier_import_dispatch_outbox',
                     'supplier_import_dispatch_monitor_health',
@@ -532,12 +711,15 @@ final class CanonicalSupplierSnapshotSchemaMigrationTest extends TestCase
                     'supplier_offer_snapshot_enrollments',
                     'supplier_offer_snapshot_observations'
                 )
-            SQL))->pluck('constraint_name');
+            ORDER BY tc.TABLE_NAME, tc.CONSTRAINT_NAME
+            SQL))->map(static fn (object $row): array => [
+            'table_name' => (string) $row->table_name,
+            'constraint_name' => (string) $row->constraint_name,
+            'expression' => self::normalizeSql((string) $row->expression),
+        ])->all();
 
-        foreach ($required as $constraint) {
-            $this->assertContains($constraint, $actual->all());
-        }
-        $this->assertGreaterThanOrEqual(75, $actual->count());
+        $this->assertCount(94, $actual);
+        $this->assertSame(self::CHECK_INVENTORY_SHA256, self::inventoryHash($actual));
     }
 
     private function assertTriggerInventory(): void
@@ -559,76 +741,152 @@ final class CanonicalSupplierSnapshotSchemaMigrationTest extends TestCase
         ];
 
         $actual = collect(DB::select(<<<'SQL'
-            SELECT TRIGGER_NAME AS trigger_name
+            SELECT TRIGGER_NAME AS trigger_name,
+                   EVENT_OBJECT_TABLE AS table_name,
+                   ACTION_TIMING AS timing,
+                   EVENT_MANIPULATION AS event,
+                   ACTION_STATEMENT AS statement
             FROM information_schema.TRIGGERS
             WHERE TRIGGER_SCHEMA = DATABASE()
+                AND EVENT_OBJECT_TABLE IN (
+                    'supplier_import_execution_claims',
+                    'supplier_import_dispatch_outbox',
+                    'supplier_import_dispatch_monitor_health',
+                    'supplier_import_dispatch_alert_intents',
+                    'supplier_import_dispatch_recovery_authorizations',
+                    'supplier_import_dispatch_recovery_results',
+                    'supplier_import_cohort_authorization_members',
+                    'supplier_offer_snapshot_generations',
+                    'supplier_offer_snapshot_enrollments',
+                    'supplier_offer_snapshot_observations'
+                )
             ORDER BY TRIGGER_NAME
-            SQL))->pluck('trigger_name')->all();
-        $this->assertSame($expected, $actual);
+            SQL))->map(static fn (object $row): array => [
+            'trigger_name' => (string) $row->trigger_name,
+            'table_name' => (string) $row->table_name,
+            'timing' => (string) $row->timing,
+            'event' => (string) $row->event,
+            'statement' => self::normalizeSql((string) $row->statement),
+        ])->all();
+
+        $this->assertCount(13, $actual);
+        $this->assertSame($expected, array_column($actual, 'trigger_name'));
+        $this->assertSame(self::TRIGGER_INVENTORY_SHA256, self::inventoryHash($actual));
     }
 
     private function assertGeneratedGuardInventory(): void
     {
         $rows = collect(DB::select(<<<'SQL'
-            SELECT COLUMN_NAME AS column_name, EXTRA AS extra, GENERATION_EXPRESSION AS expression
-            FROM information_schema.COLUMNS
-            WHERE TABLE_SCHEMA = DATABASE()
-                AND TABLE_NAME = 'supplier_import_dispatch_recovery_results'
-                AND COLUMN_NAME IN ('started_once_guard', 'terminal_once_guard')
-            ORDER BY COLUMN_NAME
-            SQL))->keyBy('column_name');
+            SELECT c.TABLE_NAME AS table_name,
+                   c.COLUMN_NAME AS column_name,
+                   c.COLUMN_TYPE AS column_type,
+                   c.IS_NULLABLE AS is_nullable,
+                   c.EXTRA AS extra,
+                   c.GENERATION_EXPRESSION AS expression,
+                   s.INDEX_NAME AS index_name,
+                   s.NON_UNIQUE AS non_unique,
+                   s.SEQ_IN_INDEX AS seq_in_index
+            FROM information_schema.COLUMNS c
+            INNER JOIN information_schema.STATISTICS s
+                ON s.TABLE_SCHEMA = c.TABLE_SCHEMA
+                AND s.TABLE_NAME = c.TABLE_NAME
+                AND s.COLUMN_NAME = c.COLUMN_NAME
+            WHERE c.TABLE_SCHEMA = DATABASE()
+                AND c.TABLE_NAME = 'supplier_import_dispatch_recovery_results'
+                AND c.COLUMN_NAME IN ('started_once_guard', 'terminal_once_guard')
+            ORDER BY c.COLUMN_NAME, s.INDEX_NAME, s.SEQ_IN_INDEX
+            SQL))->map(static fn (object $row): array => [
+            'table_name' => (string) $row->table_name,
+            'column_name' => (string) $row->column_name,
+            'column_type' => (string) $row->column_type,
+            'is_nullable' => (string) $row->is_nullable,
+            'extra' => (string) $row->extra,
+            'expression' => self::normalizeSql((string) $row->expression),
+            'index_name' => (string) $row->index_name,
+            'non_unique' => (int) $row->non_unique,
+            'seq_in_index' => (int) $row->seq_in_index,
+        ])->all();
 
-        $this->assertSame(['started_once_guard', 'terminal_once_guard'], $rows->keys()->all());
-        foreach ($rows as $row) {
-            $this->assertStringContainsString('STORED GENERATED', strtoupper($row->extra));
-            $this->assertNotSame('', $row->expression);
-        }
+        $this->assertCount(2, $rows);
+        $this->assertSame(['started_once_guard', 'terminal_once_guard'], array_column($rows, 'column_name'));
+        $this->assertSame(self::GENERATED_GUARD_INVENTORY_SHA256, self::inventoryHash($rows));
     }
 
     private function assertHexColumnInventory(): void
     {
-        $columns = [
-            'supplier_import_execution_claims' => [
-                'logical_execution_key', 'active_attempt_token_hash',
-                'source_fingerprint', 'cohort_seed_fingerprint',
-            ],
-            'supplier_import_dispatch_outbox' => [
-                'logical_execution_key', 'dispatch_payload_hash',
-                'lease_token_hash', 'publication_attempt_token_hash',
-            ],
-            'supplier_import_dispatch_monitor_health' => ['monitor_owner_token_hash'],
-            'supplier_import_dispatch_alert_intents' => ['alert_identity', 'delivery_owner_token_hash'],
-            'supplier_import_dispatch_recovery_authorizations' => [
-                'expected_state_fingerprint', 'authorization_nonce_hash',
-            ],
-            'supplier_import_dispatch_recovery_results' => [
-                'result_fingerprint', 'resume_state_fingerprint',
-            ],
-            'supplier_import_cohort_authorization_members' => ['supplier_sku_hash'],
-            'supplier_offer_snapshot_generations' => [
-                'source_fingerprint', 'generation_fingerprint', 'cohort_fingerprint',
-                'observation_set_fingerprint',
-            ],
-            'supplier_offer_snapshot_enrollments' => ['supplier_sku_hash', 'enrollment_fingerprint'],
-            'supplier_offer_snapshot_observations' => [
-                'supplier_sku_hash', 'observation_fingerprint',
-                'reliable_manufacturer_mpn_hash',
-            ],
-        ];
+        $rows = collect(DB::select(<<<'SQL'
+            SELECT TABLE_NAME AS table_name,
+                   COLUMN_NAME AS column_name,
+                   COLUMN_TYPE AS column_type,
+                   CHARACTER_MAXIMUM_LENGTH AS length,
+                   CHARACTER_SET_NAME AS charset,
+                   COLLATION_NAME AS collation,
+                   IS_NULLABLE AS is_nullable
+            FROM information_schema.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE()
+                AND COLUMN_TYPE = 'char(64)'
+                AND CHARACTER_SET_NAME = 'ascii'
+                AND COLLATION_NAME = 'ascii_bin'
+                AND TABLE_NAME IN (
+                    'supplier_import_execution_claims',
+                    'supplier_import_dispatch_outbox',
+                    'supplier_import_dispatch_monitor_health',
+                    'supplier_import_dispatch_alert_intents',
+                    'supplier_import_dispatch_recovery_authorizations',
+                    'supplier_import_dispatch_recovery_results',
+                    'supplier_import_cohort_authorization_members',
+                    'supplier_offer_snapshot_generations',
+                    'supplier_offer_snapshot_enrollments',
+                    'supplier_offer_snapshot_observations'
+                )
+            ORDER BY TABLE_NAME, COLUMN_NAME
+            SQL))->map(static fn (object $row): array => [
+            'table_name' => (string) $row->table_name,
+            'column_name' => (string) $row->column_name,
+            'column_type' => (string) $row->column_type,
+            'length' => (int) $row->length,
+            'charset' => (string) $row->charset,
+            'collation' => (string) $row->collation,
+            'is_nullable' => (string) $row->is_nullable,
+        ])->all();
 
-        foreach ($columns as $table => $names) {
-            $rows = collect(DB::select(<<<'SQL'
-                SELECT COLUMN_NAME AS column_name, COLUMN_TYPE AS column_type,
-                       CHARACTER_SET_NAME AS character_set_name,
-                       COLLATION_NAME AS collation_name
-                FROM information_schema.COLUMNS
-                WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?
-                SQL, [$table]))->keyBy('column_name');
-            foreach ($names as $name) {
-                $this->assertSame('char(64)', $rows[$name]->column_type);
-                $this->assertSame('ascii', $rows[$name]->character_set_name);
-                $this->assertSame('ascii_bin', $rows[$name]->collation_name);
+        $this->assertCount(27, $rows);
+        $this->assertSame(self::SECURITY_COLUMNS, collect($rows)->mapWithKeys(
+            static fn (array $row): array => [
+                $row['table_name'].'.'.$row['column_name'] => $row['is_nullable'],
+            ],
+        )->all());
+        $this->assertSame(self::SECURITY_COLUMN_INVENTORY_SHA256, self::inventoryHash($rows));
+
+        foreach ($rows as $row) {
+            if ($row['table_name'] === 'supplier_import_dispatch_recovery_results'
+                && $row['column_name'] === 'logical_execution_key') {
+                $this->assertSame(1, (int) DB::scalar(<<<'SQL'
+                    SELECT COUNT(*)
+                    FROM information_schema.REFERENTIAL_CONSTRAINTS
+                    WHERE CONSTRAINT_SCHEMA = DATABASE()
+                        AND TABLE_NAME = 'supplier_import_dispatch_recovery_results'
+                        AND CONSTRAINT_NAME = 'fk_import_recovery_result_complete_auth_tuple'
+                        AND REFERENCED_TABLE_NAME = 'supplier_import_dispatch_recovery_authorizations'
+                        AND UPDATE_RULE = 'RESTRICT'
+                        AND DELETE_RULE = 'RESTRICT'
+                    SQL));
+
+                continue;
             }
+
+            $checks = collect(DB::select(<<<'SQL'
+                SELECT cc.CHECK_CLAUSE AS expression
+                FROM information_schema.TABLE_CONSTRAINTS tc
+                INNER JOIN information_schema.CHECK_CONSTRAINTS cc
+                    ON cc.CONSTRAINT_SCHEMA = tc.CONSTRAINT_SCHEMA
+                    AND cc.CONSTRAINT_NAME = tc.CONSTRAINT_NAME
+                WHERE tc.CONSTRAINT_SCHEMA = DATABASE() AND tc.TABLE_NAME = ?
+                SQL, [$row['table_name']]))->pluck('expression');
+            $this->assertTrue($checks->contains(
+                static fn (string $expression): bool => str_contains($expression, '`'.$row['column_name'].'`')
+                    && str_contains(strtolower($expression), 'regexp_like'),
+            ), 'Missing exact hexadecimal CHECK coverage for '.$row['table_name'].'.'.$row['column_name']);
         }
     }
 
@@ -839,6 +1097,158 @@ final class CanonicalSupplierSnapshotSchemaMigrationTest extends TestCase
         ];
     }
 
+    private function assertParentDeleteWinsRace(PDO $pdoA, PDO $pdoB): void
+    {
+        $fixture = $this->seedRaceJobFixture('parent-delete-wins');
+        $claim = $this->raceClaimValues($fixture, 'parent-delete-wins');
+
+        try {
+            $pdoA->beginTransaction();
+            $delete = $pdoA->prepare('DELETE FROM import_jobs WHERE id = ?');
+            $delete->execute([$fixture['job_id']]);
+            $this->assertSame(1, $delete->rowCount());
+
+            $pdoB->beginTransaction();
+            $this->assertPdoMysqlError(
+                fn () => $this->insertRaceClaim($pdoB, $claim),
+                1205,
+                'HY000',
+            );
+            $pdoB->rollBack();
+            $pdoA->commit();
+
+            $this->assertPdoMysqlError(
+                fn () => $this->insertRaceClaim($pdoB, $claim),
+                1452,
+                '23000',
+            );
+            $this->assertSame(0, DB::table('import_jobs')->where('id', $fixture['job_id'])->count());
+            $this->assertSame(0, DB::table('supplier_import_execution_claims')
+                ->where('logical_execution_key', $claim['logical_execution_key'])->count());
+        } finally {
+            $this->rollbackPdo($pdoA);
+            $this->rollbackPdo($pdoB);
+        }
+    }
+
+    private function assertChildInsertWinsRace(PDO $pdoA, PDO $pdoB): void
+    {
+        $fixture = $this->seedRaceJobFixture('child-insert-wins');
+        $claim = $this->raceClaimValues($fixture, 'child-insert-wins');
+
+        try {
+            $pdoA->beginTransaction();
+            $this->insertRaceClaim($pdoA, $claim);
+
+            $pdoB->beginTransaction();
+            $this->assertPdoMysqlError(
+                function () use ($pdoB, $fixture): void {
+                    $statement = $pdoB->prepare('DELETE FROM import_jobs WHERE id = ?');
+                    $statement->execute([$fixture['job_id']]);
+                },
+                1205,
+                'HY000',
+            );
+            $pdoB->rollBack();
+            $pdoA->commit();
+
+            $this->assertPdoMysqlError(
+                function () use ($pdoB, $fixture): void {
+                    $statement = $pdoB->prepare('DELETE FROM import_jobs WHERE id = ?');
+                    $statement->execute([$fixture['job_id']]);
+                },
+                1451,
+                '23000',
+            );
+            $this->assertSame(1, DB::table('import_jobs')->where('id', $fixture['job_id'])->count());
+            $this->assertSame(1, DB::table('supplier_import_execution_claims')
+                ->where('logical_execution_key', $claim['logical_execution_key'])->count());
+        } finally {
+            $this->rollbackPdo($pdoA);
+            $this->rollbackPdo($pdoB);
+        }
+    }
+
+    /** @return array{supplier_id: int, feed_id: int, job_id: int} */
+    private function seedRaceJobFixture(string $suffix): array
+    {
+        $now = '2026-08-20 08:00:00';
+        $supplierId = DB::table('suppliers')->insertGetId([
+            'company_name' => 'Race Supplier '.$suffix,
+            'slug' => 'race-supplier-'.$suffix.'-'.strtolower(bin2hex(random_bytes(3))),
+            'created_at' => $now,
+            'updated_at' => $now,
+        ]);
+        $feedId = DB::table('supplier_feeds')->insertGetId([
+            'supplier_id' => $supplierId,
+            'feed_name' => 'Race Feed '.$suffix,
+            'feed_url' => 'https://example.test/race-'.$suffix.'.xml',
+            'created_at' => $now,
+            'updated_at' => $now,
+        ]);
+        $jobId = DB::table('import_jobs')->insertGetId([
+            'supplier_id' => $supplierId,
+            'supplier_feed_id' => $feedId,
+            'created_at' => $now,
+            'updated_at' => $now,
+        ]);
+
+        return [
+            'supplier_id' => $supplierId,
+            'feed_id' => $feedId,
+            'job_id' => $jobId,
+        ];
+    }
+
+    /**
+     * @param  array{supplier_id: int, feed_id: int, job_id: int}  $fixture
+     * @return array{logical_execution_key: string, supplier_id: int, feed_id: int, job_id: int}
+     */
+    private function raceClaimValues(array $fixture, string $suffix): array
+    {
+        return $fixture + [
+            'logical_execution_key' => hash('sha256', 'canonical-schema-race-'.$suffix),
+        ];
+    }
+
+    /** @param array{logical_execution_key: string, supplier_id: int, feed_id: int, job_id: int} $claim */
+    private function insertRaceClaim(PDO $pdo, array $claim): void
+    {
+        $statement = $pdo->prepare(<<<'SQL'
+            INSERT INTO supplier_import_execution_claims (
+                logical_execution_key, supplier_id, supplier_feed_id,
+                import_job_id, allocated_at, execution_path
+            ) VALUES (?, ?, ?, ?, '2026-08-20 08:00:00.000000', 'legacy_xml')
+            SQL);
+        $statement->execute([
+            $claim['logical_execution_key'],
+            $claim['supplier_id'],
+            $claim['feed_id'],
+            $claim['job_id'],
+        ]);
+    }
+
+    private function assertPdoMysqlError(callable $operation, int $driverCode, string $sqlState): void
+    {
+        try {
+            $operation();
+        } catch (PDOException $exception) {
+            $this->assertSame($sqlState, (string) ($exception->errorInfo[0] ?? ''));
+            $this->assertSame($driverCode, (int) ($exception->errorInfo[1] ?? 0));
+
+            return;
+        }
+
+        $this->fail(sprintf('Expected MySQL error %d (%s).', $driverCode, $sqlState));
+    }
+
+    private function rollbackPdo(PDO $pdo): void
+    {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+    }
+
     private function assertQueryRejected(callable $operation, string $messageFragment): void
     {
         try {
@@ -921,20 +1331,55 @@ final class CanonicalSupplierSnapshotSchemaMigrationTest extends TestCase
 
     private function guardRejectionMessage(): string
     {
-        $this->resetDownGuard();
         try {
-            CanonicalSupplierSnapshotSchema::assertDestructiveDownAllowed();
-            $this->fail('Expected destructive down guard rejection.');
-        } catch (RuntimeException $exception) {
+            $exitCode = Artisan::call('migrate:rollback', [
+                '--database' => 'snapshot_schema_phase_i',
+                '--force' => true,
+            ]);
+        } catch (Throwable $exception) {
             return $exception->getMessage();
         }
+
+        $this->fail(sprintf(
+            'Expected destructive down guard rejection, got exit code %d: %s',
+            $exitCode,
+            Artisan::output(),
+        ));
     }
 
     private function resetDownGuard(): void
     {
         $reflection = new ReflectionClass(CanonicalSupplierSnapshotSchema::class);
-        $property = $reflection->getProperty('destructiveDownAuthorized');
-        $property->setValue(null, false);
+        $property = $reflection->getProperty('destructiveDownScope');
+        $property->setValue(null, null);
+    }
+
+    private function issueDownCapability(): string
+    {
+        $capability = CanonicalSupplierSnapshotSchema::issueDestructiveDownCapability();
+        $this->issuedDownCapabilities[] = $capability;
+        putenv(self::DOWN_CAPABILITY_ENV.'='.$capability);
+        $_ENV[self::DOWN_CAPABILITY_ENV] = $capability;
+        $_SERVER[self::DOWN_CAPABILITY_ENV] = $capability;
+
+        return $capability;
+    }
+
+    private function clearDownCapabilityEnvironment(): void
+    {
+        putenv(self::DOWN_CAPABILITY_ENV);
+        unset($_ENV[self::DOWN_CAPABILITY_ENV], $_SERVER[self::DOWN_CAPABILITY_ENV]);
+    }
+
+    /** @param list<array<string, int|string>> $inventory */
+    private static function inventoryHash(array $inventory): string
+    {
+        return hash('sha256', json_encode($inventory, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES));
+    }
+
+    private static function normalizeSql(string $sql): string
+    {
+        return trim((string) preg_replace('/\s+/', ' ', $sql));
     }
 
     /** @return array<string, string> */

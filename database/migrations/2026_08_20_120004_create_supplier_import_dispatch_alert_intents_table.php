@@ -148,12 +148,15 @@ return new class extends Migration
 
     public function down(): void
     {
-        CanonicalSupplierSnapshotSchema::assertDestructiveDownAllowed();
-
-        Schema::table('supplier_import_dispatch_alert_intents', function (Blueprint $table): void {
-            $table->dropForeign('fk_import_dispatch_alert_outbox');
-        });
-        Schema::drop('supplier_import_dispatch_alert_intents');
+        CanonicalSupplierSnapshotSchema::runDestructiveDownStep(
+            '2026_08_20_120004_create_supplier_import_dispatch_alert_intents_table',
+            function (): void {
+                Schema::table('supplier_import_dispatch_alert_intents', function (Blueprint $table): void {
+                    $table->dropForeign('fk_import_dispatch_alert_outbox');
+                });
+                Schema::drop('supplier_import_dispatch_alert_intents');
+            },
+        );
     }
 
     private static function requiredHex(string $column): string

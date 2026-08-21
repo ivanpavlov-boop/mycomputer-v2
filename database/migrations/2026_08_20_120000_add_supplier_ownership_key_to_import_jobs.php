@@ -21,10 +21,13 @@ return new class extends Migration
 
     public function down(): void
     {
-        CanonicalSupplierSnapshotSchema::assertDestructiveDownAllowed();
-
-        Schema::table('import_jobs', function (Blueprint $table): void {
-            $table->dropUnique('uq_import_job_id_supplier_feed');
-        });
+        CanonicalSupplierSnapshotSchema::runDestructiveDownStep(
+            '2026_08_20_120000_add_supplier_ownership_key_to_import_jobs',
+            function (): void {
+                Schema::table('import_jobs', function (Blueprint $table): void {
+                    $table->dropUnique('uq_import_job_id_supplier_feed');
+                });
+            },
+        );
     }
 };

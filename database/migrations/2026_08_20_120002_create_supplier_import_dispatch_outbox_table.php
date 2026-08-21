@@ -289,8 +289,10 @@ return new class extends Migration
 
     public function down(): void
     {
-        CanonicalSupplierSnapshotSchema::assertDestructiveDownAllowed();
-        Schema::drop('supplier_import_dispatch_outbox');
+        CanonicalSupplierSnapshotSchema::runDestructiveDownStep(
+            '2026_08_20_120002_create_supplier_import_dispatch_outbox_table',
+            fn () => Schema::drop('supplier_import_dispatch_outbox'),
+        );
     }
 
     private static function requiredHex(string $column): string

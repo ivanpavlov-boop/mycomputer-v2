@@ -97,12 +97,16 @@ return new class extends Migration
 
     public function down(): void
     {
-        CanonicalSupplierSnapshotSchema::assertDestructiveDownAllowed();
-        CanonicalSupplierSnapshotSchema::dropTriggers([
-            'trg_import_recovery_auth_no_update',
-            'trg_import_recovery_auth_no_delete',
-        ]);
-        Schema::drop('supplier_import_dispatch_recovery_authorizations');
+        CanonicalSupplierSnapshotSchema::runDestructiveDownStep(
+            '2026_08_20_120005_create_supplier_import_dispatch_recovery_authorizations_table',
+            function (): void {
+                CanonicalSupplierSnapshotSchema::dropTriggers([
+                    'trg_import_recovery_auth_no_update',
+                    'trg_import_recovery_auth_no_delete',
+                ]);
+                Schema::drop('supplier_import_dispatch_recovery_authorizations');
+            },
+        );
     }
 
     private static function requiredHex(string $column): string

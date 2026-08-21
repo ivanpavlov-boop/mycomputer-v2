@@ -44,11 +44,15 @@ return new class extends Migration
 
     public function down(): void
     {
-        CanonicalSupplierSnapshotSchema::assertDestructiveDownAllowed();
-        CanonicalSupplierSnapshotSchema::dropTriggers([
-            'trg_import_cohort_auth_no_update',
-            'trg_import_cohort_auth_no_delete',
-        ]);
-        Schema::drop('supplier_import_cohort_authorization_members');
+        CanonicalSupplierSnapshotSchema::runDestructiveDownStep(
+            '2026_08_20_120007_create_supplier_import_cohort_authorization_members_table',
+            function (): void {
+                CanonicalSupplierSnapshotSchema::dropTriggers([
+                    'trg_import_cohort_auth_no_update',
+                    'trg_import_cohort_auth_no_delete',
+                ]);
+                Schema::drop('supplier_import_cohort_authorization_members');
+            },
+        );
     }
 };

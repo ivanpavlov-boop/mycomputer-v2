@@ -18,10 +18,13 @@ return new class extends Migration
 
     public function down(): void
     {
-        CanonicalSupplierSnapshotSchema::assertDestructiveDownAllowed();
-
-        Schema::table('import_histories', function (Blueprint $table): void {
-            $table->dropIndex('ix_import_history_supplier_id');
-        });
+        CanonicalSupplierSnapshotSchema::runDestructiveDownStep(
+            '2026_08_20_120011_add_supplier_range_index_to_import_histories',
+            function (): void {
+                Schema::table('import_histories', function (Blueprint $table): void {
+                    $table->dropIndex('ix_import_history_supplier_id');
+                });
+            },
+        );
     }
 };

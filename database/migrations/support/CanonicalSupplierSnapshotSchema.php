@@ -2,15 +2,57 @@
 
 namespace Database\Migrations\Support;
 
+use Closure;
 use Illuminate\Database\Schema\ColumnDefinition;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use RuntimeException;
+use Symfony\Component\Console\Input\InputInterface;
 use Throwable;
 
 final class CanonicalSupplierSnapshotSchema
 {
-    private static bool $destructiveDownAuthorized = false;
+    private const DOWN_CAPABILITY_ENV = 'SUPPLIER_SNAPSHOT_EMPTY_SCHEMA_DOWN_CAPABILITY';
+
+    private const DOWN_CAPABILITY_VERSION = 'canonical-supplier-snapshot-down-v1';
+
+    private const DOWN_CAPABILITY_TTL_SECONDS = 300;
+
+    /** @var list<string> */
+    private const DOWN_MIGRATIONS = [
+        '2026_08_20_120011_add_supplier_range_index_to_import_histories',
+        '2026_08_20_120010_create_supplier_offer_snapshot_observations_table',
+        '2026_08_20_120009_create_supplier_offer_snapshot_enrollments_table',
+        '2026_08_20_120008_create_supplier_offer_snapshot_generations_table',
+        '2026_08_20_120007_create_supplier_import_cohort_authorization_members_table',
+        '2026_08_20_120006_create_supplier_import_dispatch_recovery_results_table',
+        '2026_08_20_120005_create_supplier_import_dispatch_recovery_authorizations_table',
+        '2026_08_20_120004_create_supplier_import_dispatch_alert_intents_table',
+        '2026_08_20_120003_create_supplier_import_dispatch_monitor_health_table',
+        '2026_08_20_120002_create_supplier_import_dispatch_outbox_table',
+        '2026_08_20_120001_create_supplier_import_execution_claims_table',
+        '2026_08_20_120000_add_supplier_ownership_key_to_import_jobs',
+    ];
+
+    /** @var list<string> */
+    private const GUARDED_TRIGGERS = [
+        'trg_import_cohort_auth_no_delete',
+        'trg_import_cohort_auth_no_update',
+        'trg_import_execution_claim_path_immutable',
+        'trg_import_recovery_auth_no_delete',
+        'trg_import_recovery_auth_no_update',
+        'trg_import_recovery_result_no_delete',
+        'trg_import_recovery_result_no_update',
+        'trg_snapshot_enrollment_no_delete',
+        'trg_snapshot_enrollment_no_update',
+        'trg_snapshot_generation_no_delete',
+        'trg_snapshot_generation_no_update',
+        'trg_snapshot_observation_no_delete',
+        'trg_snapshot_observation_no_update',
+    ];
+
+    /** @var array{input: InputInterface, next_step: int}|null */
+    private static ?array $destructiveDownScope = null;
 
     /** @var array<string, list<string>> */
     private const GUARDED_TABLE_COLUMNS = [
@@ -194,28 +236,130 @@ final class CanonicalSupplierSnapshotSchema
         }
     }
 
-    public static function assertDestructiveDownAllowed(): void
+    public static function issueDestructiveDownCapability(): string
     {
-        if (self::$destructiveDownAuthorized) {
-            return;
+        if (! app()->environment(['local', 'testing'])) {
+            throw new RuntimeException('Destructive down capability issuance requires local or testing');
+        }
+
+        $token = bin2hex(random_bytes(32));
+        $path = self::capabilityPath($token);
+        $handle = @fopen($path, 'x+b');
+
+        if ($handle === false) {
+            throw new RuntimeException('Unable to create one-use destructive down capability');
         }
 
         try {
+            @chmod($path, 0600);
+            $payload = json_encode([
+                'version' => self::DOWN_CAPABILITY_VERSION,
+                'token_hash' => hash('sha256', $token),
+                'expires_at' => time() + self::DOWN_CAPABILITY_TTL_SECONDS,
+            ], JSON_THROW_ON_ERROR);
+
+            $offset = 0;
+            while ($offset < strlen($payload)) {
+                $written = fwrite($handle, substr($payload, $offset));
+                if ($written === false || $written === 0) {
+                    throw new RuntimeException('Unable to persist one-use destructive down capability');
+                }
+                $offset += $written;
+            }
+
+            if (! fflush($handle)) {
+                throw new RuntimeException('Unable to flush one-use destructive down capability');
+            }
+        } catch (Throwable $exception) {
+            fclose($handle);
+            @unlink($path);
+
+            throw $exception;
+        }
+
+        fclose($handle);
+
+        return $token;
+    }
+
+    public static function revokeDestructiveDownCapability(string $token): void
+    {
+        if (preg_match('/\A[0-9a-f]{64}\z/', $token) === 1) {
+            @unlink(self::capabilityPath($token));
+        }
+    }
+
+    public static function runDestructiveDownStep(string $migration, Closure $operation): void
+    {
+        $input = self::currentConsoleInput();
+
+        if (self::$destructiveDownScope !== null && self::$destructiveDownScope['input'] !== $input) {
+            self::invalidateDestructiveDownScope();
+        }
+
+        if (self::$destructiveDownScope === null) {
+            if ($migration !== self::DOWN_MIGRATIONS[0]) {
+                self::discardSuppliedCapability();
+
+                throw self::downgradeRejected(sprintf(
+                    'rollback sequence must begin with %s',
+                    self::DOWN_MIGRATIONS[0],
+                ));
+            }
+
+            self::authorizeDestructiveDownScope($input);
+        }
+
+        $step = self::$destructiveDownScope['next_step'];
+        $expected = self::DOWN_MIGRATIONS[$step] ?? null;
+
+        if ($expected !== $migration) {
+            self::invalidateDestructiveDownScope();
+
+            throw self::downgradeRejected(sprintf(
+                'unexpected rollback step %s; expected %s',
+                $migration,
+                $expected ?? 'completed',
+            ));
+        }
+
+        try {
+            self::assertMigrationSequenceState($step);
+            $operation();
+        } catch (Throwable $exception) {
+            self::invalidateDestructiveDownScope();
+
+            throw $exception;
+        }
+
+        $nextStep = $step + 1;
+        if ($nextStep === count(self::DOWN_MIGRATIONS)) {
+            self::invalidateDestructiveDownScope();
+        } else {
+            self::$destructiveDownScope['next_step'] = $nextStep;
+        }
+    }
+
+    private static function authorizeDestructiveDownScope(InputInterface $input): void
+    {
+        try {
+            self::consumeInvocationCapability();
             self::assertEnvironment();
-            self::assertConfirmation();
             self::assertForwardGatesDisabled();
             self::assertCompleteReadableSchema();
             self::assertNineTablesEmpty();
             self::assertPristineMonitorSingleton();
+            self::assertMigrationSequenceState(0);
         } catch (Throwable $exception) {
-            throw new RuntimeException(
-                'Canonical supplier snapshot schema downgrade rejected before destructive DDL: '.$exception->getMessage(),
-                0,
-                $exception,
-            );
+            self::invalidateDestructiveDownScope();
+
+            throw self::downgradeRejected($exception->getMessage(), $exception);
         }
 
-        self::$destructiveDownAuthorized = true;
+        self::$destructiveDownScope = [
+            'input' => $input,
+            'next_step' => 0,
+        ];
     }
 
     private static function assertEnvironment(): void
@@ -225,10 +369,36 @@ final class CanonicalSupplierSnapshotSchema
         }
     }
 
-    private static function assertConfirmation(): void
+    private static function consumeInvocationCapability(): void
     {
-        if (getenv('SUPPLIER_SNAPSHOT_EMPTY_SCHEMA_DOWN_CONFIRMED') !== 'true') {
-            throw new RuntimeException('explicit process confirmation is missing');
+        $token = getenv(self::DOWN_CAPABILITY_ENV);
+        self::clearSuppliedCapabilityEnvironment();
+
+        if (! is_string($token) || preg_match('/\A[0-9a-f]{64}\z/', $token) !== 1) {
+            throw new RuntimeException('one-use invocation capability is missing or malformed');
+        }
+
+        $path = self::capabilityPath($token);
+        $consumedPath = $path.'.consumed.'.bin2hex(random_bytes(8));
+
+        if (! @rename($path, $consumedPath)) {
+            throw new RuntimeException('one-use invocation capability artifact is missing or already consumed');
+        }
+
+        try {
+            $payload = json_decode((string) file_get_contents($consumedPath), true, flags: JSON_THROW_ON_ERROR);
+            $expectedHash = hash('sha256', $token);
+
+            if (($payload['version'] ?? null) !== self::DOWN_CAPABILITY_VERSION
+                || ! is_string($payload['token_hash'] ?? null)
+                || ! hash_equals($expectedHash, $payload['token_hash'])
+                || ! is_int($payload['expires_at'] ?? null)
+                || $payload['expires_at'] < time()
+                || $payload['expires_at'] > time() + self::DOWN_CAPABILITY_TTL_SECONDS) {
+                throw new RuntimeException('one-use invocation capability is invalid or expired');
+            }
+        } finally {
+            @unlink($consumedPath);
         }
     }
 
@@ -251,6 +421,52 @@ final class CanonicalSupplierSnapshotSchema
             if (! Schema::hasColumns($table, $columns)) {
                 throw new RuntimeException(sprintf('guard-visible columns for %s are incomplete', $table));
             }
+        }
+
+        $triggers = collect(DB::select(<<<'SQL'
+            SELECT TRIGGER_NAME AS trigger_name
+            FROM information_schema.TRIGGERS
+            WHERE TRIGGER_SCHEMA = DATABASE()
+                AND EVENT_OBJECT_TABLE IN (
+                    'supplier_import_execution_claims',
+                    'supplier_import_dispatch_outbox',
+                    'supplier_import_dispatch_monitor_health',
+                    'supplier_import_dispatch_alert_intents',
+                    'supplier_import_dispatch_recovery_authorizations',
+                    'supplier_import_dispatch_recovery_results',
+                    'supplier_import_cohort_authorization_members',
+                    'supplier_offer_snapshot_generations',
+                    'supplier_offer_snapshot_enrollments',
+                    'supplier_offer_snapshot_observations'
+                )
+            ORDER BY TRIGGER_NAME
+            SQL))->pluck('trigger_name')->all();
+
+        if ($triggers !== self::GUARDED_TRIGGERS) {
+            throw new RuntimeException('canonical trigger inventory is incomplete or unexpected');
+        }
+
+        foreach ([
+            ['import_jobs', 'uq_import_job_id_supplier_feed'],
+            ['import_histories', 'ix_import_history_supplier_id'],
+        ] as [$table, $index]) {
+            if ((int) DB::scalar(<<<'SQL'
+                SELECT COUNT(*)
+                FROM information_schema.STATISTICS
+                WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND INDEX_NAME = ?
+                SQL, [$table, $index]) === 0) {
+                throw new RuntimeException(sprintf('expected support index %s is missing', $index));
+            }
+        }
+
+        if ((int) DB::scalar(<<<'SQL'
+            SELECT COUNT(*)
+            FROM information_schema.REFERENTIAL_CONSTRAINTS
+            WHERE CONSTRAINT_SCHEMA = DATABASE()
+                AND TABLE_NAME = 'supplier_import_dispatch_alert_intents'
+                AND CONSTRAINT_NAME = 'fk_import_dispatch_alert_outbox'
+            SQL) !== 1) {
+            throw new RuntimeException('expected alert outbox foreign key is missing');
         }
     }
 
@@ -311,5 +527,79 @@ final class CanonicalSupplierSnapshotSchema
                 throw new RuntimeException(sprintf('monitor singleton column %s is not pristine', $column));
             }
         }
+    }
+
+    private static function assertMigrationSequenceState(int $step): void
+    {
+        if (! Schema::hasTable('migrations')) {
+            throw new RuntimeException('migration repository is unavailable');
+        }
+
+        $expected = array_slice(array_reverse(self::DOWN_MIGRATIONS), 0, count(self::DOWN_MIGRATIONS) - $step);
+        sort($expected);
+        $actual = DB::table('migrations')
+            ->whereIn('migration', self::DOWN_MIGRATIONS)
+            ->pluck('migration')
+            ->all();
+        sort($actual);
+
+        if ($actual !== $expected) {
+            throw new RuntimeException('Phase I migration repository sequence does not match the owned rollback step');
+        }
+    }
+
+    private static function currentConsoleInput(): InputInterface
+    {
+        foreach (debug_backtrace(0, 64) as $frame) {
+            foreach ($frame['args'] ?? [] as $argument) {
+                if ($argument instanceof InputInterface) {
+                    return $argument;
+                }
+            }
+        }
+
+        throw self::downgradeRejected('destructive down must run inside one console command invocation');
+    }
+
+    private static function discardSuppliedCapability(): void
+    {
+        $token = getenv(self::DOWN_CAPABILITY_ENV);
+        self::clearSuppliedCapabilityEnvironment();
+
+        if (! is_string($token) || preg_match('/\A[0-9a-f]{64}\z/', $token) !== 1) {
+            return;
+        }
+
+        $path = self::capabilityPath($token);
+        $consumedPath = $path.'.discarded.'.bin2hex(random_bytes(8));
+        if (@rename($path, $consumedPath)) {
+            @unlink($consumedPath);
+        }
+    }
+
+    private static function clearSuppliedCapabilityEnvironment(): void
+    {
+        putenv(self::DOWN_CAPABILITY_ENV);
+        unset($_ENV[self::DOWN_CAPABILITY_ENV], $_SERVER[self::DOWN_CAPABILITY_ENV]);
+    }
+
+    private static function capabilityPath(string $token): string
+    {
+        return sys_get_temp_dir().DIRECTORY_SEPARATOR
+            .'mycomputer-canonical-snapshot-down-'.hash('sha256', $token).'.cap';
+    }
+
+    private static function invalidateDestructiveDownScope(): void
+    {
+        self::$destructiveDownScope = null;
+    }
+
+    private static function downgradeRejected(string $message, ?Throwable $previous = null): RuntimeException
+    {
+        return new RuntimeException(
+            'Canonical supplier snapshot schema downgrade rejected before destructive DDL: '.$message,
+            0,
+            $previous,
+        );
     }
 }

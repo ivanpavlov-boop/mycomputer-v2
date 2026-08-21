@@ -108,12 +108,16 @@ return new class extends Migration
 
     public function down(): void
     {
-        CanonicalSupplierSnapshotSchema::assertDestructiveDownAllowed();
-        CanonicalSupplierSnapshotSchema::dropTriggers([
-            'trg_snapshot_observation_no_update',
-            'trg_snapshot_observation_no_delete',
-        ]);
-        Schema::drop('supplier_offer_snapshot_observations');
+        CanonicalSupplierSnapshotSchema::runDestructiveDownStep(
+            '2026_08_20_120010_create_supplier_offer_snapshot_observations_table',
+            function (): void {
+                CanonicalSupplierSnapshotSchema::dropTriggers([
+                    'trg_snapshot_observation_no_update',
+                    'trg_snapshot_observation_no_delete',
+                ]);
+                Schema::drop('supplier_offer_snapshot_observations');
+            },
+        );
     }
 
     private static function requiredHex(string $column): string
