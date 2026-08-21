@@ -276,6 +276,8 @@ final class CanonicalSupplierSnapshotSchemaMigrationTest extends TestCase
 
     private const DOWN_CAPABILITY_ENV = 'SUPPLIER_SNAPSHOT_EMPTY_SCHEMA_DOWN_CAPABILITY';
 
+    private const WINDOWS_WRITE_RIGHTS_MASK = 852310;
+
     private const FIRST_DOWN_MIGRATION = '2026_08_20_120011_add_supplier_range_index_to_import_histories';
 
     /** @var list<string> */
@@ -555,14 +557,16 @@ final class CanonicalSupplierSnapshotSchemaMigrationTest extends TestCase
             $this->clearDownCapabilityEnvironment();
             $this->assertGuardRejectedContaining('one-use invocation capability is missing or malformed');
 
-            $this->issueDownCapability();
+            $productionCapability = $this->issueDownCapability();
             app()->detectEnvironment(static fn (): string => 'production');
             $this->assertGuardRejectedContaining('environment must be exactly local or testing');
+            $this->assertCapabilityStateAbsent($productionCapability, 'wrong environment');
             app()->detectEnvironment(static fn () => $originalEnvironment);
 
-            $this->issueDownCapability();
+            $gateCapability = $this->issueDownCapability();
             config(['supplier_snapshot_capture.monitor_schedule_enabled' => true]);
             $this->assertGuardRejectedContaining('forward gate supplier_snapshot_capture.monitor_schedule_enabled is not disabled');
+            $this->assertCapabilityStateAbsent($gateCapability, 'enabled forward gate');
             config(['supplier_snapshot_capture.monitor_schedule_enabled' => false]);
 
             CanonicalSupplierSnapshotSchema::dropTriggers([
@@ -570,8 +574,9 @@ final class CanonicalSupplierSnapshotSchemaMigrationTest extends TestCase
                 'trg_snapshot_observation_no_delete',
             ]);
             Schema::drop('supplier_offer_snapshot_observations');
-            $this->issueDownCapability();
+            $partialSchemaCapability = $this->issueDownCapability();
             $this->assertGuardRejectedContaining('expected table supplier_offer_snapshot_observations is missing');
+            $this->assertCapabilityStateAbsent($partialSchemaCapability, 'partial schema');
             foreach (array_diff(self::CANONICAL_TABLES, ['supplier_offer_snapshot_observations']) as $table) {
                 $this->assertTrue(Schema::hasTable($table));
             }
@@ -581,8 +586,9 @@ final class CanonicalSupplierSnapshotSchemaMigrationTest extends TestCase
             $this->migrateHistoricalThenPhase($historicalPath);
             DB::setDefaultConnection('snapshot_schema_phase_i');
             $this->seedProtectedGraph('snapshot_schema_phase_i');
-            $this->issueDownCapability();
+            $evidenceCapability = $this->issueDownCapability();
             $message = $this->guardRejectionMessage();
+            $this->assertCapabilityStateAbsent($evidenceCapability, 'protected evidence present');
             foreach (array_diff(self::CANONICAL_TABLES, ['supplier_import_dispatch_monitor_health']) as $table) {
                 $this->assertStringContainsString($table, $message);
                 $this->assertTrue(Schema::hasTable($table));
@@ -596,8 +602,9 @@ final class CanonicalSupplierSnapshotSchemaMigrationTest extends TestCase
             DB::table('supplier_import_dispatch_monitor_health')->where('id', 1)->update([
                 'integrity_state' => 'stale',
             ]);
-            $this->issueDownCapability();
+            $monitorCapability = $this->issueDownCapability();
             $this->assertGuardRejectedContaining('monitor singleton column integrity_state is not pristine');
+            $this->assertCapabilityStateAbsent($monitorCapability, 'malformed monitor singleton');
             $this->assertSame(10, collect(self::CANONICAL_TABLES)->filter(
                 static fn (string $table): bool => Schema::hasTable($table),
             )->count());
@@ -611,6 +618,7 @@ final class CanonicalSupplierSnapshotSchemaMigrationTest extends TestCase
             CanonicalSupplierSnapshotSchema::revokeDestructiveDownCapability(str_repeat('a', 64));
             putenv(self::DOWN_CAPABILITY_ENV.'='.str_repeat('a', 64));
             $this->assertGuardRejectedContaining('capability artifact is missing or already consumed');
+            $this->assertCapabilityStateAbsent(str_repeat('a', 64), 'raw token without artifact');
             $this->assertSame(10, collect(self::CANONICAL_TABLES)->filter(
                 static fn (string $table): bool => Schema::hasTable($table),
             )->count());
@@ -628,6 +636,7 @@ final class CanonicalSupplierSnapshotSchemaMigrationTest extends TestCase
                 '--database' => 'snapshot_schema_phase_i',
                 '--force' => true,
             ]), Artisan::output());
+            $this->assertCapabilityStateAbsent($consumedCapability, 'successful full rollback');
 
             DB::setDefaultConnection('snapshot_schema_phase_i');
             foreach (self::CANONICAL_TABLES as $table) {
@@ -664,7 +673,6 @@ final class CanonicalSupplierSnapshotSchemaMigrationTest extends TestCase
             $this->assertSame(10, collect(self::CANONICAL_TABLES)->filter(
                 static fn (string $table): bool => Schema::hasTable($table),
             )->count());
-            CanonicalSupplierSnapshotSchema::revokeDestructiveDownCapability($consumedCapability);
         } finally {
             app()->detectEnvironment(static fn () => $originalEnvironment);
             config(['supplier_snapshot_capture.monitor_schedule_enabled' => false]);
@@ -713,12 +721,13 @@ final class CanonicalSupplierSnapshotSchemaMigrationTest extends TestCase
             DB::statement('SET SESSION lock_wait_timeout = 1');
             $blocker->beginTransaction();
             $blocker->select('SELECT id FROM import_histories LIMIT 1 FOR UPDATE');
-            $this->issueDownCapability();
+            $failedCommandCapability = $this->issueDownCapability();
 
             $this->assertStringContainsStringIgnoringCase(
                 'lock wait timeout',
                 $this->guardRejectionMessage(),
             );
+            $this->assertCapabilityStateAbsent($failedCommandCapability, 'rollback command failure');
             $blocker->rollBack();
             $this->clearDownCapabilityEnvironment();
             $this->assertTrue($this->indexExists('import_histories', 'ix_import_history_supplier_id'));
@@ -737,9 +746,10 @@ final class CanonicalSupplierSnapshotSchemaMigrationTest extends TestCase
             $migration = DB::table('migrations')->where('migration', self::FIRST_DOWN_MIGRATION)->first();
             $this->assertNotNull($migration);
             DB::table('migrations')->where('migration', self::FIRST_DOWN_MIGRATION)->delete();
-            $this->issueDownCapability();
+            $missingMigrationCapability = $this->issueDownCapability();
 
             $this->assertGuardRejectedContaining('latest migration batch must be exactly the 12 canonical Phase I migrations');
+            $this->assertCapabilityStateAbsent($missingMigrationCapability, 'missing canonical migration');
             $this->assertTrue(Schema::hasTable('supplier_offer_snapshot_observations'));
             $this->assertTrue($this->indexExists('import_histories', 'ix_import_history_supplier_id'));
             DB::table('migrations')->insert((array) $migration);
@@ -787,9 +797,10 @@ final class CanonicalSupplierSnapshotSchemaMigrationTest extends TestCase
             ];
 
             foreach ($rollbackSelectors as $label => $selector) {
-                $this->issueDownCapability();
+                $selectorCapability = $this->issueDownCapability();
                 $message = $this->commandRejectionMessage('migrate:rollback', $selector);
                 $this->assertStringContainsString('rollback selector', $message, $label);
+                $this->assertCapabilityStateAbsent($selectorCapability, $label);
                 $this->assertPhaseISchemaUntouched(12, $label);
             }
 
@@ -797,11 +808,12 @@ final class CanonicalSupplierSnapshotSchemaMigrationTest extends TestCase
                 'migration' => '2026_08_20_120012_unrelated_synthetic_migration',
                 'batch' => $batch,
             ]);
-            $this->issueDownCapability();
+            $extraMigrationCapability = $this->issueDownCapability();
             $this->assertStringContainsString(
                 'latest migration batch must be exactly the 12 canonical Phase I migrations',
                 $this->commandRejectionMessage('migrate:rollback'),
             );
+            $this->assertCapabilityStateAbsent($extraMigrationCapability, 'extra latest-batch migration');
             $this->assertPhaseISchemaUntouched(12, 'extra latest-batch migration');
             $this->assertSame(1, DB::table('migrations')->where(
                 'migration',
@@ -815,21 +827,23 @@ final class CanonicalSupplierSnapshotSchemaMigrationTest extends TestCase
             $missing = DB::table('migrations')->where('migration', self::FIRST_DOWN_MIGRATION)->first();
             $this->assertNotNull($missing);
             DB::table('migrations')->where('migration', self::FIRST_DOWN_MIGRATION)->delete();
-            $this->issueDownCapability();
+            $missingMigrationCapability = $this->issueDownCapability();
             $this->assertStringContainsString(
                 'latest migration batch must be exactly the 12 canonical Phase I migrations',
                 $this->commandRejectionMessage('migrate:rollback'),
             );
+            $this->assertCapabilityStateAbsent($missingMigrationCapability, 'missing canonical migration row');
             $this->assertPhaseISchemaUntouched(11, 'missing canonical migration row');
             DB::table('migrations')->insert((array) $missing);
             $this->assertPhaseISchemaUntouched(12, 'restored canonical migration row');
 
             foreach (['migrate:reset', 'migrate:refresh'] as $command) {
-                $this->issueDownCapability();
+                $wrongCommandCapability = $this->issueDownCapability();
                 $this->assertStringContainsString(
                     sprintf('command %s is not allowed', $command),
                     $this->commandRejectionMessage($command),
                 );
+                $this->assertCapabilityStateAbsent($wrongCommandCapability, $command);
                 $this->assertPhaseISchemaUntouched(12, $command);
             }
 
@@ -873,9 +887,10 @@ final class CanonicalSupplierSnapshotSchemaMigrationTest extends TestCase
             CanonicalSupplierSnapshotSchema::bootstrapDestructiveDownGuard();
 
             $input = $this->rollbackArrayInput();
-            $this->issueDownCapability();
+            $completedCapability = $this->issueDownCapability();
             Event::dispatch(new CommandStarting('migrate:rollback', $input, $output));
             Event::dispatch(new CommandFinished('migrate:rollback', $input, $output, 0));
+            $this->assertCapabilityStateAbsent($completedCapability, 'completed command lifecycle');
 
             try {
                 Event::dispatch(new CommandStarting('migrate:rollback', $input, $output));
@@ -890,9 +905,9 @@ final class CanonicalSupplierSnapshotSchemaMigrationTest extends TestCase
 
             $firstInput = $this->rollbackArrayInput();
             $secondInput = $this->rollbackArrayInput();
-            $this->issueDownCapability();
+            $outerCapability = $this->issueDownCapability();
             Event::dispatch(new CommandStarting('migrate:rollback', $firstInput, $output));
-            $this->issueDownCapability();
+            $nestedCapability = $this->issueDownCapability();
             try {
                 Event::dispatch(new CommandStarting('migrate:rollback', $secondInput, $output));
                 $this->fail('Nested destructive command scope must fail closed.');
@@ -902,10 +917,12 @@ final class CanonicalSupplierSnapshotSchemaMigrationTest extends TestCase
                     $exception->getMessage(),
                 );
             }
+            $this->assertCapabilityStateAbsent($outerCapability, 'outer nested-command capability');
+            $this->assertCapabilityStateAbsent($nestedCapability, 'nested-command capability');
             $this->assertPhaseISchemaUntouched(12, 'nested command');
 
             $orderedInput = $this->rollbackArrayInput();
-            $this->issueDownCapability();
+            $orderedCapability = $this->issueDownCapability();
             Event::dispatch(new CommandStarting('migrate:rollback', $orderedInput, $output));
             $invokeWrongStep = static function (ArrayInput $activeInput): void {
                 CanonicalSupplierSnapshotSchema::runDestructiveDownStep(
@@ -919,6 +936,7 @@ final class CanonicalSupplierSnapshotSchemaMigrationTest extends TestCase
             } catch (Throwable $exception) {
                 $this->assertStringContainsString('unexpected rollback step', $exception->getMessage());
             }
+            $this->assertCapabilityStateAbsent($orderedCapability, 'out-of-order rollback step');
             $this->assertPhaseISchemaUntouched(12, 'out-of-order migration');
         } finally {
             $this->resetDownGuard();
@@ -942,6 +960,12 @@ final class CanonicalSupplierSnapshotSchemaMigrationTest extends TestCase
         $this->assertCapabilityPathSecurity($this->capabilityPath($firstToken), $firstDirectory);
         CanonicalSupplierSnapshotSchema::revokeDestructiveDownCapability($firstToken);
         CanonicalSupplierSnapshotSchema::revokeDestructiveDownCapability($secondToken);
+        $this->assertCapabilityStateAbsent($firstToken, 'explicit first capability revoke');
+        $this->assertCapabilityStateAbsent($secondToken, 'explicit second capability revoke');
+
+        $token = $this->issueDownCapability();
+        file_put_contents($this->capabilityPath($token), '{invalid-json');
+        $this->assertCapabilityConsumptionRejectedAndCleaned($token, 'Syntax error', 'invalid JSON');
 
         $payloadMutations = [
             'extra key' => static function (array $payload): array {
@@ -985,18 +1009,14 @@ final class CanonicalSupplierSnapshotSchemaMigrationTest extends TestCase
                 $path,
                 json_encode($mutation($payload), JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES),
             );
-            $this->assertCapabilityConsumptionRejected('invalid or expired', $label);
-            CanonicalSupplierSnapshotSchema::revokeDestructiveDownCapability($token);
+            $this->assertCapabilityConsumptionRejectedAndCleaned($token, 'invalid or expired', $label);
         }
 
         $token = $this->issueDownCapability();
         $path = $this->capabilityPath($token);
-        $directory = $this->capabilityDirectory($token);
         unlink($path);
         mkdir($path);
-        $this->assertCapabilityConsumptionRejected('not a regular file', 'non-regular artifact');
-        rmdir($path);
-        CanonicalSupplierSnapshotSchema::revokeDestructiveDownCapability($token);
+        $this->assertCapabilityConsumptionRejectedAndCleaned($token, 'not a regular file', 'non-regular artifact');
 
         $token = $this->issueDownCapability();
         $path = $this->capabilityPath($token);
@@ -1019,32 +1039,36 @@ final class CanonicalSupplierSnapshotSchemaMigrationTest extends TestCase
             file_put_contents($linkTarget, 'target');
             $this->assertTrue(symlink($linkTarget, $path));
         }
-        $this->assertCapabilityConsumptionRejected('Capability', 'symlink/reparse artifact');
-        if (! @rmdir($path) && (file_exists($path) || is_link($path))) {
-            unlink($path);
-        }
+        $this->assertCapabilityConsumptionRejectedAndCleaned($token, 'Capability', 'symlink/reparse artifact');
         if (is_dir($linkTarget)) {
             rmdir($linkTarget);
         } else {
             unlink($linkTarget);
         }
-        CanonicalSupplierSnapshotSchema::revokeDestructiveDownCapability($token);
 
         $token = $this->issueDownCapability();
-        $this->makeCapabilityPathUnsafe($this->capabilityDirectory($token), true);
-        $this->assertCapabilityConsumptionRejected(
+        $directory = $this->capabilityDirectory($token);
+        $this->makeCapabilityPathUnsafe($directory, true);
+        if (PHP_OS_FAMILY === 'Windows') {
+            $this->assertIndependentWindowsAclUnsafe($directory, true);
+        }
+        $this->assertCapabilityConsumptionRejectedAndCleaned(
+            $token,
             PHP_OS_FAMILY === 'Windows' ? 'Windows capability ACL' : 'permissions are not exactly 0700',
             'unsafe parent permissions',
         );
-        CanonicalSupplierSnapshotSchema::revokeDestructiveDownCapability($token);
 
         $token = $this->issueDownCapability();
-        $this->makeCapabilityPathUnsafe($this->capabilityPath($token), false);
-        $this->assertCapabilityConsumptionRejected(
+        $path = $this->capabilityPath($token);
+        $this->makeCapabilityPathUnsafe($path, false);
+        if (PHP_OS_FAMILY === 'Windows') {
+            $this->assertIndependentWindowsAclUnsafe($path, false);
+        }
+        $this->assertCapabilityConsumptionRejectedAndCleaned(
+            $token,
             PHP_OS_FAMILY === 'Windows' ? 'Windows capability ACL' : 'permissions are not exactly 0600',
             'unsafe artifact permissions',
         );
-        CanonicalSupplierSnapshotSchema::revokeDestructiveDownCapability($token);
 
         $token = $this->issueDownCapability();
         $worker = sys_get_temp_dir().DIRECTORY_SEPARATOR.'phase-i-capability-consumer-'.bin2hex(random_bytes(8)).'.php';
@@ -1083,6 +1107,8 @@ final class CanonicalSupplierSnapshotSchemaMigrationTest extends TestCase
                 static fn (Process $process): bool => $process->getExitCode() === 2
                     && $process->getOutput() === 'REJECTED',
             )->count());
+            CanonicalSupplierSnapshotSchema::revokeDestructiveDownCapability($token);
+            $this->assertCapabilityStateAbsent($token, 'concurrent capability consumption');
         } finally {
             File::delete($worker);
             CanonicalSupplierSnapshotSchema::revokeDestructiveDownCapability($token);
@@ -2027,34 +2053,177 @@ final class CanonicalSupplierSnapshotSchemaMigrationTest extends TestCase
 
     private function assertCapabilityPathSecurity(string $path, string $directory): void
     {
-        $this->invokeCapabilityMethod('assertSecureDirectory', [$directory]);
-        $this->invokeCapabilityMethod('assertSecureArtifact', [$path]);
         $this->assertTrue(is_dir($directory));
         $this->assertTrue(is_file($path));
         $this->assertFalse(is_link($directory));
         $this->assertFalse(is_link($path));
 
-        if (PHP_OS_FAMILY !== 'Windows') {
-            $directoryStat = lstat($directory);
-            $artifactStat = lstat($path);
-            $this->assertIsArray($directoryStat);
-            $this->assertIsArray($artifactStat);
-            $this->assertSame(0700, $directoryStat['mode'] & 0777);
-            $this->assertSame(0600, $artifactStat['mode'] & 0777);
-            $this->assertSame(posix_geteuid(), $directoryStat['uid']);
-            $this->assertSame(posix_geteuid(), $artifactStat['uid']);
-            $this->assertSame(1, $artifactStat['nlink']);
+        if (PHP_OS_FAMILY === 'Windows') {
+            $this->assertIndependentWindowsAclSecure($directory, true);
+            $this->assertIndependentWindowsAclSecure($path, false);
+
+            return;
         }
+
+        $directoryStat = lstat($directory);
+        $artifactStat = lstat($path);
+        $this->assertIsArray($directoryStat);
+        $this->assertIsArray($artifactStat);
+        $this->assertSame(0040000, $directoryStat['mode'] & 0170000);
+        $this->assertSame(0100000, $artifactStat['mode'] & 0170000);
+        $this->assertSame(0700, $directoryStat['mode'] & 0777);
+        $this->assertSame(0600, $artifactStat['mode'] & 0777);
+        $this->assertSame(posix_geteuid(), $directoryStat['uid']);
+        $this->assertSame(posix_geteuid(), $artifactStat['uid']);
+        $this->assertSame(1, $artifactStat['nlink']);
     }
 
-    private function assertCapabilityConsumptionRejected(string $fragment, string $context): void
-    {
+    private function assertCapabilityConsumptionRejectedAndCleaned(
+        string $token,
+        string $fragment,
+        string $context,
+    ): void {
         try {
             $this->invokeCapabilityMethod('consumeInvocationCapability');
             $this->fail($context.': capability consumption unexpectedly succeeded');
         } catch (Throwable $exception) {
             $this->assertStringContainsString($fragment, $exception->getMessage(), $context);
         }
+
+        $this->assertCapabilityStateAbsent($token, $context);
+    }
+
+    private function assertCapabilityStateAbsent(string $token, string $context): void
+    {
+        $path = $this->capabilityPath($token);
+        $directory = $this->capabilityDirectory($token);
+        clearstatcache(true, $path);
+        clearstatcache(true, $directory);
+        $consumed = glob($directory.DIRECTORY_SEPARATOR.'consumed-*.json');
+
+        $this->assertFalse(file_exists($path) || is_link($path), $context.': original artifact remains');
+        $this->assertSame([], is_array($consumed) ? $consumed : [], $context.': consumed artifact remains');
+        $this->assertFalse(
+            file_exists($directory) || is_link($directory),
+            $context.': private capability directory remains',
+        );
+
+        $reflection = new ReflectionClass(CanonicalSupplierSnapshotSchema::class);
+        $this->assertNull(
+            $reflection->getProperty('destructiveDownScope')->getValue(),
+            $context.': destructive down scope remains active',
+        );
+    }
+
+    private function assertIndependentWindowsAclSecure(string $path, bool $directory): void
+    {
+        $acl = $this->observeWindowsAcl($path);
+        $rules = $acl['rules'];
+
+        $this->assertSame($acl['current_sid'], $acl['owner_sid']);
+        $this->assertSame($directory, $acl['is_directory']);
+        $this->assertSame(! $directory, $acl['is_file']);
+        $this->assertFalse($acl['reparse']);
+        $this->assertSame($directory, $acl['protected']);
+        $this->assertCount(1, $rules);
+        $this->assertSame($acl['current_sid'], $rules[0]['sid']);
+        $this->assertSame('Allow', $rules[0]['type']);
+        $this->assertSame(2032127, $rules[0]['rights_value']);
+        $this->assertSame(! $directory, $rules[0]['inherited']);
+        $this->assertSame($directory ? 'ContainerInherit, ObjectInherit' : 'None', $rules[0]['inheritance']);
+        $this->assertSame('None', $rules[0]['propagation']);
+    }
+
+    private function assertIndependentWindowsAclUnsafe(string $path, bool $directory): void
+    {
+        $acl = $this->observeWindowsAcl($path);
+        $this->assertSame($directory, $acl['is_directory']);
+        $this->assertFalse($acl['reparse']);
+
+        $unsafe = collect($acl['rules'])->filter(static fn (array $rule): bool => $rule['sid'] !== $acl['current_sid']
+            && $rule['type'] === 'Allow'
+            && ($rule['rights_value'] & self::WINDOWS_WRITE_RIGHTS_MASK) !== 0
+        );
+        $this->assertNotEmpty($unsafe, 'Independent ACL observer must detect an unprivileged write-capable ACE.');
+        $this->assertContains('S-1-1-0', $unsafe->pluck('sid')->all());
+    }
+
+    /**
+     * @return array{
+     *     current_sid: string,
+     *     owner_sid: string,
+     *     protected: bool,
+     *     reparse: bool,
+     *     is_directory: bool,
+     *     is_file: bool,
+     *     rules: list<array{sid: string, type: string, rights_value: int, inherited: bool, inheritance: string, propagation: string}>
+     * }
+     */
+    private function observeWindowsAcl(string $path): array
+    {
+        $systemRoot = getenv('SystemRoot');
+        $this->assertIsString($systemRoot);
+        $powerShell = $systemRoot.'\\System32\\WindowsPowerShell\\v1.0\\powershell.exe';
+        $script = <<<'POWERSHELL'
+            $ErrorActionPreference = 'Stop'
+            $path = [IO.Path]::GetFullPath([string] $env:MYCOMPUTER_PHASE_I_TEST_PATH)
+            $isDirectory = [IO.Directory]::Exists($path)
+            $isFile = [IO.File]::Exists($path)
+            if (-not $isDirectory -and -not $isFile) {
+                throw 'Independent ACL observation path is missing'
+            }
+            $acl = $(if ($isDirectory) {
+                [IO.Directory]::GetAccessControl($path)
+            } else {
+                [IO.File]::GetAccessControl($path)
+            })
+            $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
+            $rules = @($acl.GetAccessRules($true, $true, [Security.Principal.SecurityIdentifier]) | ForEach-Object {
+                [ordered]@{
+                    sid = $_.IdentityReference.Value
+                    type = $_.AccessControlType.ToString()
+                    rights_value = [int64] $_.FileSystemRights
+                    inherited = [bool] $_.IsInherited
+                    inheritance = $_.InheritanceFlags.ToString()
+                    propagation = $_.PropagationFlags.ToString()
+                }
+            })
+            [ordered]@{
+                current_sid = $identity.User.Value
+                owner_sid = $acl.GetOwner([Security.Principal.SecurityIdentifier]).Value
+                protected = [bool] $acl.AreAccessRulesProtected
+                reparse = [bool] (([IO.File]::GetAttributes($path) -band [IO.FileAttributes]::ReparsePoint) -ne 0)
+                is_directory = [bool] $isDirectory
+                is_file = [bool] $isFile
+                rules = $rules
+            } | ConvertTo-Json -Compress -Depth 5
+            POWERSHELL;
+        $process = new Process([
+            $powerShell,
+            '-NoLogo',
+            '-NoProfile',
+            '-NonInteractive',
+            '-ExecutionPolicy',
+            'Bypass',
+            '-Command',
+            $script,
+        ], env: ['MYCOMPUTER_PHASE_I_TEST_PATH' => $path]);
+        $process->setTimeout(10);
+        $process->run();
+        $this->assertTrue(
+            $process->isSuccessful(),
+            'Independent Windows ACL observation failed: '.$process->getErrorOutput(),
+        );
+
+        $observed = json_decode(trim($process->getOutput()), true, flags: JSON_THROW_ON_ERROR);
+        $this->assertIsArray($observed);
+        $this->assertSame(
+            ['current_sid', 'owner_sid', 'protected', 'reparse', 'is_directory', 'is_file', 'rules'],
+            array_keys($observed),
+        );
+        $this->assertIsArray($observed['rules']);
+
+        return $observed;
     }
 
     /** @param list<mixed> $arguments */

@@ -511,7 +511,10 @@ final class CanonicalSupplierSnapshotSchema
             self::assertMigrationSequenceState(0);
         } catch (Throwable $exception) {
             if (is_array($capability)) {
-                @rmdir($capability['directory']);
+                self::removeConsumedCapabilityDirectory(
+                    $capability['directory'],
+                    $capability['directory_identity'],
+                );
             }
             self::invalidateDestructiveDownScope();
 
@@ -553,24 +556,34 @@ final class CanonicalSupplierSnapshotSchema
 
         $directory = self::capabilityDirectory($token);
         $path = self::capabilityPath($token);
-        clearstatcache(true, $directory);
-        if (! file_exists($directory) && ! is_link($directory)) {
-            throw new RuntimeException('one-use invocation capability artifact is missing or already consumed');
-        }
-        self::assertSecureDirectory($directory);
-        clearstatcache(true, $path);
-        if (! file_exists($path) && ! is_link($path)) {
-            throw new RuntimeException('one-use invocation capability artifact is missing or already consumed');
-        }
-        self::assertSecureArtifact($path);
-        $directoryIdentity = self::directoryIdentity($directory);
-        $consumedPath = $directory.DIRECTORY_SEPARATOR.'consumed-'.bin2hex(random_bytes(16)).'.json';
-
-        if (! @rename($path, $consumedPath)) {
-            throw new RuntimeException('one-use invocation capability artifact is missing or already consumed');
-        }
+        $consumedPath = null;
+        $cleanupOnFailure = true;
 
         try {
+            clearstatcache(true, $directory);
+            if (! file_exists($directory) && ! is_link($directory)) {
+                $cleanupOnFailure = false;
+
+                throw new RuntimeException('one-use invocation capability artifact is missing or already consumed');
+            }
+            self::assertSecureDirectory($directory);
+            clearstatcache(true, $path);
+            if (! file_exists($path) && ! is_link($path)) {
+                $cleanupOnFailure = false;
+
+                throw new RuntimeException('one-use invocation capability artifact is missing or already consumed');
+            }
+            self::assertSecureArtifact($path);
+            $directoryIdentity = self::directoryIdentity($directory);
+            $consumedPath = $directory.DIRECTORY_SEPARATOR.'consumed-'.bin2hex(random_bytes(16)).'.json';
+
+            if (! @rename($path, $consumedPath)) {
+                clearstatcache(true, $path);
+                $cleanupOnFailure = file_exists($path) || is_link($path);
+
+                throw new RuntimeException('one-use invocation capability artifact is missing or already consumed');
+            }
+
             if ($directoryIdentity !== self::directoryIdentity($directory)) {
                 throw new RuntimeException('private capability directory identity changed during consumption');
             }
@@ -603,14 +616,26 @@ final class CanonicalSupplierSnapshotSchema
                 || ! hash_equals(self::canonicalRollbackPlanSha256(), $payload['rollback_plan_sha256'])) {
                 throw new RuntimeException('one-use invocation capability is invalid or expired');
             }
-        } finally {
-            @unlink($consumedPath);
-        }
 
-        return [
-            'directory' => $directory,
-            'directory_identity' => $directoryIdentity,
-        ];
+            if (! @unlink($consumedPath)) {
+                throw new RuntimeException('consumed one-use invocation capability could not be removed');
+            }
+            clearstatcache(true, $consumedPath);
+            if (file_exists($consumedPath) || is_link($consumedPath)) {
+                throw new RuntimeException('consumed one-use invocation capability still exists after removal');
+            }
+
+            return [
+                'directory' => $directory,
+                'directory_identity' => $directoryIdentity,
+            ];
+        } catch (Throwable $exception) {
+            if ($cleanupOnFailure) {
+                self::rejectCapabilityIssuance($token, $exception);
+            }
+
+            throw $exception;
+        }
     }
 
     private static function assertAllowedRollbackSelectors(InputInterface $input): void
@@ -1114,6 +1139,59 @@ final class CanonicalSupplierSnapshotSchema
         return $process->getOutput();
     }
 
+    private static function secureWindowsDirectoryForCleanup(string $path): void
+    {
+        $script = <<<'POWERSHELL'
+            $ErrorActionPreference = 'Stop'
+            $path = [IO.Path]::GetFullPath([string] $env:MYCOMPUTER_PHASE_I_CAPABILITY_PATH)
+            if (-not [IO.Directory]::Exists($path)) {
+                throw 'Capability cleanup path is not a directory'
+            }
+            if (([IO.File]::GetAttributes($path) -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+                throw 'Capability cleanup directory is a reparse point'
+            }
+            $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
+            $security = New-Object Security.AccessControl.DirectorySecurity
+            $security.SetOwner($identity.User)
+            $security.SetAccessRuleProtection($true, $false)
+            $rule = New-Object Security.AccessControl.FileSystemAccessRule(
+                $identity.User,
+                [Security.AccessControl.FileSystemRights]::FullControl,
+                [Security.AccessControl.InheritanceFlags]'ContainerInherit, ObjectInherit',
+                [Security.AccessControl.PropagationFlags]::None,
+                [Security.AccessControl.AccessControlType]::Allow
+            )
+            [void] $security.AddAccessRule($rule)
+            [IO.Directory]::SetAccessControl($path, $security)
+            POWERSHELL;
+
+        self::runWindowsSecurityProcess($script, [$path]);
+        self::assertSecureDirectory($path);
+    }
+
+    private static function windowsPathIsReparsePoint(string $path): bool
+    {
+        $script = <<<'POWERSHELL'
+            $ErrorActionPreference = 'Stop'
+            $path = [IO.Path]::GetFullPath([string] $env:MYCOMPUTER_PHASE_I_CAPABILITY_PATH)
+            if (-not [IO.Directory]::Exists($path) -and -not [IO.File]::Exists($path)) {
+                throw 'Capability cleanup path is missing'
+            }
+            if (([IO.File]::GetAttributes($path) -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+                [Console]::Out.Write('1')
+            } else {
+                [Console]::Out.Write('0')
+            }
+            POWERSHELL;
+
+        $result = trim(self::runWindowsSecurityProcess($script, [$path]));
+        if (! in_array($result, ['0', '1'], true)) {
+            throw new RuntimeException('Windows capability reparse-point observation failed closed');
+        }
+
+        return $result === '1';
+    }
+
     private static function directoryIdentity(string $path): string
     {
         self::assertSecureDirectory($path);
@@ -1138,9 +1216,149 @@ final class CanonicalSupplierSnapshotSchema
 
     private static function removeCapabilityArtifact(string $token): void
     {
-        $directory = self::capabilityDirectory($token);
-        @unlink(self::capabilityPath($token));
-        @rmdir($directory);
+        self::removeCapabilityDirectory(self::capabilityDirectory($token));
+    }
+
+    private static function rejectCapabilityIssuance(string $token, Throwable $rejection): never
+    {
+        try {
+            self::removeCapabilityArtifact($token);
+        } catch (Throwable $cleanupFailure) {
+            throw new RuntimeException(
+                'one-use invocation capability cleanup integrity failure: '.$cleanupFailure->getMessage(),
+                0,
+                $rejection,
+            );
+        }
+
+        throw $rejection;
+    }
+
+    private static function removeConsumedCapabilityDirectory(string $directory, string $expectedIdentity): void
+    {
+        self::removeCapabilityDirectory($directory, $expectedIdentity);
+    }
+
+    private static function removeCapabilityDirectory(string $directory, ?string $expectedIdentity = null): void
+    {
+        clearstatcache(true, $directory);
+        if (! file_exists($directory) && ! is_link($directory)) {
+            return;
+        }
+        self::assertCapabilityCleanupPath($directory);
+
+        if (is_link($directory)) {
+            $removed = PHP_OS_FAMILY === 'Windows' && is_dir($directory)
+                ? @rmdir($directory)
+                : @unlink($directory);
+            if (! $removed) {
+                throw new RuntimeException('Capability cleanup could not remove the private directory link');
+            }
+            self::assertCapabilityPathAbsent($directory);
+
+            return;
+        }
+
+        if (PHP_OS_FAMILY === 'Windows' && self::windowsPathIsReparsePoint($directory)) {
+            if (! @rmdir($directory)) {
+                throw new RuntimeException('Capability cleanup could not remove the private directory reparse point');
+            }
+            self::assertCapabilityPathAbsent($directory);
+
+            return;
+        }
+
+        self::assertExpectedPathType($directory, true);
+        $stat = self::requiredLstat($directory);
+        if (PHP_OS_FAMILY === 'Windows') {
+            self::secureWindowsDirectoryForCleanup($directory);
+        } else {
+            if (! function_exists('posix_geteuid') || $stat['uid'] !== posix_geteuid()) {
+                throw new RuntimeException('Capability cleanup directory owner cannot be proven');
+            }
+            if (! @chmod($directory, 0700)) {
+                throw new RuntimeException('Capability cleanup could not restore owner-only directory permissions');
+            }
+            self::assertSecureDirectory($directory);
+        }
+
+        if ($expectedIdentity !== null && ! hash_equals($expectedIdentity, self::directoryIdentity($directory))) {
+            throw new RuntimeException('Capability cleanup directory identity changed');
+        }
+
+        $entries = @scandir($directory);
+        if (! is_array($entries)) {
+            throw new RuntimeException('Capability cleanup directory cannot be enumerated');
+        }
+
+        foreach ($entries as $entry) {
+            if ($entry === '.' || $entry === '..') {
+                continue;
+            }
+            if ($entry !== self::DOWN_CAPABILITY_FILE
+                && preg_match('/\Aconsumed-[0-9a-f]{32}\.json\z/', $entry) !== 1) {
+                throw new RuntimeException('Capability cleanup directory contains an unexpected entry');
+            }
+        }
+
+        foreach ($entries as $entry) {
+            if ($entry !== '.' && $entry !== '..') {
+                self::removeKnownCapabilityEntry($directory.DIRECTORY_SEPARATOR.$entry);
+            }
+        }
+
+        if (! @rmdir($directory)) {
+            throw new RuntimeException('Capability cleanup could not remove the private directory');
+        }
+        self::assertCapabilityPathAbsent($directory);
+    }
+
+    private static function assertCapabilityCleanupPath(string $directory): void
+    {
+        $root = self::capabilityRootPath();
+        self::assertSecureDirectory($root);
+        $rootPath = rtrim(str_replace('\\', '/', self::normalizedAbsolutePath($root)), '/');
+        $parent = realpath(dirname($directory));
+        if (! is_string($parent)) {
+            throw new RuntimeException('Capability cleanup parent cannot be resolved');
+        }
+        $parentPath = rtrim(str_replace('\\', '/', PHP_OS_FAMILY === 'Windows' ? strtolower($parent) : $parent), '/');
+
+        if (! hash_equals($rootPath, $parentPath)
+            || preg_match('/\A[0-9a-f]{64}\z/', basename($directory)) !== 1) {
+            throw new RuntimeException('Capability cleanup path is outside the private capability namespace');
+        }
+    }
+
+    private static function removeKnownCapabilityEntry(string $path): void
+    {
+        clearstatcache(true, $path);
+        if (! file_exists($path) && ! is_link($path)) {
+            return;
+        }
+
+        if (is_link($path)) {
+            $removed = PHP_OS_FAMILY === 'Windows' && is_dir($path) ? @rmdir($path) : @unlink($path);
+        } elseif (PHP_OS_FAMILY === 'Windows' && self::windowsPathIsReparsePoint($path)) {
+            $removed = is_dir($path) ? @rmdir($path) : @unlink($path);
+        } elseif (is_dir($path)) {
+            $removed = @rmdir($path);
+        } else {
+            $removed = @unlink($path);
+        }
+
+        if (! $removed) {
+            throw new RuntimeException('Capability cleanup could not remove a known issuance entry');
+        }
+        self::assertCapabilityPathAbsent($path);
+    }
+
+    private static function assertCapabilityPathAbsent(string $path): void
+    {
+        clearstatcache(true, $path);
+        if (file_exists($path) || is_link($path)) {
+            throw new RuntimeException('Capability cleanup path still exists after removal');
+        }
     }
 
     private static function invalidateDestructiveDownScope(): void
@@ -1149,7 +1367,10 @@ final class CanonicalSupplierSnapshotSchema
         self::$destructiveDownScope = null;
 
         if (is_array($scope)) {
-            @rmdir($scope['capability_directory']);
+            self::removeConsumedCapabilityDirectory(
+                $scope['capability_directory'],
+                $scope['capability_directory_identity'],
+            );
         }
     }
 
