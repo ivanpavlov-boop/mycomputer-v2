@@ -3,11 +3,16 @@
 namespace Database\Migrations\Support;
 
 use Closure;
+use Illuminate\Console\Events\CommandFinished;
+use Illuminate\Console\Events\CommandStarting;
+use Illuminate\Database\Migrations\Migrator;
 use Illuminate\Database\Schema\ColumnDefinition;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Schema;
 use RuntimeException;
 use Symfony\Component\Console\Input\InputInterface;
+use Symfony\Component\Process\Process;
 use Throwable;
 
 final class CanonicalSupplierSnapshotSchema
@@ -17,6 +22,28 @@ final class CanonicalSupplierSnapshotSchema
     private const DOWN_CAPABILITY_VERSION = 'canonical-supplier-snapshot-down-v1';
 
     private const DOWN_CAPABILITY_TTL_SECONDS = 300;
+
+    private const DOWN_COMMAND = 'migrate:rollback';
+
+    private const DOWN_CAPABILITY_ROOT = 'mycomputer-phase-i-down';
+
+    private const DOWN_CAPABILITY_FILE = 'capability.json';
+
+    /** @var list<string> */
+    private const DESTRUCTIVE_MIGRATION_COMMANDS = [
+        'migrate:rollback',
+        'migrate:reset',
+        'migrate:refresh',
+    ];
+
+    /** @var list<string> */
+    private const REJECTED_ROLLBACK_OPTIONS = [
+        '--step',
+        '--batch',
+        '--path',
+        '--realpath',
+        '--pretend',
+    ];
 
     /** @var list<string> */
     private const DOWN_MIGRATIONS = [
@@ -51,8 +78,23 @@ final class CanonicalSupplierSnapshotSchema
         'trg_snapshot_observation_no_update',
     ];
 
-    /** @var array{input: InputInterface, next_step: int}|null */
+    /**
+     * @var array{
+     *     input: InputInterface,
+     *     invocation_id: string,
+     *     command: string,
+     *     connection: string,
+     *     database: string,
+     *     plan_sha256: string,
+     *     selected_migrations: list<string>,
+     *     capability_directory: string,
+     *     capability_directory_identity: string,
+     *     next_step: int
+     * }|null
+     */
     private static ?array $destructiveDownScope = null;
+
+    private static ?object $destructiveDownLifecycleDispatcher = null;
 
     /** @var array<string, list<string>> */
     private const GUARDED_TABLE_COLUMNS = [
@@ -236,6 +278,21 @@ final class CanonicalSupplierSnapshotSchema
         }
     }
 
+    public static function bootstrapDestructiveDownGuard(): void
+    {
+        self::registerDestructiveDownLifecycle();
+
+        $input = self::currentConsoleInputOrNull();
+        if ($input === null) {
+            return;
+        }
+
+        $command = (string) ($input->getFirstArgument() ?? '');
+        if (in_array($command, self::DESTRUCTIVE_MIGRATION_COMMANDS, true)) {
+            self::prepareDestructiveDownInvocation($command, $input);
+        }
+    }
+
     public static function issueDestructiveDownCapability(): string
     {
         if (! app()->environment(['local', 'testing'])) {
@@ -243,20 +300,40 @@ final class CanonicalSupplierSnapshotSchema
         }
 
         $token = bin2hex(random_bytes(32));
+        $directory = self::capabilityDirectory($token);
         $path = self::capabilityPath($token);
-        $handle = @fopen($path, 'x+b');
-
-        if ($handle === false) {
-            throw new RuntimeException('Unable to create one-use destructive down capability');
-        }
+        $handle = null;
 
         try {
-            @chmod($path, 0600);
+            self::ensureCapabilityRoot();
+            self::createPrivateDirectory($directory);
+            self::assertSecureDirectory($directory);
+
+            $previousUmask = null;
+            if (PHP_OS_FAMILY !== 'Windows') {
+                $previousUmask = umask(0077);
+            }
+
+            try {
+                $handle = @fopen($path, 'x+b');
+            } finally {
+                if ($previousUmask !== null) {
+                    umask($previousUmask);
+                }
+            }
+
+            if ($handle === false) {
+                throw new RuntimeException('Unable to exclusively create one-use destructive down capability');
+            }
+
+            self::assertSecureArtifact($path);
+
             $payload = json_encode([
                 'version' => self::DOWN_CAPABILITY_VERSION,
-                'token_hash' => hash('sha256', $token),
+                'token_sha256' => hash('sha256', $token),
                 'expires_at' => time() + self::DOWN_CAPABILITY_TTL_SECONDS,
-            ], JSON_THROW_ON_ERROR);
+                'rollback_plan_sha256' => self::canonicalRollbackPlanSha256(),
+            ], JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES);
 
             $offset = 0;
             while ($offset < strlen($payload)) {
@@ -270,14 +347,19 @@ final class CanonicalSupplierSnapshotSchema
             if (! fflush($handle)) {
                 throw new RuntimeException('Unable to flush one-use destructive down capability');
             }
-        } catch (Throwable $exception) {
+
             fclose($handle);
-            @unlink($path);
+            $handle = null;
+            self::assertSecureDirectory($directory);
+            self::assertSecureArtifact($path);
+        } catch (Throwable $exception) {
+            if (is_resource($handle)) {
+                fclose($handle);
+            }
+            self::removeCapabilityArtifact($token);
 
             throw $exception;
         }
-
-        fclose($handle);
 
         return $token;
     }
@@ -285,32 +367,42 @@ final class CanonicalSupplierSnapshotSchema
     public static function revokeDestructiveDownCapability(string $token): void
     {
         if (preg_match('/\A[0-9a-f]{64}\z/', $token) === 1) {
-            @unlink(self::capabilityPath($token));
+            self::removeCapabilityArtifact($token);
         }
     }
 
     public static function runDestructiveDownStep(string $migration, Closure $operation): void
     {
         $input = self::currentConsoleInput();
+        $scope = self::$destructiveDownScope;
 
-        if (self::$destructiveDownScope !== null && self::$destructiveDownScope['input'] !== $input) {
+        if ($scope === null) {
+            self::discardSuppliedCapability();
+
+            throw self::downgradeRejected('destructive rollback invocation was not authorized before migration execution');
+        }
+
+        if ($scope['input'] !== $input
+            || $scope['command'] !== self::DOWN_COMMAND
+            || $input->getFirstArgument() !== self::DOWN_COMMAND) {
             self::invalidateDestructiveDownScope();
+
+            throw self::downgradeRejected('rollback invocation identity changed');
         }
 
-        if (self::$destructiveDownScope === null) {
-            if ($migration !== self::DOWN_MIGRATIONS[0]) {
-                self::discardSuppliedCapability();
+        $connection = DB::getDefaultConnection();
+        $database = DB::connection()->getDatabaseName();
+        $planSha256 = self::invocationRollbackPlanSha256($connection, $database, $scope['selected_migrations']);
+        if ($scope['connection'] !== $connection
+            || $scope['database'] !== $database
+            || ! hash_equals($scope['plan_sha256'], $planSha256)
+            || $scope['capability_directory_identity'] !== self::directoryIdentity($scope['capability_directory'])) {
+            self::invalidateDestructiveDownScope();
 
-                throw self::downgradeRejected(sprintf(
-                    'rollback sequence must begin with %s',
-                    self::DOWN_MIGRATIONS[0],
-                ));
-            }
-
-            self::authorizeDestructiveDownScope($input);
+            throw self::downgradeRejected('rollback invocation plan or private capability directory identity changed');
         }
 
-        $step = self::$destructiveDownScope['next_step'];
+        $step = $scope['next_step'];
         $expected = self::DOWN_MIGRATIONS[$step] ?? null;
 
         if ($expected !== $migration) {
@@ -340,10 +432,77 @@ final class CanonicalSupplierSnapshotSchema
         }
     }
 
-    private static function authorizeDestructiveDownScope(InputInterface $input): void
+    private static function registerDestructiveDownLifecycle(): void
     {
+        $dispatcher = Event::getFacadeRoot();
+        if (! is_object($dispatcher)) {
+            throw self::downgradeRejected('console event dispatcher is unavailable');
+        }
+
+        if (self::$destructiveDownLifecycleDispatcher === $dispatcher) {
+            return;
+        }
+
+        $dispatcher->listen(CommandStarting::class, static function (CommandStarting $event): void {
+            if (in_array($event->command, self::DESTRUCTIVE_MIGRATION_COMMANDS, true)) {
+                self::prepareDestructiveDownInvocation($event->command, $event->input);
+            }
+        });
+        $dispatcher->listen(CommandFinished::class, static function (CommandFinished $event): void {
+            if (self::$destructiveDownScope !== null) {
+                self::invalidateDestructiveDownScope();
+            }
+        });
+
+        self::$destructiveDownLifecycleDispatcher = $dispatcher;
+    }
+
+    private static function prepareDestructiveDownInvocation(string $command, InputInterface $input): void
+    {
+        if (self::$destructiveDownScope !== null) {
+            if (self::$destructiveDownScope['input'] === $input
+                && self::$destructiveDownScope['command'] === $command) {
+                return;
+            }
+
+            self::discardSuppliedCapability();
+            self::invalidateDestructiveDownScope();
+
+            throw self::downgradeRejected('nested or re-entrant destructive migration command is not allowed');
+        }
+
+        if ($command !== self::DOWN_COMMAND || $input->getFirstArgument() !== self::DOWN_COMMAND) {
+            self::discardSuppliedCapability();
+
+            throw self::downgradeRejected(sprintf('command %s is not allowed', $command));
+        }
+
         try {
-            self::consumeInvocationCapability();
+            self::assertAllowedRollbackSelectors($input);
+            self::withRollbackConnection($input, function (Migrator $migrator) use ($input): void {
+                $selectedMigrations = self::exactSelectedRollbackMigrations($migrator);
+                self::assertCanonicalMigrationFilesAvailable($migrator, $selectedMigrations);
+                self::authorizeDestructiveDownScope($input, $selectedMigrations);
+            });
+        } catch (Throwable $exception) {
+            self::discardSuppliedCapability();
+            self::invalidateDestructiveDownScope();
+
+            if (str_starts_with($exception->getMessage(), 'Canonical supplier snapshot schema downgrade rejected')) {
+                throw $exception;
+            }
+
+            throw self::downgradeRejected($exception->getMessage(), $exception);
+        }
+    }
+
+    /** @param list<string> $selectedMigrations */
+    private static function authorizeDestructiveDownScope(InputInterface $input, array $selectedMigrations): void
+    {
+        $capability = null;
+
+        try {
+            $capability = self::consumeInvocationCapability();
             self::assertEnvironment();
             self::assertForwardGatesDisabled();
             self::assertCompleteReadableSchema();
@@ -351,13 +510,26 @@ final class CanonicalSupplierSnapshotSchema
             self::assertPristineMonitorSingleton();
             self::assertMigrationSequenceState(0);
         } catch (Throwable $exception) {
+            if (is_array($capability)) {
+                @rmdir($capability['directory']);
+            }
             self::invalidateDestructiveDownScope();
 
             throw self::downgradeRejected($exception->getMessage(), $exception);
         }
 
+        $connection = DB::getDefaultConnection();
+        $database = DB::connection()->getDatabaseName();
         self::$destructiveDownScope = [
             'input' => $input,
+            'invocation_id' => bin2hex(random_bytes(32)),
+            'command' => self::DOWN_COMMAND,
+            'connection' => $connection,
+            'database' => $database,
+            'plan_sha256' => self::invocationRollbackPlanSha256($connection, $database, $selectedMigrations),
+            'selected_migrations' => $selectedMigrations,
+            'capability_directory' => $capability['directory'],
+            'capability_directory_identity' => $capability['directory_identity'],
             'next_step' => 0,
         ];
     }
@@ -369,7 +541,8 @@ final class CanonicalSupplierSnapshotSchema
         }
     }
 
-    private static function consumeInvocationCapability(): void
+    /** @return array{directory: string, directory_identity: string} */
+    private static function consumeInvocationCapability(): array
     {
         $token = getenv(self::DOWN_CAPABILITY_ENV);
         self::clearSuppliedCapabilityEnvironment();
@@ -378,28 +551,144 @@ final class CanonicalSupplierSnapshotSchema
             throw new RuntimeException('one-use invocation capability is missing or malformed');
         }
 
+        $directory = self::capabilityDirectory($token);
         $path = self::capabilityPath($token);
-        $consumedPath = $path.'.consumed.'.bin2hex(random_bytes(8));
+        clearstatcache(true, $directory);
+        if (! file_exists($directory) && ! is_link($directory)) {
+            throw new RuntimeException('one-use invocation capability artifact is missing or already consumed');
+        }
+        self::assertSecureDirectory($directory);
+        clearstatcache(true, $path);
+        if (! file_exists($path) && ! is_link($path)) {
+            throw new RuntimeException('one-use invocation capability artifact is missing or already consumed');
+        }
+        self::assertSecureArtifact($path);
+        $directoryIdentity = self::directoryIdentity($directory);
+        $consumedPath = $directory.DIRECTORY_SEPARATOR.'consumed-'.bin2hex(random_bytes(16)).'.json';
 
         if (! @rename($path, $consumedPath)) {
             throw new RuntimeException('one-use invocation capability artifact is missing or already consumed');
         }
 
         try {
-            $payload = json_decode((string) file_get_contents($consumedPath), true, flags: JSON_THROW_ON_ERROR);
-            $expectedHash = hash('sha256', $token);
+            if ($directoryIdentity !== self::directoryIdentity($directory)) {
+                throw new RuntimeException('private capability directory identity changed during consumption');
+            }
+            self::assertSecureArtifact($consumedPath);
+            $rawPayload = file_get_contents($consumedPath);
+            if (! is_string($rawPayload) || strlen($rawPayload) > 4096) {
+                throw new RuntimeException('one-use invocation capability payload is unreadable or oversized');
+            }
 
-            if (($payload['version'] ?? null) !== self::DOWN_CAPABILITY_VERSION
-                || ! is_string($payload['token_hash'] ?? null)
-                || ! hash_equals($expectedHash, $payload['token_hash'])
+            $payload = json_decode($rawPayload, true, flags: JSON_THROW_ON_ERROR);
+            $expectedHash = hash('sha256', $token);
+            $expectedKeys = ['version', 'token_sha256', 'expires_at', 'rollback_plan_sha256'];
+            $canonicalPayload = is_array($payload)
+                ? json_encode($payload, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES)
+                : null;
+
+            if (! is_array($payload)
+                || array_keys($payload) !== $expectedKeys
+                || ! is_string($canonicalPayload)
+                || ! hash_equals($canonicalPayload, $rawPayload)
+                || $payload['version'] !== self::DOWN_CAPABILITY_VERSION
+                || ! is_string($payload['token_sha256'])
+                || preg_match('/\A[0-9a-f]{64}\z/', $payload['token_sha256']) !== 1
+                || ! hash_equals($expectedHash, $payload['token_sha256'])
                 || ! is_int($payload['expires_at'] ?? null)
                 || $payload['expires_at'] < time()
-                || $payload['expires_at'] > time() + self::DOWN_CAPABILITY_TTL_SECONDS) {
+                || $payload['expires_at'] > time() + self::DOWN_CAPABILITY_TTL_SECONDS
+                || ! is_string($payload['rollback_plan_sha256'])
+                || preg_match('/\A[0-9a-f]{64}\z/', $payload['rollback_plan_sha256']) !== 1
+                || ! hash_equals(self::canonicalRollbackPlanSha256(), $payload['rollback_plan_sha256'])) {
                 throw new RuntimeException('one-use invocation capability is invalid or expired');
             }
         } finally {
             @unlink($consumedPath);
         }
+
+        return [
+            'directory' => $directory,
+            'directory_identity' => $directoryIdentity,
+        ];
+    }
+
+    private static function assertAllowedRollbackSelectors(InputInterface $input): void
+    {
+        foreach (self::REJECTED_ROLLBACK_OPTIONS as $option) {
+            if ($input->hasParameterOption($option, true)) {
+                throw new RuntimeException(sprintf('rollback selector %s is not allowed', $option));
+            }
+        }
+    }
+
+    private static function withRollbackConnection(InputInterface $input, Closure $operation): void
+    {
+        $requested = $input->getOption('database');
+        $connection = is_string($requested) && $requested !== '' ? $requested : null;
+
+        app(Migrator::class)->usingConnection($connection, function () use ($operation): void {
+            $operation(app(Migrator::class));
+        });
+    }
+
+    /** @return list<string> */
+    private static function exactSelectedRollbackMigrations(Migrator $migrator): array
+    {
+        $selected = array_map(
+            static fn (array|object $migration): string => (string) (
+                is_array($migration) ? $migration['migration'] : $migration->migration
+            ),
+            $migrator->getRepository()->getLast(),
+        );
+
+        if ($selected !== self::DOWN_MIGRATIONS) {
+            throw new RuntimeException(sprintf(
+                'latest migration batch must be exactly the %d canonical Phase I migrations in reverse order',
+                count(self::DOWN_MIGRATIONS),
+            ));
+        }
+
+        return $selected;
+    }
+
+    /** @param list<string> $selectedMigrations */
+    private static function assertCanonicalMigrationFilesAvailable(Migrator $migrator, array $selectedMigrations): void
+    {
+        $paths = array_values(array_unique([
+            database_path('migrations'),
+            ...$migrator->paths(),
+        ]));
+        $files = $migrator->getMigrationFiles($paths);
+
+        foreach ($selectedMigrations as $migration) {
+            if (! isset($files[$migration])) {
+                throw new RuntimeException(sprintf('selected canonical migration file %s is unavailable', $migration));
+            }
+        }
+    }
+
+    private static function canonicalRollbackPlanSha256(): string
+    {
+        return hash('sha256', json_encode([
+            'command' => self::DOWN_COMMAND,
+            'reverse_migrations' => self::DOWN_MIGRATIONS,
+        ], JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES));
+    }
+
+    /** @param list<string> $selectedMigrations */
+    private static function invocationRollbackPlanSha256(
+        string $connection,
+        string $database,
+        array $selectedMigrations,
+    ): string {
+        return hash('sha256', json_encode([
+            'canonical_plan_sha256' => self::canonicalRollbackPlanSha256(),
+            'command' => self::DOWN_COMMAND,
+            'connection' => $connection,
+            'database' => $database,
+            'selected_migrations' => $selectedMigrations,
+        ], JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES));
     }
 
     private static function assertForwardGatesDisabled(): void
@@ -550,6 +839,16 @@ final class CanonicalSupplierSnapshotSchema
 
     private static function currentConsoleInput(): InputInterface
     {
+        $input = self::currentConsoleInputOrNull();
+        if ($input !== null) {
+            return $input;
+        }
+
+        throw self::downgradeRejected('destructive down must run inside one console command invocation');
+    }
+
+    private static function currentConsoleInputOrNull(): ?InputInterface
+    {
         foreach (debug_backtrace(0, 64) as $frame) {
             foreach ($frame['args'] ?? [] as $argument) {
                 if ($argument instanceof InputInterface) {
@@ -558,7 +857,7 @@ final class CanonicalSupplierSnapshotSchema
             }
         }
 
-        throw self::downgradeRejected('destructive down must run inside one console command invocation');
+        return null;
     }
 
     private static function discardSuppliedCapability(): void
@@ -570,11 +869,7 @@ final class CanonicalSupplierSnapshotSchema
             return;
         }
 
-        $path = self::capabilityPath($token);
-        $consumedPath = $path.'.discarded.'.bin2hex(random_bytes(8));
-        if (@rename($path, $consumedPath)) {
-            @unlink($consumedPath);
-        }
+        self::removeCapabilityArtifact($token);
     }
 
     private static function clearSuppliedCapabilityEnvironment(): void
@@ -585,13 +880,277 @@ final class CanonicalSupplierSnapshotSchema
 
     private static function capabilityPath(string $token): string
     {
-        return sys_get_temp_dir().DIRECTORY_SEPARATOR
-            .'mycomputer-canonical-snapshot-down-'.hash('sha256', $token).'.cap';
+        return self::capabilityDirectory($token).DIRECTORY_SEPARATOR.self::DOWN_CAPABILITY_FILE;
+    }
+
+    private static function capabilityDirectory(string $token): string
+    {
+        return self::capabilityRootPath().DIRECTORY_SEPARATOR
+            .hash('sha256', "canonical-supplier-snapshot-down-directory\0".$token);
+    }
+
+    private static function capabilityRootPath(): string
+    {
+        return rtrim(sys_get_temp_dir(), '\\/').DIRECTORY_SEPARATOR.self::DOWN_CAPABILITY_ROOT;
+    }
+
+    private static function ensureCapabilityRoot(): void
+    {
+        $root = self::capabilityRootPath();
+        if (! file_exists($root) && ! is_link($root)) {
+            try {
+                self::createPrivateDirectory($root);
+            } catch (Throwable $exception) {
+                if (! file_exists($root) && ! is_link($root)) {
+                    throw $exception;
+                }
+            }
+        }
+
+        self::assertSecureDirectory($root);
+    }
+
+    private static function createPrivateDirectory(string $path): void
+    {
+        if (PHP_OS_FAMILY === 'Windows') {
+            self::createPrivateWindowsDirectory($path);
+
+            return;
+        }
+
+        $previousUmask = umask(0077);
+        try {
+            if (! @mkdir($path, 0700)) {
+                throw new RuntimeException('Unable to create private destructive down capability directory');
+            }
+        } finally {
+            umask($previousUmask);
+        }
+    }
+
+    private static function createPrivateWindowsDirectory(string $path): void
+    {
+        $script = <<<'POWERSHELL'
+            $ErrorActionPreference = 'Stop'
+            $path = [IO.Path]::GetFullPath([string] $env:MYCOMPUTER_PHASE_I_CAPABILITY_PATH)
+            if ([IO.Directory]::Exists($path) -or [IO.File]::Exists($path)) {
+                throw 'Capability directory already exists'
+            }
+            $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
+            $security = New-Object Security.AccessControl.DirectorySecurity
+            $security.SetOwner($identity.User)
+            $security.SetAccessRuleProtection($true, $false)
+            $rule = New-Object Security.AccessControl.FileSystemAccessRule(
+                $identity.User,
+                [Security.AccessControl.FileSystemRights]::FullControl,
+                [Security.AccessControl.InheritanceFlags]'ContainerInherit, ObjectInherit',
+                [Security.AccessControl.PropagationFlags]::None,
+                [Security.AccessControl.AccessControlType]::Allow
+            )
+            [void] $security.AddAccessRule($rule)
+            [void] [IO.Directory]::CreateDirectory($path, $security)
+            POWERSHELL;
+
+        self::runWindowsSecurityProcess($script, [$path]);
+    }
+
+    private static function assertSecureDirectory(string $path): void
+    {
+        self::assertExpectedPathType($path, true);
+
+        if (PHP_OS_FAMILY === 'Windows') {
+            self::assertSecureWindowsPath($path, true);
+
+            return;
+        }
+
+        $stat = self::requiredLstat($path);
+        if (($stat['mode'] & 0777) !== 0700) {
+            throw new RuntimeException('Private capability directory permissions are not exactly 0700');
+        }
+        if (! function_exists('posix_geteuid') || $stat['uid'] !== posix_geteuid()) {
+            throw new RuntimeException('Private capability directory owner cannot be proven');
+        }
+    }
+
+    private static function assertSecureArtifact(string $path): void
+    {
+        self::assertExpectedPathType($path, false);
+        $stat = self::requiredLstat($path);
+        if (($stat['nlink'] ?? 0) !== 1) {
+            throw new RuntimeException('Capability artifact has an unsafe hard-link count');
+        }
+
+        if (PHP_OS_FAMILY === 'Windows') {
+            self::assertSecureWindowsPath($path, false);
+
+            return;
+        }
+
+        if (($stat['mode'] & 0777) !== 0600) {
+            throw new RuntimeException('Capability artifact permissions are not exactly 0600');
+        }
+        if (! function_exists('posix_geteuid') || $stat['uid'] !== posix_geteuid()) {
+            throw new RuntimeException('Capability artifact owner cannot be proven');
+        }
+    }
+
+    private static function assertExpectedPathType(string $path, bool $directory): void
+    {
+        clearstatcache(true, $path);
+        if (is_link($path)) {
+            throw new RuntimeException('Capability path must not be a symbolic link');
+        }
+
+        $stat = self::requiredLstat($path);
+        $type = $stat['mode'] & 0170000;
+        $expectedType = $directory ? 0040000 : 0100000;
+        if ($type !== $expectedType || ($directory ? ! is_dir($path) : ! is_file($path))) {
+            throw new RuntimeException($directory
+                ? 'Capability directory is not a regular directory'
+                : 'Capability artifact is not a regular file');
+        }
+    }
+
+    /** @return array<string|int, int> */
+    private static function requiredLstat(string $path): array
+    {
+        $stat = @lstat($path);
+        if (! is_array($stat)) {
+            throw new RuntimeException('Capability path metadata is unavailable');
+        }
+
+        return $stat;
+    }
+
+    private static function assertSecureWindowsPath(string $path, bool $directory): void
+    {
+        $script = <<<'POWERSHELL'
+            $ErrorActionPreference = 'Stop'
+            $path = [IO.Path]::GetFullPath([string] $env:MYCOMPUTER_PHASE_I_CAPABILITY_PATH)
+            $isDirectory = [IO.Directory]::Exists($path)
+            $isFile = [IO.File]::Exists($path)
+            if (-not $isDirectory -and -not $isFile) {
+                throw 'Capability path is missing'
+            }
+            $acl = $(if ($isDirectory) {
+                [IO.Directory]::GetAccessControl($path)
+            } else {
+                [IO.File]::GetAccessControl($path)
+            })
+            $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
+            $rules = @($acl.GetAccessRules($true, $true, [Security.Principal.SecurityIdentifier]) | ForEach-Object {
+                [ordered]@{
+                    sid = $_.IdentityReference.Value
+                    type = $_.AccessControlType.ToString()
+                    rights = $_.FileSystemRights.ToString()
+                    inherited = [bool] $_.IsInherited
+                }
+            })
+            [ordered]@{
+                path = $path
+                type = $(if ($isDirectory) { 'directory' } else { 'file' })
+                reparse = [bool] (([IO.File]::GetAttributes($path) -band [IO.FileAttributes]::ReparsePoint) -ne 0)
+                owner_sid = $acl.GetOwner([Security.Principal.SecurityIdentifier]).Value
+                current_sid = $identity.User.Value
+                protected = [bool] $acl.AreAccessRulesProtected
+                rules = $rules
+            } | ConvertTo-Json -Compress -Depth 4
+            POWERSHELL;
+
+        $raw = self::runWindowsSecurityProcess($script, [$path]);
+        $security = json_decode(trim($raw), true, flags: JSON_THROW_ON_ERROR);
+        $expectedType = $directory ? 'directory' : 'file';
+        $rules = is_array($security['rules'] ?? null) ? $security['rules'] : [];
+
+        if (($security['type'] ?? null) !== $expectedType
+            || ($security['reparse'] ?? true) !== false
+            || ! is_string($security['current_sid'] ?? null)
+            || ($security['owner_sid'] ?? null) !== $security['current_sid']
+            || ($directory && ($security['protected'] ?? false) !== true)
+            || count($rules) !== 1
+            || ($rules[0]['sid'] ?? null) !== $security['current_sid']
+            || ($rules[0]['type'] ?? null) !== 'Allow'
+            || ($rules[0]['rights'] ?? null) !== 'FullControl'
+            || ($directory && ($rules[0]['inherited'] ?? true) !== false)) {
+            throw new RuntimeException('Windows capability ACL, owner, or reparse-point proof failed');
+        }
+    }
+
+    /** @param list<string> $arguments */
+    private static function runWindowsSecurityProcess(string $script, array $arguments): string
+    {
+        $systemRoot = getenv('SystemRoot');
+        if (! is_string($systemRoot) || $systemRoot === '') {
+            throw new RuntimeException('Windows system root is unavailable for ACL enforcement');
+        }
+
+        $powerShell = $systemRoot.'\\System32\\WindowsPowerShell\\v1.0\\powershell.exe';
+        if (! is_file($powerShell)) {
+            throw new RuntimeException('Windows ACL enforcement tool is unavailable');
+        }
+
+        if (count($arguments) !== 1) {
+            throw new RuntimeException('Windows ACL operation requires exactly one path');
+        }
+
+        $process = new Process([
+            $powerShell,
+            '-NoLogo',
+            '-NoProfile',
+            '-NonInteractive',
+            '-ExecutionPolicy',
+            'Bypass',
+            '-Command',
+            $script,
+        ], env: ['MYCOMPUTER_PHASE_I_CAPABILITY_PATH' => $arguments[0]]);
+        $process->setTimeout(10);
+        $process->run();
+
+        if (! $process->isSuccessful()) {
+            throw new RuntimeException('Windows ACL enforcement or validation failed closed');
+        }
+
+        return $process->getOutput();
+    }
+
+    private static function directoryIdentity(string $path): string
+    {
+        self::assertSecureDirectory($path);
+        $stat = self::requiredLstat($path);
+
+        return hash('sha256', json_encode([
+            'path' => self::normalizedAbsolutePath($path),
+            'device' => $stat['dev'],
+            'inode' => $stat['ino'],
+        ], JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES));
+    }
+
+    private static function normalizedAbsolutePath(string $path): string
+    {
+        $resolved = realpath($path);
+        if (! is_string($resolved)) {
+            throw new RuntimeException('Capability path cannot be resolved');
+        }
+
+        return PHP_OS_FAMILY === 'Windows' ? strtolower(str_replace('\\', '/', $resolved)) : $resolved;
+    }
+
+    private static function removeCapabilityArtifact(string $token): void
+    {
+        $directory = self::capabilityDirectory($token);
+        @unlink(self::capabilityPath($token));
+        @rmdir($directory);
     }
 
     private static function invalidateDestructiveDownScope(): void
     {
+        $scope = self::$destructiveDownScope;
         self::$destructiveDownScope = null;
+
+        if (is_array($scope)) {
+            @rmdir($scope['capability_directory']);
+        }
     }
 
     private static function downgradeRejected(string $message, ?Throwable $previous = null): RuntimeException

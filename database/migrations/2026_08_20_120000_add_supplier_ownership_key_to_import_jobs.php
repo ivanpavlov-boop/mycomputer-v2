@@ -7,6 +7,8 @@ use Illuminate\Support\Facades\Schema;
 
 require_once __DIR__.'/support/CanonicalSupplierSnapshotSchema.php';
 
+CanonicalSupplierSnapshotSchema::bootstrapDestructiveDownGuard();
+
 return new class extends Migration
 {
     public function up(): void

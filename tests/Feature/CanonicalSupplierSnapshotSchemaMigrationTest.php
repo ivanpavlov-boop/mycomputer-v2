@@ -3,15 +3,25 @@
 namespace Tests\Feature;
 
 use Database\Migrations\Support\CanonicalSupplierSnapshotSchema;
+use Illuminate\Console\Events\CommandFinished;
+use Illuminate\Console\Events\CommandStarting;
+use Illuminate\Contracts\Console\Kernel as ConsoleKernel;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Schema;
 use PDO;
 use PDOException;
 use ReflectionClass;
+use Symfony\Component\Console\Input\ArrayInput;
+use Symfony\Component\Console\Input\InputArgument;
+use Symfony\Component\Console\Input\InputDefinition;
+use Symfony\Component\Console\Input\InputOption;
+use Symfony\Component\Console\Output\BufferedOutput;
+use Symfony\Component\Process\Process;
 use Tests\TestCase;
 use Throwable;
 
@@ -19,17 +29,270 @@ require_once __DIR__.'/../../database/migrations/support/CanonicalSupplierSnapsh
 
 final class CanonicalSupplierSnapshotSchemaMigrationTest extends TestCase
 {
-    private const CHECK_INVENTORY_SHA256 = 'a705540a21477f791c105cb1e871c749ffacc1477732f22a96f6fa45c1c22538';
+    /** @var array<string, array<string, string>> */
+    private const EXPECTED_CHECKS = [
+        'supplier_import_cohort_authorization_members' => [
+            'chk_import_cohort_auth_supplier_sku_hash' => '((length(`supplier_sku_hash`) = 64) and regexp_like(`supplier_sku_hash`,_ascii\\\'^[0-9a-f]{64}$\\\',_utf8mb4\\\'c\\\'))',
+        ],
+        'supplier_import_dispatch_alert_intents' => [
+            'chk_import_dispatch_alert_attempt_bound' => '((`attempt_count` >= 0) and (`attempt_count` <= 8))',
+            'chk_import_dispatch_alert_delivery_owner_tuple' => '(((`delivery_owner_token_hash` is null) and (`delivery_lease_acquired_at` is null) and (`delivery_lease_expires_at` is null)) or ((`delivery_owner_token_hash` is not null) and (length(`delivery_owner_token_hash`) = 64) and regexp_like(`delivery_owner_token_hash`,_ascii\\\'^[0-9a-f]{64}$\\\',_utf8mb4\\\'c\\\') and (`delivery_lease_acquired_at` is not null) and (`delivery_lease_expires_at` is not null) and (`delivery_lease_acquired_at` < `delivery_lease_expires_at`)))',
+            'chk_import_dispatch_alert_identity' => '((length(`alert_identity`) = 64) and regexp_like(`alert_identity`,_ascii\\\'^[0-9a-f]{64}$\\\',_utf8mb4\\\'c\\\'))',
+            'chk_import_dispatch_alert_schema_type' => '((cast(`schema_version` as char charset binary) = cast(_ascii\\\'supplier-import-dispatch-alert-v1\\\' as char charset binary)) and (length(`schema_version`) = 33) and (cast(`alert_type` as char charset binary) = cast(_ascii\\\'dispatch_watchdog_overdue\\\' as char charset binary)) and (length(`alert_type`) = 25) and (json_type(`payload`) = _utf8mb4\\\'OBJECT\\\'))',
+            'chk_import_dispatch_alert_severity_bucket' => '(((cast(`severity` as char charset binary) = cast(_ascii\\\'warning\\\' as char charset binary)) and (`critical_bucket` is null)) or ((cast(`severity` as char charset binary) = cast(_ascii\\\'critical\\\' as char charset binary)) and (`critical_bucket` is not null)))',
+            'chk_import_dispatch_alert_state' => '(cast(`delivery_state` as char charset binary) in (cast(_ascii\\\'pending\\\' as char charset binary),cast(_ascii\\\'delivering\\\' as char charset binary),cast(_ascii\\\'acknowledged\\\' as char charset binary),cast(_ascii\\\'permanent_failed\\\' as char charset binary),cast(_ascii\\\'delivery_outcome_unknown_exhausted\\\' as char charset binary)))',
+            'chk_import_dispatch_alert_state_tuple' => '(((`delivery_state` = _utf8mb4\\\'pending\\\') and (`delivery_owner_token_hash` is null) and (`delivery_lease_acquired_at` is null) and (`delivery_lease_expires_at` is null) and (`next_attempt_at` is not null) and (`acknowledged_at` is null)) or ((`delivery_state` = _utf8mb4\\\'delivering\\\') and (`delivery_owner_token_hash` is not null) and (`delivery_lease_acquired_at` is not null) and (`delivery_lease_expires_at` is not null) and (`next_attempt_at` is null) and (`acknowledged_at` is null) and (`attempt_count` between 1 and 8)) or ((`delivery_state` = _utf8mb4\\\'acknowledged\\\') and (`delivery_owner_token_hash` is null) and (`delivery_lease_acquired_at` is null) and (`delivery_lease_expires_at` is null) and (`next_attempt_at` is null) and (`acknowledged_at` is not null) and (`last_failure_code` is null)) or ((`delivery_state` = _utf8mb4\\\'permanent_failed\\\') and (`delivery_owner_token_hash` is null) and (`delivery_lease_acquired_at` is null) and (`delivery_lease_expires_at` is null) and (`next_attempt_at` is null) and (`acknowledged_at` is null) and (`attempt_count` between 1 and 8) and (`last_failure_code` is not null)) or ((`delivery_state` = _utf8mb4\\\'delivery_outcome_unknown_exhausted\\\') and (`delivery_owner_token_hash` is null) and (`delivery_lease_acquired_at` is null) and (`delivery_lease_expires_at` is null) and (`next_attempt_at` is null) and (`acknowledged_at` is null) and (`attempt_count` = 8) and (cast(`last_failure_code` as char charset binary) = cast(_ascii\\\'alert_delivery_outcome_unknown_exhausted\\\' as char charset binary))))',
+        ],
+        'supplier_import_dispatch_monitor_health' => [
+            'chk_import_dispatch_monitor_generation' => '(`last_successful_monitor_generation` <= `monitor_generation`)',
+            'chk_import_dispatch_monitor_identity' => '((cast(`monitor_identity` as char charset binary) = cast(_ascii\\\'supplier-import-dispatch-watchdog-v1\\\' as char charset binary)) and (length(`monitor_identity`) = 36) and (cast(`observer_identity` as char charset binary) = cast(_ascii\\\'supplier-import-dispatch-observer-v1\\\' as char charset binary)) and (length(`observer_identity`) = 36))',
+            'chk_import_dispatch_monitor_integrity_state' => '(cast(`integrity_state` as char charset binary) in (cast(_ascii\\\'healthy\\\' as char charset binary),cast(_ascii\\\'stale\\\' as char charset binary),cast(_ascii\\\'failed\\\' as char charset binary),cast(_ascii\\\'unknown\\\' as char charset binary)))',
+            'chk_import_dispatch_monitor_observer_tuple' => '(((`observer_sequence` = 0) and (`observed_monitor_generation` = 0) and (`observed_cycle_sequence` = 0) and (`last_successful_observer_at` is null)) or ((`observer_sequence` > 0) and (`observed_monitor_generation` > 0) and (`observed_cycle_sequence` > 0) and (`last_successful_observer_at` is not null) and (`observed_monitor_generation` <= `last_successful_monitor_generation`) and (`observed_cycle_sequence` <= `cycle_sequence`)))',
+            'chk_import_dispatch_monitor_owner_tuple' => '(((`monitor_owner_token_hash` is null) and (`monitor_lease_acquired_at` is null) and (`monitor_lease_expires_at` is null)) or ((`monitor_owner_token_hash` is not null) and (length(`monitor_owner_token_hash`) = 64) and regexp_like(`monitor_owner_token_hash`,_ascii\\\'^[0-9a-f]{64}$\\\',_utf8mb4\\\'c\\\') and (`monitor_lease_acquired_at` is not null) and (`monitor_lease_expires_at` is not null) and (`monitor_lease_acquired_at` < `monitor_lease_expires_at`)))',
+            'chk_import_dispatch_monitor_singleton' => '(`id` = 1)',
+            'chk_import_dispatch_monitor_stored_healthy' => '((`integrity_state` <> _utf8mb4\\\'healthy\\\') or ((`cycle_sequence` > 0) and (`last_successful_monitor_generation` > 0) and (`last_successful_cycle_at` is not null) and (`last_successful_sink_health_at` is not null) and (`last_successful_cycle_at` = `last_successful_sink_health_at`) and (`last_successful_sink_contract_key` is not null) and (`last_failure_code` is null)))',
+            'chk_import_dispatch_monitor_success_tuple' => '(((`cycle_sequence` = 0) and (`last_successful_monitor_generation` = 0) and (`last_successful_cycle_at` is null) and (`last_successful_sink_health_at` is null) and (`last_successful_sink_contract_key` is null)) or ((`cycle_sequence` > 0) and (`last_successful_monitor_generation` > 0) and (`last_successful_cycle_at` is not null) and (`last_successful_sink_health_at` is not null) and (`last_successful_cycle_at` = `last_successful_sink_health_at`) and (`last_successful_sink_contract_key` is not null)))',
+        ],
+        'supplier_import_dispatch_outbox' => [
+            'chk_import_outbox_attempt_bound' => '((`attempt_count` >= 0) and (`attempt_count` <= 8))',
+            'chk_import_outbox_delivery_attempt_bound' => '((`delivery_attempt_count` >= 0) and (`delivery_attempt_count` <= 8))',
+            'chk_import_outbox_event_type' => '(cast(`event_type` as char charset binary) = cast(_ascii\\\'initial_dispatch\\\' as char charset binary))',
+            'chk_import_outbox_job_type' => '(cast(`job_type` as char charset binary) in (cast(_ascii\\\'run_supplier_import\\\' as char charset binary),cast(_ascii\\\'process_xml_supplier_feed\\\' as char charset binary)))',
+            'chk_import_outbox_lease_hash' => '((`lease_token_hash` is null) or ((length(`lease_token_hash`) = 64) and regexp_like(`lease_token_hash`,_ascii\\\'^[0-9a-f]{64}$\\\',_utf8mb4\\\'c\\\')))',
+            'chk_import_outbox_lease_tuple' => '(((`lease_owner_key` is null) and (`lease_token_hash` is null) and (`leased_at` is null) and (`lease_expires_at` is null)) or ((`lease_owner_key` is not null) and (`lease_token_hash` is not null) and (`leased_at` is not null) and (`lease_expires_at` is not null)))',
+            'chk_import_outbox_logical_key' => '((length(`logical_execution_key`) = 64) and regexp_like(`logical_execution_key`,_ascii\\\'^[0-9a-f]{64}$\\\',_utf8mb4\\\'c\\\'))',
+            'chk_import_outbox_payload_hash' => '((length(`dispatch_payload_hash`) = 64) and regexp_like(`dispatch_payload_hash`,_ascii\\\'^[0-9a-f]{64}$\\\',_utf8mb4\\\'c\\\'))',
+            'chk_import_outbox_payload_object' => '(json_type(`dispatch_payload`) = _utf8mb4\\\'OBJECT\\\')',
+            'chk_import_outbox_publication_attempt_state' => '(cast(`publication_attempt_state` as char charset binary) in (cast(_ascii\\\'none\\\' as char charset binary),cast(_ascii\\\'reserved\\\' as char charset binary),cast(_ascii\\\'external_fence_installed\\\' as char charset binary),cast(_ascii\\\'call_boundary_entered\\\' as char charset binary),cast(_ascii\\\'durable_success\\\' as char charset binary),cast(_ascii\\\'durable_failure\\\' as char charset binary),cast(_ascii\\\'outcome_unknown\\\' as char charset binary)))',
+            'chk_import_outbox_publication_attempt_tuple' => '(((`publication_attempt_state` = _ascii\\\'none\\\') and (`publication_attempt_generation` = 0) and (`attempt_count` = 0) and (`publication_attempt_token_hash` is null) and (`publication_attempt_reserved_at` is null) and (`publication_attempt_lease_expires_at` is null) and (`publication_external_fence_installed_at` is null) and (`publication_call_boundary_at` is null) and (`publication_attempt_resolved_at` is null)) or ((`publication_attempt_state` = _ascii\\\'reserved\\\') and (`publication_attempt_generation` > 0) and (`attempt_count` > 0) and (`publication_attempt_token_hash` is not null) and (`publication_attempt_reserved_at` is not null) and (`publication_attempt_lease_expires_at` > `publication_attempt_reserved_at`) and (`publication_external_fence_installed_at` is null) and (`publication_call_boundary_at` is null) and (`publication_attempt_resolved_at` is null)) or ((`publication_attempt_state` = _ascii\\\'external_fence_installed\\\') and (`publication_attempt_generation` > 0) and (`attempt_count` > 0) and (`publication_attempt_token_hash` is not null) and (`publication_attempt_reserved_at` is not null) and (`publication_attempt_lease_expires_at` > `publication_attempt_reserved_at`) and (`publication_external_fence_installed_at` >= `publication_attempt_reserved_at`) and (`publication_call_boundary_at` is null) and (`publication_attempt_resolved_at` is null)) or ((`publication_attempt_state` = _ascii\\\'call_boundary_entered\\\') and (`publication_attempt_generation` > 0) and (`attempt_count` > 0) and (`publication_attempt_token_hash` is not null) and (`publication_attempt_reserved_at` is not null) and (`publication_attempt_lease_expires_at` > `publication_attempt_reserved_at`) and (`publication_external_fence_installed_at` >= `publication_attempt_reserved_at`) and (`publication_call_boundary_at` >= `publication_external_fence_installed_at`) and (`publication_attempt_resolved_at` is null)) or ((`publication_attempt_state` in (_ascii\\\'durable_success\\\',_ascii\\\'durable_failure\\\')) and (`publication_attempt_generation` > 0) and (`attempt_count` > 0) and (`publication_attempt_token_hash` is null) and (`publication_attempt_reserved_at` is not null) and (`publication_attempt_lease_expires_at` > `publication_attempt_reserved_at`) and (`publication_external_fence_installed_at` >= `publication_attempt_reserved_at`) and (`publication_call_boundary_at` >= `publication_external_fence_installed_at`) and (`publication_attempt_resolved_at` >= `publication_call_boundary_at`)) or ((`publication_attempt_state` = _ascii\\\'outcome_unknown\\\') and (`publication_attempt_generation` > 0) and (`attempt_count` > 0) and (`publication_attempt_token_hash` is null) and (`publication_attempt_reserved_at` is not null) and (`publication_attempt_lease_expires_at` > `publication_attempt_reserved_at`) and ((`publication_external_fence_installed_at` is null) or (`publication_external_fence_installed_at` >= `publication_attempt_reserved_at`)) and ((`publication_call_boundary_at` is null) or ((`publication_external_fence_installed_at` is not null) and (`publication_call_boundary_at` >= `publication_external_fence_installed_at`))) and (`publication_attempt_resolved_at` >= `publication_attempt_reserved_at`)))',
+            'chk_import_outbox_publication_token_hash' => '((`publication_attempt_token_hash` is null) or ((length(`publication_attempt_token_hash`) = 64) and regexp_like(`publication_attempt_token_hash`,_ascii\\\'^[0-9a-f]{64}$\\\',_utf8mb4\\\'c\\\')))',
+            'chk_import_outbox_publish_tuple' => '(((`published_at` is null) and (`last_published_at` is null)) or ((`published_at` is not null) and (`last_published_at` is not null)))',
+            'chk_import_outbox_state' => '(`state` in (_ascii\\\'pending\\\',_ascii\\\'leased\\\',_ascii\\\'published\\\',_ascii\\\'recovery_required\\\',_ascii\\\'terminal_failed\\\'))',
+            'chk_import_outbox_state_fields' => '(((`state` = _ascii\\\'pending\\\') and (`lease_owner_key` is null) and (`lease_token_hash` is null) and (`leased_at` is null) and (`lease_expires_at` is null) and (`published_at` is null) and (`last_published_at` is null) and (`delivery_watchdog_at` is null) and (`recovery_required_at` is null) and (`recovery_reason_code` is null) and (`terminal_at` is null) and (`terminal_failure_reason_code` is null)) or ((`state` = _ascii\\\'leased\\\') and (`lease_owner_key` is not null) and (`lease_token_hash` is not null) and (`leased_at` is not null) and (`lease_expires_at` is not null) and (`delivery_watchdog_at` is null) and (`recovery_required_at` is null) and (`recovery_reason_code` is null) and (`terminal_at` is null) and (`terminal_failure_reason_code` is null)) or ((`state` = _ascii\\\'published\\\') and (`lease_owner_key` is null) and (`lease_token_hash` is null) and (`leased_at` is null) and (`lease_expires_at` is null) and (`published_at` is not null) and (`last_published_at` is not null) and (`recovery_required_at` is null) and (`recovery_reason_code` is null) and (`terminal_at` is null) and (`terminal_failure_reason_code` is null)) or ((`state` = _ascii\\\'recovery_required\\\') and (`lease_owner_key` is null) and (`lease_token_hash` is null) and (`leased_at` is null) and (`lease_expires_at` is null) and (`published_at` is not null) and (`last_published_at` is not null) and (`delivery_watchdog_at` is null) and (`recovery_required_at` is not null) and (`recovery_reason_code` is not null) and (`terminal_at` is null) and (`terminal_failure_reason_code` is null)) or ((`state` = _ascii\\\'terminal_failed\\\') and (`lease_owner_key` is null) and (`lease_token_hash` is null) and (`leased_at` is null) and (`lease_expires_at` is null) and (`delivery_watchdog_at` is null) and (`recovery_required_at` is null) and (`recovery_reason_code` is null) and (`terminal_at` is not null) and (`terminal_failure_reason_code` is not null)))',
+            'chk_import_outbox_terminal_attempt' => '((`terminal_failure_reason_code` <> _ascii\\\'dispatch_publication_attempts_exhausted\\\') or (`attempt_count` = 8))',
+            'chk_import_outbox_timestamp_order' => '((`transport_deadline_at` > `created_at`) and ((`leased_at` is null) or ((`leased_at` >= `created_at`) and (`leased_at` < `lease_expires_at`))) and ((`next_attempt_at` is null) or (`next_attempt_at` >= `created_at`)) and ((`published_at` is null) or (`published_at` >= `created_at`)) and ((`last_published_at` is null) or (`last_published_at` >= `published_at`)) and ((`delivery_watchdog_at` is null) or (`delivery_watchdog_at` >= `last_published_at`)) and ((`recovery_required_at` is null) or (`recovery_required_at` >= `created_at`)) and ((`terminal_at` is null) or (`terminal_at` >= `created_at`)))',
+            'chk_import_outbox_transport_deadline' => '(`transport_deadline_at` = (`created_at` + interval 24 hour))',
+            'chk_import_outbox_watchdog_state' => '((`delivery_watchdog_at` is null) or (`state` = _ascii\\\'published\\\'))',
+        ],
+        'supplier_import_dispatch_recovery_authorizations' => [
+            'chk_import_recovery_auth_action' => '(cast(`authorization_action` as char charset binary) in (cast(_ascii\\\'republish_same_key\\\' as char charset binary),cast(_ascii\\\'recover_expired_queued_ownership\\\' as char charset binary),cast(_ascii\\\'terminalize_stale_dispatch\\\' as char charset binary),cast(_ascii\\\'terminalize_publication_mismatch\\\' as char charset binary),cast(_ascii\\\'terminalize_abandoned_processing\\\' as char charset binary)))',
+            'chk_import_recovery_auth_expected_fingerprint' => '((length(`expected_state_fingerprint`) = 64) and regexp_like(`expected_state_fingerprint`,_ascii\\\'^[0-9a-f]{64}$\\\',_utf8mb4\\\'c\\\'))',
+            'chk_import_recovery_auth_expiry' => '(`expires_at` = (`authorized_at` + interval 900 second))',
+            'chk_import_recovery_auth_logical_key' => '((length(`logical_execution_key`) = 64) and regexp_like(`logical_execution_key`,_ascii\\\'^[0-9a-f]{64}$\\\',_utf8mb4\\\'c\\\'))',
+            'chk_import_recovery_auth_nonce_hash' => '((length(`authorization_nonce_hash`) = 64) and regexp_like(`authorization_nonce_hash`,_ascii\\\'^[0-9a-f]{64}$\\\',_utf8mb4\\\'c\\\'))',
+            'chk_import_recovery_auth_parent_id' => '(`target_parent_id` > 0)',
+            'chk_import_recovery_auth_parent_type' => '(cast(`target_parent_type` as char charset binary) in (cast(_ascii\\\'supplier_import_run\\\' as char charset binary),cast(_ascii\\\'supplier_feed\\\' as char charset binary)))',
+        ],
+        'supplier_import_dispatch_recovery_results' => [
+            'chk_import_recovery_result_action_event_code' => '(((cast(`event_kind` as char charset binary) = cast(_ascii\\\'started\\\' as char charset binary)) and (cast(`canonical_result_code` as char charset binary) = cast(_ascii\\\'authorization_attempt_started\\\' as char charset binary))) or ((cast(`event_kind` as char charset binary) = cast(_ascii\\\'rejected\\\' as char charset binary)) and (cast(`canonical_result_code` as char charset binary) in (cast(_ascii\\\'authorization_expired\\\' as char charset binary),cast(_ascii\\\'state_fingerprint_mismatch\\\' as char charset binary),cast(_ascii\\\'resume_state_fingerprint_mismatch\\\' as char charset binary),cast(_ascii\\\'state_conflict\\\' as char charset binary),cast(_ascii\\\'noncanonical_parent\\\' as char charset binary),cast(_ascii\\\'action_not_permitted\\\' as char charset binary),cast(_ascii\\\'response_window_expired\\\' as char charset binary),cast(_ascii\\\'monitor_integrity_not_healthy\\\' as char charset binary)))) or ((cast(`event_kind` as char charset binary) = cast(_ascii\\\'already_terminal\\\' as char charset binary)) and (cast(`canonical_result_code` as char charset binary) = cast(_ascii\\\'already_terminal_noop\\\' as char charset binary))) or ((cast(`authorization_action` as char charset binary) = cast(_ascii\\\'republish_same_key\\\' as char charset binary)) and (((cast(`event_kind` as char charset binary) = cast(_ascii\\\'republish_succeeded\\\' as char charset binary)) and (cast(`canonical_result_code` as char charset binary) = cast(_ascii\\\'dispatch_republished_same_key\\\' as char charset binary))) or ((cast(`event_kind` as char charset binary) = cast(_ascii\\\'publish_failed\\\' as char charset binary)) and (cast(`canonical_result_code` as char charset binary) in (cast(_ascii\\\'dispatch_publication_failed\\\' as char charset binary),cast(_ascii\\\'dispatch_publication_attempts_exhausted\\\' as char charset binary)))) or ((cast(`event_kind` as char charset binary) = cast(_ascii\\\'action_stopped\\\' as char charset binary)) and (cast(`canonical_result_code` as char charset binary) in (cast(_ascii\\\'republish_delivery_budget_exhausted_after_start\\\' as char charset binary),cast(_ascii\\\'republish_transport_deadline_expired_after_start\\\' as char charset binary),cast(_ascii\\\'republish_response_window_expired_after_start\\\' as char charset binary),cast(_ascii\\\'monitor_integrity_not_healthy_after_start\\\' as char charset binary),cast(_ascii\\\'republish_state_conflict_after_start\\\' as char charset binary)))))) or ((cast(`authorization_action` as char charset binary) = cast(_ascii\\\'recover_expired_queued_ownership\\\' as char charset binary)) and (cast(`event_kind` as char charset binary) = cast(_ascii\\\'ownership_recovery_succeeded\\\' as char charset binary)) and (cast(`canonical_result_code` as char charset binary) = cast(_ascii\\\'queued_ownership_lease_expired\\\' as char charset binary))) or ((cast(`authorization_action` as char charset binary) = cast(_ascii\\\'terminalize_stale_dispatch\\\' as char charset binary)) and (cast(`event_kind` as char charset binary) = cast(_ascii\\\'terminalization_succeeded\\\' as char charset binary)) and (cast(`canonical_result_code` as char charset binary) in (cast(_ascii\\\'transport_delivery_budget_exhausted\\\' as char charset binary),cast(_ascii\\\'transport_deadline_expired\\\' as char charset binary),cast(_ascii\\\'dispatch_watchdog_operator_terminalized\\\' as char charset binary),cast(_ascii\\\'dispatch_watchdog_response_expired\\\' as char charset binary),cast(_ascii\\\'dispatch_publication_attempts_exhausted\\\' as char charset binary)))) or ((cast(`authorization_action` as char charset binary) = cast(_ascii\\\'terminalize_publication_mismatch\\\' as char charset binary)) and (cast(`event_kind` as char charset binary) = cast(_ascii\\\'terminalization_succeeded\\\' as char charset binary)) and (cast(`canonical_result_code` as char charset binary) = cast(_ascii\\\'dispatch_publication_mismatch\\\' as char charset binary))) or ((cast(`authorization_action` as char charset binary) = cast(_ascii\\\'terminalize_abandoned_processing\\\' as char charset binary)) and (cast(`event_kind` as char charset binary) = cast(_ascii\\\'terminalization_succeeded\\\' as char charset binary)) and (cast(`canonical_result_code` as char charset binary) = cast(_ascii\\\'processing_lease_abandoned\\\' as char charset binary))))',
+            'chk_import_recovery_result_event' => '(cast(`event_kind` as char charset binary) in (cast(_ascii\\\'started\\\' as char charset binary),cast(_ascii\\\'republish_succeeded\\\' as char charset binary),cast(_ascii\\\'terminalization_succeeded\\\' as char charset binary),cast(_ascii\\\'ownership_recovery_succeeded\\\' as char charset binary),cast(_ascii\\\'publish_failed\\\' as char charset binary),cast(_ascii\\\'action_stopped\\\' as char charset binary),cast(_ascii\\\'rejected\\\' as char charset binary),cast(_ascii\\\'already_terminal\\\' as char charset binary)))',
+            'chk_import_recovery_result_fingerprint' => '((length(`result_fingerprint`) = 64) and regexp_like(`result_fingerprint`,_ascii\\\'^[0-9a-f]{64}$\\\',_utf8mb4\\\'c\\\'))',
+            'chk_import_recovery_result_resume_fingerprint' => '(((cast(`event_kind` as char charset binary) = cast(_ascii\\\'started\\\' as char charset binary)) and (cast(`authorization_action` as char charset binary) = cast(_ascii\\\'republish_same_key\\\' as char charset binary)) and (length(`resume_state_fingerprint`) = 64) and regexp_like(`resume_state_fingerprint`,_ascii\\\'^[0-9a-f]{64}$\\\',_utf8mb4\\\'c\\\')) or (((cast(`event_kind` as char charset binary) <> cast(_ascii\\\'started\\\' as char charset binary)) or (cast(`authorization_action` as char charset binary) <> cast(_ascii\\\'republish_same_key\\\' as char charset binary))) and (`resume_state_fingerprint` is null)))',
+            'chk_import_recovery_result_sequence' => '(((cast(`event_kind` as char charset binary) in (cast(_ascii\\\'started\\\' as char charset binary),cast(_ascii\\\'rejected\\\' as char charset binary),cast(_ascii\\\'already_terminal\\\' as char charset binary))) and (`event_sequence` = 1)) or ((cast(`event_kind` as char charset binary) in (cast(_ascii\\\'republish_succeeded\\\' as char charset binary),cast(_ascii\\\'terminalization_succeeded\\\' as char charset binary),cast(_ascii\\\'ownership_recovery_succeeded\\\' as char charset binary),cast(_ascii\\\'publish_failed\\\' as char charset binary),cast(_ascii\\\'action_stopped\\\' as char charset binary))) and (`event_sequence` = 2)))',
+        ],
+        'supplier_import_execution_claims' => [
+            'chk_import_claim_attempt_hash' => '((`active_attempt_token_hash` is null) or ((length(`active_attempt_token_hash`) = 64) and regexp_like(`active_attempt_token_hash`,_ascii\\\'^[0-9a-f]{64}$\\\',_utf8mb4\\\'c\\\')))',
+            'chk_import_claim_attempt_time_order' => '((`claimed_at` is null) or (`claimed_at` < `attempt_lease_expires_at`))',
+            'chk_import_claim_attempt_tuple' => '(((`active_attempt_token_hash` is null) and (`claimed_at` is null) and (`attempt_lease_expires_at` is null)) or ((`active_attempt_token_hash` is not null) and (`claimed_at` is not null) and (`attempt_lease_expires_at` is not null)))',
+            'chk_import_claim_cohort_auth_time' => '((`cohort_authorized_at` is null) or ((`allocated_at` is not null) and (`cohort_authorized_at` >= `allocated_at`)))',
+            'chk_import_claim_cohort_auth_version' => '((`cohort_authorization_version` is null) or (`cohort_authorization_version` = _ascii\\\'supplier_offer_cohort_v1\\\'))',
+            'chk_import_claim_cohort_authorization_tuple' => '(((`cohort_authorization_version` is null) and (`cohort_authorized_at` is null) and (`cohort_seed_count` is null) and (`cohort_seed_fingerprint` is null)) or ((`cohort_authorization_version` is not null) and (`cohort_authorized_at` is not null) and (`cohort_seed_count` is not null) and (`cohort_seed_fingerprint` is not null)))',
+            'chk_import_claim_cohort_seed_hash' => '((`cohort_seed_fingerprint` is null) or ((length(`cohort_seed_fingerprint`) = 64) and regexp_like(`cohort_seed_fingerprint`,_ascii\\\'^[0-9a-f]{64}$\\\',_utf8mb4\\\'c\\\')))',
+            'chk_import_claim_processing_marker' => '((`processing_started_at` is null) or (`state` in (_ascii\\\'processing\\\',_ascii\\\'terminal_qualified\\\',_ascii\\\'terminal_frozen\\\',_ascii\\\'terminal_failed\\\')))',
+            'chk_import_claim_processing_owner' => '((`state` <> _ascii\\\'processing\\\') or ((`supplier_feed_id` is not null) and (`import_job_id` is not null) and (`allocated_at` is not null) and (`import_history_id` is not null) and (`source_fingerprint` is not null) and (`cohort_authorization_version` is not null) and (`cohort_authorized_at` is not null) and (`cohort_seed_count` is not null) and (`cohort_seed_fingerprint` is not null) and (`processing_started_at` is not null) and (`active_attempt_token_hash` is not null) and (`claimed_at` is not null) and (`attempt_lease_expires_at` is not null)))',
+            'chk_import_claim_processing_time_order' => '((`processing_started_at` is null) or (`state` in (_utf8mb4\\\'terminal_qualified\\\',_utf8mb4\\\'terminal_frozen\\\',_utf8mb4\\\'terminal_failed\\\')) or ((`claimed_at` is not null) and (`processing_started_at` >= `claimed_at`) and (`processing_started_at` < `attempt_lease_expires_at`)))',
+            'chk_import_claim_state' => '(`state` in (_ascii\\\'pending_dispatch\\\',_ascii\\\'queued\\\',_ascii\\\'processing\\\',_ascii\\\'terminal_qualified\\\',_ascii\\\'terminal_frozen\\\',_ascii\\\'terminal_failed\\\'))',
+            'chk_import_claim_terminal_fields' => '(((`state` = _ascii\\\'terminal_qualified\\\') and (`terminal_at` is not null) and (`terminal_reason_code` is null)) or ((`state` in (_ascii\\\'terminal_frozen\\\',_ascii\\\'terminal_failed\\\')) and (`terminal_at` is not null) and (`terminal_reason_code` is not null)) or ((`state` not in (_ascii\\\'terminal_qualified\\\',_ascii\\\'terminal_frozen\\\',_ascii\\\'terminal_failed\\\')) and (`terminal_at` is null) and (`terminal_reason_code` is null)))',
+            'chk_import_claim_terminal_owner_clear' => '((`state` not in (_ascii\\\'terminal_qualified\\\',_ascii\\\'terminal_frozen\\\',_ascii\\\'terminal_failed\\\')) or ((`active_attempt_token_hash` is null) and (`claimed_at` is null) and (`attempt_lease_expires_at` is null)))',
+            'chk_import_execution_claim_allocation_pair' => '(((`supplier_feed_id` is null) and (`import_job_id` is null) and (`allocated_at` is null)) or ((`supplier_feed_id` is not null) and (`import_job_id` is not null) and (`allocated_at` is not null)))',
+            'chk_import_execution_claim_fingerprint_allocation' => '((`source_fingerprint` is null) or ((`supplier_feed_id` is not null) and (`import_job_id` is not null) and (`allocated_at` is not null)))',
+            'chk_import_execution_claim_history_allocation' => '((`import_history_id` is null) or ((`supplier_feed_id` is not null) and (`import_job_id` is not null) and (`allocated_at` is not null)))',
+            'chk_import_execution_claim_logical_key' => '((length(`logical_execution_key`) = 64) and regexp_like(`logical_execution_key`,_ascii\\\'^[0-9a-f]{64}$\\\',_utf8mb4\\\'c\\\'))',
+            'chk_import_execution_claim_path_parent' => '(((cast(`execution_path` as char charset binary) = cast(_ascii\\\'orchestrated\\\' as char charset binary)) and (length(`execution_path`) = 12) and (`supplier_import_run_id` is not null)) or ((cast(`execution_path` as char charset binary) = cast(_ascii\\\'legacy_xml\\\' as char charset binary)) and (length(`execution_path`) = 10) and (`supplier_import_run_id` is null) and (`supplier_feed_id` is not null) and (`import_job_id` is not null)))',
+            'chk_import_execution_claim_processing_allocation' => '((`state` <> _ascii\\\'processing\\\') or ((`supplier_feed_id` is not null) and (`import_job_id` is not null) and (`allocated_at` is not null) and (`import_history_id` is not null) and (`source_fingerprint` is not null) and (`processing_started_at` is not null)))',
+            'chk_import_execution_claim_source_fingerprint' => '((`source_fingerprint` is null) or ((length(`source_fingerprint`) = 64) and regexp_like(`source_fingerprint`,_ascii\\\'^[0-9a-f]{64}$\\\',_utf8mb4\\\'c\\\')))',
+            'chk_import_execution_claim_terminal_evidence_allocation' => '((`state` not in (_ascii\\\'terminal_qualified\\\',_ascii\\\'terminal_frozen\\\')) or ((`supplier_feed_id` is not null) and (`import_job_id` is not null) and (`allocated_at` is not null) and (`import_history_id` is not null)))',
+        ],
+        'supplier_offer_snapshot_enrollments' => [
+            'chk_snapshot_enrollment_fingerprint' => '((length(`enrollment_fingerprint`) = 64) and regexp_like(`enrollment_fingerprint`,_ascii\\\'^[0-9a-f]{64}$\\\',_utf8mb4\\\'c\\\'))',
+            'chk_snapshot_enrollment_source' => '(cast(`enrollment_source` as char charset binary) in (cast(_ascii\\\'capture_start_seed\\\' as char charset binary),cast(_ascii\\\'exact_source_observation\\\' as char charset binary),cast(_ascii\\\'capture_start_seed_and_exact_source_observation\\\' as char charset binary)))',
+            'chk_snapshot_enrollment_source_identity' => '((length(`source_identity`) between 1 and 128) and regexp_like(`source_identity`,_ascii\\\'^snapshot-source-v1:[a-z0-9]+([._-][a-z0-9]+)*(:[a-z0-9]+([._-][a-z0-9]+)*)*$\\\',_utf8mb4\\\'c\\\'))',
+            'chk_snapshot_enrollment_supplier_sku_hash' => '((length(`supplier_sku_hash`) = 64) and regexp_like(`supplier_sku_hash`,_ascii\\\'^[0-9a-f]{64}$\\\',_utf8mb4\\\'c\\\'))',
+            'chk_snapshot_enrollment_timestamp' => 'regexp_like(`enrolled_at`,_ascii\\\'^[0-9]{4}-(0[1-9]|1[0-2])-([0-2][0-9]|3[01])T([01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9][+]00:00$\\\',_utf8mb4\\\'c\\\')',
+        ],
+        'supplier_offer_snapshot_generations' => [
+            'chk_snapshot_generation_boolean_domains' => '((`freshness_policy_approved` in (0,1)) and (`successful` in (0,1)) and (`full` in (0,1)) and (`schema_valid` in (0,1)) and (`truncated` in (0,1)) and (`fatal_integrity_blocker` in (0,1)) and (`supplier_identity_confirmed` in (0,1)) and (`comparable` in (0,1)))',
+            'chk_snapshot_generation_capture_outcome' => '(cast(`capture_outcome` as char charset binary) in (cast(_ascii\\\'completed\\\' as char charset binary),cast(_ascii\\\'completed_with_errors\\\' as char charset binary),cast(_ascii\\\'failed\\\' as char charset binary),cast(_ascii\\\'incomplete\\\' as char charset binary),cast(_ascii\\\'overflow\\\' as char charset binary)))',
+            'chk_snapshot_generation_cohort_fingerprint' => '((`cohort_fingerprint` is null) or ((length(`cohort_fingerprint`) = 64) and regexp_like(`cohort_fingerprint`,_ascii\\\'^[0-9a-f]{64}$\\\',_utf8mb4\\\'c\\\')))',
+            'chk_snapshot_generation_count_reconciliation' => '((`total_observed_count` = (((`valid_observation_count` + `invalid_observation_count`) + `rejected_observation_count`) + `duplicate_observation_count`)) and (`enrolled_observation_count` >= `valid_observation_count`))',
+            'chk_snapshot_generation_fingerprint' => '((length(`generation_fingerprint`) = 64) and regexp_like(`generation_fingerprint`,_ascii\\\'^[0-9a-f]{64}$\\\',_utf8mb4\\\'c\\\'))',
+            'chk_snapshot_generation_freshness_tuple' => '(((`freshness_policy_key` is null) and (`freshness_max_age_hours` is null) and (`freshness_policy_approved` = 0)) or ((`freshness_policy_key` is not null) and (`freshness_max_age_hours` is not null) and (`freshness_policy_approved` = 1)))',
+            'chk_snapshot_generation_json_shapes' => '((json_type(`policy_versions`) = _utf8mb4\\\'OBJECT\\\') and (json_type(`qualification_reason_codes`) = _utf8mb4\\\'ARRAY\\\'))',
+            'chk_snapshot_generation_observation_fingerprint' => '((`observation_set_fingerprint` is null) or ((length(`observation_set_fingerprint`) = 64) and regexp_like(`observation_set_fingerprint`,_ascii\\\'^[0-9a-f]{64}$\\\',_utf8mb4\\\'c\\\')))',
+            'chk_snapshot_generation_qualification_state' => '(cast(`qualification_state` as char charset binary) in (cast(_ascii\\\'qualified_baseline\\\' as char charset binary),cast(_ascii\\\'qualified_comparable\\\' as char charset binary),cast(_ascii\\\'frozen\\\' as char charset binary)))',
+            'chk_snapshot_generation_qualification_tuple' => '(((`qualification_state` = _utf8mb4\\\'qualified_baseline\\\') and (`predecessor_snapshot_generation_id` is null) and (`comparable` = 0) and (`product_drop_percent` is null) and (json_length(`qualification_reason_codes`) = 0) and (`successful` = 1) and (`full` = 1) and (`schema_valid` = 1) and (`truncated` = 0) and (`fatal_integrity_blocker` = 0) and (`supplier_identity_confirmed` = 1) and (`valid_observation_count` >= `minimum_product_count`) and (`cohort_fingerprint` is not null) and (`observation_set_fingerprint` is not null)) or ((`qualification_state` = _utf8mb4\\\'qualified_comparable\\\') and (`predecessor_snapshot_generation_id` is not null) and (`comparable` = 1) and (`product_drop_percent` is not null) and (`product_drop_percent` <= `maximum_product_drop_percent`) and (json_length(`qualification_reason_codes`) = 0) and (`successful` = 1) and (`full` = 1) and (`schema_valid` = 1) and (`truncated` = 0) and (`fatal_integrity_blocker` = 0) and (`supplier_identity_confirmed` = 1) and (`valid_observation_count` >= `minimum_product_count`) and (`cohort_fingerprint` is not null) and (`observation_set_fingerprint` is not null)) or ((`qualification_state` = _utf8mb4\\\'frozen\\\') and (json_length(`qualification_reason_codes`) > 0)))',
+            'chk_snapshot_generation_source_fingerprint' => '((length(`source_fingerprint`) = 64) and regexp_like(`source_fingerprint`,_ascii\\\'^[0-9a-f]{64}$\\\',_utf8mb4\\\'c\\\'))',
+            'chk_snapshot_generation_source_identity' => '((length(`source_identity`) between 1 and 128) and regexp_like(`source_identity`,_ascii\\\'^snapshot-source-v1:[a-z0-9]+([._-][a-z0-9]+)*(:[a-z0-9]+([._-][a-z0-9]+)*)*$\\\',_utf8mb4\\\'c\\\'))',
+            'chk_snapshot_generation_thresholds' => '((`minimum_product_count` > 0) and (`maximum_product_drop_percent` <= 100) and ((`product_drop_percent` is null) or (`product_drop_percent` between 0 and 100)))',
+            'chk_snapshot_generation_timestamps' => '(regexp_like(`captured_at`,_ascii\\\'^[0-9]{4}-(0[1-9]|1[0-2])-([0-2][0-9]|3[01])T([01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9][+]00:00$\\\',_utf8mb4\\\'c\\\') and regexp_like(`capture_started_at`,_ascii\\\'^[0-9]{4}-(0[1-9]|1[0-2])-([0-2][0-9]|3[01])T([01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9][+]00:00$\\\',_utf8mb4\\\'c\\\') and regexp_like(`capture_completed_at`,_ascii\\\'^[0-9]{4}-(0[1-9]|1[0-2])-([0-2][0-9]|3[01])T([01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9][+]00:00$\\\',_utf8mb4\\\'c\\\') and ((`authoritative_snapshot_at` is null) or regexp_like(`authoritative_snapshot_at`,_ascii\\\'^[0-9]{4}-(0[1-9]|1[0-2])-([0-2][0-9]|3[01])T([01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9][+]00:00$\\\',_utf8mb4\\\'c\\\')) and (`captured_at` = `capture_completed_at`) and (`capture_started_at` <= `capture_completed_at`) and ((`authoritative_snapshot_at` is null) or (`authoritative_snapshot_at` <= `captured_at`)))',
+        ],
+        'supplier_offer_snapshot_observations' => [
+            'chk_snapshot_observation_absent_semantics' => '((`present` = 1) or ((`price` is null) and (`currency` is null) and (`raw_quantity_observed` is null) and (`eol_flag` is null) and (`canonical_public_status` is null) and (`supplier_mapper_valid` = 0) and (`exact_supplier_sku_match` = 0) and (`identifier_conflict` = 0) and (`blocking_validation_issue` = 0) and (`duplicate_offer` = 0) and (`reliable_manufacturer_mpn_hash` is null)))',
+            'chk_snapshot_observation_boolean_domains' => '((`present` in (0,1)) and (`supplier_mapper_valid` in (0,1)) and (`exact_supplier_sku_match` in (0,1)) and (`identifier_conflict` in (0,1)) and (`blocking_validation_issue` in (0,1)) and (`duplicate_offer` in (0,1)) and ((`eol_flag` is null) or (`eol_flag` in (0,1))))',
+            'chk_snapshot_observation_currency' => '((`currency` is null) or ((length(`currency`) = 3) and regexp_like(`currency`,_ascii\\\'^[A-Z]{3}$\\\',_utf8mb4\\\'c\\\')))',
+            'chk_snapshot_observation_fingerprint' => '((length(`observation_fingerprint`) = 64) and regexp_like(`observation_fingerprint`,_ascii\\\'^[0-9a-f]{64}$\\\',_utf8mb4\\\'c\\\'))',
+            'chk_snapshot_observation_mpn_hash' => '((`reliable_manufacturer_mpn_hash` is null) or ((length(`reliable_manufacturer_mpn_hash`) = 64) and regexp_like(`reliable_manufacturer_mpn_hash`,_ascii\\\'^[0-9a-f]{64}$\\\',_utf8mb4\\\'c\\\')))',
+            'chk_snapshot_observation_price' => '((`price` is null) or (`price` >= 0))',
+            'chk_snapshot_observation_supplier_sku_hash' => '((length(`supplier_sku_hash`) = 64) and regexp_like(`supplier_sku_hash`,_ascii\\\'^[0-9a-f]{64}$\\\',_utf8mb4\\\'c\\\'))',
+        ],
+    ];
 
-    private const TRIGGER_INVENTORY_SHA256 = '4a4d7fc3921fff163efcb8f0b921bfa9b59c98019c7e938751bd1e01ba7003bc';
+    /** @var list<array{trigger_name: string, table_name: string, timing: string, event: string, statement: string}> */
+    private const EXPECTED_TRIGGERS = [
+        [
+            'trigger_name' => 'trg_import_cohort_auth_no_delete',
+            'table_name' => 'supplier_import_cohort_authorization_members',
+            'timing' => 'BEFORE',
+            'event' => 'DELETE',
+            'statement' => "SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Immutable supplier snapshot row cannot be deleted'",
+        ],
+        [
+            'trigger_name' => 'trg_import_cohort_auth_no_update',
+            'table_name' => 'supplier_import_cohort_authorization_members',
+            'timing' => 'BEFORE',
+            'event' => 'UPDATE',
+            'statement' => "SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Immutable supplier snapshot row cannot be updated'",
+        ],
+        [
+            'trigger_name' => 'trg_import_execution_claim_path_immutable',
+            'table_name' => 'supplier_import_execution_claims',
+            'timing' => 'BEFORE',
+            'event' => 'UPDATE',
+            'statement' => "BEGIN IF BINARY OLD.execution_path <> BINARY NEW.execution_path THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Execution claim path is immutable'; END IF; END",
+        ],
+        [
+            'trigger_name' => 'trg_import_recovery_auth_no_delete',
+            'table_name' => 'supplier_import_dispatch_recovery_authorizations',
+            'timing' => 'BEFORE',
+            'event' => 'DELETE',
+            'statement' => "SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Immutable supplier snapshot row cannot be deleted'",
+        ],
+        [
+            'trigger_name' => 'trg_import_recovery_auth_no_update',
+            'table_name' => 'supplier_import_dispatch_recovery_authorizations',
+            'timing' => 'BEFORE',
+            'event' => 'UPDATE',
+            'statement' => "SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Immutable supplier snapshot row cannot be updated'",
+        ],
+        [
+            'trigger_name' => 'trg_import_recovery_result_no_delete',
+            'table_name' => 'supplier_import_dispatch_recovery_results',
+            'timing' => 'BEFORE',
+            'event' => 'DELETE',
+            'statement' => "SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Immutable supplier snapshot row cannot be deleted'",
+        ],
+        [
+            'trigger_name' => 'trg_import_recovery_result_no_update',
+            'table_name' => 'supplier_import_dispatch_recovery_results',
+            'timing' => 'BEFORE',
+            'event' => 'UPDATE',
+            'statement' => "SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Immutable supplier snapshot row cannot be updated'",
+        ],
+        [
+            'trigger_name' => 'trg_snapshot_enrollment_no_delete',
+            'table_name' => 'supplier_offer_snapshot_enrollments',
+            'timing' => 'BEFORE',
+            'event' => 'DELETE',
+            'statement' => "SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Immutable supplier snapshot row cannot be deleted'",
+        ],
+        [
+            'trigger_name' => 'trg_snapshot_enrollment_no_update',
+            'table_name' => 'supplier_offer_snapshot_enrollments',
+            'timing' => 'BEFORE',
+            'event' => 'UPDATE',
+            'statement' => "SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Immutable supplier snapshot row cannot be updated'",
+        ],
+        [
+            'trigger_name' => 'trg_snapshot_generation_no_delete',
+            'table_name' => 'supplier_offer_snapshot_generations',
+            'timing' => 'BEFORE',
+            'event' => 'DELETE',
+            'statement' => "SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Immutable supplier snapshot row cannot be deleted'",
+        ],
+        [
+            'trigger_name' => 'trg_snapshot_generation_no_update',
+            'table_name' => 'supplier_offer_snapshot_generations',
+            'timing' => 'BEFORE',
+            'event' => 'UPDATE',
+            'statement' => "SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Immutable supplier snapshot row cannot be updated'",
+        ],
+        [
+            'trigger_name' => 'trg_snapshot_observation_no_delete',
+            'table_name' => 'supplier_offer_snapshot_observations',
+            'timing' => 'BEFORE',
+            'event' => 'DELETE',
+            'statement' => "SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Immutable supplier snapshot row cannot be deleted'",
+        ],
+        [
+            'trigger_name' => 'trg_snapshot_observation_no_update',
+            'table_name' => 'supplier_offer_snapshot_observations',
+            'timing' => 'BEFORE',
+            'event' => 'UPDATE',
+            'statement' => "SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Immutable supplier snapshot row cannot be updated'",
+        ],
+    ];
 
-    private const GENERATED_GUARD_INVENTORY_SHA256 = 'fa986b77b80d675c1c4583485ca9af5b26c6a50b782114178e7d0463f7afc398';
-
-    private const SECURITY_COLUMN_INVENTORY_SHA256 = 'e549fbe5760da29b100adab235990b4949e28039620a174d712646b9001cbb98';
+    /** @var list<array<string, mixed>> */
+    private const EXPECTED_GENERATED_GUARDS = [
+        [
+            'table_name' => 'supplier_import_dispatch_recovery_results',
+            'column_name' => 'started_once_guard',
+            'column_type' => 'tinyint unsigned',
+            'is_nullable' => 'YES',
+            'extra' => 'STORED GENERATED',
+            'expression' => "(case when (cast(`event_kind` as char charset binary) = cast(_ascii\\'started\\' as char charset binary)) then 1 else NULL end)",
+            'index_name' => 'uq_import_recovery_result_auth_started',
+            'non_unique' => 0,
+            'index_columns' => [
+                'supplier_import_dispatch_recovery_authorization_id',
+                'started_once_guard',
+            ],
+        ],
+        [
+            'table_name' => 'supplier_import_dispatch_recovery_results',
+            'column_name' => 'terminal_once_guard',
+            'column_type' => 'tinyint unsigned',
+            'is_nullable' => 'YES',
+            'extra' => 'STORED GENERATED',
+            'expression' => "(case when (cast(`event_kind` as char charset binary) in (cast(_ascii\\'republish_succeeded\\' as char charset binary),cast(_ascii\\'terminalization_succeeded\\' as char charset binary),cast(_ascii\\'ownership_recovery_succeeded\\' as char charset binary),cast(_ascii\\'publish_failed\\' as char charset binary),cast(_ascii\\'action_stopped\\' as char charset binary),cast(_ascii\\'rejected\\' as char charset binary),cast(_ascii\\'already_terminal\\' as char charset binary))) then 1 else NULL end)",
+            'index_name' => 'uq_import_recovery_result_auth_terminal',
+            'non_unique' => 0,
+            'index_columns' => [
+                'supplier_import_dispatch_recovery_authorization_id',
+                'terminal_once_guard',
+            ],
+        ],
+    ];
 
     private const DOWN_CAPABILITY_ENV = 'SUPPLIER_SNAPSHOT_EMPTY_SCHEMA_DOWN_CAPABILITY';
 
     private const FIRST_DOWN_MIGRATION = '2026_08_20_120011_add_supplier_range_index_to_import_histories';
+
+    /** @var list<string> */
+    private const PHASE_I_MIGRATIONS = [
+        '2026_08_20_120000_add_supplier_ownership_key_to_import_jobs',
+        '2026_08_20_120001_create_supplier_import_execution_claims_table',
+        '2026_08_20_120002_create_supplier_import_dispatch_outbox_table',
+        '2026_08_20_120003_create_supplier_import_dispatch_monitor_health_table',
+        '2026_08_20_120004_create_supplier_import_dispatch_alert_intents_table',
+        '2026_08_20_120005_create_supplier_import_dispatch_recovery_authorizations_table',
+        '2026_08_20_120006_create_supplier_import_dispatch_recovery_results_table',
+        '2026_08_20_120007_create_supplier_import_cohort_authorization_members_table',
+        '2026_08_20_120008_create_supplier_offer_snapshot_generations_table',
+        '2026_08_20_120009_create_supplier_offer_snapshot_enrollments_table',
+        '2026_08_20_120010_create_supplier_offer_snapshot_observations_table',
+        self::FIRST_DOWN_MIGRATION,
+    ];
 
     /** @var list<string> */
     private const CANONICAL_TABLES = [
@@ -82,6 +345,9 @@ final class CanonicalSupplierSnapshotSchemaMigrationTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+
+        app(ConsoleKernel::class)->rerouteSymfonyCommandEvents();
+        CanonicalSupplierSnapshotSchema::bootstrapDestructiveDownGuard();
 
         if (DB::getDriverName() !== 'mysql') {
             $this->markTestSkipped('Canonical supplier snapshot schema requires MySQL 8.4.');
@@ -473,7 +739,7 @@ final class CanonicalSupplierSnapshotSchemaMigrationTest extends TestCase
             DB::table('migrations')->where('migration', self::FIRST_DOWN_MIGRATION)->delete();
             $this->issueDownCapability();
 
-            $this->assertGuardRejectedContaining('rollback sequence must begin with '.self::FIRST_DOWN_MIGRATION);
+            $this->assertGuardRejectedContaining('latest migration batch must be exactly the 12 canonical Phase I migrations');
             $this->assertTrue(Schema::hasTable('supplier_offer_snapshot_observations'));
             $this->assertTrue($this->indexExists('import_histories', 'ix_import_history_supplier_id'));
             DB::table('migrations')->insert((array) $migration);
@@ -494,6 +760,332 @@ final class CanonicalSupplierSnapshotSchemaMigrationTest extends TestCase
             DB::purge('snapshot_schema_phase_i');
             $this->dropTemporaryDatabase($database);
             File::deleteDirectory($historicalPath);
+        }
+    }
+
+    public function test_partial_filtered_mixed_and_wrong_commands_fail_before_first_ddl(): void
+    {
+        $database = 'phase_i_command_gate_'.getmypid().'_'.strtolower(bin2hex(random_bytes(4)));
+        $historicalPath = sys_get_temp_dir().DIRECTORY_SEPARATOR.$database.'_migrations';
+        $originalDefaultConnection = DB::getDefaultConnection();
+
+        try {
+            $this->createTemporaryDatabase($database);
+            $this->configureTemporaryConnection($database);
+            $this->copyHistoricalMigrations($historicalPath);
+            $this->migrateHistoricalThenPhase($historicalPath);
+            DB::setDefaultConnection('snapshot_schema_phase_i');
+            $batch = (int) DB::table('migrations')->max('batch');
+
+            $rollbackSelectors = [
+                '--step=1' => ['--step' => 1],
+                '--step=12' => ['--step' => 12],
+                '--batch' => ['--batch' => $batch],
+                '--path' => ['--path' => [database_path('migrations')]],
+                '--realpath' => ['--realpath' => true],
+                '--pretend' => ['--pretend' => true],
+            ];
+
+            foreach ($rollbackSelectors as $label => $selector) {
+                $this->issueDownCapability();
+                $message = $this->commandRejectionMessage('migrate:rollback', $selector);
+                $this->assertStringContainsString('rollback selector', $message, $label);
+                $this->assertPhaseISchemaUntouched(12, $label);
+            }
+
+            DB::table('migrations')->insert([
+                'migration' => '2026_08_20_120012_unrelated_synthetic_migration',
+                'batch' => $batch,
+            ]);
+            $this->issueDownCapability();
+            $this->assertStringContainsString(
+                'latest migration batch must be exactly the 12 canonical Phase I migrations',
+                $this->commandRejectionMessage('migrate:rollback'),
+            );
+            $this->assertPhaseISchemaUntouched(12, 'extra latest-batch migration');
+            $this->assertSame(1, DB::table('migrations')->where(
+                'migration',
+                '2026_08_20_120012_unrelated_synthetic_migration',
+            )->count());
+            DB::table('migrations')->where(
+                'migration',
+                '2026_08_20_120012_unrelated_synthetic_migration',
+            )->delete();
+
+            $missing = DB::table('migrations')->where('migration', self::FIRST_DOWN_MIGRATION)->first();
+            $this->assertNotNull($missing);
+            DB::table('migrations')->where('migration', self::FIRST_DOWN_MIGRATION)->delete();
+            $this->issueDownCapability();
+            $this->assertStringContainsString(
+                'latest migration batch must be exactly the 12 canonical Phase I migrations',
+                $this->commandRejectionMessage('migrate:rollback'),
+            );
+            $this->assertPhaseISchemaUntouched(11, 'missing canonical migration row');
+            DB::table('migrations')->insert((array) $missing);
+            $this->assertPhaseISchemaUntouched(12, 'restored canonical migration row');
+
+            foreach (['migrate:reset', 'migrate:refresh'] as $command) {
+                $this->issueDownCapability();
+                $this->assertStringContainsString(
+                    sprintf('command %s is not allowed', $command),
+                    $this->commandRejectionMessage($command),
+                );
+                $this->assertPhaseISchemaUntouched(12, $command);
+            }
+
+            $migration = require database_path(
+                'migrations/2026_08_20_120011_add_supplier_range_index_to_import_histories.php',
+            );
+            try {
+                $migration->down();
+                $this->fail('Direct migration down invocation must fail closed.');
+            } catch (Throwable $exception) {
+                $this->assertStringContainsString(
+                    'destructive down must run inside one console command invocation',
+                    $exception->getMessage(),
+                );
+            }
+            $this->assertPhaseISchemaUntouched(12, 'direct down');
+        } finally {
+            $this->resetDownGuard();
+            $this->clearDownCapabilityEnvironment();
+            DB::setDefaultConnection($originalDefaultConnection);
+            DB::disconnect('snapshot_schema_phase_i');
+            DB::purge('snapshot_schema_phase_i');
+            $this->dropTemporaryDatabase($database);
+            File::deleteDirectory($historicalPath);
+        }
+    }
+
+    public function test_command_completion_reused_input_reentrancy_and_order_fail_closed(): void
+    {
+        $database = 'phase_i_lifecycle_'.getmypid().'_'.strtolower(bin2hex(random_bytes(4)));
+        $historicalPath = sys_get_temp_dir().DIRECTORY_SEPARATOR.$database.'_migrations';
+        $originalDefaultConnection = DB::getDefaultConnection();
+        $output = new BufferedOutput;
+
+        try {
+            $this->createTemporaryDatabase($database);
+            $this->configureTemporaryConnection($database);
+            $this->copyHistoricalMigrations($historicalPath);
+            $this->migrateHistoricalThenPhase($historicalPath);
+            DB::setDefaultConnection('snapshot_schema_phase_i');
+            CanonicalSupplierSnapshotSchema::bootstrapDestructiveDownGuard();
+
+            $input = $this->rollbackArrayInput();
+            $this->issueDownCapability();
+            Event::dispatch(new CommandStarting('migrate:rollback', $input, $output));
+            Event::dispatch(new CommandFinished('migrate:rollback', $input, $output, 0));
+
+            try {
+                Event::dispatch(new CommandStarting('migrate:rollback', $input, $output));
+                $this->fail('A completed command must not authorize reused Input.');
+            } catch (Throwable $exception) {
+                $this->assertStringContainsString(
+                    'one-use invocation capability is missing or malformed',
+                    $exception->getMessage(),
+                );
+            }
+            $this->assertPhaseISchemaUntouched(12, 'completed command Input reuse');
+
+            $firstInput = $this->rollbackArrayInput();
+            $secondInput = $this->rollbackArrayInput();
+            $this->issueDownCapability();
+            Event::dispatch(new CommandStarting('migrate:rollback', $firstInput, $output));
+            $this->issueDownCapability();
+            try {
+                Event::dispatch(new CommandStarting('migrate:rollback', $secondInput, $output));
+                $this->fail('Nested destructive command scope must fail closed.');
+            } catch (Throwable $exception) {
+                $this->assertStringContainsString(
+                    'nested or re-entrant destructive migration command is not allowed',
+                    $exception->getMessage(),
+                );
+            }
+            $this->assertPhaseISchemaUntouched(12, 'nested command');
+
+            $orderedInput = $this->rollbackArrayInput();
+            $this->issueDownCapability();
+            Event::dispatch(new CommandStarting('migrate:rollback', $orderedInput, $output));
+            $invokeWrongStep = static function (ArrayInput $activeInput): void {
+                CanonicalSupplierSnapshotSchema::runDestructiveDownStep(
+                    '2026_08_20_120010_create_supplier_offer_snapshot_observations_table',
+                    static function (): void {},
+                );
+            };
+            try {
+                $invokeWrongStep($orderedInput);
+                $this->fail('Out-of-order Phase I down step must fail closed.');
+            } catch (Throwable $exception) {
+                $this->assertStringContainsString('unexpected rollback step', $exception->getMessage());
+            }
+            $this->assertPhaseISchemaUntouched(12, 'out-of-order migration');
+        } finally {
+            $this->resetDownGuard();
+            $this->clearDownCapabilityEnvironment();
+            DB::setDefaultConnection($originalDefaultConnection);
+            DB::disconnect('snapshot_schema_phase_i');
+            DB::purge('snapshot_schema_phase_i');
+            $this->dropTemporaryDatabase($database);
+            File::deleteDirectory($historicalPath);
+        }
+    }
+
+    public function test_capability_artifact_is_private_strict_and_atomically_one_use(): void
+    {
+        $firstToken = $this->issueDownCapability();
+        $secondToken = $this->issueDownCapability();
+        $firstDirectory = $this->capabilityDirectory($firstToken);
+        $secondDirectory = $this->capabilityDirectory($secondToken);
+        $this->assertNotSame($firstDirectory, $secondDirectory);
+        $this->assertMatchesRegularExpression('/[\\\\\/]mycomputer-phase-i-down[\\\\\/][0-9a-f]{64}$/', $firstDirectory);
+        $this->assertCapabilityPathSecurity($this->capabilityPath($firstToken), $firstDirectory);
+        CanonicalSupplierSnapshotSchema::revokeDestructiveDownCapability($firstToken);
+        CanonicalSupplierSnapshotSchema::revokeDestructiveDownCapability($secondToken);
+
+        $payloadMutations = [
+            'extra key' => static function (array $payload): array {
+                $payload['unexpected'] = true;
+
+                return $payload;
+            },
+            'missing key' => static function (array $payload): array {
+                unset($payload['expires_at']);
+
+                return $payload;
+            },
+            'wrong version' => static function (array $payload): array {
+                $payload['version'] = 'wrong-version';
+
+                return $payload;
+            },
+            'wrong plan' => static function (array $payload): array {
+                $payload['rollback_plan_sha256'] = str_repeat('b', 64);
+
+                return $payload;
+            },
+            'wrong token' => static function (array $payload): array {
+                $payload['token_sha256'] = str_repeat('c', 64);
+
+                return $payload;
+            },
+            'expired' => static function (array $payload): array {
+                $payload['expires_at'] = time() - 1;
+
+                return $payload;
+            },
+        ];
+
+        foreach ($payloadMutations as $label => $mutation) {
+            $token = $this->issueDownCapability();
+            $path = $this->capabilityPath($token);
+            $payload = json_decode((string) file_get_contents($path), true, flags: JSON_THROW_ON_ERROR);
+            $this->assertIsArray($payload);
+            file_put_contents(
+                $path,
+                json_encode($mutation($payload), JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES),
+            );
+            $this->assertCapabilityConsumptionRejected('invalid or expired', $label);
+            CanonicalSupplierSnapshotSchema::revokeDestructiveDownCapability($token);
+        }
+
+        $token = $this->issueDownCapability();
+        $path = $this->capabilityPath($token);
+        $directory = $this->capabilityDirectory($token);
+        unlink($path);
+        mkdir($path);
+        $this->assertCapabilityConsumptionRejected('not a regular file', 'non-regular artifact');
+        rmdir($path);
+        CanonicalSupplierSnapshotSchema::revokeDestructiveDownCapability($token);
+
+        $token = $this->issueDownCapability();
+        $path = $this->capabilityPath($token);
+        $linkTarget = sys_get_temp_dir().DIRECTORY_SEPARATOR.'phase-i-capability-link-'.bin2hex(random_bytes(8));
+        unlink($path);
+        if (PHP_OS_FAMILY === 'Windows') {
+            mkdir($linkTarget, 0700);
+            $process = new Process([
+                getenv('ComSpec') ?: 'C:\\Windows\\System32\\cmd.exe',
+                '/d',
+                '/c',
+                'mklink',
+                '/J',
+                $path,
+                $linkTarget,
+            ]);
+            $process->run();
+            $this->assertTrue($process->isSuccessful(), 'Windows junction creation must be available for reparse testing.');
+        } else {
+            file_put_contents($linkTarget, 'target');
+            $this->assertTrue(symlink($linkTarget, $path));
+        }
+        $this->assertCapabilityConsumptionRejected('Capability', 'symlink/reparse artifact');
+        if (! @rmdir($path) && (file_exists($path) || is_link($path))) {
+            unlink($path);
+        }
+        if (is_dir($linkTarget)) {
+            rmdir($linkTarget);
+        } else {
+            unlink($linkTarget);
+        }
+        CanonicalSupplierSnapshotSchema::revokeDestructiveDownCapability($token);
+
+        $token = $this->issueDownCapability();
+        $this->makeCapabilityPathUnsafe($this->capabilityDirectory($token), true);
+        $this->assertCapabilityConsumptionRejected(
+            PHP_OS_FAMILY === 'Windows' ? 'Windows capability ACL' : 'permissions are not exactly 0700',
+            'unsafe parent permissions',
+        );
+        CanonicalSupplierSnapshotSchema::revokeDestructiveDownCapability($token);
+
+        $token = $this->issueDownCapability();
+        $this->makeCapabilityPathUnsafe($this->capabilityPath($token), false);
+        $this->assertCapabilityConsumptionRejected(
+            PHP_OS_FAMILY === 'Windows' ? 'Windows capability ACL' : 'permissions are not exactly 0600',
+            'unsafe artifact permissions',
+        );
+        CanonicalSupplierSnapshotSchema::revokeDestructiveDownCapability($token);
+
+        $token = $this->issueDownCapability();
+        $worker = sys_get_temp_dir().DIRECTORY_SEPARATOR.'phase-i-capability-consumer-'.bin2hex(random_bytes(8)).'.php';
+        File::put($worker, <<<'PHP'
+            <?php
+            require $argv[1].'/vendor/autoload.php';
+            require_once $argv[1].'/database/migrations/support/CanonicalSupplierSnapshotSchema.php';
+            try {
+                $reflection = new ReflectionClass(Database\Migrations\Support\CanonicalSupplierSnapshotSchema::class);
+                $method = $reflection->getMethod('consumeInvocationCapability');
+                $method->invoke(null);
+                fwrite(STDOUT, 'CONSUMED');
+                exit(0);
+            } catch (Throwable) {
+                fwrite(STDOUT, 'REJECTED');
+                exit(2);
+            }
+            PHP);
+        try {
+            $processes = [
+                new Process([PHP_BINARY, $worker, base_path()], env: [self::DOWN_CAPABILITY_ENV => $token]),
+                new Process([PHP_BINARY, $worker, base_path()], env: [self::DOWN_CAPABILITY_ENV => $token]),
+            ];
+            foreach ($processes as $process) {
+                $process->setTimeout(20);
+                $process->start();
+            }
+            foreach ($processes as $process) {
+                $process->wait();
+            }
+            $this->assertSame(1, collect($processes)->filter(
+                static fn (Process $process): bool => $process->getExitCode() === 0
+                    && $process->getOutput() === 'CONSUMED',
+            )->count());
+            $this->assertSame(1, collect($processes)->filter(
+                static fn (Process $process): bool => $process->getExitCode() === 2
+                    && $process->getOutput() === 'REJECTED',
+            )->count());
+        } finally {
+            File::delete($worker);
+            CanonicalSupplierSnapshotSchema::revokeDestructiveDownCapability($token);
         }
     }
 
@@ -689,6 +1281,17 @@ final class CanonicalSupplierSnapshotSchemaMigrationTest extends TestCase
 
     private function assertCheckInventory(): void
     {
+        $expected = [];
+        foreach (self::EXPECTED_CHECKS as $table => $checks) {
+            foreach ($checks as $name => $expression) {
+                $expected[] = [
+                    'table_name' => $table,
+                    'constraint_name' => $name,
+                    'expression' => self::normalizeSql($expression),
+                ];
+            }
+        }
+
         $actual = collect(DB::select(<<<'SQL'
             SELECT tc.TABLE_NAME AS table_name,
                    tc.CONSTRAINT_NAME AS constraint_name,
@@ -718,27 +1321,17 @@ final class CanonicalSupplierSnapshotSchemaMigrationTest extends TestCase
             'expression' => self::normalizeSql((string) $row->expression),
         ])->all();
 
+        $this->assertCount(94, $expected);
         $this->assertCount(94, $actual);
-        $this->assertSame(self::CHECK_INVENTORY_SHA256, self::inventoryHash($actual));
+        $this->assertSame($expected, $actual);
     }
 
     private function assertTriggerInventory(): void
     {
-        $expected = [
-            'trg_import_cohort_auth_no_delete',
-            'trg_import_cohort_auth_no_update',
-            'trg_import_execution_claim_path_immutable',
-            'trg_import_recovery_auth_no_delete',
-            'trg_import_recovery_auth_no_update',
-            'trg_import_recovery_result_no_delete',
-            'trg_import_recovery_result_no_update',
-            'trg_snapshot_enrollment_no_delete',
-            'trg_snapshot_enrollment_no_update',
-            'trg_snapshot_generation_no_delete',
-            'trg_snapshot_generation_no_update',
-            'trg_snapshot_observation_no_delete',
-            'trg_snapshot_observation_no_update',
-        ];
+        $expected = array_map(static fn (array $row): array => [
+            ...$row,
+            'statement' => self::normalizeSql($row['statement']),
+        ], self::EXPECTED_TRIGGERS);
 
         $actual = collect(DB::select(<<<'SQL'
             SELECT TRIGGER_NAME AS trigger_name,
@@ -770,8 +1363,7 @@ final class CanonicalSupplierSnapshotSchemaMigrationTest extends TestCase
         ])->all();
 
         $this->assertCount(13, $actual);
-        $this->assertSame($expected, array_column($actual, 'trigger_name'));
-        $this->assertSame(self::TRIGGER_INVENTORY_SHA256, self::inventoryHash($actual));
+        $this->assertSame($expected, $actual);
     }
 
     private function assertGeneratedGuardInventory(): void
@@ -785,7 +1377,13 @@ final class CanonicalSupplierSnapshotSchemaMigrationTest extends TestCase
                    c.GENERATION_EXPRESSION AS expression,
                    s.INDEX_NAME AS index_name,
                    s.NON_UNIQUE AS non_unique,
-                   s.SEQ_IN_INDEX AS seq_in_index
+                   (
+                       SELECT GROUP_CONCAT(s2.COLUMN_NAME ORDER BY s2.SEQ_IN_INDEX SEPARATOR ',')
+                       FROM information_schema.STATISTICS s2
+                       WHERE s2.TABLE_SCHEMA = s.TABLE_SCHEMA
+                           AND s2.TABLE_NAME = s.TABLE_NAME
+                           AND s2.INDEX_NAME = s.INDEX_NAME
+                   ) AS index_columns
             FROM information_schema.COLUMNS c
             INNER JOIN information_schema.STATISTICS s
                 ON s.TABLE_SCHEMA = c.TABLE_SCHEMA
@@ -804,12 +1402,15 @@ final class CanonicalSupplierSnapshotSchemaMigrationTest extends TestCase
             'expression' => self::normalizeSql((string) $row->expression),
             'index_name' => (string) $row->index_name,
             'non_unique' => (int) $row->non_unique,
-            'seq_in_index' => (int) $row->seq_in_index,
+            'index_columns' => explode(',', (string) $row->index_columns),
         ])->all();
 
         $this->assertCount(2, $rows);
-        $this->assertSame(['started_once_guard', 'terminal_once_guard'], array_column($rows, 'column_name'));
-        $this->assertSame(self::GENERATED_GUARD_INVENTORY_SHA256, self::inventoryHash($rows));
+        $expected = array_map(static fn (array $row): array => [
+            ...$row,
+            'expression' => self::normalizeSql($row['expression']),
+        ], self::EXPECTED_GENERATED_GUARDS);
+        $this->assertSame($expected, $rows);
     }
 
     private function assertHexColumnInventory(): void
@@ -856,7 +1457,6 @@ final class CanonicalSupplierSnapshotSchemaMigrationTest extends TestCase
                 $row['table_name'].'.'.$row['column_name'] => $row['is_nullable'],
             ],
         )->all());
-        $this->assertSame(self::SECURITY_COLUMN_INVENTORY_SHA256, self::inventoryHash($rows));
 
         foreach ($rows as $row) {
             if ($row['table_name'] === 'supplier_import_dispatch_recovery_results'
@@ -1329,22 +1929,72 @@ final class CanonicalSupplierSnapshotSchemaMigrationTest extends TestCase
         $this->assertStringContainsString($fragment, $this->guardRejectionMessage());
     }
 
-    private function guardRejectionMessage(): string
+    /** @param array<string, mixed> $parameters */
+    private function guardRejectionMessage(array $parameters = []): string
+    {
+        return $this->commandRejectionMessage('migrate:rollback', $parameters);
+    }
+
+    /** @param array<string, mixed> $parameters */
+    private function commandRejectionMessage(string $command, array $parameters = []): string
     {
         try {
-            $exitCode = Artisan::call('migrate:rollback', [
+            $exitCode = Artisan::call($command, array_merge([
                 '--database' => 'snapshot_schema_phase_i',
                 '--force' => true,
-            ]);
+            ], $parameters));
         } catch (Throwable $exception) {
             return $exception->getMessage();
         }
 
         $this->fail(sprintf(
-            'Expected destructive down guard rejection, got exit code %d: %s',
+            'Expected destructive down guard rejection from %s, got exit code %d: %s',
+            $command,
             $exitCode,
             Artisan::output(),
         ));
+    }
+
+    private function assertPhaseISchemaUntouched(int $expectedMigrationRows, string $context): void
+    {
+        $this->assertTrue(
+            $this->indexExists('import_histories', 'ix_import_history_supplier_id'),
+            $context.': first reverse-owned support index was removed',
+        );
+        $this->assertTrue(
+            $this->indexExists('import_jobs', 'uq_import_job_id_supplier_feed'),
+            $context.': Phase I ownership support index was removed',
+        );
+        $this->assertSame(
+            10,
+            collect(self::CANONICAL_TABLES)->filter(
+                static fn (string $table): bool => Schema::hasTable($table),
+            )->count(),
+            $context.': canonical table inventory changed',
+        );
+        $this->assertSame(
+            $expectedMigrationRows,
+            DB::table('migrations')->whereIn('migration', self::PHASE_I_MIGRATIONS)->count(),
+            $context.': Phase I migration repository state changed',
+        );
+    }
+
+    private function rollbackArrayInput(): ArrayInput
+    {
+        return new ArrayInput([
+            'command' => 'migrate:rollback',
+            '--database' => 'snapshot_schema_phase_i',
+            '--force' => true,
+        ], new InputDefinition([
+            new InputArgument('command', InputArgument::REQUIRED),
+            new InputOption('database', null, InputOption::VALUE_OPTIONAL),
+            new InputOption('force', null, InputOption::VALUE_NONE),
+            new InputOption('step', null, InputOption::VALUE_OPTIONAL),
+            new InputOption('batch', null, InputOption::VALUE_REQUIRED),
+            new InputOption('path', null, InputOption::VALUE_OPTIONAL | InputOption::VALUE_IS_ARRAY),
+            new InputOption('realpath', null, InputOption::VALUE_NONE),
+            new InputOption('pretend', null, InputOption::VALUE_NONE),
+        ]));
     }
 
     private function resetDownGuard(): void
@@ -1365,16 +2015,113 @@ final class CanonicalSupplierSnapshotSchemaMigrationTest extends TestCase
         return $capability;
     }
 
+    private function capabilityDirectory(string $token): string
+    {
+        return (string) $this->invokeCapabilityMethod('capabilityDirectory', [$token]);
+    }
+
+    private function capabilityPath(string $token): string
+    {
+        return (string) $this->invokeCapabilityMethod('capabilityPath', [$token]);
+    }
+
+    private function assertCapabilityPathSecurity(string $path, string $directory): void
+    {
+        $this->invokeCapabilityMethod('assertSecureDirectory', [$directory]);
+        $this->invokeCapabilityMethod('assertSecureArtifact', [$path]);
+        $this->assertTrue(is_dir($directory));
+        $this->assertTrue(is_file($path));
+        $this->assertFalse(is_link($directory));
+        $this->assertFalse(is_link($path));
+
+        if (PHP_OS_FAMILY !== 'Windows') {
+            $directoryStat = lstat($directory);
+            $artifactStat = lstat($path);
+            $this->assertIsArray($directoryStat);
+            $this->assertIsArray($artifactStat);
+            $this->assertSame(0700, $directoryStat['mode'] & 0777);
+            $this->assertSame(0600, $artifactStat['mode'] & 0777);
+            $this->assertSame(posix_geteuid(), $directoryStat['uid']);
+            $this->assertSame(posix_geteuid(), $artifactStat['uid']);
+            $this->assertSame(1, $artifactStat['nlink']);
+        }
+    }
+
+    private function assertCapabilityConsumptionRejected(string $fragment, string $context): void
+    {
+        try {
+            $this->invokeCapabilityMethod('consumeInvocationCapability');
+            $this->fail($context.': capability consumption unexpectedly succeeded');
+        } catch (Throwable $exception) {
+            $this->assertStringContainsString($fragment, $exception->getMessage(), $context);
+        }
+    }
+
+    /** @param list<mixed> $arguments */
+    private function invokeCapabilityMethod(string $method, array $arguments = []): mixed
+    {
+        $reflection = new ReflectionClass(CanonicalSupplierSnapshotSchema::class);
+
+        return $reflection->getMethod($method)->invoke(null, ...$arguments);
+    }
+
+    private function makeCapabilityPathUnsafe(string $path, bool $directory): void
+    {
+        if (PHP_OS_FAMILY !== 'Windows') {
+            chmod($path, $directory ? 0770 : 0660);
+
+            return;
+        }
+
+        $systemRoot = getenv('SystemRoot');
+        $this->assertIsString($systemRoot);
+        $powerShell = $systemRoot.'\\System32\\WindowsPowerShell\\v1.0\\powershell.exe';
+        $script = <<<'POWERSHELL'
+            $ErrorActionPreference = 'Stop'
+            $path = [IO.Path]::GetFullPath([string] $env:MYCOMPUTER_PHASE_I_TEST_PATH)
+            $directory = $env:MYCOMPUTER_PHASE_I_TEST_DIRECTORY -eq '1'
+            $acl = $(if ($directory) { [IO.Directory]::GetAccessControl($path) } else { [IO.File]::GetAccessControl($path) })
+            $world = New-Object Security.Principal.SecurityIdentifier(
+                [Security.Principal.WellKnownSidType]::WorldSid,
+                $null
+            )
+            $inheritance = $(if ($directory) {
+                [Security.AccessControl.InheritanceFlags]'ContainerInherit, ObjectInherit'
+            } else {
+                [Security.AccessControl.InheritanceFlags]::None
+            })
+            $rule = New-Object Security.AccessControl.FileSystemAccessRule(
+                $world,
+                [Security.AccessControl.FileSystemRights]::Modify,
+                $inheritance,
+                [Security.AccessControl.PropagationFlags]::None,
+                [Security.AccessControl.AccessControlType]::Allow
+            )
+            [void] $acl.AddAccessRule($rule)
+            if ($directory) { [IO.Directory]::SetAccessControl($path, $acl) } else { [IO.File]::SetAccessControl($path, $acl) }
+            POWERSHELL;
+        $process = new Process([
+            $powerShell,
+            '-NoLogo',
+            '-NoProfile',
+            '-NonInteractive',
+            '-ExecutionPolicy',
+            'Bypass',
+            '-Command',
+            $script,
+        ], env: [
+            'MYCOMPUTER_PHASE_I_TEST_PATH' => $path,
+            'MYCOMPUTER_PHASE_I_TEST_DIRECTORY' => $directory ? '1' : '0',
+        ]);
+        $process->setTimeout(10);
+        $process->run();
+        $this->assertTrue($process->isSuccessful(), 'Test ACL mutation must succeed.');
+    }
+
     private function clearDownCapabilityEnvironment(): void
     {
         putenv(self::DOWN_CAPABILITY_ENV);
         unset($_ENV[self::DOWN_CAPABILITY_ENV], $_SERVER[self::DOWN_CAPABILITY_ENV]);
-    }
-
-    /** @param list<array<string, int|string>> $inventory */
-    private static function inventoryHash(array $inventory): string
-    {
-        return hash('sha256', json_encode($inventory, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES));
     }
 
     private static function normalizeSql(string $sql): string
