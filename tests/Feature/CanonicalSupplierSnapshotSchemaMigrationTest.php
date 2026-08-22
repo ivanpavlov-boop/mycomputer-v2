@@ -360,7 +360,9 @@ final class CanonicalSupplierSnapshotSchemaMigrationTest extends TestCase
     {
         foreach ($this->issuedDownCapabilities as $capability) {
             CanonicalSupplierSnapshotSchema::revokeDestructiveDownCapability($capability);
+            $this->purgeCapabilityLedgerForTesting($capability);
         }
+        $this->removeEmptyCapabilityRootsForTesting();
         $this->clearDownCapabilityEnvironment();
         $this->resetDownGuard();
 
@@ -560,13 +562,13 @@ final class CanonicalSupplierSnapshotSchemaMigrationTest extends TestCase
             $productionCapability = $this->issueDownCapability();
             app()->detectEnvironment(static fn (): string => 'production');
             $this->assertGuardRejectedContaining('environment must be exactly local or testing');
-            $this->assertCapabilityStateAbsent($productionCapability, 'wrong environment');
+            $this->assertCapabilitySpentAndArtifactAbsent($productionCapability, 'wrong environment');
             app()->detectEnvironment(static fn () => $originalEnvironment);
 
             $gateCapability = $this->issueDownCapability();
             config(['supplier_snapshot_capture.monitor_schedule_enabled' => true]);
             $this->assertGuardRejectedContaining('forward gate supplier_snapshot_capture.monitor_schedule_enabled is not disabled');
-            $this->assertCapabilityStateAbsent($gateCapability, 'enabled forward gate');
+            $this->assertCapabilitySpentAndArtifactAbsent($gateCapability, 'enabled forward gate');
             config(['supplier_snapshot_capture.monitor_schedule_enabled' => false]);
 
             CanonicalSupplierSnapshotSchema::dropTriggers([
@@ -576,7 +578,7 @@ final class CanonicalSupplierSnapshotSchemaMigrationTest extends TestCase
             Schema::drop('supplier_offer_snapshot_observations');
             $partialSchemaCapability = $this->issueDownCapability();
             $this->assertGuardRejectedContaining('expected table supplier_offer_snapshot_observations is missing');
-            $this->assertCapabilityStateAbsent($partialSchemaCapability, 'partial schema');
+            $this->assertCapabilitySpentAndArtifactAbsent($partialSchemaCapability, 'partial schema');
             foreach (array_diff(self::CANONICAL_TABLES, ['supplier_offer_snapshot_observations']) as $table) {
                 $this->assertTrue(Schema::hasTable($table));
             }
@@ -588,7 +590,7 @@ final class CanonicalSupplierSnapshotSchemaMigrationTest extends TestCase
             $this->seedProtectedGraph('snapshot_schema_phase_i');
             $evidenceCapability = $this->issueDownCapability();
             $message = $this->guardRejectionMessage();
-            $this->assertCapabilityStateAbsent($evidenceCapability, 'protected evidence present');
+            $this->assertCapabilitySpentAndArtifactAbsent($evidenceCapability, 'protected evidence present');
             foreach (array_diff(self::CANONICAL_TABLES, ['supplier_import_dispatch_monitor_health']) as $table) {
                 $this->assertStringContainsString($table, $message);
                 $this->assertTrue(Schema::hasTable($table));
@@ -604,7 +606,7 @@ final class CanonicalSupplierSnapshotSchemaMigrationTest extends TestCase
             ]);
             $monitorCapability = $this->issueDownCapability();
             $this->assertGuardRejectedContaining('monitor singleton column integrity_state is not pristine');
-            $this->assertCapabilityStateAbsent($monitorCapability, 'malformed monitor singleton');
+            $this->assertCapabilitySpentAndArtifactAbsent($monitorCapability, 'malformed monitor singleton');
             $this->assertSame(10, collect(self::CANONICAL_TABLES)->filter(
                 static fn (string $table): bool => Schema::hasTable($table),
             )->count());
@@ -617,8 +619,8 @@ final class CanonicalSupplierSnapshotSchemaMigrationTest extends TestCase
             config(['supplier_snapshot_capture.destructive_down_confirmed' => true]);
             CanonicalSupplierSnapshotSchema::revokeDestructiveDownCapability(str_repeat('a', 64));
             putenv(self::DOWN_CAPABILITY_ENV.'='.str_repeat('a', 64));
-            $this->assertGuardRejectedContaining('capability artifact is missing or already consumed');
-            $this->assertCapabilityStateAbsent(str_repeat('a', 64), 'raw token without artifact');
+            $this->assertGuardRejectedContaining('authoritative issued ledger record is missing');
+            $this->assertUnissuedCapabilityStateAbsent(str_repeat('a', 64), 'raw token without authoritative issuance');
             $this->assertSame(10, collect(self::CANONICAL_TABLES)->filter(
                 static fn (string $table): bool => Schema::hasTable($table),
             )->count());
@@ -636,7 +638,7 @@ final class CanonicalSupplierSnapshotSchemaMigrationTest extends TestCase
                 '--database' => 'snapshot_schema_phase_i',
                 '--force' => true,
             ]), Artisan::output());
-            $this->assertCapabilityStateAbsent($consumedCapability, 'successful full rollback');
+            $this->assertCapabilitySpentAndArtifactAbsent($consumedCapability, 'successful full rollback');
 
             DB::setDefaultConnection('snapshot_schema_phase_i');
             foreach (self::CANONICAL_TABLES as $table) {
@@ -727,7 +729,7 @@ final class CanonicalSupplierSnapshotSchemaMigrationTest extends TestCase
                 'lock wait timeout',
                 $this->guardRejectionMessage(),
             );
-            $this->assertCapabilityStateAbsent($failedCommandCapability, 'rollback command failure');
+            $this->assertCapabilitySpentAndArtifactAbsent($failedCommandCapability, 'rollback command failure');
             $blocker->rollBack();
             $this->clearDownCapabilityEnvironment();
             $this->assertTrue($this->indexExists('import_histories', 'ix_import_history_supplier_id'));
@@ -749,7 +751,7 @@ final class CanonicalSupplierSnapshotSchemaMigrationTest extends TestCase
             $missingMigrationCapability = $this->issueDownCapability();
 
             $this->assertGuardRejectedContaining('latest migration batch must be exactly the 12 canonical Phase I migrations');
-            $this->assertCapabilityStateAbsent($missingMigrationCapability, 'missing canonical migration');
+            $this->assertCapabilitySpentAndArtifactAbsent($missingMigrationCapability, 'missing canonical migration');
             $this->assertTrue(Schema::hasTable('supplier_offer_snapshot_observations'));
             $this->assertTrue($this->indexExists('import_histories', 'ix_import_history_supplier_id'));
             DB::table('migrations')->insert((array) $migration);
@@ -800,8 +802,12 @@ final class CanonicalSupplierSnapshotSchemaMigrationTest extends TestCase
                 $selectorCapability = $this->issueDownCapability();
                 $message = $this->commandRejectionMessage('migrate:rollback', $selector);
                 $this->assertStringContainsString('rollback selector', $message, $label);
-                $this->assertCapabilityStateAbsent($selectorCapability, $label);
+                $this->assertCapabilitySpentAndArtifactAbsent($selectorCapability, $label);
                 $this->assertPhaseISchemaUntouched(12, $label);
+                $replay = $this->rollbackAttempt($selectorCapability);
+                $this->assertNotSame(0, $replay['exit'], $label.' replay');
+                $this->assertStringContainsString('already spent or revoked', $replay['message'], $label.' replay');
+                $this->assertPhaseISchemaUntouched(12, $label.' replay');
             }
 
             DB::table('migrations')->insert([
@@ -813,7 +819,7 @@ final class CanonicalSupplierSnapshotSchemaMigrationTest extends TestCase
                 'latest migration batch must be exactly the 12 canonical Phase I migrations',
                 $this->commandRejectionMessage('migrate:rollback'),
             );
-            $this->assertCapabilityStateAbsent($extraMigrationCapability, 'extra latest-batch migration');
+            $this->assertCapabilitySpentAndArtifactAbsent($extraMigrationCapability, 'extra latest-batch migration');
             $this->assertPhaseISchemaUntouched(12, 'extra latest-batch migration');
             $this->assertSame(1, DB::table('migrations')->where(
                 'migration',
@@ -832,7 +838,7 @@ final class CanonicalSupplierSnapshotSchemaMigrationTest extends TestCase
                 'latest migration batch must be exactly the 12 canonical Phase I migrations',
                 $this->commandRejectionMessage('migrate:rollback'),
             );
-            $this->assertCapabilityStateAbsent($missingMigrationCapability, 'missing canonical migration row');
+            $this->assertCapabilitySpentAndArtifactAbsent($missingMigrationCapability, 'missing canonical migration row');
             $this->assertPhaseISchemaUntouched(11, 'missing canonical migration row');
             DB::table('migrations')->insert((array) $missing);
             $this->assertPhaseISchemaUntouched(12, 'restored canonical migration row');
@@ -843,7 +849,7 @@ final class CanonicalSupplierSnapshotSchemaMigrationTest extends TestCase
                     sprintf('command %s is not allowed', $command),
                     $this->commandRejectionMessage($command),
                 );
-                $this->assertCapabilityStateAbsent($wrongCommandCapability, $command);
+                $this->assertCapabilitySpentAndArtifactAbsent($wrongCommandCapability, $command);
                 $this->assertPhaseISchemaUntouched(12, $command);
             }
 
@@ -890,7 +896,7 @@ final class CanonicalSupplierSnapshotSchemaMigrationTest extends TestCase
             $completedCapability = $this->issueDownCapability();
             Event::dispatch(new CommandStarting('migrate:rollback', $input, $output));
             Event::dispatch(new CommandFinished('migrate:rollback', $input, $output, 0));
-            $this->assertCapabilityStateAbsent($completedCapability, 'completed command lifecycle');
+            $this->assertCapabilitySpentAndArtifactAbsent($completedCapability, 'completed command lifecycle');
 
             try {
                 Event::dispatch(new CommandStarting('migrate:rollback', $input, $output));
@@ -917,8 +923,8 @@ final class CanonicalSupplierSnapshotSchemaMigrationTest extends TestCase
                     $exception->getMessage(),
                 );
             }
-            $this->assertCapabilityStateAbsent($outerCapability, 'outer nested-command capability');
-            $this->assertCapabilityStateAbsent($nestedCapability, 'nested-command capability');
+            $this->assertCapabilitySpentAndArtifactAbsent($outerCapability, 'outer nested-command capability');
+            $this->assertCapabilitySpentAndArtifactAbsent($nestedCapability, 'nested-command capability');
             $this->assertPhaseISchemaUntouched(12, 'nested command');
 
             $orderedInput = $this->rollbackArrayInput();
@@ -936,7 +942,7 @@ final class CanonicalSupplierSnapshotSchemaMigrationTest extends TestCase
             } catch (Throwable $exception) {
                 $this->assertStringContainsString('unexpected rollback step', $exception->getMessage());
             }
-            $this->assertCapabilityStateAbsent($orderedCapability, 'out-of-order rollback step');
+            $this->assertCapabilitySpentAndArtifactAbsent($orderedCapability, 'out-of-order rollback step');
             $this->assertPhaseISchemaUntouched(12, 'out-of-order migration');
         } finally {
             $this->resetDownGuard();
@@ -958,10 +964,16 @@ final class CanonicalSupplierSnapshotSchemaMigrationTest extends TestCase
         $this->assertNotSame($firstDirectory, $secondDirectory);
         $this->assertMatchesRegularExpression('/[\\\\\/]mycomputer-phase-i-down[\\\\\/][0-9a-f]{64}$/', $firstDirectory);
         $this->assertCapabilityPathSecurity($this->capabilityPath($firstToken), $firstDirectory);
+        $this->assertNotSame(dirname($firstDirectory), $this->capabilityLedgerRoot());
+        $this->assertCapabilityPathSecurity(
+            $this->capabilityIssuedLedgerPath($firstToken),
+            $this->capabilityLedgerRoot(),
+        );
+        $this->assertFalse(file_exists($this->capabilitySpentLedgerPath($firstToken)));
         CanonicalSupplierSnapshotSchema::revokeDestructiveDownCapability($firstToken);
         CanonicalSupplierSnapshotSchema::revokeDestructiveDownCapability($secondToken);
-        $this->assertCapabilityStateAbsent($firstToken, 'explicit first capability revoke');
-        $this->assertCapabilityStateAbsent($secondToken, 'explicit second capability revoke');
+        $this->assertCapabilitySpentAndArtifactAbsent($firstToken, 'explicit first capability revoke');
+        $this->assertCapabilitySpentAndArtifactAbsent($secondToken, 'explicit second capability revoke');
 
         $token = $this->issueDownCapability();
         file_put_contents($this->capabilityPath($token), '{invalid-json');
@@ -995,6 +1007,16 @@ final class CanonicalSupplierSnapshotSchemaMigrationTest extends TestCase
             },
             'expired' => static function (array $payload): array {
                 $payload['expires_at'] = time() - 1;
+
+                return $payload;
+            },
+            'extended expiry' => static function (array $payload): array {
+                $payload['expires_at'] += 3600;
+
+                return $payload;
+            },
+            'wrong issuance' => static function (array $payload): array {
+                $payload['issuance_id'] = str_repeat('d', 64);
 
                 return $payload;
             },
@@ -1071,6 +1093,86 @@ final class CanonicalSupplierSnapshotSchemaMigrationTest extends TestCase
         );
 
         $token = $this->issueDownCapability();
+        $issuedPath = $this->capabilityIssuedLedgerPath($token);
+        $this->makeCapabilityPathUnsafe($issuedPath, false);
+        if (PHP_OS_FAMILY === 'Windows') {
+            $this->assertIndependentWindowsAclUnsafe($issuedPath, false);
+        }
+        try {
+            $this->invokeCapabilityMethod('consumeInvocationCapability');
+            $this->fail('Unsafe authoritative ledger ACL must fail closed.');
+        } catch (Throwable $exception) {
+            $this->assertStringContainsString(
+                PHP_OS_FAMILY === 'Windows' ? 'Windows capability ACL' : 'permissions are not exactly 0600',
+                $exception->getMessage(),
+            );
+        }
+        $this->assertFalse(file_exists($this->capabilityDirectory($token)));
+        $this->assertFalse(file_exists($this->capabilitySpentLedgerPath($token)));
+        $this->restoreIndependentPathSecurity($issuedPath, false);
+        CanonicalSupplierSnapshotSchema::revokeDestructiveDownCapability($token);
+        $this->assertCapabilitySpentAndArtifactAbsent($token, 'unsafe issued ledger ACL');
+
+        $token = $this->issueDownCapability();
+        $issuedPath = $this->capabilityIssuedLedgerPath($token);
+        $issuedRaw = (string) file_get_contents($issuedPath);
+        $issuedPayload = json_decode($issuedRaw, true, flags: JSON_THROW_ON_ERROR);
+        $this->assertIsArray($issuedPayload);
+        $issuedPayload['unexpected'] = true;
+        file_put_contents(
+            $issuedPath,
+            json_encode($issuedPayload, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES),
+        );
+        try {
+            $this->invokeCapabilityMethod('consumeInvocationCapability');
+            $this->fail('An issued ledger record with unknown keys must fail closed.');
+        } catch (Throwable $exception) {
+            $this->assertStringContainsString('authoritative issued ledger record is invalid', $exception->getMessage());
+        }
+        $this->assertFalse(file_exists($this->capabilityDirectory($token)));
+        $this->assertFalse(file_exists($this->capabilitySpentLedgerPath($token)));
+        file_put_contents($issuedPath, $issuedRaw);
+        CanonicalSupplierSnapshotSchema::revokeDestructiveDownCapability($token);
+        $this->assertCapabilitySpentAndArtifactAbsent($token, 'strict issued ledger payload');
+
+        $token = $this->issueDownCapability();
+        $issuedPath = $this->capabilityIssuedLedgerPath($token);
+        $ledgerLinkTarget = sys_get_temp_dir().DIRECTORY_SEPARATOR.'phase-i-ledger-link-'.bin2hex(random_bytes(8));
+        unlink($issuedPath);
+        if (PHP_OS_FAMILY === 'Windows') {
+            mkdir($ledgerLinkTarget, 0700);
+            $process = new Process([
+                getenv('ComSpec') ?: 'C:\\Windows\\System32\\cmd.exe',
+                '/d',
+                '/c',
+                'mklink',
+                '/J',
+                $issuedPath,
+                $ledgerLinkTarget,
+            ]);
+            $process->run();
+            $this->assertTrue($process->isSuccessful(), 'Windows ledger junction creation must be available.');
+        } else {
+            file_put_contents($ledgerLinkTarget, 'target');
+            $this->assertTrue(symlink($ledgerLinkTarget, $issuedPath));
+        }
+        try {
+            $this->invokeCapabilityMethod('consumeInvocationCapability');
+            $this->fail('A ledger symlink or reparse point must fail closed.');
+        } catch (Throwable $exception) {
+            $this->assertStringContainsString('Capability', $exception->getMessage());
+        }
+        $this->assertFalse(file_exists($this->capabilityDirectory($token)));
+        if (PHP_OS_FAMILY === 'Windows') {
+            rmdir($issuedPath);
+            rmdir($ledgerLinkTarget);
+        } else {
+            unlink($issuedPath);
+            unlink($ledgerLinkTarget);
+        }
+        $this->assertFalse(file_exists($this->capabilitySpentLedgerPath($token)));
+
+        $token = $this->issueDownCapability();
         $worker = sys_get_temp_dir().DIRECTORY_SEPARATOR.'phase-i-capability-consumer-'.bin2hex(random_bytes(8)).'.php';
         File::put($worker, <<<'PHP'
             <?php
@@ -1107,12 +1209,136 @@ final class CanonicalSupplierSnapshotSchemaMigrationTest extends TestCase
                 static fn (Process $process): bool => $process->getExitCode() === 2
                     && $process->getOutput() === 'REJECTED',
             )->count());
+            $this->assertDirectoryExists(
+                $this->capabilityDirectory($token),
+                'The losing consumer must not delete the winning consumer namespace.',
+            );
+            $this->assertFileExists($this->capabilitySpentLedgerPath($token));
             CanonicalSupplierSnapshotSchema::revokeDestructiveDownCapability($token);
-            $this->assertCapabilityStateAbsent($token, 'concurrent capability consumption');
+            $this->assertCapabilitySpentAndArtifactAbsent($token, 'concurrent capability consumption');
         } finally {
             File::delete($worker);
             CanonicalSupplierSnapshotSchema::revokeDestructiveDownCapability($token);
         }
+    }
+
+    public function test_rejected_capability_cannot_be_reconstructed_or_extended_to_authorize_rollback(): void
+    {
+        $database = 'phase_i_replay_'.getmypid().'_'.strtolower(bin2hex(random_bytes(4)));
+        $historicalPath = sys_get_temp_dir().DIRECTORY_SEPARATOR.$database.'_migrations';
+        $originalDefaultConnection = DB::getDefaultConnection();
+        $token = null;
+
+        try {
+            $this->createTemporaryDatabase($database);
+            $this->configureTemporaryConnection($database);
+            $this->copyHistoricalMigrations($historicalPath);
+            $this->migrateHistoricalThenPhase($historicalPath);
+            DB::setDefaultConnection('snapshot_schema_phase_i');
+
+            $token = $this->issueDownCapability();
+            $originalArtifact = (string) file_get_contents($this->capabilityPath($token));
+            file_put_contents($this->capabilityPath($token), '{invalid-json');
+
+            $initial = $this->rollbackAttempt($token);
+            $this->assertNotSame(0, $initial['exit']);
+            $this->assertStringContainsString('Syntax error', $initial['message']);
+            $this->assertCapabilitySpentAndArtifactAbsent($token, 'rejected replay fixture');
+            $this->assertPhaseISchemaUntouched(12, 'initial malformed capability rejection');
+
+            $this->recreateArtifactFixture($token, $originalArtifact);
+            $replay = $this->rollbackAttempt($token);
+            $this->assertNotSame(0, $replay['exit']);
+            $this->assertStringContainsString('already spent or revoked', $replay['message']);
+            $this->assertPhaseISchemaUntouched(12, 'reconstructed old-token replay');
+
+            $extended = json_decode($originalArtifact, true, flags: JSON_THROW_ON_ERROR);
+            $this->assertIsArray($extended);
+            $extended['expires_at'] += 3600;
+            file_put_contents(
+                $this->capabilityPath($token),
+                json_encode($extended, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES),
+            );
+            $extendedReplay = $this->rollbackAttempt($token);
+            $this->assertNotSame(0, $extendedReplay['exit']);
+            $this->assertStringContainsString('already spent or revoked', $extendedReplay['message']);
+            $this->assertPhaseISchemaUntouched(12, 'extended-expiry old-token replay');
+
+            $this->assertTrue(is_file($this->capabilityIssuedLedgerPath($token)));
+            $this->assertTrue(is_file($this->capabilitySpentLedgerPath($token)));
+            $this->assertSame(10, collect(self::CANONICAL_TABLES)->filter(
+                static fn (string $table): bool => Schema::hasTable($table),
+            )->count());
+            $this->assertSame(
+                12,
+                DB::table('migrations')->whereIn('migration', self::PHASE_I_MIGRATIONS)->count(),
+            );
+        } finally {
+            if (is_string($token)) {
+                CanonicalSupplierSnapshotSchema::revokeDestructiveDownCapability($token);
+            }
+            $this->resetDownGuard();
+            $this->clearDownCapabilityEnvironment();
+            DB::setDefaultConnection($originalDefaultConnection);
+            DB::disconnect('snapshot_schema_phase_i');
+            DB::purge('snapshot_schema_phase_i');
+            $this->dropTemporaryDatabase($database);
+            File::deleteDirectory($historicalPath);
+        }
+    }
+
+    public function test_missing_artifact_is_revoked_and_missing_issuance_never_authorizes(): void
+    {
+        $missingArtifactToken = $this->issueDownCapability();
+        $originalArtifact = (string) file_get_contents($this->capabilityPath($missingArtifactToken));
+        unlink($this->capabilityPath($missingArtifactToken));
+
+        try {
+            $this->invokeCapabilityMethod('consumeInvocationCapability');
+            $this->fail('A missing artifact must fail after atomically spending its capability.');
+        } catch (Throwable $exception) {
+            $this->assertStringContainsString('missing after consumption claim', $exception->getMessage());
+        }
+        $this->assertCapabilitySpentAndArtifactAbsent($missingArtifactToken, 'missing artifact');
+
+        $this->recreateArtifactFixture($missingArtifactToken, $originalArtifact);
+        $this->presentDownCapability($missingArtifactToken);
+        try {
+            $this->invokeCapabilityMethod('consumeInvocationCapability');
+            $this->fail('A reconstructed missing artifact capability must remain spent.');
+        } catch (Throwable $exception) {
+            $this->assertStringContainsString('already spent or revoked', $exception->getMessage());
+        }
+        $this->assertTrue(
+            is_dir($this->capabilityDirectory($missingArtifactToken)),
+            'Spent loser handling must not delete a possible winning consumer namespace.',
+        );
+        CanonicalSupplierSnapshotSchema::revokeDestructiveDownCapability($missingArtifactToken);
+        $this->assertCapabilitySpentAndArtifactAbsent($missingArtifactToken, 'missing artifact replay cleanup');
+
+        $missingIssuedToken = $this->issueDownCapability();
+        $missingIssuedArtifact = (string) file_get_contents($this->capabilityPath($missingIssuedToken));
+        unlink($this->capabilityIssuedLedgerPath($missingIssuedToken));
+        try {
+            $this->invokeCapabilityMethod('consumeInvocationCapability');
+            $this->fail('An artifact without authoritative issuance must fail closed.');
+        } catch (Throwable $exception) {
+            $this->assertStringContainsString('authoritative issued ledger record is missing', $exception->getMessage());
+        }
+        $this->assertUnissuedCapabilityStateAbsent($missingIssuedToken, 'missing authoritative issuance');
+
+        $this->recreateArtifactFixture($missingIssuedToken, $missingIssuedArtifact);
+        $this->presentDownCapability($missingIssuedToken);
+        try {
+            $this->invokeCapabilityMethod('consumeInvocationCapability');
+            $this->fail('Recreated artifact state must not replace authoritative issuance.');
+        } catch (Throwable $exception) {
+            $this->assertStringContainsString('authoritative issued ledger record is missing', $exception->getMessage());
+        }
+        $this->assertUnissuedCapabilityStateAbsent($missingIssuedToken, 'recreated artifact without issuance');
+        $this->assertSame(10, collect(self::CANONICAL_TABLES)->filter(
+            static fn (string $table): bool => Schema::hasTable($table),
+        )->count());
     }
 
     private function assertIndexInventory(): void
@@ -2034,11 +2260,112 @@ final class CanonicalSupplierSnapshotSchemaMigrationTest extends TestCase
     {
         $capability = CanonicalSupplierSnapshotSchema::issueDestructiveDownCapability();
         $this->issuedDownCapabilities[] = $capability;
+        $this->presentDownCapability($capability);
+
+        return $capability;
+    }
+
+    private function presentDownCapability(string $capability): void
+    {
         putenv(self::DOWN_CAPABILITY_ENV.'='.$capability);
         $_ENV[self::DOWN_CAPABILITY_ENV] = $capability;
         $_SERVER[self::DOWN_CAPABILITY_ENV] = $capability;
+    }
 
-        return $capability;
+    /** @return array{exit: int, message: string} */
+    private function rollbackAttempt(string $capability): array
+    {
+        $this->presentDownCapability($capability);
+        try {
+            $exit = Artisan::call('migrate:rollback', [
+                '--database' => 'snapshot_schema_phase_i',
+                '--force' => true,
+            ]);
+
+            return ['exit' => $exit, 'message' => Artisan::output()];
+        } catch (Throwable $exception) {
+            return ['exit' => 1, 'message' => $exception->getMessage()];
+        }
+    }
+
+    private function recreateArtifactFixture(string $token, string $payload): void
+    {
+        $directory = $this->capabilityDirectory($token);
+        $path = $this->capabilityPath($token);
+        clearstatcache(true, $directory);
+        if (! is_dir($directory)) {
+            $this->createIndependentPrivateDirectory($directory);
+        }
+
+        $previousUmask = null;
+        if (PHP_OS_FAMILY !== 'Windows') {
+            $previousUmask = umask(0077);
+        }
+        try {
+            $handle = fopen($path, 'x+b');
+        } finally {
+            if ($previousUmask !== null) {
+                umask($previousUmask);
+            }
+        }
+        $this->assertIsResource($handle);
+        try {
+            $this->assertSame(strlen($payload), fwrite($handle, $payload));
+            $this->assertTrue(fflush($handle));
+        } finally {
+            fclose($handle);
+        }
+
+        $this->assertCapabilityPathSecurity($path, $directory);
+    }
+
+    private function createIndependentPrivateDirectory(string $path): void
+    {
+        if (PHP_OS_FAMILY !== 'Windows') {
+            $previousUmask = umask(0077);
+            try {
+                $this->assertTrue(mkdir($path, 0700));
+            } finally {
+                umask($previousUmask);
+            }
+
+            return;
+        }
+
+        $systemRoot = getenv('SystemRoot');
+        $this->assertIsString($systemRoot);
+        $powerShell = $systemRoot.'\\System32\\WindowsPowerShell\\v1.0\\powershell.exe';
+        $script = <<<'POWERSHELL'
+            $ErrorActionPreference = 'Stop'
+            $path = [IO.Path]::GetFullPath([string] $env:MYCOMPUTER_PHASE_I_TEST_PATH)
+            $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
+            $security = New-Object Security.AccessControl.DirectorySecurity
+            $security.SetOwner($identity.User)
+            $security.SetAccessRuleProtection($true, $false)
+            $rule = New-Object Security.AccessControl.FileSystemAccessRule(
+                $identity.User,
+                [Security.AccessControl.FileSystemRights]::FullControl,
+                [Security.AccessControl.InheritanceFlags]'ContainerInherit, ObjectInherit',
+                [Security.AccessControl.PropagationFlags]::None,
+                [Security.AccessControl.AccessControlType]::Allow
+            )
+            [void] $security.AddAccessRule($rule)
+            [void] [IO.Directory]::CreateDirectory($path, $security)
+            POWERSHELL;
+        $process = new Process([
+            $powerShell,
+            '-NoLogo',
+            '-NoProfile',
+            '-NonInteractive',
+            '-ExecutionPolicy',
+            'Bypass',
+            '-Command',
+            $script,
+        ], env: ['MYCOMPUTER_PHASE_I_TEST_PATH' => $path]);
+        $process->setTimeout(10);
+        $process->run();
+        $this->assertTrue($process->isSuccessful(), 'Independent private-directory fixture creation failed.');
+        $this->assertIndependentWindowsAclSecure($path, true);
     }
 
     private function capabilityDirectory(string $token): string
@@ -2049,6 +2376,21 @@ final class CanonicalSupplierSnapshotSchemaMigrationTest extends TestCase
     private function capabilityPath(string $token): string
     {
         return (string) $this->invokeCapabilityMethod('capabilityPath', [$token]);
+    }
+
+    private function capabilityLedgerRoot(): string
+    {
+        return (string) $this->invokeCapabilityMethod('capabilityLedgerRootPath');
+    }
+
+    private function capabilityIssuedLedgerPath(string $token): string
+    {
+        return (string) $this->invokeCapabilityMethod('capabilityIssuedLedgerPathForToken', [$token]);
+    }
+
+    private function capabilitySpentLedgerPath(string $token): string
+    {
+        return (string) $this->invokeCapabilityMethod('capabilitySpentLedgerPathForToken', [$token]);
     }
 
     private function assertCapabilityPathSecurity(string $path, string $directory): void
@@ -2090,15 +2432,19 @@ final class CanonicalSupplierSnapshotSchemaMigrationTest extends TestCase
             $this->assertStringContainsString($fragment, $exception->getMessage(), $context);
         }
 
-        $this->assertCapabilityStateAbsent($token, $context);
+        $this->assertCapabilitySpentAndArtifactAbsent($token, $context);
     }
 
-    private function assertCapabilityStateAbsent(string $token, string $context): void
+    private function assertCapabilitySpentAndArtifactAbsent(string $token, string $context): void
     {
         $path = $this->capabilityPath($token);
         $directory = $this->capabilityDirectory($token);
+        $issuedPath = $this->capabilityIssuedLedgerPath($token);
+        $spentPath = $this->capabilitySpentLedgerPath($token);
         clearstatcache(true, $path);
         clearstatcache(true, $directory);
+        clearstatcache(true, $issuedPath);
+        clearstatcache(true, $spentPath);
         $consumed = glob($directory.DIRECTORY_SEPARATOR.'consumed-*.json');
 
         $this->assertFalse(file_exists($path) || is_link($path), $context.': original artifact remains');
@@ -2107,12 +2453,55 @@ final class CanonicalSupplierSnapshotSchemaMigrationTest extends TestCase
             file_exists($directory) || is_link($directory),
             $context.': private capability directory remains',
         );
+        $this->assertTrue(is_file($issuedPath), $context.': authoritative issued record is missing');
+        $this->assertTrue(is_file($spentPath), $context.': spent/revoked record is missing');
+        $this->assertCapabilityPathSecurity($issuedPath, $this->capabilityLedgerRoot());
+        $this->assertCapabilityPathSecurity($spentPath, $this->capabilityLedgerRoot());
 
         $reflection = new ReflectionClass(CanonicalSupplierSnapshotSchema::class);
         $this->assertNull(
             $reflection->getProperty('destructiveDownScope')->getValue(),
             $context.': destructive down scope remains active',
         );
+    }
+
+    private function assertUnissuedCapabilityStateAbsent(string $token, string $context): void
+    {
+        $path = $this->capabilityPath($token);
+        $directory = $this->capabilityDirectory($token);
+        $issuedPath = $this->capabilityIssuedLedgerPath($token);
+        $spentPath = $this->capabilitySpentLedgerPath($token);
+        foreach ([$path, $directory, $issuedPath, $spentPath] as $candidate) {
+            clearstatcache(true, $candidate);
+            $this->assertFalse(
+                file_exists($candidate) || is_link($candidate),
+                $context.': unissued capability state exists',
+            );
+        }
+    }
+
+    private function purgeCapabilityLedgerForTesting(string $token): void
+    {
+        foreach ([$this->capabilitySpentLedgerPath($token), $this->capabilityIssuedLedgerPath($token)] as $path) {
+            clearstatcache(true, $path);
+            if (is_file($path) || is_link($path)) {
+                @unlink($path);
+            }
+        }
+    }
+
+    private function removeEmptyCapabilityRootsForTesting(): void
+    {
+        foreach ([$this->capabilityLedgerRoot(), dirname($this->capabilityDirectory(str_repeat('0', 64)))] as $root) {
+            clearstatcache(true, $root);
+            if (! is_dir($root) || is_link($root)) {
+                continue;
+            }
+            $entries = scandir($root);
+            if (is_array($entries) && array_values(array_diff($entries, ['.', '..'])) === []) {
+                @rmdir($root);
+            }
+        }
     }
 
     private function assertIndependentWindowsAclSecure(string $path, bool $directory): void
@@ -2285,6 +2674,47 @@ final class CanonicalSupplierSnapshotSchemaMigrationTest extends TestCase
         $process->setTimeout(10);
         $process->run();
         $this->assertTrue($process->isSuccessful(), 'Test ACL mutation must succeed.');
+    }
+
+    private function restoreIndependentPathSecurity(string $path, bool $directory): void
+    {
+        if (PHP_OS_FAMILY !== 'Windows') {
+            $this->assertTrue(chmod($path, $directory ? 0700 : 0600));
+
+            return;
+        }
+
+        $systemRoot = getenv('SystemRoot');
+        $this->assertIsString($systemRoot);
+        $powerShell = $systemRoot.'\\System32\\WindowsPowerShell\\v1.0\\powershell.exe';
+        $script = <<<'POWERSHELL'
+            $ErrorActionPreference = 'Stop'
+            $path = [IO.Path]::GetFullPath([string] $env:MYCOMPUTER_PHASE_I_TEST_PATH)
+            $directory = $env:MYCOMPUTER_PHASE_I_TEST_DIRECTORY -eq '1'
+            $acl = $(if ($directory) { [IO.Directory]::GetAccessControl($path) } else { [IO.File]::GetAccessControl($path) })
+            @($acl.GetAccessRules($true, $false, [Security.Principal.SecurityIdentifier])) | ForEach-Object {
+                [void] $acl.RemoveAccessRuleSpecific($_)
+            }
+            $acl.SetAccessRuleProtection($false, $false)
+            if ($directory) { [IO.Directory]::SetAccessControl($path, $acl) } else { [IO.File]::SetAccessControl($path, $acl) }
+            POWERSHELL;
+        $process = new Process([
+            $powerShell,
+            '-NoLogo',
+            '-NoProfile',
+            '-NonInteractive',
+            '-ExecutionPolicy',
+            'Bypass',
+            '-Command',
+            $script,
+        ], env: [
+            'MYCOMPUTER_PHASE_I_TEST_PATH' => $path,
+            'MYCOMPUTER_PHASE_I_TEST_DIRECTORY' => $directory ? '1' : '0',
+        ]);
+        $process->setTimeout(10);
+        $process->run();
+        $this->assertTrue($process->isSuccessful(), 'Independent ACL restoration must succeed.');
+        $this->assertIndependentWindowsAclSecure($path, $directory);
     }
 
     private function clearDownCapabilityEnvironment(): void
