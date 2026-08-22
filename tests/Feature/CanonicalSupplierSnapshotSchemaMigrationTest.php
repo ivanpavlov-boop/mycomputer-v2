@@ -341,7 +341,7 @@ final class CanonicalSupplierSnapshotSchemaMigrationTest extends TestCase
         'supplier_offer_snapshot_observations.supplier_sku_hash' => 'NO',
     ];
 
-    /** @var list<string> */
+    /** @var array<string, string> token => target identity SHA-256 */
     private array $issuedDownCapabilities = [];
 
     protected function setUp(): void
@@ -358,8 +358,9 @@ final class CanonicalSupplierSnapshotSchemaMigrationTest extends TestCase
 
     protected function tearDown(): void
     {
-        foreach ($this->issuedDownCapabilities as $capability) {
-            CanonicalSupplierSnapshotSchema::revokeDestructiveDownCapability($capability);
+        Carbon::setTestNow();
+
+        foreach (array_keys($this->issuedDownCapabilities) as $capability) {
             $this->purgeCapabilityLedgerForTesting($capability);
         }
         $this->removeEmptyCapabilityRootsForTesting();
@@ -1000,6 +1001,21 @@ final class CanonicalSupplierSnapshotSchemaMigrationTest extends TestCase
 
                 return $payload;
             },
+            'missing target identity' => static function (array $payload): array {
+                unset($payload['target_identity_sha256']);
+
+                return $payload;
+            },
+            'malformed target identity' => static function (array $payload): array {
+                $payload['target_identity_sha256'] = 'not-a-sha256';
+
+                return $payload;
+            },
+            'wrong target identity' => static function (array $payload): array {
+                $payload['target_identity_sha256'] = str_repeat('e', 64);
+
+                return $payload;
+            },
             'wrong token' => static function (array $payload): array {
                 $payload['token_sha256'] = str_repeat('c', 64);
 
@@ -1113,27 +1129,55 @@ final class CanonicalSupplierSnapshotSchemaMigrationTest extends TestCase
         CanonicalSupplierSnapshotSchema::revokeDestructiveDownCapability($token);
         $this->assertCapabilitySpentAndArtifactAbsent($token, 'unsafe issued ledger ACL');
 
-        $token = $this->issueDownCapability();
-        $issuedPath = $this->capabilityIssuedLedgerPath($token);
-        $issuedRaw = (string) file_get_contents($issuedPath);
-        $issuedPayload = json_decode($issuedRaw, true, flags: JSON_THROW_ON_ERROR);
-        $this->assertIsArray($issuedPayload);
-        $issuedPayload['unexpected'] = true;
-        file_put_contents(
-            $issuedPath,
-            json_encode($issuedPayload, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES),
-        );
-        try {
-            $this->invokeCapabilityMethod('consumeInvocationCapability');
-            $this->fail('An issued ledger record with unknown keys must fail closed.');
-        } catch (Throwable $exception) {
-            $this->assertStringContainsString('authoritative issued ledger record is invalid', $exception->getMessage());
+        $issuedPayloadMutations = [
+            'extra target field' => static function (array $payload): array {
+                $payload['target_identity'] = str_repeat('a', 64);
+
+                return $payload;
+            },
+            'missing target identity' => static function (array $payload): array {
+                unset($payload['target_identity_sha256']);
+
+                return $payload;
+            },
+            'malformed target identity' => static function (array $payload): array {
+                $payload['target_identity_sha256'] = 'not-a-sha256';
+
+                return $payload;
+            },
+            'wrong target identity' => static function (array $payload): array {
+                $payload['target_identity_sha256'] = str_repeat('e', 64);
+
+                return $payload;
+            },
+        ];
+
+        foreach ($issuedPayloadMutations as $label => $mutation) {
+            $token = $this->issueDownCapability();
+            $issuedPath = $this->capabilityIssuedLedgerPath($token);
+            $issuedRaw = (string) file_get_contents($issuedPath);
+            $issuedPayload = json_decode($issuedRaw, true, flags: JSON_THROW_ON_ERROR);
+            $this->assertIsArray($issuedPayload);
+            file_put_contents(
+                $issuedPath,
+                json_encode($mutation($issuedPayload), JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES),
+            );
+            try {
+                $this->invokeCapabilityMethod('consumeInvocationCapability');
+                $this->fail($label.': invalid issued ledger record must fail closed.');
+            } catch (Throwable $exception) {
+                $this->assertStringContainsString(
+                    'authoritative issued ledger record is invalid',
+                    $exception->getMessage(),
+                    $label,
+                );
+            }
+            $this->assertFalse(file_exists($this->capabilityDirectory($token)));
+            $this->assertFalse(file_exists($this->capabilitySpentLedgerPath($token)));
+            file_put_contents($issuedPath, $issuedRaw);
+            CanonicalSupplierSnapshotSchema::revokeDestructiveDownCapability($token);
+            $this->assertCapabilitySpentAndArtifactAbsent($token, 'strict issued ledger payload: '.$label);
         }
-        $this->assertFalse(file_exists($this->capabilityDirectory($token)));
-        $this->assertFalse(file_exists($this->capabilitySpentLedgerPath($token)));
-        file_put_contents($issuedPath, $issuedRaw);
-        CanonicalSupplierSnapshotSchema::revokeDestructiveDownCapability($token);
-        $this->assertCapabilitySpentAndArtifactAbsent($token, 'strict issued ledger payload');
 
         $token = $this->issueDownCapability();
         $issuedPath = $this->capabilityIssuedLedgerPath($token);
@@ -1177,6 +1221,8 @@ final class CanonicalSupplierSnapshotSchemaMigrationTest extends TestCase
         File::put($worker, <<<'PHP'
             <?php
             require $argv[1].'/vendor/autoload.php';
+            $app = require $argv[1].'/bootstrap/app.php';
+            $app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
             require_once $argv[1].'/database/migrations/support/CanonicalSupplierSnapshotSchema.php';
             try {
                 $reflection = new ReflectionClass(Database\Migrations\Support\CanonicalSupplierSnapshotSchema::class);
@@ -1283,6 +1329,258 @@ final class CanonicalSupplierSnapshotSchemaMigrationTest extends TestCase
             DB::disconnect('snapshot_schema_phase_i');
             DB::purge('snapshot_schema_phase_i');
             $this->dropTemporaryDatabase($database);
+            File::deleteDirectory($historicalPath);
+        }
+    }
+
+    public function test_observed_expiry_and_explicit_expired_revoke_survive_clock_rollback(): void
+    {
+        $database = 'phase_i_expiry_'.getmypid().'_'.strtolower(bin2hex(random_bytes(4)));
+        $historicalPath = sys_get_temp_dir().DIRECTORY_SEPARATOR.$database.'_migrations';
+        $originalDefaultConnection = DB::getDefaultConnection();
+        $tokens = [];
+        $t0 = Carbon::parse('2026-08-22 10:00:00', 'UTC');
+
+        try {
+            $this->createTemporaryDatabase($database);
+            $this->configureTemporaryConnection($database);
+            $this->copyHistoricalMigrations($historicalPath);
+            $this->migrateHistoricalThenPhase($historicalPath);
+            DB::setDefaultConnection('snapshot_schema_phase_i');
+
+            Carbon::setTestNow($t0);
+            $expiredToken = $this->issueDownCapability();
+            $tokens[] = $expiredToken;
+            $expiredArtifact = (string) file_get_contents($this->capabilityPath($expiredToken));
+            $this->assertFileDoesNotExist($this->capabilitySpentLedgerPath($expiredToken));
+
+            Carbon::setTestNow($t0->copy()->addSeconds(301));
+            $expiredAttempt = $this->rollbackAttempt($expiredToken);
+            $this->assertNotSame(0, $expiredAttempt['exit']);
+            $this->assertStringContainsString('authoritative issued ledger record is expired', $expiredAttempt['message']);
+            $this->assertCapabilitySpentAndArtifactAbsent($expiredToken, 'observed expired capability');
+            $expiredSpent = json_decode(
+                (string) file_get_contents($this->capabilitySpentLedgerPath($expiredToken)),
+                true,
+                flags: JSON_THROW_ON_ERROR,
+            );
+            $this->assertSame('consumption_claimed', $expiredSpent['reason_class'] ?? null);
+            $this->assertPhaseISchemaUntouched(12, 'observed expired capability');
+
+            Carbon::setTestNow($t0->copy()->addSeconds(100));
+            $this->recreateArtifactFixture($expiredToken, $expiredArtifact);
+            $expiredReplay = $this->rollbackAttempt($expiredToken);
+            $this->assertNotSame(0, $expiredReplay['exit']);
+            $this->assertStringContainsString('already spent or revoked', $expiredReplay['message']);
+            $this->assertPhaseISchemaUntouched(12, 'clock-rollback expired-capability replay');
+            CanonicalSupplierSnapshotSchema::revokeDestructiveDownCapability(
+                $expiredToken,
+                'snapshot_schema_phase_i',
+            );
+
+            Carbon::setTestNow($t0);
+            $revokedToken = $this->issueDownCapability();
+            $tokens[] = $revokedToken;
+            $revokedArtifact = (string) file_get_contents($this->capabilityPath($revokedToken));
+            Carbon::setTestNow($t0->copy()->addSeconds(301));
+            CanonicalSupplierSnapshotSchema::revokeDestructiveDownCapability(
+                $revokedToken,
+                'snapshot_schema_phase_i',
+            );
+            $this->assertCapabilitySpentAndArtifactAbsent($revokedToken, 'explicit expired capability revoke');
+            $revokedSpent = json_decode(
+                (string) file_get_contents($this->capabilitySpentLedgerPath($revokedToken)),
+                true,
+                flags: JSON_THROW_ON_ERROR,
+            );
+            $this->assertSame('explicit_revocation', $revokedSpent['reason_class'] ?? null);
+
+            Carbon::setTestNow($t0->copy()->addSeconds(100));
+            $this->recreateArtifactFixture($revokedToken, $revokedArtifact);
+            $revokedReplay = $this->rollbackAttempt($revokedToken);
+            $this->assertNotSame(0, $revokedReplay['exit']);
+            $this->assertStringContainsString('already spent or revoked', $revokedReplay['message']);
+            $this->assertPhaseISchemaUntouched(12, 'clock-rollback explicitly-revoked capability replay');
+            CanonicalSupplierSnapshotSchema::revokeDestructiveDownCapability(
+                $revokedToken,
+                'snapshot_schema_phase_i',
+            );
+        } finally {
+            Carbon::setTestNow();
+            foreach ($tokens as $token) {
+                try {
+                    CanonicalSupplierSnapshotSchema::revokeDestructiveDownCapability(
+                        $token,
+                        'snapshot_schema_phase_i',
+                    );
+                } catch (Throwable) {
+                    // Test teardown removes target-bound fixture state directly.
+                }
+            }
+            $this->resetDownGuard();
+            $this->clearDownCapabilityEnvironment();
+            DB::setDefaultConnection($originalDefaultConnection);
+            DB::disconnect('snapshot_schema_phase_i');
+            DB::purge('snapshot_schema_phase_i');
+            $this->dropTemporaryDatabase($database);
+            File::deleteDirectory($historicalPath);
+        }
+    }
+
+    public function test_capability_for_database_a_cannot_authorize_database_b(): void
+    {
+        $suffix = getmypid().'_'.strtolower(bin2hex(random_bytes(4)));
+        $databaseA = 'phase_i_target_a_'.$suffix;
+        $databaseB = 'phase_i_target_b_'.$suffix;
+        $connectionA = 'snapshot_schema_phase_i_target_a';
+        $connectionB = 'snapshot_schema_phase_i_target_b';
+        $historicalPath = sys_get_temp_dir().DIRECTORY_SEPARATOR.'phase_i_targets_'.$suffix.'_migrations';
+        $originalDefaultConnection = DB::getDefaultConnection();
+        $token = null;
+
+        try {
+            $this->createTemporaryDatabase($databaseA);
+            $this->createTemporaryDatabase($databaseB);
+            $this->configureTemporaryConnection($databaseA, $connectionA);
+            $this->configureTemporaryConnection($databaseB, $connectionB);
+            $this->copyHistoricalMigrations($historicalPath);
+            $this->migrateHistoricalThenPhase($historicalPath, $connectionA);
+            $this->migrateHistoricalThenPhase($historicalPath, $connectionB);
+
+            $targetA = $this->canonicalTargetIdentity($connectionA);
+            $targetB = $this->canonicalTargetIdentity($connectionB);
+            $this->assertSame('mysql', $targetA['driver']);
+            $this->assertSame($targetA['server_uuid'], $targetB['server_uuid']);
+            $this->assertSame($databaseA, $targetA['database_name']);
+            $this->assertSame($databaseB, $targetB['database_name']);
+            $this->assertNotSame($targetA['target_identity_sha256'], $targetB['target_identity_sha256']);
+            $this->assertSame(
+                hash(
+                    'sha256',
+                    "mycomputer:phase-i-down-target:v1\0mysql\0{$connectionA}\0"
+                        .$targetA['server_uuid']."\0{$databaseA}",
+                ),
+                $targetA['target_identity_sha256'],
+            );
+            $this->assertNotSame(
+                $targetA['target_identity_sha256'],
+                hash(
+                    'sha256',
+                    "mycomputer:phase-i-down-target:v1\0mysql\0{$connectionA}\0"
+                        .'00000000-0000-0000-0000-000000000000'."\0{$databaseA}",
+                ),
+                'The canonical target digest must structurally bind MySQL @@server_uuid.',
+            );
+
+            $beforeA = $this->phaseISchemaState($connectionA);
+            $beforeB = $this->phaseISchemaState($connectionB);
+            $token = $this->issueDownCapability($connectionA);
+            $artifact = json_decode(
+                (string) file_get_contents($this->capabilityPath($token)),
+                true,
+                flags: JSON_THROW_ON_ERROR,
+            );
+            $issued = json_decode(
+                (string) file_get_contents($this->capabilityIssuedLedgerPath($token)),
+                true,
+                flags: JSON_THROW_ON_ERROR,
+            );
+            $this->assertSame($targetA['target_identity_sha256'], $artifact['target_identity_sha256'] ?? null);
+            $this->assertSame($targetA['target_identity_sha256'], $issued['target_identity_sha256'] ?? null);
+
+            $attempt = $this->rollbackAttempt($token, $connectionB);
+            $this->assertNotSame(0, $attempt['exit']);
+            $this->assertStringContainsString('authoritative issued ledger record is missing', $attempt['message']);
+            $this->assertSame($beforeB, $this->phaseISchemaState($connectionB));
+            $this->assertSame($beforeA, $this->phaseISchemaState($connectionA));
+            $this->assertFileExists($this->capabilityPath($token));
+            $this->assertFileExists($this->capabilityIssuedLedgerPath($token));
+            $this->assertFileDoesNotExist($this->capabilitySpentLedgerPath($token));
+
+            CanonicalSupplierSnapshotSchema::revokeDestructiveDownCapability($token, $connectionA);
+            $this->assertCapabilitySpentAndArtifactAbsent($token, 'A capability after wrong-target B attempt');
+        } finally {
+            if (is_string($token)) {
+                try {
+                    CanonicalSupplierSnapshotSchema::revokeDestructiveDownCapability($token, $connectionA);
+                } catch (Throwable) {
+                    // Test teardown removes target-bound fixture state directly.
+                }
+            }
+            $this->resetDownGuard();
+            $this->clearDownCapabilityEnvironment();
+            DB::setDefaultConnection($originalDefaultConnection);
+            foreach ([$connectionA, $connectionB] as $connection) {
+                DB::disconnect($connection);
+                DB::purge($connection);
+            }
+            $this->dropTemporaryDatabase($databaseA);
+            $this->dropTemporaryDatabase($databaseB);
+            File::deleteDirectory($historicalPath);
+        }
+    }
+
+    public function test_reconfigured_connection_alias_cannot_reuse_old_database_capability(): void
+    {
+        $suffix = getmypid().'_'.strtolower(bin2hex(random_bytes(4)));
+        $databaseA = 'phase_i_alias_a_'.$suffix;
+        $databaseB = 'phase_i_alias_b_'.$suffix;
+        $alias = 'snapshot_schema_phase_i_alias';
+        $connectionA = 'snapshot_schema_phase_i_alias_a';
+        $connectionB = 'snapshot_schema_phase_i_alias_b';
+        $historicalPath = sys_get_temp_dir().DIRECTORY_SEPARATOR.'phase_i_alias_'.$suffix.'_migrations';
+        $originalDefaultConnection = DB::getDefaultConnection();
+        $token = null;
+
+        try {
+            $this->createTemporaryDatabase($databaseA);
+            $this->createTemporaryDatabase($databaseB);
+            $this->configureTemporaryConnection($databaseA, $connectionA);
+            $this->configureTemporaryConnection($databaseB, $connectionB);
+            $this->copyHistoricalMigrations($historicalPath);
+            $this->migrateHistoricalThenPhase($historicalPath, $connectionA);
+            $this->migrateHistoricalThenPhase($historicalPath, $connectionB);
+
+            $this->configureTemporaryConnection($databaseA, $alias);
+            $targetA = $this->canonicalTargetIdentity($alias);
+            $token = $this->issueDownCapability($alias);
+
+            $this->configureTemporaryConnection($databaseB, $alias);
+            $targetB = $this->canonicalTargetIdentity($alias);
+            $this->assertSame($targetA['connection_name'], $targetB['connection_name']);
+            $this->assertNotSame($targetA['database_name'], $targetB['database_name']);
+            $this->assertNotSame($targetA['target_identity_sha256'], $targetB['target_identity_sha256']);
+            $beforeB = $this->phaseISchemaState($alias);
+
+            $attempt = $this->rollbackAttempt($token, $alias);
+            $this->assertNotSame(0, $attempt['exit']);
+            $this->assertStringContainsString('authoritative issued ledger record is missing', $attempt['message']);
+            $this->assertSame($beforeB, $this->phaseISchemaState($alias));
+            $this->assertFalse($this->phaseISchemaState($alias)['first_destructive_ddl_executed']);
+            $this->assertFileExists($this->capabilityPath($token));
+            $this->assertFileDoesNotExist($this->capabilitySpentLedgerPath($token));
+
+            $this->configureTemporaryConnection($databaseA, $alias);
+            CanonicalSupplierSnapshotSchema::revokeDestructiveDownCapability($token, $alias);
+            $this->assertCapabilitySpentAndArtifactAbsent($token, 'reconfigured alias wrong-target attempt');
+        } finally {
+            if (is_string($token)) {
+                try {
+                    $this->configureTemporaryConnection($databaseA, $alias);
+                    CanonicalSupplierSnapshotSchema::revokeDestructiveDownCapability($token, $alias);
+                } catch (Throwable) {
+                    // Test teardown removes target-bound fixture state directly.
+                }
+            }
+            $this->resetDownGuard();
+            $this->clearDownCapabilityEnvironment();
+            DB::setDefaultConnection($originalDefaultConnection);
+            foreach ([$alias, $connectionA, $connectionB] as $connection) {
+                DB::disconnect($connection);
+                DB::purge($connection);
+            }
+            $this->dropTemporaryDatabase($databaseA);
+            $this->dropTemporaryDatabase($databaseB);
             File::deleteDirectory($historicalPath);
         }
     }
@@ -2138,13 +2436,15 @@ final class CanonicalSupplierSnapshotSchemaMigrationTest extends TestCase
         $this->resetDownGuard();
     }
 
-    private function configureTemporaryConnection(string $database): void
-    {
-        config(['database.connections.snapshot_schema_phase_i' => array_merge(
+    private function configureTemporaryConnection(
+        string $database,
+        string $connection = 'snapshot_schema_phase_i',
+    ): void {
+        config(["database.connections.{$connection}" => array_merge(
             config('database.connections.mysql'),
             ['database' => $database],
         )]);
-        DB::purge('snapshot_schema_phase_i');
+        DB::purge($connection);
     }
 
     private function copyHistoricalMigrations(string $path): void
@@ -2160,16 +2460,18 @@ final class CanonicalSupplierSnapshotSchemaMigrationTest extends TestCase
         }
     }
 
-    private function migrateHistoricalThenPhase(string $historicalPath): void
-    {
+    private function migrateHistoricalThenPhase(
+        string $historicalPath,
+        string $connection = 'snapshot_schema_phase_i',
+    ): void {
         $this->assertSame(0, Artisan::call('migrate', [
-            '--database' => 'snapshot_schema_phase_i',
+            '--database' => $connection,
             '--path' => $historicalPath,
             '--realpath' => true,
             '--force' => true,
         ]), Artisan::output());
         $this->assertSame(0, Artisan::call('migrate', [
-            '--database' => 'snapshot_schema_phase_i',
+            '--database' => $connection,
             '--path' => database_path('migrations'),
             '--realpath' => true,
             '--force' => true,
@@ -2231,6 +2533,33 @@ final class CanonicalSupplierSnapshotSchemaMigrationTest extends TestCase
         );
     }
 
+    /** @return array{tables: int, migration_rows: int, first_destructive_ddl_executed: bool} */
+    private function phaseISchemaState(string $connection): array
+    {
+        $database = DB::connection($connection)->getDatabaseName();
+        $tableCount = DB::connection($connection)
+            ->table('information_schema.TABLES')
+            ->where('TABLE_SCHEMA', $database)
+            ->whereIn('TABLE_NAME', self::CANONICAL_TABLES)
+            ->count();
+        $migrationRows = DB::connection($connection)
+            ->table('migrations')
+            ->whereIn('migration', self::PHASE_I_MIGRATIONS)
+            ->count();
+        $firstReverseOwnedIndexCount = DB::connection($connection)
+            ->table('information_schema.STATISTICS')
+            ->where('TABLE_SCHEMA', $database)
+            ->where('TABLE_NAME', 'import_histories')
+            ->where('INDEX_NAME', 'ix_import_history_supplier_id')
+            ->count();
+
+        return [
+            'tables' => $tableCount,
+            'migration_rows' => $migrationRows,
+            'first_destructive_ddl_executed' => $firstReverseOwnedIndexCount === 0,
+        ];
+    }
+
     private function rollbackArrayInput(): ArrayInput
     {
         return new ArrayInput([
@@ -2256,10 +2585,12 @@ final class CanonicalSupplierSnapshotSchemaMigrationTest extends TestCase
         $property->setValue(null, null);
     }
 
-    private function issueDownCapability(): string
+    private function issueDownCapability(?string $connection = null): string
     {
-        $capability = CanonicalSupplierSnapshotSchema::issueDestructiveDownCapability();
-        $this->issuedDownCapabilities[] = $capability;
+        $connection ??= DB::getDefaultConnection();
+        $target = $this->canonicalTargetIdentity($connection);
+        $capability = CanonicalSupplierSnapshotSchema::issueDestructiveDownCapability($connection);
+        $this->issuedDownCapabilities[$capability] = $target['target_identity_sha256'];
         $this->presentDownCapability($capability);
 
         return $capability;
@@ -2273,12 +2604,14 @@ final class CanonicalSupplierSnapshotSchemaMigrationTest extends TestCase
     }
 
     /** @return array{exit: int, message: string} */
-    private function rollbackAttempt(string $capability): array
-    {
+    private function rollbackAttempt(
+        string $capability,
+        string $connection = 'snapshot_schema_phase_i',
+    ): array {
         $this->presentDownCapability($capability);
         try {
             $exit = Artisan::call('migrate:rollback', [
-                '--database' => 'snapshot_schema_phase_i',
+                '--database' => $connection,
                 '--force' => true,
             ]);
 
@@ -2368,14 +2701,44 @@ final class CanonicalSupplierSnapshotSchemaMigrationTest extends TestCase
         $this->assertIndependentWindowsAclSecure($path, true);
     }
 
+    /**
+     * @return array{
+     *     version: string,
+     *     driver: string,
+     *     connection_name: string,
+     *     server_uuid: string,
+     *     database_name: string,
+     *     target_identity_sha256: string
+     * }
+     */
+    private function canonicalTargetIdentity(string $connection): array
+    {
+        $target = $this->invokeCapabilityMethod('canonicalTargetIdentity', [$connection]);
+        $this->assertIsArray($target);
+
+        return $target;
+    }
+
+    private function capabilityTargetIdentitySha256(string $token): string
+    {
+        return $this->issuedDownCapabilities[$token]
+            ?? $this->canonicalTargetIdentity(DB::getDefaultConnection())['target_identity_sha256'];
+    }
+
     private function capabilityDirectory(string $token): string
     {
-        return (string) $this->invokeCapabilityMethod('capabilityDirectory', [$token]);
+        return (string) $this->invokeCapabilityMethod('capabilityDirectory', [
+            $token,
+            $this->capabilityTargetIdentitySha256($token),
+        ]);
     }
 
     private function capabilityPath(string $token): string
     {
-        return (string) $this->invokeCapabilityMethod('capabilityPath', [$token]);
+        return (string) $this->invokeCapabilityMethod('capabilityPath', [
+            $token,
+            $this->capabilityTargetIdentitySha256($token),
+        ]);
     }
 
     private function capabilityLedgerRoot(): string
@@ -2383,14 +2746,25 @@ final class CanonicalSupplierSnapshotSchemaMigrationTest extends TestCase
         return (string) $this->invokeCapabilityMethod('capabilityLedgerRootPath');
     }
 
+    private function capabilityRoot(): string
+    {
+        return (string) $this->invokeCapabilityMethod('capabilityRootPath');
+    }
+
     private function capabilityIssuedLedgerPath(string $token): string
     {
-        return (string) $this->invokeCapabilityMethod('capabilityIssuedLedgerPathForToken', [$token]);
+        return (string) $this->invokeCapabilityMethod('capabilityIssuedLedgerPathForToken', [
+            $token,
+            $this->capabilityTargetIdentitySha256($token),
+        ]);
     }
 
     private function capabilitySpentLedgerPath(string $token): string
     {
-        return (string) $this->invokeCapabilityMethod('capabilitySpentLedgerPathForToken', [$token]);
+        return (string) $this->invokeCapabilityMethod('capabilitySpentLedgerPathForToken', [
+            $token,
+            $this->capabilityTargetIdentitySha256($token),
+        ]);
     }
 
     private function assertCapabilityPathSecurity(string $path, string $directory): void
@@ -2482,17 +2856,27 @@ final class CanonicalSupplierSnapshotSchemaMigrationTest extends TestCase
 
     private function purgeCapabilityLedgerForTesting(string $token): void
     {
+        $directory = $this->capabilityDirectory($token);
+        clearstatcache(true, $directory);
+        if (is_dir($directory) && ! is_link($directory)) {
+            File::deleteDirectory($directory);
+        } elseif (is_link($directory) || is_file($directory)) {
+            @unlink($directory);
+        }
+
         foreach ([$this->capabilitySpentLedgerPath($token), $this->capabilityIssuedLedgerPath($token)] as $path) {
             clearstatcache(true, $path);
             if (is_file($path) || is_link($path)) {
                 @unlink($path);
             }
         }
+
+        unset($this->issuedDownCapabilities[$token]);
     }
 
     private function removeEmptyCapabilityRootsForTesting(): void
     {
-        foreach ([$this->capabilityLedgerRoot(), dirname($this->capabilityDirectory(str_repeat('0', 64)))] as $root) {
+        foreach ([$this->capabilityLedgerRoot(), $this->capabilityRoot()] as $root) {
             clearstatcache(true, $root);
             if (! is_dir($root) || is_link($root)) {
                 continue;

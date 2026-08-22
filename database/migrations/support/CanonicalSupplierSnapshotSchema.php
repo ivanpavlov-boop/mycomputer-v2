@@ -7,6 +7,7 @@ use Illuminate\Console\Events\CommandFinished;
 use Illuminate\Console\Events\CommandStarting;
 use Illuminate\Database\Migrations\Migrator;
 use Illuminate\Database\Schema\ColumnDefinition;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Schema;
@@ -19,9 +20,13 @@ final class CanonicalSupplierSnapshotSchema
 {
     private const DOWN_CAPABILITY_ENV = 'SUPPLIER_SNAPSHOT_EMPTY_SCHEMA_DOWN_CAPABILITY';
 
-    private const DOWN_CAPABILITY_VERSION = 'canonical-supplier-snapshot-down-v2';
+    private const DOWN_CAPABILITY_VERSION = 'canonical-supplier-snapshot-down-v3';
 
-    private const DOWN_CAPABILITY_LEDGER_VERSION = 'canonical-supplier-snapshot-down-ledger-v1';
+    private const DOWN_CAPABILITY_LEDGER_VERSION = 'canonical-supplier-snapshot-down-ledger-v2';
+
+    private const DOWN_CAPABILITY_TARGET_IDENTITY_VERSION = 'canonical-supplier-snapshot-down-target-v1';
+
+    private const DOWN_CAPABILITY_TARGET_IDENTITY_DOMAIN = 'mycomputer:phase-i-down-target:v1';
 
     private const DOWN_CAPABILITY_TTL_SECONDS = 300;
 
@@ -33,7 +38,7 @@ final class CanonicalSupplierSnapshotSchema
 
     private const DOWN_CAPABILITY_FILE = 'capability.json';
 
-    private const DOWN_CAPABILITY_LEDGER_KEY_DOMAIN = 'mycomputer:phase-i-down-capability-ledger:v1';
+    private const DOWN_CAPABILITY_LEDGER_KEY_DOMAIN = 'mycomputer:phase-i-down-capability-ledger:v2';
 
     /** @var list<string> */
     private const DOWN_CAPABILITY_SPENT_REASONS = [
@@ -306,15 +311,17 @@ final class CanonicalSupplierSnapshotSchema
         }
     }
 
-    public static function issueDestructiveDownCapability(): string
+    public static function issueDestructiveDownCapability(?string $connection = null): string
     {
         if (! app()->environment(['local', 'testing'])) {
             throw new RuntimeException('Destructive down capability issuance requires local or testing');
         }
 
+        $target = self::canonicalTargetIdentity($connection ?? DB::getDefaultConnection());
+
         for ($attempt = 0; $attempt < 8; $attempt++) {
             try {
-                return self::issueDestructiveDownCapabilityAttempt();
+                return self::issueDestructiveDownCapabilityAttempt($target);
             } catch (RuntimeException $exception) {
                 if ($exception->getMessage() !== 'Unable to exclusively create authoritative destructive down issuance record') {
                     throw $exception;
@@ -325,24 +332,31 @@ final class CanonicalSupplierSnapshotSchema
         throw new RuntimeException('Unable to allocate a unique destructive down capability');
     }
 
-    private static function issueDestructiveDownCapabilityAttempt(): string
+    /** @param array{connection_name: string, target_identity_sha256: string} $target */
+    private static function issueDestructiveDownCapabilityAttempt(array $target): string
     {
         $token = bin2hex(random_bytes(32));
         $tokenSha256 = hash('sha256', $token);
         $rollbackPlanSha256 = self::canonicalRollbackPlanSha256();
-        $expiresAt = time() + self::DOWN_CAPABILITY_TTL_SECONDS;
+        $targetIdentitySha256 = $target['target_identity_sha256'];
+        $expiresAt = self::currentTimestamp() + self::DOWN_CAPABILITY_TTL_SECONDS;
         $issuanceId = bin2hex(random_bytes(32));
         $issuedPayload = [
             'version' => self::DOWN_CAPABILITY_LEDGER_VERSION,
             'token_sha256' => $tokenSha256,
             'rollback_plan_sha256' => $rollbackPlanSha256,
+            'target_identity_sha256' => $targetIdentitySha256,
             'expires_at' => $expiresAt,
             'issuance_id' => $issuanceId,
         ];
         $issuedRaw = self::canonicalJson($issuedPayload);
-        $directory = self::capabilityDirectory($token);
-        $path = self::capabilityPath($token);
-        $issuedPath = self::capabilityIssuedLedgerPath($tokenSha256, $rollbackPlanSha256);
+        $directory = self::capabilityDirectory($token, $targetIdentitySha256);
+        $path = self::capabilityPath($token, $targetIdentitySha256);
+        $issuedPath = self::capabilityIssuedLedgerPath(
+            $tokenSha256,
+            $rollbackPlanSha256,
+            $targetIdentitySha256,
+        );
         $issuedCreated = false;
 
         try {
@@ -356,6 +370,7 @@ final class CanonicalSupplierSnapshotSchema
             $spentPath = self::capabilitySpentLedgerPath(self::capabilityLedgerKey(
                 $tokenSha256,
                 $rollbackPlanSha256,
+                $targetIdentitySha256,
             ));
             clearstatcache(true, $spentPath);
             if (file_exists($spentPath) || is_link($spentPath)) {
@@ -368,6 +383,7 @@ final class CanonicalSupplierSnapshotSchema
                 'version' => self::DOWN_CAPABILITY_VERSION,
                 'token_sha256' => $tokenSha256,
                 'rollback_plan_sha256' => $rollbackPlanSha256,
+                'target_identity_sha256' => $targetIdentitySha256,
                 'expires_at' => $expiresAt,
                 'issuance_id' => $issuanceId,
             ]));
@@ -375,19 +391,19 @@ final class CanonicalSupplierSnapshotSchema
                 throw new RuntimeException('Unable to exclusively create one-use destructive down capability');
             }
 
-            self::loadAuthoritativeIssuedRecord($token);
+            self::loadAuthoritativeIssuedRecord($token, $targetIdentitySha256);
             self::assertSecureDirectory($directory);
             self::assertSecureArtifact($path);
         } catch (Throwable $exception) {
             if ($issuedCreated) {
                 try {
-                    $issued = self::loadAuthoritativeIssuedRecord($token);
+                    $issued = self::loadAuthoritativeIssuedRecord($token, $targetIdentitySha256);
                     self::claimCapabilitySpent($issued, 'issuance_failed');
                 } catch (Throwable) {
                     // A failed issuance never returns its token; preserve any ledger state fail closed.
                 }
             }
-            self::removeCapabilityArtifact($token);
+            self::removeCapabilityArtifact($token, $targetIdentitySha256);
 
             throw $exception;
         }
@@ -395,23 +411,24 @@ final class CanonicalSupplierSnapshotSchema
         return $token;
     }
 
-    public static function revokeDestructiveDownCapability(string $token): void
+    public static function revokeDestructiveDownCapability(string $token, ?string $connection = null): void
     {
         if (preg_match('/\A[0-9a-f]{64}\z/', $token) !== 1) {
             return;
         }
 
+        $target = self::canonicalTargetIdentity($connection ?? DB::getDefaultConnection());
+
         try {
-            $issued = self::loadAuthoritativeIssuedRecord($token);
+            $issued = self::loadAuthoritativeIssuedRecord($token, $target['target_identity_sha256']);
             self::claimCapabilitySpent($issued, 'explicit_revocation');
         } catch (Throwable $exception) {
-            if (! str_contains($exception->getMessage(), 'authoritative issued ledger record is missing')
-                && ! str_contains($exception->getMessage(), 'authoritative issued ledger record is expired')) {
+            if (! str_contains($exception->getMessage(), 'authoritative issued ledger record is missing')) {
                 throw $exception;
             }
         }
 
-        self::removeCapabilityArtifact($token);
+        self::removeCapabilityArtifact($token, $target['target_identity_sha256']);
     }
 
     public static function runDestructiveDownStep(string $migration, Closure $operation): void
@@ -435,9 +452,16 @@ final class CanonicalSupplierSnapshotSchema
 
         $connection = DB::getDefaultConnection();
         $database = DB::connection()->getDatabaseName();
-        $planSha256 = self::invocationRollbackPlanSha256($connection, $database, $scope['selected_migrations']);
+        $target = self::canonicalTargetIdentity($connection);
+        $planSha256 = self::invocationRollbackPlanSha256(
+            $connection,
+            $database,
+            $target['target_identity_sha256'],
+            $scope['selected_migrations'],
+        );
         if ($scope['connection'] !== $connection
             || $scope['database'] !== $database
+            || ! hash_equals($scope['target_identity_sha256'], $target['target_identity_sha256'])
             || ! hash_equals($scope['plan_sha256'], $planSha256)
             || $scope['capability_directory_identity'] !== self::directoryIdentity($scope['capability_directory'])) {
             self::invalidateDestructiveDownScope();
@@ -502,20 +526,22 @@ final class CanonicalSupplierSnapshotSchema
 
     private static function prepareDestructiveDownInvocation(string $command, InputInterface $input): void
     {
+        $connection = self::rollbackConnectionName($input);
+
         if (self::$destructiveDownScope !== null) {
             if (self::$destructiveDownScope['input'] === $input
                 && self::$destructiveDownScope['command'] === $command) {
                 return;
             }
 
-            self::discardSuppliedCapability();
+            self::discardSuppliedCapability($connection);
             self::invalidateDestructiveDownScope();
 
             throw self::downgradeRejected('nested or re-entrant destructive migration command is not allowed');
         }
 
         if ($command !== self::DOWN_COMMAND || $input->getFirstArgument() !== self::DOWN_COMMAND) {
-            self::discardSuppliedCapability();
+            self::discardSuppliedCapability($connection);
 
             throw self::downgradeRejected(sprintf('command %s is not allowed', $command));
         }
@@ -528,7 +554,7 @@ final class CanonicalSupplierSnapshotSchema
                 self::authorizeDestructiveDownScope($input, $selectedMigrations);
             });
         } catch (Throwable $exception) {
-            self::discardSuppliedCapability();
+            self::discardSuppliedCapability($connection);
             self::invalidateDestructiveDownScope();
 
             if (str_starts_with($exception->getMessage(), 'Canonical supplier snapshot schema downgrade rejected')) {
@@ -572,7 +598,13 @@ final class CanonicalSupplierSnapshotSchema
             'command' => self::DOWN_COMMAND,
             'connection' => $connection,
             'database' => $database,
-            'plan_sha256' => self::invocationRollbackPlanSha256($connection, $database, $selectedMigrations),
+            'target_identity_sha256' => $capability['target_identity_sha256'],
+            'plan_sha256' => self::invocationRollbackPlanSha256(
+                $connection,
+                $database,
+                $capability['target_identity_sha256'],
+                $selectedMigrations,
+            ),
             'selected_migrations' => $selectedMigrations,
             'capability_directory' => $capability['directory'],
             'capability_directory_identity' => $capability['directory_identity'],
@@ -587,7 +619,7 @@ final class CanonicalSupplierSnapshotSchema
         }
     }
 
-    /** @return array{directory: string, directory_identity: string} */
+    /** @return array{directory: string, directory_identity: string, target_identity_sha256: string} */
     private static function consumeInvocationCapability(): array
     {
         $token = getenv(self::DOWN_CAPABILITY_ENV);
@@ -597,10 +629,12 @@ final class CanonicalSupplierSnapshotSchema
             throw new RuntimeException('one-use invocation capability is missing or malformed');
         }
 
+        $target = self::canonicalTargetIdentity(DB::getDefaultConnection());
+
         try {
-            $issued = self::loadAuthoritativeIssuedRecord($token);
+            $issued = self::loadAuthoritativeIssuedRecord($token, $target['target_identity_sha256']);
         } catch (Throwable $exception) {
-            self::removeCapabilityArtifact($token);
+            self::removeCapabilityArtifact($token, $target['target_identity_sha256']);
 
             throw $exception;
         }
@@ -609,7 +643,18 @@ final class CanonicalSupplierSnapshotSchema
             throw new RuntimeException('one-use invocation capability is already spent or revoked');
         }
 
-        return self::consumeClaimedCapabilityArtifact($token, $issued);
+        if ($issued['expires_at'] < self::currentTimestamp()) {
+            self::rejectCapabilityConsumption(
+                $token,
+                $target['target_identity_sha256'],
+                new RuntimeException('authoritative issued ledger record is expired'),
+            );
+        }
+
+        return [
+            ...self::consumeClaimedCapabilityArtifact($token, $target['target_identity_sha256'], $issued),
+            'target_identity_sha256' => $target['target_identity_sha256'],
+        ];
     }
 
     /**
@@ -617,6 +662,7 @@ final class CanonicalSupplierSnapshotSchema
      *     version: string,
      *     token_sha256: string,
      *     rollback_plan_sha256: string,
+     *     target_identity_sha256: string,
      *     expires_at: int,
      *     issuance_id: string,
      *     capability_key: string,
@@ -624,10 +670,13 @@ final class CanonicalSupplierSnapshotSchema
      * } $issued
      * @return array{directory: string, directory_identity: string}
      */
-    private static function consumeClaimedCapabilityArtifact(string $token, array $issued): array
-    {
-        $directory = self::capabilityDirectory($token);
-        $path = self::capabilityPath($token);
+    private static function consumeClaimedCapabilityArtifact(
+        string $token,
+        string $targetIdentitySha256,
+        array $issued,
+    ): array {
+        $directory = self::capabilityDirectory($token, $targetIdentitySha256);
+        $path = self::capabilityPath($token, $targetIdentitySha256);
         $consumedPath = null;
 
         try {
@@ -662,6 +711,7 @@ final class CanonicalSupplierSnapshotSchema
                 'version',
                 'token_sha256',
                 'rollback_plan_sha256',
+                'target_identity_sha256',
                 'expires_at',
                 'issuance_id',
             ];
@@ -680,6 +730,9 @@ final class CanonicalSupplierSnapshotSchema
                 || ! is_string($payload['rollback_plan_sha256'])
                 || preg_match('/\A[0-9a-f]{64}\z/', $payload['rollback_plan_sha256']) !== 1
                 || ! hash_equals($issued['rollback_plan_sha256'], $payload['rollback_plan_sha256'])
+                || ! is_string($payload['target_identity_sha256'])
+                || preg_match('/\A[0-9a-f]{64}\z/', $payload['target_identity_sha256']) !== 1
+                || ! hash_equals($issued['target_identity_sha256'], $payload['target_identity_sha256'])
                 || ! is_int($payload['expires_at'] ?? null)
                 || $payload['expires_at'] !== $issued['expires_at']
                 || ! is_string($payload['issuance_id'])
@@ -701,7 +754,7 @@ final class CanonicalSupplierSnapshotSchema
                 'directory_identity' => $directoryIdentity,
             ];
         } catch (Throwable $exception) {
-            self::rejectCapabilityConsumption($token, $exception);
+            self::rejectCapabilityConsumption($token, $targetIdentitySha256, $exception);
         }
     }
 
@@ -722,6 +775,15 @@ final class CanonicalSupplierSnapshotSchema
         app(Migrator::class)->usingConnection($connection, function () use ($operation): void {
             $operation(app(Migrator::class));
         });
+    }
+
+    private static function rollbackConnectionName(InputInterface $input): string
+    {
+        $requested = $input->getOption('database');
+
+        return is_string($requested) && $requested !== ''
+            ? $requested
+            : DB::getDefaultConnection();
     }
 
     /** @return list<string> */
@@ -768,10 +830,64 @@ final class CanonicalSupplierSnapshotSchema
         ], JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES));
     }
 
+    /**
+     * @return array{
+     *     version: string,
+     *     driver: string,
+     *     connection_name: string,
+     *     server_uuid: string,
+     *     database_name: string,
+     *     target_identity_sha256: string
+     * }
+     */
+    private static function canonicalTargetIdentity(string $connectionName): array
+    {
+        if ($connectionName === '' || str_contains($connectionName, "\0")) {
+            throw new RuntimeException('Canonical rollback target connection name is invalid');
+        }
+
+        $connection = DB::connection($connectionName);
+        $driver = $connection->getDriverName();
+        if ($driver !== 'mysql') {
+            throw new RuntimeException('Canonical rollback target must use MySQL');
+        }
+
+        $identity = $connection->selectOne('SELECT LOWER(@@server_uuid) AS server_uuid, DATABASE() AS database_name');
+        $serverUuid = is_object($identity) ? ($identity->server_uuid ?? null) : null;
+        $databaseName = is_object($identity) ? ($identity->database_name ?? null) : null;
+
+        if (! is_string($serverUuid)
+            || preg_match('/\A[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\z/', $serverUuid) !== 1) {
+            throw new RuntimeException('Canonical rollback target MySQL server UUID is invalid');
+        }
+        if (! is_string($databaseName) || $databaseName === '' || str_contains($databaseName, "\0")) {
+            throw new RuntimeException('Canonical rollback target database name is invalid');
+        }
+
+        $targetIdentitySha256 = hash(
+            'sha256',
+            self::DOWN_CAPABILITY_TARGET_IDENTITY_DOMAIN
+                ."\0".$driver
+                ."\0".$connectionName
+                ."\0".$serverUuid
+                ."\0".$databaseName,
+        );
+
+        return [
+            'version' => self::DOWN_CAPABILITY_TARGET_IDENTITY_VERSION,
+            'driver' => $driver,
+            'connection_name' => $connectionName,
+            'server_uuid' => $serverUuid,
+            'database_name' => $databaseName,
+            'target_identity_sha256' => $targetIdentitySha256,
+        ];
+    }
+
     /** @param list<string> $selectedMigrations */
     private static function invocationRollbackPlanSha256(
         string $connection,
         string $database,
+        string $targetIdentitySha256,
         array $selectedMigrations,
     ): string {
         return hash('sha256', json_encode([
@@ -779,8 +895,14 @@ final class CanonicalSupplierSnapshotSchema
             'command' => self::DOWN_COMMAND,
             'connection' => $connection,
             'database' => $database,
+            'target_identity_sha256' => $targetIdentitySha256,
             'selected_migrations' => $selectedMigrations,
         ], JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES));
+    }
+
+    private static function currentTimestamp(): int
+    {
+        return Carbon::now()->getTimestamp();
     }
 
     private static function assertForwardGatesDisabled(): void
@@ -952,7 +1074,7 @@ final class CanonicalSupplierSnapshotSchema
         return null;
     }
 
-    private static function discardSuppliedCapability(): void
+    private static function discardSuppliedCapability(?string $connection = null): void
     {
         $token = getenv(self::DOWN_CAPABILITY_ENV);
         self::clearSuppliedCapabilityEnvironment();
@@ -961,7 +1083,7 @@ final class CanonicalSupplierSnapshotSchema
             return;
         }
 
-        self::revokeDestructiveDownCapability($token);
+        self::revokeDestructiveDownCapability($token, $connection);
     }
 
     private static function clearSuppliedCapabilityEnvironment(): void
@@ -975,20 +1097,29 @@ final class CanonicalSupplierSnapshotSchema
      *     version: string,
      *     token_sha256: string,
      *     rollback_plan_sha256: string,
+     *     target_identity_sha256: string,
      *     expires_at: int,
      *     issuance_id: string,
      *     capability_key: string,
      *     issued_record_sha256: string
      * }
      */
-    private static function loadAuthoritativeIssuedRecord(string $token): array
+    private static function loadAuthoritativeIssuedRecord(string $token, string $targetIdentitySha256): array
     {
         self::ensureCapabilityLedgerRoot();
 
         $tokenSha256 = hash('sha256', $token);
         $rollbackPlanSha256 = self::canonicalRollbackPlanSha256();
-        $capabilityKey = self::capabilityLedgerKey($tokenSha256, $rollbackPlanSha256);
-        $path = self::capabilityIssuedLedgerPath($tokenSha256, $rollbackPlanSha256);
+        $capabilityKey = self::capabilityLedgerKey(
+            $tokenSha256,
+            $rollbackPlanSha256,
+            $targetIdentitySha256,
+        );
+        $path = self::capabilityIssuedLedgerPath(
+            $tokenSha256,
+            $rollbackPlanSha256,
+            $targetIdentitySha256,
+        );
         clearstatcache(true, $path);
         if (! file_exists($path) && ! is_link($path)) {
             throw new RuntimeException('authoritative issued ledger record is missing');
@@ -1000,6 +1131,7 @@ final class CanonicalSupplierSnapshotSchema
             'version',
             'token_sha256',
             'rollback_plan_sha256',
+            'target_identity_sha256',
             'expires_at',
             'issuance_id',
         ];
@@ -1014,8 +1146,11 @@ final class CanonicalSupplierSnapshotSchema
             || ! is_string($payload['rollback_plan_sha256'])
             || preg_match('/\A[0-9a-f]{64}\z/', $payload['rollback_plan_sha256']) !== 1
             || ! hash_equals($rollbackPlanSha256, $payload['rollback_plan_sha256'])
+            || ! is_string($payload['target_identity_sha256'])
+            || preg_match('/\A[0-9a-f]{64}\z/', $payload['target_identity_sha256']) !== 1
+            || ! hash_equals($targetIdentitySha256, $payload['target_identity_sha256'])
             || ! is_int($payload['expires_at'] ?? null)
-            || $payload['expires_at'] > time() + self::DOWN_CAPABILITY_TTL_SECONDS
+            || $payload['expires_at'] > self::currentTimestamp() + self::DOWN_CAPABILITY_TTL_SECONDS
             || ! is_string($payload['issuance_id'])
             || preg_match('/\A[0-9a-f]{64}\z/', $payload['issuance_id']) !== 1
             || ! hash_equals(
@@ -1023,9 +1158,6 @@ final class CanonicalSupplierSnapshotSchema
                 pathinfo($path, PATHINFO_FILENAME),
             )) {
             throw new RuntimeException('authoritative issued ledger record is invalid');
-        }
-        if ($payload['expires_at'] < time()) {
-            throw new RuntimeException('authoritative issued ledger record is expired');
         }
 
         return [
@@ -1040,6 +1172,7 @@ final class CanonicalSupplierSnapshotSchema
      *     version: string,
      *     token_sha256: string,
      *     rollback_plan_sha256: string,
+     *     target_identity_sha256: string,
      *     expires_at: int,
      *     issuance_id: string,
      *     capability_key: string,
@@ -1057,7 +1190,7 @@ final class CanonicalSupplierSnapshotSchema
         $created = self::createExclusiveSecureFile($path, self::canonicalJson([
             'version' => self::DOWN_CAPABILITY_LEDGER_VERSION,
             'issued_record_sha256' => $issued['issued_record_sha256'],
-            'spent_at' => time(),
+            'spent_at' => self::currentTimestamp(),
             'reason_class' => $reasonClass,
         ]));
 
@@ -1073,6 +1206,7 @@ final class CanonicalSupplierSnapshotSchema
      *     version: string,
      *     token_sha256: string,
      *     rollback_plan_sha256: string,
+     *     target_identity_sha256: string,
      *     expires_at: int,
      *     issuance_id: string,
      *     capability_key: string,
@@ -1093,7 +1227,7 @@ final class CanonicalSupplierSnapshotSchema
             || preg_match('/\A[0-9a-f]{64}\z/', $payload['issued_record_sha256']) !== 1
             || ! hash_equals($issued['issued_record_sha256'], $payload['issued_record_sha256'])
             || ! is_int($payload['spent_at'] ?? null)
-            || $payload['spent_at'] > time() + self::DOWN_CAPABILITY_TTL_SECONDS
+            || $payload['spent_at'] > self::currentTimestamp() + self::DOWN_CAPABILITY_TTL_SECONDS
             || ! is_string($payload['reason_class'])
             || ! in_array($payload['reason_class'], self::DOWN_CAPABILITY_SPENT_REASONS, true)) {
             throw new RuntimeException('authoritative spent ledger record is invalid');
@@ -1165,23 +1299,38 @@ final class CanonicalSupplierSnapshotSchema
         return json_encode($payload, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES);
     }
 
-    private static function capabilityLedgerKey(string $tokenSha256, string $rollbackPlanSha256): string
-    {
+    private static function capabilityLedgerKey(
+        string $tokenSha256,
+        string $rollbackPlanSha256,
+        string $targetIdentitySha256,
+    ): string {
         return hash(
             'sha256',
-            self::DOWN_CAPABILITY_LEDGER_KEY_DOMAIN."\0".$tokenSha256."\0".$rollbackPlanSha256,
+            self::DOWN_CAPABILITY_LEDGER_KEY_DOMAIN
+                ."\0".$tokenSha256
+                ."\0".$rollbackPlanSha256
+                ."\0".$targetIdentitySha256,
         );
     }
 
-    private static function capabilityIssuedLedgerPath(string $tokenSha256, string $rollbackPlanSha256): string
-    {
+    private static function capabilityIssuedLedgerPath(
+        string $tokenSha256,
+        string $rollbackPlanSha256,
+        string $targetIdentitySha256,
+    ): string {
         return self::capabilityLedgerRootPath().DIRECTORY_SEPARATOR
-            .self::capabilityLedgerKey($tokenSha256, $rollbackPlanSha256).'.issued';
+            .self::capabilityLedgerKey($tokenSha256, $rollbackPlanSha256, $targetIdentitySha256).'.issued';
     }
 
-    private static function capabilityIssuedLedgerPathForToken(string $token): string
-    {
-        return self::capabilityIssuedLedgerPath(hash('sha256', $token), self::canonicalRollbackPlanSha256());
+    private static function capabilityIssuedLedgerPathForToken(
+        string $token,
+        ?string $targetIdentitySha256 = null,
+    ): string {
+        return self::capabilityIssuedLedgerPath(
+            hash('sha256', $token),
+            self::canonicalRollbackPlanSha256(),
+            $targetIdentitySha256 ?? self::canonicalTargetIdentity(DB::getDefaultConnection())['target_identity_sha256'],
+        );
     }
 
     private static function capabilitySpentLedgerPath(string $capabilityKey): string
@@ -1189,11 +1338,14 @@ final class CanonicalSupplierSnapshotSchema
         return self::capabilityLedgerRootPath().DIRECTORY_SEPARATOR.$capabilityKey.'.spent';
     }
 
-    private static function capabilitySpentLedgerPathForToken(string $token): string
-    {
+    private static function capabilitySpentLedgerPathForToken(
+        string $token,
+        ?string $targetIdentitySha256 = null,
+    ): string {
         return self::capabilitySpentLedgerPath(self::capabilityLedgerKey(
             hash('sha256', $token),
             self::canonicalRollbackPlanSha256(),
+            $targetIdentitySha256 ?? self::canonicalTargetIdentity(DB::getDefaultConnection())['target_identity_sha256'],
         ));
     }
 
@@ -1202,15 +1354,22 @@ final class CanonicalSupplierSnapshotSchema
         return rtrim(sys_get_temp_dir(), '\\/').DIRECTORY_SEPARATOR.self::DOWN_CAPABILITY_LEDGER_ROOT;
     }
 
-    private static function capabilityPath(string $token): string
+    private static function capabilityPath(string $token, ?string $targetIdentitySha256 = null): string
     {
-        return self::capabilityDirectory($token).DIRECTORY_SEPARATOR.self::DOWN_CAPABILITY_FILE;
+        return self::capabilityDirectory($token, $targetIdentitySha256).DIRECTORY_SEPARATOR.self::DOWN_CAPABILITY_FILE;
     }
 
-    private static function capabilityDirectory(string $token): string
+    private static function capabilityDirectory(string $token, ?string $targetIdentitySha256 = null): string
     {
+        $targetIdentitySha256 ??= self::canonicalTargetIdentity(
+            DB::getDefaultConnection(),
+        )['target_identity_sha256'];
+
         return self::capabilityRootPath().DIRECTORY_SEPARATOR
-            .hash('sha256', "canonical-supplier-snapshot-down-directory\0".$token);
+            .hash(
+                'sha256',
+                "canonical-supplier-snapshot-down-directory:v2\0".$token."\0".$targetIdentitySha256,
+            );
     }
 
     private static function capabilityRootPath(): string
@@ -1529,15 +1688,18 @@ final class CanonicalSupplierSnapshotSchema
         return PHP_OS_FAMILY === 'Windows' ? strtolower(str_replace('\\', '/', $resolved)) : $resolved;
     }
 
-    private static function removeCapabilityArtifact(string $token): void
+    private static function removeCapabilityArtifact(string $token, string $targetIdentitySha256): void
     {
-        self::removeCapabilityDirectory(self::capabilityDirectory($token));
+        self::removeCapabilityDirectory(self::capabilityDirectory($token, $targetIdentitySha256));
     }
 
-    private static function rejectCapabilityConsumption(string $token, Throwable $rejection): never
-    {
+    private static function rejectCapabilityConsumption(
+        string $token,
+        string $targetIdentitySha256,
+        Throwable $rejection,
+    ): never {
         try {
-            self::removeCapabilityArtifact($token);
+            self::removeCapabilityArtifact($token, $targetIdentitySha256);
         } catch (Throwable $cleanupFailure) {
             throw new RuntimeException(
                 'one-use invocation capability cleanup integrity failure: '.$cleanupFailure->getMessage(),
