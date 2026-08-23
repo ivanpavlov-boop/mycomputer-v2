@@ -233,21 +233,13 @@ final class CanonicalSupplierContract
     /** @param list<string> $hashes @return list<string> */
     public static function sortedUniqueHashes(array $hashes, string $field): array
     {
-        if (! array_is_list($hashes) || $hashes === []) {
-            throw new InvalidArgumentException('invalid_'.$field);
-        }
+        return self::sortedUniqueHashList($hashes, $field, false);
+    }
 
-        foreach ($hashes as $hash) {
-            self::hex64($hash, $field);
-        }
-
-        sort($hashes, SORT_STRING);
-
-        if (count($hashes) !== count(array_unique($hashes, SORT_STRING))) {
-            throw new InvalidArgumentException('invalid_'.$field);
-        }
-
-        return $hashes;
+    /** @param list<string> $hashes @return list<string> */
+    public static function canonicalCohortSeedMemberHashes(array $hashes): array
+    {
+        return self::sortedUniqueHashList($hashes, 'member_hashes', true);
     }
 
     /** @return array<string, mixed> */
@@ -330,5 +322,25 @@ final class CanonicalSupplierContract
         }
 
         return $value;
+    }
+
+    /** @param list<string> $hashes @return list<string> */
+    private static function sortedUniqueHashList(array $hashes, string $field, bool $allowEmpty): array
+    {
+        if (! array_is_list($hashes) || (! $allowEmpty && $hashes === [])) {
+            throw new InvalidArgumentException('invalid_'.$field);
+        }
+
+        foreach ($hashes as $hash) {
+            self::hex64($hash, $field);
+        }
+
+        sort($hashes, SORT_STRING);
+
+        if (count($hashes) !== count(array_unique($hashes, SORT_STRING))) {
+            throw new InvalidArgumentException('invalid_'.$field);
+        }
+
+        return $hashes;
     }
 }

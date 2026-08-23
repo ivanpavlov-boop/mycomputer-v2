@@ -11,6 +11,7 @@ use App\Data\Suppliers\Snapshots\CanonicalSupplierRecoveryResumeState;
 use App\Data\Suppliers\Snapshots\CanonicalSupplierSnapshotEnrollment;
 use App\Data\Suppliers\Snapshots\CanonicalSupplierSnapshotGenerationHeader;
 use App\Data\Suppliers\Snapshots\CanonicalSupplierSnapshotObservation;
+use App\Data\Suppliers\Snapshots\CanonicalSupplierSnapshotReasonCode;
 use App\Models\SupplierOfferSnapshotGeneration;
 use App\Models\SupplierOfferSnapshotObservation;
 use App\Services\Suppliers\Snapshots\SupplierSnapshotFingerprintService;
@@ -310,6 +311,49 @@ final class CanonicalSupplierSnapshotByteContractTest extends TestCase
         $this->assertNull($this->fingerprints->reliableManufacturerMpnHash(null));
     }
 
+    public function test_empty_cohort_seed_has_the_exact_independent_golden_contract(): void
+    {
+        $expectedBytes = '{"cohort_authorization_version":"supplier_offer_cohort_v1","member_hashes":[]}';
+
+        $this->assertSame(78, strlen($expectedBytes));
+        $this->assertSame(
+            $expectedBytes,
+            $this->fingerprints->cohortSeedCanonicalBytes('supplier_offer_cohort_v1', []),
+        );
+        $this->assertSame(
+            '2342382283afc7bf368d49b0d3c561c03d4b1542a1ef84e1ad3f1757f9fed1a4',
+            $this->fingerprints->cohortSeedFingerprint('supplier_offer_cohort_v1', []),
+        );
+
+        $hashA = str_repeat('a', 64);
+        $hashB = str_repeat('b', 64);
+        $this->assertSame(
+            $this->fingerprints->cohortSeedCanonicalBytes(
+                'supplier_offer_cohort_v1',
+                [$hashA, $hashB],
+            ),
+            $this->fingerprints->cohortSeedCanonicalBytes(
+                'supplier_offer_cohort_v1',
+                [$hashB, $hashA],
+            ),
+        );
+        $this->assertRejects(fn () => $this->fingerprints->cohortSeedCanonicalBytes(
+            'supplier_offer_cohort_v1',
+            [$hashA, $hashA],
+        ));
+        $this->assertRejects(fn () => $this->fingerprints->cohortSeedCanonicalBytes(
+            'supplier_offer_cohort_v1',
+            ['invalid-hash'],
+        ));
+        $this->assertRejects(fn () => $this->fingerprints->cohortSeedCanonicalBytes(
+            'supplier_offer_cohort_v2',
+            [],
+        ));
+
+        $this->assertRejects(fn () => $this->fingerprints->cohortCanonicalBytes([]));
+        $this->assertRejects(fn () => $this->fingerprints->observationSetCanonicalBytes([]));
+    }
+
     public function test_snapshot_header_enrollment_and_observation_match_golden_bytes_and_hashes(): void
     {
         $header = CanonicalSupplierSnapshotGenerationHeader::fromArray($this->generationFixture());
@@ -347,6 +391,79 @@ JSON;
             '63ec48e5f5fcc378333707c727874643b3381550e093e1e62df20cc9b3591a09',
             $this->fingerprints->observationFingerprint($observation),
         );
+    }
+
+    public function test_generation_reasons_use_the_exact_approved_canonical_allowlist(): void
+    {
+        $expectedV4 = [
+            'duplicate_snapshot_fingerprint',
+            'fatal_source_integrity_blocker',
+            'maximum_product_drop_exceeded',
+            'minimum_product_count_not_met',
+            'snapshot_fingerprint_missing',
+            'snapshot_not_full',
+            'snapshot_not_successful',
+            'snapshot_schema_invalid',
+            'snapshot_truncated',
+            'supplier_identity_unconfirmed',
+        ];
+        $expectedCapture = [
+            'capture_cohort_changed',
+            'capture_cohort_incomplete',
+            'capture_concurrent_import_activity',
+            'capture_duplicate_conflict',
+            'capture_generation_gap',
+            'capture_identity_conflict',
+            'capture_invalid_observation',
+            'capture_observation_fingerprint_conflict',
+            'capture_overflow',
+            'capture_persistence_failure',
+            'capture_rejected_observation',
+            'capture_source_fingerprint_invalid',
+            'capture_source_identity_invalid',
+            'capture_truncated',
+            'capture_unknown_activity',
+            'capture_unknown_integrity_reason',
+        ];
+
+        $this->assertSame($expectedV4, CanonicalSupplierSnapshotReasonCode::V4_LIFECYCLE);
+        $this->assertSame($expectedCapture, CanonicalSupplierSnapshotReasonCode::CAPTURE_INTEGRITY);
+        $this->assertCount(10, $expectedV4);
+        $this->assertCount(16, $expectedCapture);
+        $this->assertCount(26, CanonicalSupplierSnapshotReasonCode::all());
+        $this->assertSame(
+            CanonicalSupplierSnapshotReasonCode::all(),
+            array_values(array_unique(CanonicalSupplierSnapshotReasonCode::all(), SORT_STRING)),
+        );
+
+        foreach (CanonicalSupplierSnapshotReasonCode::all() as $reasonCode) {
+            $header = CanonicalSupplierSnapshotGenerationHeader::fromArray(
+                $this->frozenGenerationFixture([$reasonCode]),
+            );
+
+            $this->assertSame([$reasonCode], $header->toCanonicalArray()['qualification_reason_codes']);
+        }
+
+        $unsorted = ['snapshot_truncated', 'capture_overflow'];
+        $header = CanonicalSupplierSnapshotGenerationHeader::fromArray(
+            $this->frozenGenerationFixture($unsorted),
+        );
+        $this->assertSame(
+            ['capture_overflow', 'snapshot_truncated'],
+            $header->toCanonicalArray()['qualification_reason_codes'],
+        );
+
+        foreach ([
+            ['not_an_approved_reason'],
+            ['capture_overflows'],
+            ['CAPTURE_OVERFLOW'],
+            ['capture_overflow', 'not_an_approved_reason'],
+            ['capture_overflow', 'capture_overflow'],
+        ] as $reasonCodes) {
+            $this->assertRejects(fn () => CanonicalSupplierSnapshotGenerationHeader::fromArray(
+                $this->frozenGenerationFixture($reasonCodes),
+            ));
+        }
     }
 
     public function test_strict_contracts_reject_unknown_missing_and_wrong_type_fields(): void
@@ -440,9 +557,12 @@ JSON;
             date_default_timezone_set($originalTimezone);
         }
 
-        $model = new SupplierOfferSnapshotObservation($this->observationFixture());
+        $model = new SupplierOfferSnapshotObservation;
+        $model->setRawAttributes($this->observationFixture());
         $model->makeVisible(['supplier_sku_hash', 'observation_fingerprint']);
-        $model->setRelation('generation', new SupplierOfferSnapshotGeneration(['supplier_key' => 'other']));
+        $generation = new SupplierOfferSnapshotGeneration;
+        $generation->setRawAttributes(['supplier_key' => 'other']);
+        $model->setRelation('generation', $generation);
 
         $this->assertSame($utc->canonicalBytes(), $sofia->canonicalBytes());
         $this->assertSame(
@@ -610,6 +730,16 @@ JSON;
             'cohort_fingerprint' => str_repeat('2', 64),
             'observation_set_fingerprint' => str_repeat('3', 64),
         ];
+    }
+
+    /** @param list<string> $reasonCodes @return array<string, mixed> */
+    private function frozenGenerationFixture(array $reasonCodes): array
+    {
+        $fixture = $this->generationFixture();
+        $fixture['qualification_state'] = 'frozen';
+        $fixture['qualification_reason_codes'] = $reasonCodes;
+
+        return $fixture;
     }
 
     /** @return array<string, mixed> */

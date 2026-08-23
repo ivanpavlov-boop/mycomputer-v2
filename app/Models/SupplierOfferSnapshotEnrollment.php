@@ -2,12 +2,14 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\GuardsCanonicalSupplierMassAssignment;
 use App\Models\Concerns\GuardsImmutableCanonicalSupplierRecord;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class SupplierOfferSnapshotEnrollment extends Model
 {
+    use GuardsCanonicalSupplierMassAssignment;
     use GuardsImmutableCanonicalSupplierRecord;
 
     public const UPDATED_AT = null;
@@ -17,17 +19,6 @@ class SupplierOfferSnapshotEnrollment extends Model
     protected $keyType = 'int';
 
     public $incrementing = true;
-
-    protected $fillable = [
-        'supplier_id',
-        'supplier_feed_id',
-        'source_identity',
-        'supplier_sku_hash',
-        'effective_import_history_id',
-        'enrollment_source',
-        'enrollment_fingerprint',
-        'enrolled_at',
-    ];
 
     protected $hidden = [
         'source_identity',

@@ -2,12 +2,14 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\GuardsCanonicalSupplierMassAssignment;
 use App\Models\Concerns\GuardsImmutableCanonicalSupplierRecord;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class SupplierImportDispatchRecoveryAuthorization extends Model
 {
+    use GuardsCanonicalSupplierMassAssignment;
     use GuardsImmutableCanonicalSupplierRecord;
 
     protected $table = 'supplier_import_dispatch_recovery_authorizations';
@@ -19,21 +21,6 @@ class SupplierImportDispatchRecoveryAuthorization extends Model
     public $timestamps = false;
 
     protected $dateFormat = 'Y-m-d H:i:s.u';
-
-    protected $fillable = [
-        'supplier_import_execution_claim_id',
-        'supplier_import_dispatch_outbox_id',
-        'logical_execution_key',
-        'target_parent_type',
-        'target_parent_id',
-        'authorization_action',
-        'expected_state_fingerprint',
-        'canonical_reason_code',
-        'authorized_operator_id',
-        'authorized_at',
-        'expires_at',
-        'authorization_nonce_hash',
-    ];
 
     protected $hidden = [
         'logical_execution_key',

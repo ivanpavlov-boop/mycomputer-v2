@@ -118,6 +118,7 @@ final readonly class CanonicalSupplierSnapshotGenerationHeader
             'qualification_reason_codes',
             96,
         );
+        CanonicalSupplierSnapshotReasonCode::assertAllApproved($values['qualification_reason_codes']);
 
         foreach ([
             'successful',

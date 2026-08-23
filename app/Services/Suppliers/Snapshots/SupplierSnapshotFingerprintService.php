@@ -71,10 +71,7 @@ final class SupplierSnapshotFingerprintService
 
         return CanonicalSupplierContract::encodeSorted([
             'cohort_authorization_version' => $authorizationVersion,
-            'member_hashes' => CanonicalSupplierContract::sortedUniqueHashes(
-                $memberHashes,
-                'member_hashes',
-            ),
+            'member_hashes' => CanonicalSupplierContract::canonicalCohortSeedMemberHashes($memberHashes),
         ]);
     }
 

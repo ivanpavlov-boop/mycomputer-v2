@@ -2,11 +2,14 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\GuardsCanonicalSupplierMassAssignment;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class SupplierImportExecutionClaim extends Model
 {
+    use GuardsCanonicalSupplierMassAssignment;
+
     protected $table = 'supplier_import_execution_claims';
 
     protected $keyType = 'int';
@@ -14,29 +17,6 @@ class SupplierImportExecutionClaim extends Model
     public $incrementing = true;
 
     protected $dateFormat = 'Y-m-d H:i:s.u';
-
-    protected $fillable = [
-        'logical_execution_key',
-        'supplier_id',
-        'supplier_feed_id',
-        'supplier_import_run_id',
-        'import_job_id',
-        'allocated_at',
-        'import_history_id',
-        'execution_path',
-        'state',
-        'active_attempt_token_hash',
-        'source_fingerprint',
-        'cohort_authorization_version',
-        'cohort_authorized_at',
-        'cohort_seed_count',
-        'cohort_seed_fingerprint',
-        'terminal_reason_code',
-        'claimed_at',
-        'attempt_lease_expires_at',
-        'processing_started_at',
-        'terminal_at',
-    ];
 
     protected $hidden = [
         'logical_execution_key',

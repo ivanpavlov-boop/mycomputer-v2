@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\Concerns\GuardsCanonicalSupplierMassAssignment;
 use App\Models\Concerns\GuardsImmutableCanonicalSupplierRecord;
 use App\Models\ImportHistory;
 use App\Models\ImportJob;
@@ -19,11 +20,11 @@ use App\Models\SupplierOfferSnapshotEnrollment;
 use App\Models\SupplierOfferSnapshotGeneration;
 use App\Models\SupplierOfferSnapshotObservation;
 use App\Models\User;
+use Illuminate\Database\Eloquent\MassAssignmentException;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
 use LogicException;
 use ReflectionClass;
 use Tests\TestCase;
@@ -54,7 +55,20 @@ final class CanonicalSupplierSnapshotModelTest extends TestCase
         SupplierOfferSnapshotObservation::class,
     ];
 
-    public function test_all_ten_canonical_models_have_exact_table_key_timestamp_and_fillable_contracts(): void
+    private const MASS_ASSIGNMENT_ATTRIBUTES = [
+        SupplierImportExecutionClaim::class => ['logical_execution_key', 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'],
+        SupplierImportDispatchOutbox::class => ['dispatch_payload_hash', 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'],
+        SupplierImportDispatchMonitorHealth::class => ['monitor_identity', 'mass-assignment-probe'],
+        SupplierImportDispatchAlertIntent::class => ['alert_identity', 'cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc'],
+        SupplierImportDispatchRecoveryAuthorization::class => ['authorization_nonce_hash', 'dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd'],
+        SupplierImportDispatchRecoveryResult::class => ['result_fingerprint', 'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee'],
+        SupplierImportCohortAuthorizationMember::class => ['supplier_sku_hash', 'ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff'],
+        SupplierOfferSnapshotGeneration::class => ['generation_fingerprint', '1111111111111111111111111111111111111111111111111111111111111111'],
+        SupplierOfferSnapshotEnrollment::class => ['enrollment_fingerprint', '2222222222222222222222222222222222222222222222222222222222222222'],
+        SupplierOfferSnapshotObservation::class => ['observation_fingerprint', '3333333333333333333333333333333333333333333333333333333333333333'],
+    ];
+
+    public function test_all_ten_canonical_models_have_exact_table_key_timestamp_and_guarded_contracts(): void
     {
         $this->assertCount(10, self::MODEL_TABLES);
 
@@ -65,18 +79,10 @@ final class CanonicalSupplierSnapshotModelTest extends TestCase
             $this->assertSame($table, $model->getTable(), $class);
             $this->assertSame('id', $model->getKeyName(), $class);
             $this->assertSame('int', $model->getKeyType(), $class);
-            $this->assertNotSame([], $model->getFillable(), $class);
-            $this->assertNotSame([], $model->getGuarded(), $class);
+            $this->assertSame([], $model->getFillable(), $class);
+            $this->assertSame(['*'], $model->getGuarded(), $class);
+            $this->assertContains(GuardsCanonicalSupplierMassAssignment::class, class_uses_recursive($class));
             $this->assertSame([], $model->getGlobalScopes(), $class);
-
-            $columns = array_values(array_diff(
-                Schema::getColumnListing($table),
-                ['id', 'created_at', 'updated_at', 'started_once_guard', 'terminal_once_guard'],
-            ));
-            $fillable = $model->getFillable();
-            sort($columns);
-            sort($fillable);
-            $this->assertSame($columns, $fillable, $class);
 
             $reflection = new ReflectionClass($class);
             $this->assertNotSame(
@@ -190,29 +196,102 @@ final class CanonicalSupplierSnapshotModelTest extends TestCase
         $this->assertArrayNotHasKey('enrolled_at', (new SupplierOfferSnapshotEnrollment)->getCasts());
     }
 
-    public function test_append_only_models_fail_closed_before_update_or_delete(): void
+    public function test_all_ten_canonical_models_reject_every_eloquent_mass_assignment_path(): void
     {
-        foreach (self::APPEND_ONLY_MODELS as $class) {
-            $this->assertContains(GuardsImmutableCanonicalSupplierRecord::class, class_uses_recursive($class));
+        $before = $this->canonicalTableCounts();
 
+        foreach (self::MASS_ASSIGNMENT_ATTRIBUTES as $class => [$attribute, $value]) {
             /** @var Model $model */
             $model = new $class;
-            $model->exists = true;
-            $model->setRawAttributes(['id' => 1, 'sentinel' => 'before'], true);
-            $model->setAttribute('sentinel', 'after');
+            $attributes = [$attribute => $value];
 
-            try {
-                $model->save();
-                $this->fail("Expected {$class} update to be rejected.");
-            } catch (LogicException) {
-                $this->addToAssertionCount(1);
-            }
+            $this->assertMassAssignmentRejected(fn () => $model->fill($attributes), "{$class}::fill");
+            $this->assertMassAssignmentRejected(fn () => new $class($attributes), "{$class}::__construct");
+            $this->assertMassAssignmentRejected(fn () => $class::create($attributes), "{$class}::create");
+            $this->assertMassAssignmentRejected(fn () => $class::query()->createQuietly($attributes), "{$class}::createQuietly");
+            $this->assertMassAssignmentRejected(fn () => $model->forceFill($attributes), "{$class}::forceFill");
+            $this->assertMassAssignmentRejected(fn () => $class::query()->forceCreate($attributes), "{$class}::forceCreate");
+            $this->assertMassAssignmentRejected(fn () => $class::query()->forceCreateQuietly($attributes), "{$class}::forceCreateQuietly");
+            $this->assertMassAssignmentRejected(fn () => $class::query()->firstOrCreate($attributes), "{$class}::firstOrCreate");
+            $this->assertMassAssignmentRejected(
+                fn () => $class::query()->updateOrCreate($attributes, [$attribute => $value]),
+                "{$class}::updateOrCreate",
+            );
+            $this->assertMassAssignmentRejected(
+                fn () => Model::unguarded(fn () => new $class($attributes)),
+                "{$class}::unguarded",
+            );
+            $this->assertSame([], $model->getAttributes(), $class);
+        }
 
-            try {
-                $model->delete();
-                $this->fail("Expected {$class} delete to be rejected.");
-            } catch (LogicException) {
-                $this->addToAssertionCount(1);
+        $this->assertSame($before, $this->canonicalTableCounts());
+    }
+
+    public function test_low_level_fixture_rows_still_hydrate_through_all_ten_models(): void
+    {
+        $ids = $this->seedCanonicalFixtureGraph();
+
+        foreach (self::MODEL_TABLES as $class => $table) {
+            $id = $ids[$class];
+            $model = $class::query()->findOrFail($id);
+
+            $this->assertSame($id, $model->getKey(), $class);
+            $this->assertSame($table, $model->getTable(), $class);
+            $this->assertNotSame([], $model->getAttributes(), $class);
+        }
+    }
+
+    public function test_append_only_models_reject_every_available_instance_mutation_and_preserve_rows(): void
+    {
+        $ids = $this->seedCanonicalFixtureGraph();
+
+        $operations = [
+            'save(existing)' => fn (Model $model) => $model->save(),
+            'saveQuietly' => fn (Model $model) => $model->saveQuietly(),
+            'saveOrFail' => fn (Model $model) => $model->saveOrFail(),
+            'push' => fn (Model $model) => $model->push(),
+            'pushQuietly' => fn (Model $model) => $model->pushQuietly(),
+            'update' => fn (Model $model) => $model->update(['phase_two_probe' => 'changed']),
+            'updateQuietly' => fn (Model $model) => $model->updateQuietly(['phase_two_probe' => 'changed']),
+            'updateOrFail' => fn (Model $model) => $model->updateOrFail(['phase_two_probe' => 'changed']),
+            'touch' => fn (Model $model) => $model->touch(),
+            'touchQuietly' => fn (Model $model) => $model->touchQuietly(),
+            'increment' => fn (Model $model) => $model->increment('id'),
+            'decrement' => fn (Model $model) => $model->decrement('id'),
+            'incrementQuietly' => fn (Model $model) => $model->incrementQuietly('id'),
+            'decrementQuietly' => fn (Model $model) => $model->decrementQuietly('id'),
+            'delete' => fn (Model $model) => $model->delete(),
+            'deleteQuietly' => fn (Model $model) => $model->deleteQuietly(),
+            'deleteOrFail' => fn (Model $model) => $model->deleteOrFail(),
+            'forceDelete' => fn (Model $model) => $model->forceDelete(),
+        ];
+
+        foreach (self::APPEND_ONLY_MODELS as $class) {
+            $this->assertContains(GuardsImmutableCanonicalSupplierRecord::class, class_uses_recursive($class));
+            $table = self::MODEL_TABLES[$class];
+            $id = $ids[$class];
+            $before = (array) DB::table($table)->where('id', $id)->first();
+
+            foreach ($operations as $operation => $mutate) {
+                /** @var Model $model */
+                $model = $class::query()->findOrFail($id);
+
+                try {
+                    $mutate($model);
+                    $this->fail("Expected {$class}::{$operation} to be rejected.");
+                } catch (LogicException $exception) {
+                    $this->assertSame(
+                        'Immutable canonical supplier records cannot be mutated.',
+                        $exception->getMessage(),
+                        "{$class}::{$operation}",
+                    );
+                }
+
+                $this->assertSame(
+                    $before,
+                    (array) DB::table($table)->where('id', $id)->first(),
+                    "{$class}::{$operation}",
+                );
             }
         }
     }
@@ -299,7 +378,6 @@ final class CanonicalSupplierSnapshotModelTest extends TestCase
         foreach (self::MODEL_TABLES as $class => $table) {
             /** @var Model $model */
             $model = new $class;
-            $model->fill(array_fill_keys($model->getFillable(), null));
             $model->toArray();
             $model->newQuery();
             $this->assertSame($table, $model->getTable());
@@ -307,6 +385,188 @@ final class CanonicalSupplierSnapshotModelTest extends TestCase
 
         $this->assertSame([], $mutations);
         $this->assertSame($before, $this->canonicalTableCounts());
+    }
+
+    private function assertMassAssignmentRejected(callable $operation, string $context): void
+    {
+        try {
+            $operation();
+            $this->fail("Expected {$context} to reject mass assignment.");
+        } catch (MassAssignmentException $exception) {
+            $this->assertSame(
+                'Canonical supplier records do not support mass assignment.',
+                $exception->getMessage(),
+                $context,
+            );
+        }
+    }
+
+    /** @return array<class-string<Model>, int> */
+    private function seedCanonicalFixtureGraph(): array
+    {
+        $now = '2026-08-20 08:00:00.000000';
+        $supplierId = DB::table('suppliers')->insertGetId([
+            'company_name' => 'Phase II Model Supplier',
+            'slug' => 'phase-ii-model-supplier',
+            'created_at' => $now,
+            'updated_at' => $now,
+        ]);
+        $feedId = DB::table('supplier_feeds')->insertGetId([
+            'supplier_id' => $supplierId,
+            'feed_name' => 'Phase II Model Feed',
+            'feed_url' => 'https://example.test/phase-ii-model.xml',
+            'created_at' => $now,
+            'updated_at' => $now,
+        ]);
+        $jobId = DB::table('import_jobs')->insertGetId([
+            'supplier_id' => $supplierId,
+            'supplier_feed_id' => $feedId,
+            'created_at' => $now,
+            'updated_at' => $now,
+        ]);
+        $runId = DB::table('supplier_import_runs')->insertGetId([
+            'supplier_id' => $supplierId,
+            'supplier_feed_id' => $feedId,
+            'import_job_id' => $jobId,
+            'trigger_type' => 'manual',
+            'created_at' => $now,
+            'updated_at' => $now,
+        ]);
+        $historyId = DB::table('import_histories')->insertGetId([
+            'import_job_id' => $jobId,
+            'supplier_id' => $supplierId,
+            'supplier_feed_id' => $feedId,
+            'event' => 'started',
+            'created_at' => $now,
+            'updated_at' => $now,
+        ]);
+        $userId = DB::table('users')->insertGetId([
+            'name' => 'Phase II Model Operator',
+            'email' => 'phase-ii-model-operator@example.test',
+            'password' => 'not-used',
+            'created_at' => $now,
+            'updated_at' => $now,
+        ]);
+        $logicalKey = str_repeat('a', 64);
+        $claimId = DB::table('supplier_import_execution_claims')->insertGetId([
+            'logical_execution_key' => $logicalKey,
+            'supplier_id' => $supplierId,
+            'supplier_feed_id' => $feedId,
+            'supplier_import_run_id' => $runId,
+            'import_job_id' => $jobId,
+            'allocated_at' => $now,
+            'import_history_id' => $historyId,
+            'execution_path' => 'orchestrated',
+        ]);
+        $outboxId = DB::table('supplier_import_dispatch_outbox')->insertGetId([
+            'supplier_import_execution_claim_id' => $claimId,
+            'logical_execution_key' => $logicalKey,
+            'event_type' => 'initial_dispatch',
+            'job_type' => 'process_xml_supplier_feed',
+            'dispatch_payload' => '{}',
+            'dispatch_payload_hash' => str_repeat('b', 64),
+            'transport_deadline_at' => '2026-08-21 08:00:00.000000',
+            'created_at' => $now,
+            'updated_at' => $now,
+        ]);
+        $alertId = DB::table('supplier_import_dispatch_alert_intents')->insertGetId([
+            'alert_identity' => str_repeat('c', 64),
+            'schema_version' => 'supplier-import-dispatch-alert-v1',
+            'alert_type' => 'dispatch_watchdog_overdue',
+            'dispatch_outbox_id' => $outboxId,
+            'delivery_watchdog_at' => '2026-08-20 09:00:00.000000',
+            'severity' => 'warning',
+            'payload' => '{}',
+            'next_attempt_at' => '2026-08-20 09:00:00.000000',
+        ]);
+        $authorizationId = DB::table('supplier_import_dispatch_recovery_authorizations')->insertGetId([
+            'supplier_import_execution_claim_id' => $claimId,
+            'supplier_import_dispatch_outbox_id' => $outboxId,
+            'logical_execution_key' => $logicalKey,
+            'target_parent_type' => 'supplier_import_run',
+            'target_parent_id' => $runId,
+            'authorization_action' => 'republish_same_key',
+            'expected_state_fingerprint' => str_repeat('d', 64),
+            'canonical_reason_code' => 'dispatch_durable_progress_stalled',
+            'authorized_operator_id' => $userId,
+            'authorized_at' => '2026-08-20 08:00:00.000000',
+            'expires_at' => '2026-08-20 08:15:00.000000',
+            'authorization_nonce_hash' => str_repeat('e', 64),
+        ]);
+        $resultId = DB::table('supplier_import_dispatch_recovery_results')->insertGetId([
+            'supplier_import_dispatch_recovery_authorization_id' => $authorizationId,
+            'authorization_action' => 'republish_same_key',
+            'authorized_operator_id' => $userId,
+            'supplier_import_execution_claim_id' => $claimId,
+            'supplier_import_dispatch_outbox_id' => $outboxId,
+            'logical_execution_key' => $logicalKey,
+            'target_parent_type' => 'supplier_import_run',
+            'target_parent_id' => $runId,
+            'event_sequence' => 1,
+            'event_kind' => 'started',
+            'canonical_result_code' => 'authorization_attempt_started',
+            'resume_state_fingerprint' => str_repeat('f', 64),
+            'occurred_at' => '2026-08-20 08:01:00.000000',
+            'result_fingerprint' => str_repeat('1', 64),
+        ]);
+        $cohortMemberId = DB::table('supplier_import_cohort_authorization_members')->insertGetId([
+            'supplier_import_execution_claim_id' => $claimId,
+            'supplier_sku_hash' => str_repeat('2', 64),
+        ]);
+        $generationId = DB::table('supplier_offer_snapshot_generations')->insertGetId([
+            'supplier_id' => $supplierId,
+            'supplier_key' => 'phase-ii-model-v1',
+            'supplier_feed_id' => $feedId,
+            'supplier_import_execution_claim_id' => $claimId,
+            'import_history_id' => $historyId,
+            'schema_version' => 'supplier-offer-snapshot-v1',
+            'producer_version' => 'phase-ii-model-test-v1',
+            'qualification_policy_key' => 'qualification-v1',
+            'capture_integrity_policy_key' => 'capture-integrity-v1',
+            'policy_versions' => '{}',
+            'source_identity' => 'snapshot-source-v1:synthetic:phase-ii-model',
+            'source_fingerprint' => str_repeat('3', 64),
+            'captured_at' => '2026-08-20T08:05:00+00:00',
+            'capture_started_at' => '2026-08-20T08:00:00+00:00',
+            'capture_completed_at' => '2026-08-20T08:05:00+00:00',
+            'capture_outcome' => 'failed',
+            'capture_failure_reason_code' => 'capture_persistence_failure',
+            'qualification_state' => 'frozen',
+            'qualification_reason_codes' => '["capture_persistence_failure"]',
+            'minimum_product_count' => 1,
+            'maximum_product_drop_percent' => 40,
+            'generation_fingerprint' => str_repeat('4', 64),
+        ]);
+        $enrollmentId = DB::table('supplier_offer_snapshot_enrollments')->insertGetId([
+            'supplier_id' => $supplierId,
+            'supplier_feed_id' => $feedId,
+            'source_identity' => 'snapshot-source-v1:synthetic:phase-ii-model',
+            'supplier_sku_hash' => str_repeat('2', 64),
+            'effective_import_history_id' => $historyId,
+            'enrollment_source' => 'capture_start_seed',
+            'enrollment_fingerprint' => str_repeat('5', 64),
+            'enrolled_at' => '2026-08-20T08:05:00+00:00',
+        ]);
+        $observationId = DB::table('supplier_offer_snapshot_observations')->insertGetId([
+            'snapshot_generation_id' => $generationId,
+            'snapshot_enrollment_id' => $enrollmentId,
+            'supplier_sku_hash' => str_repeat('2', 64),
+            'present' => false,
+            'observation_fingerprint' => str_repeat('6', 64),
+        ]);
+
+        return [
+            SupplierImportExecutionClaim::class => $claimId,
+            SupplierImportDispatchOutbox::class => $outboxId,
+            SupplierImportDispatchMonitorHealth::class => 1,
+            SupplierImportDispatchAlertIntent::class => $alertId,
+            SupplierImportDispatchRecoveryAuthorization::class => $authorizationId,
+            SupplierImportDispatchRecoveryResult::class => $resultId,
+            SupplierImportCohortAuthorizationMember::class => $cohortMemberId,
+            SupplierOfferSnapshotGeneration::class => $generationId,
+            SupplierOfferSnapshotEnrollment::class => $enrollmentId,
+            SupplierOfferSnapshotObservation::class => $observationId,
+        ];
     }
 
     /** @param array<string, string> $expected */

@@ -2,11 +2,14 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\GuardsCanonicalSupplierMassAssignment;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class SupplierImportDispatchAlertIntent extends Model
 {
+    use GuardsCanonicalSupplierMassAssignment;
+
     protected $table = 'supplier_import_dispatch_alert_intents';
 
     protected $keyType = 'int';
@@ -14,26 +17,6 @@ class SupplierImportDispatchAlertIntent extends Model
     public $incrementing = true;
 
     protected $dateFormat = 'Y-m-d H:i:s.u';
-
-    protected $fillable = [
-        'alert_identity',
-        'schema_version',
-        'alert_type',
-        'dispatch_outbox_id',
-        'delivery_watchdog_at',
-        'severity',
-        'critical_bucket',
-        'payload',
-        'delivery_state',
-        'attempt_count',
-        'delivery_generation',
-        'delivery_owner_token_hash',
-        'delivery_lease_acquired_at',
-        'delivery_lease_expires_at',
-        'next_attempt_at',
-        'acknowledged_at',
-        'last_failure_code',
-    ];
 
     protected $hidden = [
         'alert_identity',

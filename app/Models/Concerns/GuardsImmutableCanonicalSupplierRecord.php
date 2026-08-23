@@ -7,23 +7,57 @@ use LogicException;
 
 trait GuardsImmutableCanonicalSupplierRecord
 {
+    public function save(array $options = [])
+    {
+        if ($this->exists) {
+            $this->rejectImmutableMutation();
+        }
+
+        return parent::save($options);
+    }
+
+    public function update(array $attributes = [], array $options = [])
+    {
+        $this->rejectImmutableMutation();
+    }
+
+    public function updateQuietly(array $attributes = [], array $options = [])
+    {
+        $this->rejectImmutableMutation();
+    }
+
+    public function updateOrFail(array $attributes = [], array $options = [])
+    {
+        $this->rejectImmutableMutation();
+    }
+
+    public function touch($attribute = null)
+    {
+        $this->rejectImmutableMutation();
+    }
+
     protected function performUpdate(Builder $query)
     {
-        throw new LogicException('Immutable canonical supplier records cannot be updated.');
+        $this->rejectImmutableMutation();
     }
 
     protected function incrementOrDecrement($column, $amount, $extra, $method)
     {
-        throw new LogicException('Immutable canonical supplier records cannot be updated.');
+        $this->rejectImmutableMutation();
     }
 
     public function delete()
     {
-        throw new LogicException('Immutable canonical supplier records cannot be deleted.');
+        $this->rejectImmutableMutation();
     }
 
     public function forceDelete()
     {
         return $this->delete();
+    }
+
+    private function rejectImmutableMutation(): never
+    {
+        throw new LogicException('Immutable canonical supplier records cannot be mutated.');
     }
 }

@@ -2,12 +2,14 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\GuardsCanonicalSupplierMassAssignment;
 use App\Models\Concerns\GuardsImmutableCanonicalSupplierRecord;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class SupplierOfferSnapshotObservation extends Model
 {
+    use GuardsCanonicalSupplierMassAssignment;
     use GuardsImmutableCanonicalSupplierRecord;
 
     public const UPDATED_AT = null;
@@ -17,25 +19,6 @@ class SupplierOfferSnapshotObservation extends Model
     protected $keyType = 'int';
 
     public $incrementing = true;
-
-    protected $fillable = [
-        'snapshot_generation_id',
-        'snapshot_enrollment_id',
-        'supplier_sku_hash',
-        'present',
-        'price',
-        'currency',
-        'raw_quantity_observed',
-        'eol_flag',
-        'canonical_public_status',
-        'supplier_mapper_valid',
-        'exact_supplier_sku_match',
-        'identifier_conflict',
-        'blocking_validation_issue',
-        'duplicate_offer',
-        'reliable_manufacturer_mpn_hash',
-        'observation_fingerprint',
-    ];
 
     protected $hidden = [
         'supplier_sku_hash',

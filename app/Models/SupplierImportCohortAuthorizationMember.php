@@ -2,12 +2,14 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\GuardsCanonicalSupplierMassAssignment;
 use App\Models\Concerns\GuardsImmutableCanonicalSupplierRecord;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class SupplierImportCohortAuthorizationMember extends Model
 {
+    use GuardsCanonicalSupplierMassAssignment;
     use GuardsImmutableCanonicalSupplierRecord;
 
     public const UPDATED_AT = null;
@@ -19,11 +21,6 @@ class SupplierImportCohortAuthorizationMember extends Model
     public $incrementing = true;
 
     protected $dateFormat = 'Y-m-d H:i:s.u';
-
-    protected $fillable = [
-        'supplier_import_execution_claim_id',
-        'supplier_sku_hash',
-    ];
 
     protected $hidden = [
         'supplier_sku_hash',

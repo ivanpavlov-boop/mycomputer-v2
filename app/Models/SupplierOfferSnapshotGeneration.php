@@ -2,12 +2,14 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\GuardsCanonicalSupplierMassAssignment;
 use App\Models\Concerns\GuardsImmutableCanonicalSupplierRecord;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class SupplierOfferSnapshotGeneration extends Model
 {
+    use GuardsCanonicalSupplierMassAssignment;
     use GuardsImmutableCanonicalSupplierRecord;
 
     public const UPDATED_AT = null;
@@ -17,52 +19,6 @@ class SupplierOfferSnapshotGeneration extends Model
     protected $keyType = 'int';
 
     public $incrementing = true;
-
-    protected $fillable = [
-        'supplier_id',
-        'supplier_key',
-        'supplier_feed_id',
-        'supplier_import_execution_claim_id',
-        'import_history_id',
-        'predecessor_snapshot_generation_id',
-        'schema_version',
-        'producer_version',
-        'qualification_policy_key',
-        'capture_integrity_policy_key',
-        'policy_versions',
-        'freshness_policy_key',
-        'freshness_max_age_hours',
-        'freshness_policy_approved',
-        'source_identity',
-        'source_fingerprint',
-        'captured_at',
-        'authoritative_snapshot_at',
-        'capture_started_at',
-        'capture_completed_at',
-        'capture_outcome',
-        'capture_failure_reason_code',
-        'qualification_state',
-        'qualification_reason_codes',
-        'successful',
-        'full',
-        'schema_valid',
-        'truncated',
-        'fatal_integrity_blocker',
-        'supplier_identity_confirmed',
-        'comparable',
-        'total_observed_count',
-        'valid_observation_count',
-        'invalid_observation_count',
-        'rejected_observation_count',
-        'duplicate_observation_count',
-        'enrolled_observation_count',
-        'minimum_product_count',
-        'product_drop_percent',
-        'maximum_product_drop_percent',
-        'cohort_fingerprint',
-        'observation_set_fingerprint',
-        'generation_fingerprint',
-    ];
 
     protected $hidden = [
         'source_identity',
