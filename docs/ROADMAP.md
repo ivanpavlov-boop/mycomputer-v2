@@ -812,8 +812,11 @@ by Phase 1D.2B and CART-023 remains open. Operational boundaries are documented 
    synced and verified. APCOM schedule remains disabled; Catalog Sync UPDATE,
    Sync All, and automatic sync remain disabled.
 4. Keep the merged PR #210 C3D evaluator dormant. It is deterministic,
-   non-persistent and zero-mutation, but no outbox/claim, qualified immutable
-   history or producer exists. The local prerequisite design also requires
+   non-persistent and zero-mutation. Phase I's outbox/claim/evidence schema is
+   deployed and inactive, and Phase II's guarded models/canonical byte
+   contracts are deployed and uncalled; no runtime persistence repository,
+   qualified immutable history row, capture integration or producer exists.
+   The local prerequisite design also requires
    dedicated `redis_supplier_import` / `supplier-imports` routing at
    `retry_after=3900` while unrelated Redis queues retain
    `retry_after=1300`; exact

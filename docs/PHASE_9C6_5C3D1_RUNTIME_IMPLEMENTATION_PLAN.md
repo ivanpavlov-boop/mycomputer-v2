@@ -197,38 +197,61 @@ The canonical helper locations are:
 
 ## Gap analysis
 
-| Subsystem | Status | Evidence and required direction |
-| --- | --- | --- |
-| Snapshot generation | MISSING | No generation header table/model/repository |
-| Snapshot enrollment | MISSING | No durable cohort enrollment |
-| Snapshot observation | MISSING | No immutable presence/absence observation |
-| Canonical identity | PARTIAL | Existing hasher and canonical-data helper are reusable; snapshot source grammar and most of the 22 exact producers are absent |
-| Immutable evidence | PARTIAL | `ImportHistory` is protected, but no snapshot evidence exists |
-| Execution claim | MISSING | Current parent status rows do not own a stable logical execution |
-| Ownership generation/token | MISSING | No complete claim owner tuple bound to a DB lease |
-| MySQL ownership CAS | MISSING | No one-statement MySQL-UTC claim acquisition with 4,200-second lease |
-| Supplier Redis lock | CONFLICTING | Generic cache lock is partial; `forceRelease()` violates owner safety and TTL/readiness are wrong |
-| Durable outbox | MISSING | Dispatch is direct from orchestrator/command/UI |
-| Dispatch payload identity | MISSING | No seven-key canonical payload or digest |
-| Publication attempt state | MISSING | No durable ordinal/generation/token reservation |
-| Retry/watchdog state | CONFLICTING | Current job tries/timeouts and direct `failed()` callbacks contradict the protected contract |
-| Recovery authorization | MISSING | No issuer, nonce, exact tuple, 20-field fingerprint, or immutable result |
-| Active Super Admin infrastructure | EXISTS | Reusable user predicates and last-admin protection exist |
-| `republish_same_key` | MISSING | No action-compatible Phase A/B implementation |
-| `recover_expired_queued_ownership` | MISSING | No atomic complete expired-owner CAS |
-| `terminalize_stale_dispatch` | MISSING | No exact pre-processing terminal action |
-| `terminalize_publication_mismatch` | MISSING | No one-target mismatch repository/command |
-| `terminalize_abandoned_processing` | MISSING | No expired processing-owner terminal repository/command |
-| Redis advance/publish/retire functions | MISSING | No external generation fence or one-use effect |
-| Monitor lease and health | MISSING | No singleton coordination row/service |
-| Independent observer | MISSING | No generation-bound observer heartbeat |
-| Freshness admission | MISSING | No 600-second monitor/sink plus 120-second observer gate |
-| Durable alert intent | MISSING | No canonical alert identity or state machine |
-| Provider capability gate | MISSING | No selected provider and no proven external-effect capability |
-| Legacy completion notification | EXISTS / CONFLICTING | May remain only in the legacy/unprotected transition path; protected execution must bypass it with zero legacy email dispatch and zero `last_import_notification_at` mutation |
-| Operational rollback | PARTIAL | Existing feature flags show fail-closed patterns, but snapshot/recovery/monitor gates and the complete schema-down guard do not exist |
-| MySQL CI | EXISTS | CI runs the backend against MySQL 8.4 |
-| Redis CI | MISSING | CI does not start Redis and uses array cache/sync queue |
+### Current deployed artifact inventory
+
+This table reports repository/deployment presence separately from supplier-
+runtime activation. `PRESENT / DEPLOYED` never means that a repository,
+coordinator, worker, schedule, recovery action, monitor or capture path calls
+the artifact.
+
+| Artifact | Artifact status | Supplier-runtime status | Repository evidence |
+| --- | --- | --- | --- |
+| `supplier_import_execution_claims` | `PRESENT / DEPLOYED` | `INACTIVE / UNWIRED` | Phase I migration `2026_08_20_120001_create_supplier_import_execution_claims_table.php` |
+| `supplier_import_dispatch_outbox` | `PRESENT / DEPLOYED` | `INACTIVE / UNWIRED` | Phase I migration `2026_08_20_120002_create_supplier_import_dispatch_outbox_table.php` |
+| `supplier_import_dispatch_monitor_health` | `PRESENT / DEPLOYED` | `INACTIVE / UNWIRED` | Phase I migration `2026_08_20_120003_create_supplier_import_dispatch_monitor_health_table.php` |
+| `supplier_import_dispatch_alert_intents` | `PRESENT / DEPLOYED` | `INACTIVE / UNWIRED` | Phase I migration `2026_08_20_120004_create_supplier_import_dispatch_alert_intents_table.php` |
+| `supplier_import_dispatch_recovery_authorizations` | `PRESENT / DEPLOYED` | `INACTIVE / UNWIRED` | Phase I migration `2026_08_20_120005_create_supplier_import_dispatch_recovery_authorizations_table.php` |
+| `supplier_import_dispatch_recovery_results` | `PRESENT / DEPLOYED` | `INACTIVE / UNWIRED` | Phase I migration `2026_08_20_120006_create_supplier_import_dispatch_recovery_results_table.php` |
+| `supplier_import_cohort_authorization_members` | `PRESENT / DEPLOYED` | `INACTIVE / UNWIRED` | Phase I migration `2026_08_20_120007_create_supplier_import_cohort_authorization_members_table.php` |
+| `supplier_offer_snapshot_generations` | `PRESENT / DEPLOYED` | `INACTIVE / UNWIRED` | Phase I migration `2026_08_20_120008_create_supplier_offer_snapshot_generations_table.php` |
+| `supplier_offer_snapshot_enrollments` | `PRESENT / DEPLOYED` | `INACTIVE / UNWIRED` | Phase I migration `2026_08_20_120009_create_supplier_offer_snapshot_enrollments_table.php` |
+| `supplier_offer_snapshot_observations` | `PRESENT / DEPLOYED` | `INACTIVE / UNWIRED` | Phase I migration `2026_08_20_120010_create_supplier_offer_snapshot_observations_table.php` |
+| `SupplierImportExecutionClaim` | `PRESENT / DEPLOYED` | `UNCALLED` | Phase II guarded model |
+| `SupplierImportDispatchOutbox` | `PRESENT / DEPLOYED` | `UNCALLED` | Phase II guarded model |
+| `SupplierImportDispatchMonitorHealth` | `PRESENT / DEPLOYED` | `UNCALLED` | Phase II guarded model |
+| `SupplierImportDispatchAlertIntent` | `PRESENT / DEPLOYED` | `UNCALLED` | Phase II guarded model |
+| `SupplierImportDispatchRecoveryAuthorization` | `PRESENT / DEPLOYED` | `UNCALLED` | Phase II guarded model |
+| `SupplierImportDispatchRecoveryResult` | `PRESENT / DEPLOYED` | `UNCALLED` | Phase II guarded model |
+| `SupplierImportCohortAuthorizationMember` | `PRESENT / DEPLOYED` | `UNCALLED` | Phase II guarded model |
+| `SupplierOfferSnapshotGeneration` | `PRESENT / DEPLOYED` | `UNCALLED` | Phase II guarded model |
+| `SupplierOfferSnapshotEnrollment` | `PRESENT / DEPLOYED` | `UNCALLED` | Phase II guarded model |
+| `SupplierOfferSnapshotObservation` | `PRESENT / DEPLOYED` | `UNCALLED` | Phase II guarded model |
+| `Phase II canonical byte/value contracts` | `PRESENT / DEPLOYED` | `UNCALLED` | `app/Data/Suppliers/Snapshots`, including the frozen dispatch, recovery, generation, enrollment, observation and reason contracts |
+| `SupplierSnapshotFingerprintService` | `PRESENT / DEPLOYED` | `UNCALLED` | Phase II service owns the frozen 22-identity inventory and digest producers |
+| `SnapshotSourceIdentity` | `PRESENT / DEPLOYED` | `UNCALLED` | Phase II strict snapshot-source value contract |
+
+### Remaining runtime implementation gaps
+
+| Future runtime component | Artifact status | Runtime status | Evidence and required direction |
+| --- | --- | --- | --- |
+| Phase III persistence repository and service API | `NOT IMPLEMENTED / MISSING` | `INACTIVE` | No `ImmutableSupplierOfferSnapshotRepository`, cohort-authorization repository/service, collector or capture service exists |
+| Immutable candidate-row source provenance | `NOT IMPLEMENTED / MISSING` | `BLOCKED` | Current application candidates cannot prove original canonical source identity; `PH3-RDY-001` remains open |
+| Durable claim authorization source binding | `NOT IMPLEMENTED / MISSING` | `BLOCKED` | Proposed `cohort_source_identity` schema/model remediation is documentation only; `PH3-RDY-002` remains open |
+| Approved production operational bounds | `NOT SPECIFIED` | `BLOCKED` | The nine Phase III limits remain unapproved; `PH3-RDY-003` remains open |
+| MySQL ownership CAS repository | `NOT IMPLEMENTED / MISSING` | `INACTIVE` | Deployed claim fields exist, but no one-statement MySQL-UTC acquisition service owns the 4,200-second lease |
+| Protected supplier Redis lock | `NOT IMPLEMENTED / MISSING` | `INACTIVE` | The legacy generic lock and `forceRelease()` remain outside the future protected path |
+| Durable outbox publisher/reconciler | `NOT IMPLEMENTED / MISSING` | `INACTIVE` | The outbox table/model and dispatch-payload contract exist, but direct legacy dispatch remains unwired to them |
+| Redis advance/publish/retire Functions | `NOT IMPLEMENTED / MISSING` | `INACTIVE` | No external generation fence or one-use publication effect exists |
+| Protected retry/watchdog coordinator | `NOT IMPLEMENTED / MISSING` | `INACTIVE` | Current job tries/timeouts and `failed()` behavior are still legacy behavior |
+| Recovery issuer, repositories and five actions | `NOT IMPLEMENTED / MISSING` | `INACTIVE` | Recovery tables/models/byte contracts exist, but no issuer, nonce flow, command or action implementation calls them |
+| Monitor and independent observer runtime | `NOT IMPLEMENTED / MISSING` | `INACTIVE` | Monitor/alert tables and models exist, but no monitor command, lease service, observer heartbeat or freshness admission implementation exists |
+| Alert provider capability and delivery runtime | `NOT IMPLEMENTED / MISSING` | `INACTIVE` | No provider is selected and no native-fence/provider-idempotency effect boundary is proven |
+| Protected queue/worker/config gates | `NOT IMPLEMENTED / MISSING` | `INACTIVE` | No dedicated supplier-import connection/worker or activatable readiness configuration exists |
+| Active Super Admin infrastructure | `PRESENT / DEPLOYED` | `ACTIVE LEGACY INFRASTRUCTURE` | Reusable user predicates and last-admin protection exist; they do not issue recovery authority |
+| Legacy completion notification | `PRESENT / DEPLOYED` | `ACTIVE LEGACY PATH ONLY` | The future protected path must bypass it with zero legacy email dispatch and zero `last_import_notification_at` mutation |
+| Phase I empty-schema down guard | `PRESENT / DEPLOYED` | `LOCAL/TESTING ONLY` | The complete fail-closed Phase I downgrade capability is implemented; operational rollback remains forward-only |
+| MySQL CI | `PRESENT / DEPLOYED` | `ACTIVE` | Backend CI runs against MySQL 8.4 |
+| Real Redis CI | `NOT IMPLEMENTED / MISSING` | `INACTIVE` | CI does not start Redis and still uses array cache/sync queue for this surface |
 
 These are expected implementation gaps, not an implementation design conflict.
 The current direct path can remain available only while the new protected path

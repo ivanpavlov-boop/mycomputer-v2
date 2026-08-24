@@ -793,6 +793,30 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
             $this->assertStringContainsString($bindingContract, $sourceBinding);
         }
 
+        $expectedAuthorizationTuple = [
+            'cohort_authorization_version',
+            'cohort_authorized_at',
+            'cohort_seed_count',
+            'cohort_seed_fingerprint',
+            'cohort_source_identity',
+        ];
+        $canonicalAuthorizationTuple = $this->canonicalAuthorizationCompletenessTuple($sourceBinding);
+        $authorizationProcedures = $this->authorizationProcedureTuples($design);
+
+        $this->assertSame($expectedAuthorizationTuple, $canonicalAuthorizationTuple);
+        $this->assertSame([
+            'authorization-member-persistence',
+            'capture-start-coordinator',
+            'bounded-capture-collector',
+        ], array_keys($authorizationProcedures));
+        foreach ($authorizationProcedures as $procedure => $tuple) {
+            $this->assertSame(
+                $canonicalAuthorizationTuple,
+                $tuple,
+                "Authorization procedure {$procedure} must use the exact ordered canonical tuple.",
+            );
+        }
+
         preg_match(
             '/- parent unique key:\s+`(?<table>[a-z_]+)` must define exactly\s+`(?<name>[a-z_]+)\((?<columns>[^)`]+)\)`;/m',
             $sourceBinding,
@@ -917,6 +941,76 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
             $this->assertStringContainsString($status, $plan);
         }
 
+        $runtimeInventory = $this->markdownSection(
+            $plan,
+            '### Current deployed artifact inventory',
+            '### Remaining runtime implementation gaps',
+        );
+        $runtimeInventoryRows = $this->runtimeInventoryRows($runtimeInventory);
+        $phaseOneTables = [
+            'supplier_import_execution_claims' => 'database/migrations/2026_08_20_120001_create_supplier_import_execution_claims_table.php',
+            'supplier_import_dispatch_outbox' => 'database/migrations/2026_08_20_120002_create_supplier_import_dispatch_outbox_table.php',
+            'supplier_import_dispatch_monitor_health' => 'database/migrations/2026_08_20_120003_create_supplier_import_dispatch_monitor_health_table.php',
+            'supplier_import_dispatch_alert_intents' => 'database/migrations/2026_08_20_120004_create_supplier_import_dispatch_alert_intents_table.php',
+            'supplier_import_dispatch_recovery_authorizations' => 'database/migrations/2026_08_20_120005_create_supplier_import_dispatch_recovery_authorizations_table.php',
+            'supplier_import_dispatch_recovery_results' => 'database/migrations/2026_08_20_120006_create_supplier_import_dispatch_recovery_results_table.php',
+            'supplier_import_cohort_authorization_members' => 'database/migrations/2026_08_20_120007_create_supplier_import_cohort_authorization_members_table.php',
+            'supplier_offer_snapshot_generations' => 'database/migrations/2026_08_20_120008_create_supplier_offer_snapshot_generations_table.php',
+            'supplier_offer_snapshot_enrollments' => 'database/migrations/2026_08_20_120009_create_supplier_offer_snapshot_enrollments_table.php',
+            'supplier_offer_snapshot_observations' => 'database/migrations/2026_08_20_120010_create_supplier_offer_snapshot_observations_table.php',
+        ];
+        $phaseTwoModels = [
+            'SupplierImportExecutionClaim',
+            'SupplierImportDispatchOutbox',
+            'SupplierImportDispatchMonitorHealth',
+            'SupplierImportDispatchAlertIntent',
+            'SupplierImportDispatchRecoveryAuthorization',
+            'SupplierImportDispatchRecoveryResult',
+            'SupplierImportCohortAuthorizationMember',
+            'SupplierOfferSnapshotGeneration',
+            'SupplierOfferSnapshotEnrollment',
+            'SupplierOfferSnapshotObservation',
+        ];
+
+        foreach ($phaseOneTables as $table => $migration) {
+            $this->assertSame('PRESENT / DEPLOYED', $runtimeInventoryRows[$table]['artifact_status'] ?? null);
+            $this->assertSame('INACTIVE / UNWIRED', $runtimeInventoryRows[$table]['runtime_status'] ?? null);
+            $this->assertFileExists(base_path($migration));
+            $this->assertStringContainsString("Schema::create('{$table}'", $this->readDocument($migration));
+        }
+        foreach ($phaseTwoModels as $model) {
+            $this->assertSame('PRESENT / DEPLOYED', $runtimeInventoryRows[$model]['artifact_status'] ?? null);
+            $this->assertSame('UNCALLED', $runtimeInventoryRows[$model]['runtime_status'] ?? null);
+            $this->assertFileExists(base_path("app/Models/{$model}.php"));
+        }
+        foreach ([
+            'app/Data/Suppliers/Snapshots/CanonicalSupplierContract.php',
+            'app/Data/Suppliers/Snapshots/CanonicalSupplierImportDispatchPayload.php',
+            'app/Data/Suppliers/Snapshots/CanonicalSupplierRecoveryExpectedStateV2.php',
+            'app/Data/Suppliers/Snapshots/CanonicalSupplierRecoveryResumeState.php',
+            'app/Data/Suppliers/Snapshots/CanonicalSupplierRecoveryResult.php',
+            'app/Data/Suppliers/Snapshots/CanonicalSupplierSnapshotGenerationHeader.php',
+            'app/Data/Suppliers/Snapshots/CanonicalSupplierSnapshotEnrollment.php',
+            'app/Data/Suppliers/Snapshots/CanonicalSupplierSnapshotObservation.php',
+            'app/Data/Suppliers/Snapshots/CanonicalSupplierSnapshotReasonCode.php',
+        ] as $canonicalContract) {
+            $this->assertFileExists(base_path($canonicalContract));
+        }
+        $this->assertSame(
+            ['artifact_status' => 'PRESENT / DEPLOYED', 'runtime_status' => 'UNCALLED'],
+            $runtimeInventoryRows['Phase II canonical byte/value contracts'] ?? null,
+        );
+        $this->assertSame(
+            ['artifact_status' => 'PRESENT / DEPLOYED', 'runtime_status' => 'UNCALLED'],
+            $runtimeInventoryRows['SupplierSnapshotFingerprintService'] ?? null,
+        );
+        $this->assertFileExists(base_path('app/Services/Suppliers/Snapshots/SupplierSnapshotFingerprintService.php'));
+        $this->assertSame(
+            ['artifact_status' => 'PRESENT / DEPLOYED', 'runtime_status' => 'UNCALLED'],
+            $runtimeInventoryRows['SnapshotSourceIdentity'] ?? null,
+        );
+        $this->assertFileExists(base_path('app/Data/Suppliers/Onboarding/SnapshotSourceIdentity.php'));
+
         $apcomScope = $this->markdownSection(
             $this->readDocument('docs/APCOM_OPERATIONAL_OFFER_LIFECYCLE_PREVIEW.md'),
             '## Scope',
@@ -944,6 +1038,11 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
             'remediated locally and require a fresh aggregate review',
             $phasesInProgress,
         );
+        $this->assertStringNotContainsString(
+            'no outbox/claim/recovery/monitor schema',
+            $this->readDocument('docs/PHASES.md'),
+        );
+        $this->assertStringNotContainsString('but no outbox/claim', $roadmap);
 
         $reviewBoundaryStart = strpos($plan, '## Review and rollout boundary');
         $this->assertNotFalse($reviewBoundaryStart);
@@ -960,6 +1059,13 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
                 $currentReadinessSection,
             );
         }
+        $this->assertCount(
+            3,
+            array_filter(
+                array_column($statusMatches, 2, 1),
+                static fn (string $status): bool => $status === 'BLOCKED',
+            ),
+        );
 
         foreach ([$phasesInProgress, $roadmap, $onboarding] as $currentStatus) {
             $this->assertStringContainsString('`PH3-RDY-001`', $currentStatus);
@@ -971,6 +1077,78 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
                 $currentStatus,
             );
         }
+    }
+
+    /** @return array<int, string> */
+    private function canonicalAuthorizationCompletenessTuple(string $sourceBinding): array
+    {
+        $matched = preg_match(
+            '/Canonical proposed future authorization completeness tuple \(ordered\):\R\R```text\R(?<fields>.*?)\R```/s',
+            $sourceBinding,
+            $tuple,
+        );
+
+        $this->assertSame(1, $matched, 'Canonical authorization completeness tuple is missing.');
+
+        return $this->lineSeparatedFields($tuple['fields'] ?? '');
+    }
+
+    /** @return array<string, array<int, string>> */
+    private function authorizationProcedureTuples(string $design): array
+    {
+        preg_match_all(
+            '/Normative authorization procedure `(?<name>[a-z0-9-]+)`\R'.
+            'completeness tuple \(ordered\):\R\R```text\R(?<fields>.*?)\R```\R\R'.
+            'Atomic authorization transaction: authorization members \+ exact five-field\R'.
+            'tuple \+ `cohort_source_identity` `NULL -> A`\.\R'.
+            'Retry\/recovery source authority: persisted `cohort_source_identity` only;\R'.
+            'mutable current SupplierFeed configuration is prohibited\./s',
+            $design,
+            $matches,
+            PREG_SET_ORDER,
+        );
+
+        $tuples = [];
+
+        foreach ($matches as $match) {
+            $tuples[$match['name']] = $this->lineSeparatedFields($match['fields']);
+        }
+
+        return $tuples;
+    }
+
+    /** @return array<int, string> */
+    private function lineSeparatedFields(string $fields): array
+    {
+        return array_values(array_filter(
+            array_map(
+                static fn (string $field): string => trim($field),
+                preg_split('/\R/', $fields) ?: [],
+            ),
+            static fn (string $field): bool => $field !== '',
+        ));
+    }
+
+    /** @return array<string, array{artifact_status: string, runtime_status: string}> */
+    private function runtimeInventoryRows(string $inventory): array
+    {
+        preg_match_all(
+            '/^\| `(?<artifact>[^`]+)` \| `(?<artifact_status>[^`]+)` \| `(?<runtime_status>[^`]+)` \| .+ \|$/m',
+            $inventory,
+            $matches,
+            PREG_SET_ORDER,
+        );
+
+        $rows = [];
+
+        foreach ($matches as $match) {
+            $rows[$match['artifact']] = [
+                'artifact_status' => $match['artifact_status'],
+                'runtime_status' => $match['runtime_status'],
+            ];
+        }
+
+        return $rows;
     }
 
     /** @return array<int, string> */

@@ -981,10 +981,35 @@ There is no `updated_at`. The pair
 (`supplier_import_execution_claim_id`, `supplier_sku_hash`) is immutable and
 unique. The table forbids UPDATE and DELETE, uses `RESTRICT` to the claim, and
 contains no raw SKU, EAN, MPN, source row, name, URL, path, credential, price,
-quantity, or XML. The authorization transaction inserts the complete sorted set
-and writes the claim's version, timestamp, count, and fingerprint in one commit.
-An existing partial or mismatching member set is an integrity failure and is
-never repaired from current application rows.
+quantity, or XML. Before Phase III can be authorized, the proposed additive
+claim/source remediation makes the following future procedure normative.
+
+Normative authorization procedure `authorization-member-persistence`
+completeness tuple (ordered):
+
+```text
+cohort_authorization_version
+cohort_authorized_at
+cohort_seed_count
+cohort_seed_fingerprint
+cohort_source_identity
+```
+
+Atomic authorization transaction: authorization members + exact five-field
+tuple + `cohort_source_identity` `NULL -> A`.
+Retry/recovery source authority: persisted `cohort_source_identity` only;
+mutable current SupplierFeed configuration is prohibited.
+
+That future transaction inserts the complete sorted member set and atomically
+commits the exact five-field tuple above. The source binding is the same
+`NULL -> A` transition as authorization completion; authorization complete with
+`cohort_source_identity = NULL` is impossible. Retry and recovery use persisted
+`A` and never reconstruct it from mutable current SupplierFeed URL, type,
+mapping, credentials, or other source configuration. The deployed inactive
+Phase I claim currently has only the historical four fields, so this procedure
+cannot be implemented until the separately approved additive schema/model
+remediation closes `PH3-RDY-002`. An existing partial or mismatching member set
+is an integrity failure and is never repaired from current application rows.
 
 The later implementation is not acceptable without focused tests proving:
 
@@ -1078,8 +1103,10 @@ MySQL/Redis/provider-adapter integration tests proving all of these exact cases:
     expired complete persisted tuple but never the lost raw token;
 35. abandoned-owner recovery racing the live owner or finalization affects zero
     rows unless it proves the exact expired `processing/published` pair;
-36. the capture-start authorization fields and immutable member rows commit
-    before any source work and reconcile by exact count and fingerprint;
+36. the exact canonical five-field capture-start authorization completeness
+    tuple and immutable member rows commit atomically before any source work,
+    bind `cohort_source_identity` through the same `NULL -> A` transition, and
+    reconcile by persisted source identity, exact count, and fingerprint;
 37. application inserts after the consistent snapshot are deferred unless also
     observed in exact source bytes, while later deletes or updates cannot alter
     the current seed;
@@ -3415,6 +3442,16 @@ not approved solutions. Candidate provenance remediation is
 
 The proposed future Problem A schema contract is exact but not implemented:
 
+Canonical proposed future authorization completeness tuple (ordered):
+
+```text
+cohort_authorization_version
+cohort_authorized_at
+cohort_seed_count
+cohort_seed_fingerprint
+cohort_source_identity
+```
+
 - field:
   `supplier_import_execution_claims.cohort_source_identity VARCHAR(128)
   CHARACTER SET ascii COLLATE ascii_bin NULL`;
@@ -3564,14 +3601,34 @@ The collector validates each identity, writes only the canonical
 domain-separated `supplier_sku_hash`, externally sorts and deduplicates the
 hashes, and computes the exact seed count and
 `snapshot_cohort_authorization_v1` fingerprint. It then locks the canonical
-outbox and claim, verifies `queued/published`, inserts the complete immutable
-authorization-member set, and writes the claim's
-`cohort_authorization_version`, `cohort_authorized_at`, `cohort_seed_count`, and
-`cohort_seed_fingerprint` in the same commit. No source work begins before that
-commit. The persisted member count and sorted fingerprint must recompute exactly
-before processing and finalization; a partial or conflicting authorization
-fails closed. The spool is removed in `finally` and is never authoritative after
-commit.
+outbox and claim and verifies `queued/published`.
+
+Normative authorization procedure `capture-start-coordinator`
+completeness tuple (ordered):
+
+```text
+cohort_authorization_version
+cohort_authorized_at
+cohort_seed_count
+cohort_seed_fingerprint
+cohort_source_identity
+```
+
+Atomic authorization transaction: authorization members + exact five-field
+tuple + `cohort_source_identity` `NULL -> A`.
+Retry/recovery source authority: persisted `cohort_source_identity` only;
+mutable current SupplierFeed configuration is prohibited.
+
+The same authorization transaction inserts the complete immutable member set
+and atomically commits that exact five-field tuple. The source identity uses the
+trigger-guarded `NULL -> A` binding in this update; it is never a later write,
+and authorization complete with a null source identity is impossible. No source
+work begins before that commit. The persisted source identity, member count and
+sorted fingerprint must recompute exactly before processing and finalization; a
+partial or conflicting authorization fails closed. Retry/recovery uses the
+persisted `cohort_source_identity` and never reconstructs historical identity
+from mutable current SupplierFeed configuration. The spool is removed in
+`finally` and is never authoritative after commit.
 
 A same-key retry before `processing` reuses the committed authorization-member
 rows and never rereads application membership. It verifies the closed version,
@@ -4279,10 +4336,31 @@ not a second feed request and does not retain raw source data.
    inserts are deferred, and concurrent updates/deletes cannot change this
    transaction's snapshot.
 6. The authorization collector validates, hashes, sorts, and deduplicates the
-   seed. Under outbox-then-claim locks it inserts every immutable authorization
-   member and writes the claim's version, MySQL UTC timestamp, count, and
-   fingerprint in the same commit. No source request is permitted before this
-   commit.
+   seed under outbox-then-claim locks.
+
+Normative authorization procedure `bounded-capture-collector`
+completeness tuple (ordered):
+
+```text
+cohort_authorization_version
+cohort_authorized_at
+cohort_seed_count
+cohort_seed_fingerprint
+cohort_source_identity
+```
+
+Atomic authorization transaction: authorization members + exact five-field
+tuple + `cohort_source_identity` `NULL -> A`.
+Retry/recovery source authority: persisted `cohort_source_identity` only;
+mutable current SupplierFeed configuration is prohibited.
+
+   The same transaction inserts every immutable authorization member and
+   atomically commits that exact five-field tuple, including the trigger-guarded
+   `cohort_source_identity` `NULL -> A` binding. Authorization cannot become
+   complete while source identity is null, and source identity is never written
+   afterward. No source request is permitted before this commit. Retry and
+   recovery use persisted `A`; mutable current SupplierFeed URL, type, mapping,
+   credentials, and other source configuration are never historical authority.
 7. `SsrfProtectionService::downloadToTemporaryFile()` downloads once to its
    restricted system temporary file.
 8. The process opens the mode-0600 file without following links, records its
