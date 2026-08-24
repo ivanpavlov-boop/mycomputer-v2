@@ -1055,9 +1055,11 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
             "'ix_import_dispatch_outbox_state_watchdog_id'",
             $outboxMigration,
         );
-        foreach ([$apcomScope, $onboarding] as $currentStatusDocument) {
-            $this->assertSame([], $this->watchdogStatusViolations($currentStatusDocument));
-        }
+        $watchdogContract = $this->watchdogDocumentationContract(
+            $this->watchdogDocumentation(),
+            $outboxMigration,
+        );
+        $this->assertSame([], $watchdogContract['violations'], implode(PHP_EOL, $watchdogContract['violations']));
 
         $reviewBoundaryStart = strpos($plan, '## Review and rollout boundary');
         $this->assertNotFalse($reviewBoundaryStart);
@@ -1168,19 +1170,155 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
             );
         }
 
-        $apcom = $this->readDocument('docs/APCOM_OPERATIONAL_OFFER_LIFECYCLE_PREVIEW.md');
-        $onboarding = $this->readDocument('docs/SUPPLIER_ONBOARDING_FRAMEWORK.md');
-        $this->assertNotSame(
-            [],
-            $this->watchdogStatusViolations(
-                $apcom.PHP_EOL.'The future outbox includes `delivery_watchdog_at`.',
-            ),
+    }
+
+    public function test_watchdog_current_state_contract_is_structural_exhaustive_and_repository_grounded(): void
+    {
+        $documents = $this->watchdogDocumentation();
+        $migration = $this->readDocument(
+            'database/migrations/2026_08_20_120002_create_supplier_import_dispatch_outbox_table.php',
         );
-        $this->assertNotSame(
-            [],
-            $this->watchdogStatusViolations(
-                $onboarding.PHP_EOL.'The future outbox adds `ix_import_dispatch_outbox_state_watchdog_id`.',
+        $contract = $this->watchdogDocumentationContract($documents, $migration);
+
+        $this->assertSame([], $contract['violations'], implode(PHP_EOL, $contract['violations']));
+        $this->assertSame([
+            'docs/APCOM_OPERATIONAL_OFFER_LIFECYCLE_PREVIEW.md',
+            'docs/IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md',
+            'docs/ROADMAP.md',
+            'docs/SUPPLIER_ONBOARDING_FRAMEWORK.md',
+        ], $contract['relevant_documents']);
+        $this->assertSame([
+            'docs/APCOM_OPERATIONAL_OFFER_LIFECYCLE_PREVIEW.md' => [
+                'classification' => 'CURRENT_SCHEMA_STATUS',
+                'column_occurrences' => 0,
+                'index_occurrences' => 0,
+                'contract' => 'watchdog-current-state-v1',
+            ],
+            'docs/IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md' => [
+                'classification' => 'SCHEMA_DEFINITION_REFERENCE',
+                'column_occurrences' => 40,
+                'index_occurrences' => 4,
+                'contract' => 'watchdog-current-state-v1',
+            ],
+            'docs/ROADMAP.md' => [
+                'classification' => 'SCHEMA_DEFINITION_REFERENCE',
+                'column_occurrences' => 2,
+                'index_occurrences' => 1,
+                'contract' => 'watchdog-current-state-v1',
+            ],
+            'docs/SUPPLIER_ONBOARDING_FRAMEWORK.md' => [
+                'classification' => 'CURRENT_SCHEMA_STATUS',
+                'column_occurrences' => 0,
+                'index_occurrences' => 0,
+                'contract' => 'watchdog-current-state-v1',
+            ],
+        ], $contract['contexts']);
+        $this->assertSame([
+            'schema_table' => 'supplier_import_dispatch_outbox',
+            'column_name' => 'delivery_watchdog_at',
+            'column_state' => 'PRESENT / DEPLOYED',
+            'column_type' => 'TIMESTAMP',
+            'column_precision' => '6',
+            'column_nullable' => 'YES',
+            'index_name' => 'ix_import_dispatch_outbox_state_watchdog_id',
+            'index_state' => 'PRESENT / DEPLOYED',
+            'index_ordered_columns' => 'state,delivery_watchdog_at,id',
+            'runtime_state' => 'INACTIVE / UNWIRED',
+            'future_work' => 'RUNTIME ENABLEMENT ONLY; NO SCHEMA ADDITION',
+        ], $contract['state']);
+
+        $withoutStatus = $documents;
+        $withoutStatus['docs/IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md'] = preg_replace(
+            $this->watchdogStateContractPattern(),
+            '',
+            $withoutStatus['docs/IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md'],
+            1,
+            $removedStatusCount,
+        ) ?? '';
+        $this->assertSame(1, $removedStatusCount);
+
+        $futureColumn = $documents;
+        $futureColumnPath = 'docs/APCOM_OPERATIONAL_OFFER_LIFECYCLE_PREVIEW.md';
+        $futureColumn[$futureColumnPath] = preg_replace(
+            $this->watchdogStateReferencePattern(),
+            '`delivery_watchdog_at` remains a future schema addition.',
+            $futureColumn[$futureColumnPath],
+            1,
+            $replacedColumnStatusCount,
+        ) ?? '';
+        $this->assertSame(1, $replacedColumnStatusCount);
+
+        $futureIndex = $documents;
+        $futureIndexPath = 'docs/SUPPLIER_ONBOARDING_FRAMEWORK.md';
+        $futureIndex[$futureIndexPath] = preg_replace(
+            $this->watchdogStateReferencePattern(),
+            '`ix_import_dispatch_outbox_state_watchdog_id` will be added later.',
+            $futureIndex[$futureIndexPath],
+            1,
+            $replacedIndexStatusCount,
+        ) ?? '';
+        $this->assertSame(1, $replacedIndexStatusCount);
+
+        $mutations = [
+            'W1 required status omitted' => $withoutStatus,
+            'W2 column described as future' => $futureColumn,
+            'W3 index described as future' => $futureIndex,
+            'W4 wrong column state' => $this->replaceWatchdogDocumentation(
+                $documents,
+                'column_state=PRESENT / DEPLOYED',
+                'column_state=MISSING',
             ),
+            'W5 wrong runtime state' => $this->replaceWatchdogDocumentation(
+                $documents,
+                'runtime_state=INACTIVE / UNWIRED',
+                'runtime_state=ACTIVE',
+            ),
+            'W6 reordered index' => $this->replaceWatchdogDocumentation(
+                $documents,
+                'index_ordered_columns=state,delivery_watchdog_at,id',
+                'index_ordered_columns=state,id,delivery_watchdog_at',
+            ),
+            'W7 truncated index' => $this->replaceWatchdogDocumentation(
+                $documents,
+                'index_ordered_columns=state,delivery_watchdog_at,id',
+                'index_ordered_columns=state,delivery_watchdog_at',
+            ),
+            'W8 unclassified new document' => [
+                ...$documents,
+                'docs/UNCLASSIFIED_WATCHDOG_NOTE.md' => 'Unclassified `delivery_watchdog_at` note.',
+            ],
+        ];
+
+        foreach ($mutations as $mutation => $mutatedDocuments) {
+            $violations = $this->watchdogDocumentationContract($mutatedDocuments, $migration)['violations'];
+
+            $this->assertNotSame([], $violations, "Mutation must fail closed: {$mutation}");
+        }
+
+        $markedHistorical = [
+            ...$documents,
+            'docs/WATCHDOG_HISTORY_EXAMPLE.md' => implode(PHP_EOL, [
+                '<!-- watchdog-document-context classification=HISTORICAL column_occurrences=1 index_occurrences=0 contract=watchdog-current-state-v1 -->',
+                'Historical design evidence mentions `delivery_watchdog_at` before Phase I deployment.',
+            ]),
+        ];
+        $this->assertSame(
+            [],
+            $this->watchdogDocumentationContract($markedHistorical, $migration)['violations'],
+            'W9 explicitly marked historical context must remain valid.',
+        );
+
+        $futureRuntime = [
+            ...$documents,
+            'docs/WATCHDOG_RUNTIME_EXAMPLE.md' => implode(PHP_EOL, [
+                '<!-- watchdog-document-context classification=FUTURE_RUNTIME_BEHAVIOR column_occurrences=1 index_occurrences=0 contract=watchdog-current-state-v1 -->',
+                'A separately authorized runtime may populate `delivery_watchdog_at` using the already deployed schema.',
+            ]),
+        ];
+        $this->assertSame(
+            [],
+            $this->watchdogDocumentationContract($futureRuntime, $migration)['violations'],
+            'W10 future runtime behavior over deployed schema must remain valid.',
         );
     }
 
@@ -1361,25 +1499,369 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
         ];
     }
 
-    /** @return array<int, string> */
-    private function watchdogStatusViolations(string $document): array
+    /**
+     * @return array<string, string>
+     */
+    private function watchdogDocumentation(): array
     {
-        $normalized = preg_replace('/\s+/', ' ', $document);
-        if (! is_string($normalized)) {
-            return ['Unable to normalize watchdog status documentation.'];
+        $root = base_path('docs');
+        $documents = [];
+        $iterator = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($root, \FilesystemIterator::SKIP_DOTS),
+        );
+
+        foreach ($iterator as $file) {
+            if (! $file->isFile() || strtolower($file->getExtension()) !== 'md') {
+                continue;
+            }
+
+            $relativePath = 'docs/'.str_replace(
+                '\\',
+                '/',
+                substr($file->getPathname(), strlen($root) + 1),
+            );
+            $contents = file_get_contents($file->getPathname());
+
+            if (is_string($contents)) {
+                $documents[$relativePath] = $contents;
+            }
         }
 
+        ksort($documents);
+
+        return $documents;
+    }
+
+    /**
+     * @param  array<string, string>  $documents
+     * @return array{
+     *     violations: array<int, string>,
+     *     state: array<string, string>,
+     *     contexts: array<string, array{classification: string, column_occurrences: int, index_occurrences: int, contract: string}>,
+     *     relevant_documents: array<int, string>
+     * }
+     */
+    private function watchdogDocumentationContract(array $documents, string $migration): array
+    {
+        $column = 'delivery_watchdog_at';
+        $index = 'ix_import_dispatch_outbox_state_watchdog_id';
+        $contractId = 'watchdog-current-state-v1';
+        $allowedClassifications = [
+            'CURRENT_SCHEMA_STATUS',
+            'HISTORICAL',
+            'FUTURE_RUNTIME_BEHAVIOR',
+            'SCHEMA_DEFINITION_REFERENCE',
+        ];
         $violations = [];
+        $relevantDocuments = [];
+        $contexts = [];
+        $stateContracts = [];
+        $stateReferences = [];
+
+        ksort($documents);
+
+        foreach ($documents as $path => $document) {
+            preg_match_all(
+                $this->watchdogStateContractPattern(),
+                $document,
+                $contractMatches,
+                PREG_SET_ORDER,
+            );
+
+            foreach ($contractMatches as $match) {
+                $stateContracts[] = [
+                    'path' => $path,
+                    'id' => $match['id'],
+                    'body' => $match['body'],
+                ];
+            }
+
+            preg_match_all(
+                $this->watchdogStateReferencePattern(),
+                $document,
+                $referenceMatches,
+                PREG_SET_ORDER,
+            );
+
+            $isRelevant = str_contains($document, $column) || str_contains($document, $index);
+            $residualDocument = preg_replace(
+                [$this->watchdogStateContractPattern(), $this->watchdogStateReferencePattern()],
+                '',
+                $document,
+            );
+            if (! is_string($residualDocument)) {
+                $violations[] = "Unable to classify watchdog occurrences in {$path}.";
+                $residualDocument = $document;
+            }
+            $columnOccurrences = substr_count($residualDocument, $column);
+            $indexOccurrences = substr_count($residualDocument, $index);
+
+            preg_match_all(
+                '/^<!-- watchdog-document-context classification=(?<classification>[A-Z_]+) '.
+                'column_occurrences=(?<column>\d+) index_occurrences=(?<index>\d+) '.
+                'contract=(?<contract>[a-z0-9-]+) -->\r?$/m',
+                $document,
+                $contextMatches,
+                PREG_SET_ORDER,
+            );
+
+            if (! $isRelevant) {
+                if ($contextMatches !== [] || $referenceMatches !== []) {
+                    $violations[] = "Watchdog context marker in {$path} has no watchdog occurrence.";
+                }
+
+                continue;
+            }
+
+            $relevantDocuments[] = $path;
+
+            if (count($contextMatches) !== 1) {
+                $violations[] = "{$path} must contain exactly one watchdog document context marker.";
+
+                continue;
+            }
+
+            $context = $contextMatches[0];
+            $classification = $context['classification'];
+            $reportedColumnOccurrences = (int) $context['column'];
+            $reportedIndexOccurrences = (int) $context['index'];
+            $reportedContract = $context['contract'];
+
+            $contexts[$path] = [
+                'classification' => $classification,
+                'column_occurrences' => $reportedColumnOccurrences,
+                'index_occurrences' => $reportedIndexOccurrences,
+                'contract' => $reportedContract,
+            ];
+
+            if (! in_array($classification, $allowedClassifications, true)) {
+                $violations[] = "{$path} has an unsupported watchdog context classification.";
+            }
+            if ($reportedContract !== $contractId) {
+                $violations[] = "{$path} does not bind its occurrences to {$contractId}.";
+            }
+            if ($reportedColumnOccurrences !== $columnOccurrences) {
+                $violations[] = "{$path} has an unclassified {$column} occurrence.";
+            }
+            if ($reportedIndexOccurrences !== $indexOccurrences) {
+                $violations[] = "{$path} has an unclassified {$index} occurrence.";
+            }
+
+            if ($classification === 'CURRENT_SCHEMA_STATUS') {
+                if (count($referenceMatches) !== 1) {
+                    $violations[] = "{$path} must contain exactly one structural current-state reference.";
+                } else {
+                    $stateReferences[$path] = [
+                        'contract' => $referenceMatches[0]['contract'],
+                        'body' => $referenceMatches[0]['body'],
+                    ];
+                }
+            } elseif ($referenceMatches !== []) {
+                $violations[] = "{$path} may not contain a current-state reference in {$classification} context.";
+            }
+
+            foreach ($this->watchdogSecondaryLintViolations($document) as $violation) {
+                $violations[] = "{$path}: {$violation}";
+            }
+        }
+
+        sort($relevantDocuments);
+        ksort($contexts);
+
+        $state = [];
+        if (count($stateContracts) !== 1) {
+            $violations[] = 'Exactly one authoritative watchdog current-state contract is required.';
+        } else {
+            $stateContract = $stateContracts[0];
+            if ($stateContract['path'] !== 'docs/IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md') {
+                $violations[] = 'The watchdog current-state contract must remain in the persistence design.';
+            }
+            if ($stateContract['id'] !== $contractId) {
+                $violations[] = "The authoritative watchdog contract ID must be {$contractId}.";
+            }
+
+            foreach (preg_split('/\R/', $stateContract['body']) ?: [] as $line) {
+                if (preg_match('/^(?<key>[a-z_]+)=(?<value>.+)$/', trim($line), $field) !== 1) {
+                    $violations[] = 'The watchdog current-state contract contains an invalid field.';
+
+                    continue;
+                }
+
+                if (array_key_exists($field['key'], $state)) {
+                    $violations[] = "Duplicate watchdog current-state field {$field['key']}.";
+
+                    continue;
+                }
+
+                $state[$field['key']] = $field['value'];
+            }
+        }
+
+        $migrationState = $this->watchdogMigrationState($migration);
+        $expectedState = [
+            'schema_table' => $migrationState['schema_table'] ?? '',
+            'column_name' => $migrationState['column_name'] ?? '',
+            'column_state' => 'PRESENT / DEPLOYED',
+            'column_type' => $migrationState['column_type'] ?? '',
+            'column_precision' => $migrationState['column_precision'] ?? '',
+            'column_nullable' => $migrationState['column_nullable'] ?? '',
+            'index_name' => $migrationState['index_name'] ?? '',
+            'index_state' => 'PRESENT / DEPLOYED',
+            'index_ordered_columns' => $migrationState['index_ordered_columns'] ?? '',
+            'runtime_state' => 'INACTIVE / UNWIRED',
+            'future_work' => 'RUNTIME ENABLEMENT ONLY; NO SCHEMA ADDITION',
+        ];
+
+        if (count($migrationState) !== 7) {
+            $violations[] = 'Unable to derive the complete watchdog schema from the deployed migration.';
+        }
+        if ($state !== $expectedState) {
+            $violations[] = 'The watchdog current-state declaration does not match repository schema and lifecycle truth.';
+        }
+
+        $expectedReference = [
+            'classification' => 'CURRENT_SCHEMA_STATUS',
+            'column_name' => $expectedState['column_name'],
+            'column_state' => $expectedState['column_state'],
+            'index_name' => $expectedState['index_name'],
+            'index_state' => $expectedState['index_state'],
+            'index_ordered_columns' => $expectedState['index_ordered_columns'],
+            'runtime_state' => $expectedState['runtime_state'],
+            'future_work' => $expectedState['future_work'],
+        ];
+
+        foreach ($stateReferences as $path => $reference) {
+            if ($reference['contract'] !== $contractId) {
+                $violations[] = "{$path} current-state reference has the wrong contract ID.";
+            }
+
+            $referenceState = [];
+            foreach (preg_split('/\R/', $reference['body']) ?: [] as $line) {
+                if (preg_match('/^(?<key>[a-z_]+)=(?<value>.+)$/', trim($line), $field) !== 1) {
+                    $violations[] = "{$path} current-state reference contains an invalid field.";
+
+                    continue;
+                }
+
+                if (array_key_exists($field['key'], $referenceState)) {
+                    $violations[] = "{$path} duplicates current-state field {$field['key']}.";
+
+                    continue;
+                }
+
+                $referenceState[$field['key']] = $field['value'];
+            }
+
+            if ($referenceState !== $expectedReference) {
+                $violations[] = "{$path} current-state reference does not match {$contractId}.";
+            }
+        }
+
+        foreach ([
+            'docs/APCOM_OPERATIONAL_OFFER_LIFECYCLE_PREVIEW.md',
+            'docs/SUPPLIER_ONBOARDING_FRAMEWORK.md',
+        ] as $requiredCurrentDocument) {
+            if (($contexts[$requiredCurrentDocument]['classification'] ?? null) !== 'CURRENT_SCHEMA_STATUS') {
+                $violations[] = "{$requiredCurrentDocument} must declare CURRENT_SCHEMA_STATUS.";
+            }
+        }
+
+        return [
+            'violations' => array_values(array_unique($violations)),
+            'state' => $state,
+            'contexts' => $contexts,
+            'relevant_documents' => $relevantDocuments,
+        ];
+    }
+
+    private function watchdogStateContractPattern(): string
+    {
+        return '/^<!-- watchdog-current-state-contract:start id=(?<id>[a-z0-9-]+) -->\R'.
+            '```text\R(?<body>.*?)\R```\R'.
+            '<!-- watchdog-current-state-contract:end id=\k<id> -->\R?/ms';
+    }
+
+    private function watchdogStateReferencePattern(): string
+    {
+        return '/^<!-- watchdog-current-state-reference:start contract=(?<contract>[a-z0-9-]+) -->\R'.
+            '```text\R(?<body>.*?)\R```\R'.
+            '<!-- watchdog-current-state-reference:end contract=\k<contract> -->\R?/ms';
+    }
+
+    /** @return array<string, string> */
+    private function watchdogMigrationState(string $migration): array
+    {
+        $state = [];
+
+        if (preg_match(
+            '/Schema::create\(\'(?<table>supplier_import_dispatch_outbox)\'/',
+            $migration,
+            $table,
+        ) === 1) {
+            $state['schema_table'] = $table['table'];
+        }
+
+        if (preg_match(
+            '/\$table->(?<type>timestamp)\(\'(?<column>delivery_watchdog_at)\',\s*'.
+            '(?<precision>\d+)\)(?<nullable>->nullable\(\))?;/',
+            $migration,
+            $column,
+        ) === 1) {
+            $state['column_name'] = $column['column'];
+            $state['column_type'] = strtoupper($column['type']);
+            $state['column_precision'] = $column['precision'];
+            $state['column_nullable'] = ($column['nullable'] ?? '') === '->nullable()' ? 'YES' : 'NO';
+        }
+
+        if (preg_match(
+            '/\$table->index\(\s*\[(?<columns>[^\]]+)\],\s*'.
+            '\'(?<name>ix_import_dispatch_outbox_state_watchdog_id)\',?\s*\);/s',
+            $migration,
+            $index,
+        ) === 1) {
+            preg_match_all('/\'(?<column>[a-z_]+)\'/', $index['columns'], $columns);
+            $state['index_name'] = $index['name'];
+            $state['index_ordered_columns'] = implode(',', $columns['column'] ?? []);
+        }
+
+        return $state;
+    }
+
+    /** @return array<int, string> */
+    private function watchdogSecondaryLintViolations(string $document): array
+    {
+        $violations = [];
+
         foreach (['delivery_watchdog_at', 'ix_import_dispatch_outbox_state_watchdog_id'] as $artifact) {
-            if (preg_match(
-                '/(?:future\s+outbox|future\s+(?:addition|column|index)|not\s+present|not\s+created|must\s+be\s+added)[^.]{0,240}`?'.preg_quote($artifact, '/').'`?/i',
-                $normalized,
-            ) === 1) {
-                $violations[] = "Deployed watchdog artifact {$artifact} is described as future or absent.";
+            $quotedArtifact = '`?'.preg_quote($artifact, '/').'`?';
+            foreach ([
+                '/'.$quotedArtifact.'[^.\r\n]{0,120}\b(?:remains?|is)\s+(?:a\s+)?future\s+'.
+                    '(?:schema\s+)?(?:addition|column|index)\b/i',
+                '/'.$quotedArtifact.'[^.\r\n]{0,120}\bwill\s+be\s+(?:added|created)\s+later\b/i',
+            ] as $pattern) {
+                if (preg_match($pattern, $document) === 1) {
+                    $violations[] = "Deployed watchdog artifact {$artifact} is described as future schema.";
+                }
             }
         }
 
         return $violations;
+    }
+
+    /**
+     * @param  array<string, string>  $documents
+     * @return array<string, string>
+     */
+    private function replaceWatchdogDocumentation(array $documents, string $search, string $replacement): array
+    {
+        $path = 'docs/IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md';
+        $this->assertArrayHasKey($path, $documents);
+        $replacementCount = substr_count($documents[$path], $search);
+
+        $this->assertSame(1, $replacementCount, "Expected one watchdog mutation target for {$search}.");
+        $documents[$path] = str_replace($search, $replacement, $documents[$path]);
+
+        return $documents;
     }
 
     private function registerAuthorizationProcedure(string $design, string $procedureId): string

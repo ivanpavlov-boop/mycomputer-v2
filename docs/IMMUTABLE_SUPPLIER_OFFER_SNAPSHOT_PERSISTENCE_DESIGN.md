@@ -1,5 +1,7 @@
 # Immutable Supplier Offer Snapshot Persistence Design
 
+<!-- watchdog-document-context classification=SCHEMA_DEFINITION_REFERENCE column_occurrences=40 index_occurrences=4 contract=watchdog-current-state-v1 -->
+
 ## Status And Scope
 
 Phase 9C.6.5C.3D.1-PRE.A began as a documentation-only prerequisite. Phase I's
@@ -1337,6 +1339,22 @@ ImportJob, duplicate binding, parent closeout, zero-qualified-evidence and
 legacy/orchestrated idempotency assertions.
 
 ### Dispatch-outbox data dictionary
+
+<!-- watchdog-current-state-contract:start id=watchdog-current-state-v1 -->
+```text
+schema_table=supplier_import_dispatch_outbox
+column_name=delivery_watchdog_at
+column_state=PRESENT / DEPLOYED
+column_type=TIMESTAMP
+column_precision=6
+column_nullable=YES
+index_name=ix_import_dispatch_outbox_state_watchdog_id
+index_state=PRESENT / DEPLOYED
+index_ordered_columns=state,delivery_watchdog_at,id
+runtime_state=INACTIVE / UNWIRED
+future_work=RUNTIME ENABLEMENT ONLY; NO SCHEMA ADDITION
+```
+<!-- watchdog-current-state-contract:end id=watchdog-current-state-v1 -->
 
 Deployed inactive coordination table: `supplier_import_dispatch_outbox`.
 It is mutable only through owner-checked publishing/recovery transitions. It is

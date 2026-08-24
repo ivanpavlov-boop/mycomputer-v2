@@ -1,5 +1,7 @@
 # Roadmap
 
+<!-- watchdog-document-context classification=SCHEMA_DEFINITION_REFERENCE column_occurrences=2 index_occurrences=1 contract=watchdog-current-state-v1 -->
+
 ## Purpose
 
 Track current phase status and planned Catalog Sync work.

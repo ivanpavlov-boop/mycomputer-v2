@@ -1,5 +1,7 @@
 # Supplier Onboarding Framework
 
+<!-- watchdog-document-context classification=CURRENT_SCHEMA_STATUS column_occurrences=0 index_occurrences=0 contract=watchdog-current-state-v1 -->
+
 ## Status
 
 Phase 9C.6.5A is complete and merged. It defines reusable data contracts and
@@ -421,12 +423,23 @@ evidence. Exact ownership/outbox checks, transactional cross-record rules and
 the canonical 66-row by 11-column SupplierImportRun/ImportJob/ImportHistory plus
 monitor/alert/observer crash matrix closes every terminal path without replay and explicitly
 separates action-stopped republication from newly authorized terminalization.
-The deployed, inactive Phase I outbox schema already contains
-`delivery_watchdog_at` and the exact
-`ix_import_dispatch_outbox_state_watchdog_id(state, delivery_watchdog_at, id)`.
-That schema capability does not activate the later watchdog runtime. When the
-runtime is separately implemented and enabled, it sets the field from MySQL UTC
-plus exactly 4,320 seconds after acknowledged publication.
+
+<!-- watchdog-current-state-reference:start contract=watchdog-current-state-v1 -->
+```text
+classification=CURRENT_SCHEMA_STATUS
+column_name=delivery_watchdog_at
+column_state=PRESENT / DEPLOYED
+index_name=ix_import_dispatch_outbox_state_watchdog_id
+index_state=PRESENT / DEPLOYED
+index_ordered_columns=state,delivery_watchdog_at,id
+runtime_state=INACTIVE / UNWIRED
+future_work=RUNTIME ENABLEMENT ONLY; NO SCHEMA ADDITION
+```
+<!-- watchdog-current-state-reference:end contract=watchdog-current-state-v1 -->
+
+These deployed schema artifacts do not activate the later watchdog runtime.
+When the runtime is separately implemented and enabled, it sets the field from
+MySQL UTC plus exactly 4,320 seconds after acknowledged publication.
 The marker is non-null only for exact `queued/published` and is cleared on every
 departure. Delivery admission, lock contention, release, duplicate delivery
 and `failed()` never refresh it. A due null-owner row proves only no durable
