@@ -697,6 +697,7 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
             'Existing application candidate rows do not carry immutable source provenance',
             $readiness,
         );
+        $this->assertStringContainsString('Three independent blockers remain', $readiness);
 
         $sourceScope = $this->markdownSection(
             $design,
@@ -785,16 +786,55 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
             'trg_import_execution_claim_cohort_source_immutable',
             '`NULL -> A` is allowed only',
             '`A -> B`, `A -> NULL`',
-            'uq_import_execution_claim_id_cohort_source(id, cohort_source_identity)',
-            'ix_snapshot_generation_claim_source(supplier_import_execution_claim_id,',
-            'fk_snapshot_generation_claim_source',
-            '`ON UPDATE RESTRICT` and `ON DELETE RESTRICT`',
             'current mutable SupplierFeed URL/type/mapping/configuration',
             'is not safe and must fail migration/readiness',
             'canonical serializer/fingerprint revision is currently **NOT REQUIRED**',
         ] as $bindingContract) {
             $this->assertStringContainsString($bindingContract, $sourceBinding);
         }
+
+        preg_match(
+            '/- parent unique key:\s+`(?<table>[a-z_]+)` must define exactly\s+`(?<name>[a-z_]+)\((?<columns>[^)`]+)\)`;/m',
+            $sourceBinding,
+            $parentUnique,
+        );
+        $this->assertSame('supplier_import_execution_claims', $parentUnique['table'] ?? null);
+        $this->assertSame('uq_import_execution_claim_id_cohort_source', $parentUnique['name'] ?? null);
+        $this->assertSame(
+            ['id', 'cohort_source_identity'],
+            $this->commaSeparatedColumns($parentUnique['columns'] ?? ''),
+        );
+
+        preg_match(
+            '/- child composite index:\s+`(?<table>[a-z_]+)` must define exactly\s+`(?<name>[a-z_]+)\((?<columns>[^)`]+)\)` in that column order;/m',
+            $sourceBinding,
+            $childIndex,
+        );
+        $this->assertSame('supplier_offer_snapshot_generations', $childIndex['table'] ?? null);
+        $this->assertSame('ix_snapshot_generation_claim_source', $childIndex['name'] ?? null);
+        $this->assertSame(
+            ['supplier_import_execution_claim_id', 'source_identity'],
+            $this->commaSeparatedColumns($childIndex['columns'] ?? ''),
+        );
+
+        preg_match(
+            '/- composite FK:\s+`(?<name>[a-z_]+)` binds child\s+`(?<child_table>[a-z_]+)\((?<child_columns>[^)`]+)\)` to parent\s+`(?<parent_table>[a-z_]+)\((?<parent_columns>[^)`]+)\)`, with\s+`(?<update_action>ON UPDATE [A-Z]+)` and `(?<delete_action>ON DELETE [A-Z]+)`;/m',
+            $sourceBinding,
+            $compositeForeignKey,
+        );
+        $this->assertSame('fk_snapshot_generation_claim_source', $compositeForeignKey['name'] ?? null);
+        $this->assertSame('supplier_offer_snapshot_generations', $compositeForeignKey['child_table'] ?? null);
+        $this->assertSame(
+            ['supplier_import_execution_claim_id', 'source_identity'],
+            $this->commaSeparatedColumns($compositeForeignKey['child_columns'] ?? ''),
+        );
+        $this->assertSame('supplier_import_execution_claims', $compositeForeignKey['parent_table'] ?? null);
+        $this->assertSame(
+            ['id', 'cohort_source_identity'],
+            $this->commaSeparatedColumns($compositeForeignKey['parent_columns'] ?? ''),
+        );
+        $this->assertSame('ON UPDATE RESTRICT', $compositeForeignKey['update_action'] ?? null);
+        $this->assertSame('ON DELETE RESTRICT', $compositeForeignKey['delete_action'] ?? null);
 
         $supplierFeedModel = $this->readDocument('app/Models/SupplierFeed.php');
         $supplierProductModel = $this->readDocument('app/Models/SupplierProduct.php');
@@ -814,12 +854,25 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
         $this->assertStringNotContainsString("'source_identity'", $supplierProductModel);
         $this->assertStringContainsString("'supplier_product_id'", $productSupplierOfferModel);
         $this->assertStringNotContainsString("'source_identity'", $productSupplierOfferModel);
+        $this->assertStringContainsString("Schema::create('supplier_import_execution_claims'", $claimMigration);
         $this->assertStringNotContainsString("'cohort_source_identity'", $claimMigration);
+        $this->assertStringContainsString("Schema::create('supplier_offer_snapshot_generations'", $generationMigration);
+        $this->assertStringContainsString(
+            "unsignedBigInteger('supplier_import_execution_claim_id')",
+            $generationMigration,
+        );
         $this->assertStringContainsString("string('source_identity', 128)", $generationMigration);
         $this->assertStringContainsString(
             "_ascii'^snapshot-source-v1:[a-z0-9]+([._-][a-z0-9]+)*(:[a-z0-9]+([._-][a-z0-9]+)*)*$'",
             $generationMigration,
         );
+        foreach ([
+            'uq_import_execution_claim_id_cohort_source',
+            'ix_snapshot_generation_claim_source',
+            'fk_snapshot_generation_claim_source',
+        ] as $futureSchemaName) {
+            $this->assertStringNotContainsString($futureSchemaName, $claimMigration.$generationMigration);
+        }
 
         $limits = $this->markdownSection(
             $design,
@@ -892,6 +945,22 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
             $phasesInProgress,
         );
 
+        $reviewBoundaryStart = strpos($plan, '## Review and rollout boundary');
+        $this->assertNotFalse($reviewBoundaryStart);
+        $reviewBoundary = substr($plan, $reviewBoundaryStart);
+        $this->assertIsString($reviewBoundary);
+
+        foreach ([$readiness, $reviewBoundary] as $currentReadinessSection) {
+            $this->assertMatchesRegularExpression(
+                '/\bthree\s+independent\s+blockers\b/i',
+                $currentReadinessSection,
+            );
+            $this->assertDoesNotMatchRegularExpression(
+                '/\b(?:two|both|either)\s+(?:(?:remaining|unresolved)\s+)?blockers?\b/i',
+                $currentReadinessSection,
+            );
+        }
+
         foreach ([$phasesInProgress, $roadmap, $onboarding] as $currentStatus) {
             $this->assertStringContainsString('`PH3-RDY-001`', $currentStatus);
             $this->assertStringContainsString('`PH3-RDY-002`', $currentStatus);
@@ -902,6 +971,15 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
                 $currentStatus,
             );
         }
+    }
+
+    /** @return array<int, string> */
+    private function commaSeparatedColumns(string $columns): array
+    {
+        return array_map(
+            static fn (string $column): string => trim($column),
+            explode(',', $columns),
+        );
     }
 
     private function readDocument(string $path): string

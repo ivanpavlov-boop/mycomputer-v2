@@ -1228,5 +1228,7 @@ separate operational authorization.
 
 The first safe next action is a fresh independent read-only review of the Phase
 III readiness-remediation documentation. That review may authorize only the
-separate source-binding and importer-bound design work. It cannot authorize
-Phase III implementation while either blocker remains open.
+separate design work for immutable candidate-row source provenance, durable
+authorization source binding, and approved production operational bounds. It
+cannot authorize Phase III implementation while any of the three independent
+blockers remains open.

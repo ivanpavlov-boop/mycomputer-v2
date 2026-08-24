@@ -3221,8 +3221,10 @@ Enrollment is privacy-safe, monotonic, and source-scoped.
 
 This section is the authoritative Phase III readiness-remediation contract. It
 clarifies candidate-row selection without changing any Phase II canonical byte
-contract. It also records two blockers that cannot be closed in documentation
-without a separately approved schema/contract design or importer-bound design.
+contract. Three independent blockers remain and cannot be closed in
+documentation: immutable candidate-row source provenance, durable authorization
+source binding, and approved operational bounds. Each requires separately
+approved design work before Phase III implementation can be authorized.
 
 | Finding | Verdict | Exact boundary |
 | --- | --- | --- |
