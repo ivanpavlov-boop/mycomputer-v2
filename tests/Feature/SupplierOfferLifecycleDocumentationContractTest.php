@@ -447,7 +447,7 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
             ],
             (static function (string $contents): array {
                 preg_match(
-                    '/## Canonical Proposed Table Inventory(?<inventory>.*?)## Exact Index And Foreign-key Contract/s',
+                    '/## Canonical Ten-Table Inventory(?<inventory>.*?)## Exact Index And Foreign-key Contract/s',
                     $contents,
                     $matches,
                 );
@@ -667,6 +667,81 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
 
             $this->assertIsString($contents);
             $this->assertMatchesRegularExpression('/103(?: fine-grained)? checkpoints/', $contents);
+        }
+    }
+
+    public function test_phase_three_readiness_remediation_is_explicit_and_fail_closed(): void
+    {
+        $design = file_get_contents(base_path('docs/IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md'));
+        $plan = file_get_contents(base_path('docs/PHASE_9C6_5C3D1_RUNTIME_IMPLEMENTATION_PLAN.md'));
+
+        $this->assertIsString($design);
+        $this->assertIsString($plan);
+
+        foreach ([
+            '| `PH3-RDY-001` | `CLOSED` |',
+            '| `PH3-RDY-002` | `BLOCKED` |',
+            '| `PH3-RDY-003` | `BLOCKED` |',
+            '| `PH3-RDY-004` | `CLOSED` |',
+            '(supplier_id, supplier_feed_id, source_identity)',
+            'matching supplier with `supplier_feed_id IS NULL` | `FAIL CLOSED`',
+            'non-null `supplier_feed_id` differs | `EXCLUDE`',
+            '`product_supplier_offers` contains neither `supplier_feed_id` nor',
+            '`supplier_id` or equal SKU text alone is never enough',
+            'matching supplier with null/missing `supplier_product_id` | `FAIL CLOSED`',
+            'sort lowercase ASCII hashes by unsigned byte order',
+            'different validated canonical SKU bytes producing',
+            'An empty sorted distinct seed is valid',
+            'supplier_import_execution_claims.cohort_source_identity',
+            'uq_import_execution_claim_id_cohort_source',
+            'current mutable feed configuration is never a backfill source',
+            '| `max_source_rows` | `NOT SPECIFIED` |',
+            '| `max_spool_rows` | `NOT SPECIFIED` |',
+            '| `max_spool_bytes` | `NOT SPECIFIED` |',
+            '| `max_enrollments` | `NOT SPECIFIED` |',
+            '| `max_observations` | `NOT SPECIFIED` |',
+            '| `max_canonical_children` | `NOT SPECIFIED` |',
+            '| external-sort chunk | `NOT SPECIFIED` |',
+            '| immutable DB insert batch | `NOT SPECIFIED` |',
+            '| snapshot transaction bound | `NOT SPECIFIED` |',
+            'frozen `capture_outcome=overflow` header with `capture_overflow`',
+            'Overflow is not retryable under unchanged bounds',
+            'Phase III implementation remains prohibited',
+        ] as $contract) {
+            $this->assertStringContainsString($contract, $design);
+        }
+
+        foreach ([
+            'Phase I canonical schema: implemented, merged through PR #212',
+            'Phase II guarded models and canonical byte contracts: implemented, merged',
+            'Phase III snapshot persistence/cohort authorization: readiness remediation',
+            'Phase III remains blocked by `PH3-RDY-002` and `PH3-RDY-003`',
+        ] as $status) {
+            $this->assertStringContainsString($status, $plan);
+        }
+
+        foreach ([
+            '31d1cf23a2fceac08d71c0103b3093af392f916921ef2221d860a7ecf9f7a62c',
+            '1773b68dacaae6c50b2305aec164b7135d0c43da06a69dd3ef676176e785aba3',
+            'fe9b7b9d6ba91912606d8498c6faa4968b8315df6e5646144586f461ac1d54f8',
+            '2342382283afc7bf368d49b0d3c561c03d4b1542a1ef84e1ad3f1757f9fed1a4',
+        ] as $frozenHash) {
+            $this->assertStringContainsString($frozenHash, $design);
+        }
+
+        foreach ([
+            'docs/PHASES.md',
+            'docs/ROADMAP.md',
+            'docs/SUPPLIER_ONBOARDING_FRAMEWORK.md',
+            'docs/APCOM_OPERATIONAL_OFFER_LIFECYCLE_PREVIEW.md',
+        ] as $document) {
+            $contents = file_get_contents(base_path($document));
+
+            $this->assertIsString($contents);
+            $this->assertStringContainsString('Phase I', $contents);
+            $this->assertStringContainsString('Phase II', $contents);
+            $this->assertStringContainsString('Phase III', $contents);
+            $this->assertStringContainsString('unimplemented', $contents);
         }
     }
 }

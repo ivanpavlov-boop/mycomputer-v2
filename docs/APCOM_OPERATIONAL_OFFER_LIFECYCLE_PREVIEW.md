@@ -16,9 +16,9 @@ separately gated. The current database has no immutable per-generation
 offer-observation history, and mutable staging, aggregate import reports and
 logs cannot be reconstructed as qualified history.
 
-The documentation-only persistence prerequisite is defined in
+The canonical persistence prerequisite is defined in
 [Immutable Supplier Offer Snapshot Persistence Design](IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md).
-Its remediated local architecture uses a durable capture-start authorization
+Its architecture uses a durable capture-start authorization
 header plus immutable hashed seed members, immutable generation headers,
 first-enrollment cohort rows and exhaustive physical presence/absence
 observations. A separate stable parent-execution claim makes both importer job
@@ -142,8 +142,11 @@ recovery repository, command, parser change, capture implementation,
 historical backfill or evidence producer exists yet. C3D.1 remains blocked until the fine-grained
 checkpoints below and future qualified warm-up complete. Supplier #3 remains
 unselected and unstarted.
-The persistence prerequisite remains local, unapproved, unimplemented and
-undeployed. No evidence candidate exists and no operational preview is
+Phase I's schema and Phase II's guarded models/canonical byte contracts are
+implemented, merged, CI-verified, deployed to staging and inactive. Phase III
+snapshot persistence remains unimplemented and not implementation-authorized;
+immutable source binding and approved operational bounds remain explicit
+readiness blockers. No evidence candidate exists and no operational preview is
 authorized.
 
 ## Immutable Persistence Rollout Checkpoints

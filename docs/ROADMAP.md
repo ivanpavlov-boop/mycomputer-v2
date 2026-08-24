@@ -260,9 +260,13 @@ disabled. `CART-025` remains open.
 10. **APCOM Authoritative Human Decision Evidence and Profile Approval Gate -
    documentation decisions complete.** V4 is the semantic authority, while
    implementation approval remains closed.
-11. **Immutable supplier-offer snapshot persistence prerequisite - queued
-    payload and terminal-recovery findings remediated locally.**
-    The complete-branch follow-up design has
+11. **Immutable supplier-offer snapshot persistence prerequisite - Phase I and
+    Phase II deployed inactive; Phase III readiness remediation blocked.**
+    Phase I's canonical schema was merged through PR #212, CI-verified and
+    deployed to staging. Phase II's guarded models and canonical byte contracts
+    were merged through PR #213, CI-verified and deployed to staging. Neither
+    layer has activated capture or importer integration. The complete-branch
+    design has
     transactional `supplier_import_dispatch_outbox` and a stable claim shared
     by both XML paths; pair-null orchestrated dispatch followed by owner-checked
     atomic feed/ImportJob allocation; early pair-bound legacy authorization
@@ -340,21 +344,23 @@ disabled. `CART-025` remains open.
     checkpoints with all five PR chains separating candidate/implementation,
     validation, independent review, remediation/fresh PASS, push authorization, push, remote-SHA
     verification, Draft PR creation, PR base/head verification, CI and review,
-    merge, disabled deployment and monitor/sink/observer enablement gates. No runtime
-    outbox/claim/recovery-authorization table,
-    migration, queue setting, worker, command, parser change, capture hook, producer,
-    historical backfill or operational evidence exists. C3D.1 remains blocked
-    until a fresh independent aggregate review of the complete branch approves the design and later
+    merge, disabled deployment and monitor/sink/observer enablement gates. The
+    Phase I tables/migrations and Phase II models/contracts now exist but remain
+    inactive. No runtime queue setting, worker, command, parser change, capture
+    repository/hook, producer, historical backfill or operational evidence
+    exists. Phase III is unimplemented and not authorized: `PH3-RDY-001` and
+    `PH3-RDY-004` are closed in the design, while `PH3-RDY-002` requires a
+    separately approved immutable claim/source binding and `PH3-RDY-003`
+    requires approved importer/source maxima and derived operational bounds.
+    C3D.1 remains blocked until those prerequisites and later
     checkpoints collect one future baseline plus three qualified comparable
     snapshots in an unchanged cohort epoch over at least 48 hours from absence
     1. See
     `docs/IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md`.
     The underlying read-only C3D tooling was already merged and deployed at
-    `c22fc9a8dddf3c6778ab0b88e5a50cbc02fe3f21`; the persistence design itself is
-    local, documentation-only, unapproved and undeployed. The planned dedicated
-    worker adds no automatic schedule. No evidence candidate exists, no
-    operational preview is authorized, and Supplier #3 remains unselected and
-    unstarted.
+    `c22fc9a8dddf3c6778ab0b88e5a50cbc02fe3f21`. The planned dedicated worker adds
+    no automatic schedule. No evidence candidate exists, no operational preview
+    is authorized, and Supplier #3 remains unselected and unstarted.
 12. Select Supplier #3 only after a reviewed readiness matrix and explicit human
    decision; ASBIS remains Supplier #2.
 13. Supplier #3 preview-only integration.

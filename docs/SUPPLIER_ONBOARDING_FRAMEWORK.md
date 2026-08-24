@@ -454,7 +454,7 @@ pre-state fingerprint, 900-second expiry and 32-byte single-display stdin nonce.
 The pre-state contract is exclusively `expected_state_fingerprint_v2`: exactly
 20 ordered fields including `claimed_at`, one exact domain/NUL framing and a
 synthetic reproducible vector. It is distinct from the 16-field post-start
-resume fingerprint. The complete design inventory contains ten proposed tables
+resume fingerprint. The complete design inventory contains ten canonical tables
 and 22 cryptographic/digest identities, including the generation-bound physical
 publication-attempt token hash.
 The five actions cover same-key publication, complete-expired-queued-owner
@@ -501,14 +501,20 @@ three-column child FK index and deterministic
 qualification.
 The dedicated import worker adds no import or automatic-recovery schedule; the
 only planned automatic cadence is the watchdog monitor and independent health
-observer, both restricted from supplier/catalog domain mutation. This design
-does not add a runtime outbox/claim/recovery-authorization table, migration,
-watchdog monitor, recovery repository, command, streaming parser change,
+observer, both restricted from supplier/catalog domain mutation. This readiness
+remediation does not modify or activate the deployed
+outbox/claim/recovery-authorization tables or migrations and does not add a
+runtime watchdog monitor, recovery repository, command, streaming parser change,
 capture implementation, producer, import approval, lifecycle action or Catalog
 Sync behavior.
-The persistence prerequisite remains local, unapproved, unimplemented and
-undeployed. No evidence candidate exists and no operational preview is
-authorized.
+Phase I's canonical schema is implemented, merged through PR #212, CI-verified,
+deployed to staging and inactive. Phase II's guarded models and canonical byte
+contracts are implemented, merged through PR #213, CI-verified, deployed to
+staging and uncalled. Phase III persistence remains unimplemented and is not
+implementation-authorized: `PH3-RDY-001` and `PH3-RDY-004` are documented as
+closed, while immutable source binding (`PH3-RDY-002`) and approved operational
+bounds (`PH3-RDY-003`) remain blocked. No evidence candidate exists and no
+operational preview is authorized.
 
 Operational rollback is forward-only after deployment or protected-state use:
 it disables gates/workers but preserves all schema, monitor/alert state and
@@ -518,13 +524,14 @@ empty except for the exact pristine monitor singleton; any evidence, partial
 schema or unknown count fails closed before DDL.
 
 The first complete generation in each source/cohort epoch is a comparison
-baseline only. One consistent MySQL snapshot authorizes prior enrollments and
-applicable application identities before source work; the exact downloaded
-source may add validated source-only identities, and finalization does not
-reread mutable membership. An authorized expansion makes its complete
-enrollment/observation generation that new baseline; only a deterministic
-authorization mismatch emits `capture_cohort_changed`, freezes, and requires
-operator investigation.
+baseline only. One consistent MySQL snapshot authorizes prior enrollments for
+the exact immutable source scope and only identities selected by the canonical
+`supplier_products` and `product_supplier_offers` matrices before source work;
+the exact downloaded source may add validated source-only identities, and
+finalization does not reread mutable membership. An authorized expansion makes
+its complete enrollment/observation generation that new baseline; only a
+deterministic authorization mismatch emits `capture_cohort_changed`, freezes,
+and requires operator investigation.
 Because the current V1 lifecycle contract requires `comparable=true`, the
 unchanged V4 threshold is met only by three later qualified comparable absences
 spanning at least 48 hours from the first of those three. Any gap or overlap
