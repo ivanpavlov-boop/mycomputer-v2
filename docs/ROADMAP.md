@@ -331,7 +331,7 @@ disabled. `CART-025` remains open.
     abandoned-owner new-lock/expired-tuple APIs; exact `ascii`/`ascii_bin`
     hexadecimal checks; immutable consistent-snapshot capture-start cohort
     authorization fields and hashed members before source work; immutable
-    enrollment and physical observations; exact-source-only authorized
+    enrollment and physical observations; immutably proven exact-source-only
     enrollment-generation baselines with deterministic authorization drift
     frozen; no mutable membership reread; deterministic V4 gaps; bounded streaming;
     retained one-job uniqueness, nullable unique one-claim-per-orchestrated-run,
@@ -348,10 +348,12 @@ disabled. `CART-025` remains open.
     Phase I tables/migrations and Phase II models/contracts now exist but remain
     inactive. No runtime queue setting, worker, command, parser change, capture
     repository/hook, producer, historical backfill or operational evidence
-    exists. Phase III is unimplemented and not authorized: `PH3-RDY-001` and
-    `PH3-RDY-004` are closed in the design, while `PH3-RDY-002` requires a
-    separately approved immutable claim/source binding and `PH3-RDY-003`
-    requires approved importer/source maxima and derived operational bounds.
+    exists. Phase III is unimplemented and not authorized: immutable
+    application-candidate source provenance (`PH3-RDY-001`), durable
+    authorization source binding (`PH3-RDY-002`), and approved importer/source
+    plus derived operational bounds (`PH3-RDY-003`) remain blocked; only the
+    status-consistency finding `PH3-RDY-004` is closed. Claim source binding
+    does not close candidate provenance.
     C3D.1 remains blocked until those prerequisites and later
     checkpoints collect one future baseline plus three qualified comparable
     snapshots in an unchanged cohort epoch over at least 48 hours from absence

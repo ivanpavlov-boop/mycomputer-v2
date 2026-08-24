@@ -128,25 +128,32 @@ Exact `ascii`/`ascii_bin` lowercase-hexadecimal checks, byte-exact immutable
 `uq_import_execution_claim_run`, the exact
 `chk_import_execution_claim_path_parent` parent-shape check, retained one-job
 uniqueness, a separate named three-column child FK index, a common supplier
-lock and a behavior-equivalent streaming traversal are required. One consistent
-MySQL snapshot authorizes prior enrollments and current application identities
-before source work; exact-source-only additions are the only later expansion,
-and finalization never rereads mutable membership. An authorized expansion makes
+lock and a behavior-equivalent streaming traversal are required. A future
+approved design must prove immutable original-source provenance for every
+application candidate before source work; supplier/feed equality alone cannot
+authorize membership, including after one feed ID changes from source A to
+source B. Immutably proven exact-source-only additions are the only later
+expansion, and
+finalization never rereads mutable membership. An authorized expansion makes
 its complete enrollment generation the new non-comparable baseline; only a
 deterministic authorization mismatch emits `capture_cohort_changed` and freezes.
 The dedicated import worker adds no import or automatic-recovery schedule; the
 only planned automatic cadence is the watchdog monitor and independent health
-observer, neither of which mutates supplier/catalog domain state. No runtime
-outbox/claim/recovery-authorization table, migration, watchdog monitor,
-recovery repository, command, parser change, capture implementation,
-historical backfill or evidence producer exists yet. C3D.1 remains blocked until the fine-grained
-checkpoints below and future qualified warm-up complete. Supplier #3 remains
-unselected and unstarted.
-Phase I's schema and Phase II's guarded models/canonical byte contracts are
-implemented, merged, CI-verified, deployed to staging and inactive. Phase III
+observer, neither of which mutates supplier/catalog domain state. Phase I's
+persistence schema, including claim, outbox, monitor/alert, recovery-
+authorization/result, cohort-member, generation, enrollment, and observation
+tables and migrations, is implemented, merged, CI-verified, and deployed to
+staging. It remains behaviorally inactive: later runtime claim/outbox/recovery
+execution is unwired, and no watchdog service, recovery repository, command,
+parser change, capture implementation, historical backfill, or evidence
+producer exists. Phase II's guarded models/canonical byte contracts are also
+implemented, merged, CI-verified, deployed to staging, and uncalled. Phase III
 snapshot persistence remains unimplemented and not implementation-authorized;
-immutable source binding and approved operational bounds remain explicit
-readiness blockers. No evidence candidate exists and no operational preview is
+immutable candidate-row provenance, durable authorization source binding, and
+approved operational bounds remain explicit readiness blockers. C3D.1 remains
+blocked until those prerequisites, the fine-grained checkpoints below, and
+future qualified warm-up complete. Supplier #3 remains unselected and
+unstarted. No evidence candidate exists and no operational preview is
 authorized.
 
 ## Immutable Persistence Rollout Checkpoints

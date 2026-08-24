@@ -672,29 +672,161 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
 
     public function test_phase_three_readiness_remediation_is_explicit_and_fail_closed(): void
     {
-        $design = file_get_contents(base_path('docs/IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md'));
-        $plan = file_get_contents(base_path('docs/PHASE_9C6_5C3D1_RUNTIME_IMPLEMENTATION_PLAN.md'));
+        $design = $this->readDocument('docs/IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md');
+        $plan = $this->readDocument('docs/PHASE_9C6_5C3D1_RUNTIME_IMPLEMENTATION_PLAN.md');
+        $readiness = $this->markdownSection(
+            $design,
+            '### Phase III readiness findings and authority',
+            '### Canonical source scope',
+        );
 
-        $this->assertIsString($design);
-        $this->assertIsString($plan);
+        preg_match_all(
+            '/^\| `(PH3-RDY-[0-9]{3})` \| `(BLOCKED|CLOSED)` \|/m',
+            $readiness,
+            $statusMatches,
+            PREG_SET_ORDER,
+        );
+        $this->assertSame([
+            'PH3-RDY-001' => 'BLOCKED',
+            'PH3-RDY-002' => 'BLOCKED',
+            'PH3-RDY-003' => 'BLOCKED',
+            'PH3-RDY-004' => 'CLOSED',
+        ], array_column($statusMatches, 2, 1));
+        $this->assertStringNotContainsString('| `PH3-RDY-001` | `CLOSED` |', $readiness);
+        $this->assertStringContainsString(
+            'Existing application candidate rows do not carry immutable source provenance',
+            $readiness,
+        );
+
+        $sourceScope = $this->markdownSection(
+            $design,
+            '### Canonical source scope',
+            '### Normative same-feed source A to B invariant',
+        );
+        $sourceAB = $this->markdownSection(
+            $design,
+            '### Normative same-feed source A to B invariant',
+            '### Deterministic `supplier_products` selection',
+        );
+        $supplierProducts = $this->markdownSection(
+            $design,
+            '### Deterministic `supplier_products` selection',
+            '### Deterministic `product_supplier_offers` selection',
+        );
+        $productSupplierOffers = $this->markdownSection(
+            $design,
+            '### Deterministic `product_supplier_offers` selection',
+            '### Ambiguity, identity, sorting, and seed construction',
+        );
+
+        $this->assertStringContainsString(
+            '(supplier_id, supplier_feed_id, source_identity)',
+            $sourceScope,
+        );
+        $this->assertStringContainsString('supplier/feed equality alone cannot', $sourceScope);
+        foreach ([
+            'feed ID `F` represents canonical source `A`',
+            'source-defining feed configuration changes from `A` to `B` without',
+            'historical `A` rows MUST NOT be admitted into the `B` authorization',
+            'current candidate rows do not immutably record `A`',
+            'Phase III remains blocked until a separate immutable candidate-row/source',
+        ] as $adversarialInvariant) {
+            $this->assertStringContainsString($adversarialInvariant, $sourceAB);
+        }
+        foreach (['feed_url', 'feed_type', 'mapping', 'credentials'] as $mutableSourceFact) {
+            $this->assertStringContainsString($mutableSourceFact, $sourceAB);
+        }
 
         foreach ([
-            '| `PH3-RDY-001` | `CLOSED` |',
-            '| `PH3-RDY-002` | `BLOCKED` |',
-            '| `PH3-RDY-003` | `BLOCKED` |',
-            '| `PH3-RDY-004` | `CLOSED` |',
-            '(supplier_id, supplier_feed_id, source_identity)',
-            'matching supplier with `supplier_feed_id IS NULL` | `FAIL CLOSED`',
-            'non-null `supplier_feed_id` differs | `EXCLUDE`',
-            '`product_supplier_offers` contains neither `supplier_feed_id` nor',
-            '`supplier_id` or equal SKU text alone is never enough',
-            'matching supplier with null/missing `supplier_product_id` | `FAIL CLOSED`',
-            'sort lowercase ASCII hashes by unsigned byte order',
-            'different validated canonical SKU bytes producing',
-            'An empty sorted distinct seed is valid',
-            'supplier_import_execution_claims.cohort_source_identity',
-            'uq_import_execution_claim_id_cohort_source',
-            'current mutable feed configuration is never a backfill source',
+            '`supplier_products.supplier_feed_id` equality proves feed ownership only',
+            'exact supplier/feed but immutable original-source provenance is missing',
+            '`NOT ADMISSIBLE / FAIL CLOSED / BLOCKED BY PROVENANCE`',
+            'provenance inconsistent with the capture source',
+            'null, empty, whitespace-only, malformed, conflicting',
+        ] as $candidateContract) {
+            $this->assertStringContainsString($candidateContract, $supplierProducts);
+        }
+        $this->assertStringNotContainsString(
+            '| exact supplier/feed and one valid canonical supplier SKU | `INCLUDE` |',
+            $supplierProducts,
+        );
+
+        foreach ([
+            'may establish supplier/feed/SKU',
+            'does not add immutable source provenance',
+            'does not solve the same-feed A to B',
+            'exact scope supplier/feed but no immutable original-source provenance',
+            '`NOT ADMISSIBLE / FAIL CLOSED / BLOCKED BY PROVENANCE`',
+        ] as $offerContract) {
+            $this->assertStringContainsString($offerContract, $productSupplierOffers);
+        }
+        $this->assertStringNotContainsString(
+            'The offer contributes the same source-authorized identity as its staging parent.',
+            $productSupplierOffers,
+        );
+
+        $sourceBinding = $this->markdownSection(
+            $design,
+            '### PH3-RDY-002 authorization binding and PH3-RDY-001 candidate provenance',
+            '### PH3-RDY-003 authoritative-limit inventory and unresolved gate',
+        );
+        foreach ([
+            '**Problem A - authorization binding (`PH3-RDY-002`).**',
+            '**Problem B - candidate-row provenance (`PH3-RDY-001`).**',
+            'Claim source binding does not solve this problem.',
+            'Candidate provenance remediation is',
+            '**REQUIRED / UNRESOLVED**',
+            'supplier_import_execution_claims.cohort_source_identity VARCHAR(128)',
+            'CHARACTER SET ascii COLLATE ascii_bin NULL',
+            '^snapshot-source-v1:[a-z0-9]+([._-][a-z0-9]+)*(:[a-z0-9]+([._-][a-z0-9]+)*)*$',
+            'cohort_authorization_version`, `cohort_authorized_at`,',
+            '`cohort_seed_count`, `cohort_seed_fingerprint`, and',
+            '`cohort_source_identity`',
+            'trg_import_execution_claim_cohort_source_immutable',
+            '`NULL -> A` is allowed only',
+            '`A -> B`, `A -> NULL`',
+            'uq_import_execution_claim_id_cohort_source(id, cohort_source_identity)',
+            'ix_snapshot_generation_claim_source(supplier_import_execution_claim_id,',
+            'fk_snapshot_generation_claim_source',
+            '`ON UPDATE RESTRICT` and `ON DELETE RESTRICT`',
+            'current mutable SupplierFeed URL/type/mapping/configuration',
+            'is not safe and must fail migration/readiness',
+            'canonical serializer/fingerprint revision is currently **NOT REQUIRED**',
+        ] as $bindingContract) {
+            $this->assertStringContainsString($bindingContract, $sourceBinding);
+        }
+
+        $supplierFeedModel = $this->readDocument('app/Models/SupplierFeed.php');
+        $supplierProductModel = $this->readDocument('app/Models/SupplierProduct.php');
+        $productSupplierOfferModel = $this->readDocument('app/Models/ProductSupplierOffer.php');
+        $claimMigration = $this->readDocument(
+            'database/migrations/2026_08_20_120001_create_supplier_import_execution_claims_table.php',
+        );
+        $generationMigration = $this->readDocument(
+            'database/migrations/2026_08_20_120008_create_supplier_offer_snapshot_generations_table.php',
+        );
+
+        foreach (["'feed_url'", "'feed_type'", "'mapping'"] as $mutableFeedField) {
+            $this->assertStringContainsString($mutableFeedField, $supplierFeedModel);
+        }
+        $this->assertStringContainsString("return ['id', 'supplier_id'];", $supplierFeedModel);
+        $this->assertStringContainsString("'supplier_feed_id'", $supplierProductModel);
+        $this->assertStringNotContainsString("'source_identity'", $supplierProductModel);
+        $this->assertStringContainsString("'supplier_product_id'", $productSupplierOfferModel);
+        $this->assertStringNotContainsString("'source_identity'", $productSupplierOfferModel);
+        $this->assertStringNotContainsString("'cohort_source_identity'", $claimMigration);
+        $this->assertStringContainsString("string('source_identity', 128)", $generationMigration);
+        $this->assertStringContainsString(
+            "_ascii'^snapshot-source-v1:[a-z0-9]+([._-][a-z0-9]+)*(:[a-z0-9]+([._-][a-z0-9]+)*)*$'",
+            $generationMigration,
+        );
+
+        $limits = $this->markdownSection(
+            $design,
+            '### PH3-RDY-003 authoritative-limit inventory and unresolved gate',
+            '## Generation Header Data Dictionary',
+        );
+        foreach ([
             '| `max_source_rows` | `NOT SPECIFIED` |',
             '| `max_spool_rows` | `NOT SPECIFIED` |',
             '| `max_spool_bytes` | `NOT SPECIFIED` |',
@@ -704,20 +836,14 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
             '| external-sort chunk | `NOT SPECIFIED` |',
             '| immutable DB insert batch | `NOT SPECIFIED` |',
             '| snapshot transaction bound | `NOT SPECIFIED` |',
+            '5,000, 500, 1,000, 8,388,608 bytes (8 MiB)',
+            '65,536-byte evidence chunks',
+            'Catalog Sync diagnostic values 1,000, 2,000,',
             'frozen `capture_outcome=overflow` header with `capture_overflow`',
             'Overflow is not retryable under unchanged bounds',
-            'Phase III implementation remains prohibited',
-        ] as $contract) {
-            $this->assertStringContainsString($contract, $design);
-        }
-
-        foreach ([
-            'Phase I canonical schema: implemented, merged through PR #212',
-            'Phase II guarded models and canonical byte contracts: implemented, merged',
-            'Phase III snapshot persistence/cohort authorization: readiness remediation',
-            'Phase III remains blocked by `PH3-RDY-002` and `PH3-RDY-003`',
-        ] as $status) {
-            $this->assertStringContainsString($status, $plan);
+            'Temporary files are removed in `finally`',
+        ] as $limitContract) {
+            $this->assertStringContainsString($limitContract, $limits);
         }
 
         foreach ([
@@ -730,18 +856,71 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
         }
 
         foreach ([
-            'docs/PHASES.md',
-            'docs/ROADMAP.md',
-            'docs/SUPPLIER_ONBOARDING_FRAMEWORK.md',
-            'docs/APCOM_OPERATIONAL_OFFER_LIFECYCLE_PREVIEW.md',
-        ] as $document) {
-            $contents = file_get_contents(base_path($document));
-
-            $this->assertIsString($contents);
-            $this->assertStringContainsString('Phase I', $contents);
-            $this->assertStringContainsString('Phase II', $contents);
-            $this->assertStringContainsString('Phase III', $contents);
-            $this->assertStringContainsString('unimplemented', $contents);
+            'Phase I canonical schema: implemented, merged through PR #212',
+            'Phase II guarded models and canonical byte contracts: implemented, merged',
+            'Phase III snapshot persistence/cohort authorization: readiness remediation',
+            'Phase III remains blocked by `PH3-RDY-001`, `PH3-RDY-002`, and `PH3-RDY-003`',
+        ] as $status) {
+            $this->assertStringContainsString($status, $plan);
         }
+
+        $apcomScope = $this->markdownSection(
+            $this->readDocument('docs/APCOM_OPERATIONAL_OFFER_LIFECYCLE_PREVIEW.md'),
+            '## Scope',
+            '## Immutable Persistence Rollout Checkpoints',
+        );
+        $phasesInProgress = $this->markdownSection(
+            $this->readDocument('docs/PHASES.md'),
+            '## In Progress',
+            '### Phase 9C.6.5C.3D.1-PRE.A Rollout Checkpoints',
+        );
+        $roadmap = $this->readDocument('docs/ROADMAP.md');
+        $onboarding = $this->readDocument('docs/SUPPLIER_ONBOARDING_FRAMEWORK.md');
+
+        $this->assertMatchesRegularExpression('/Phase I\'s\s+persistence schema/', $apcomScope);
+        $this->assertStringContainsString('tables and migrations, is implemented', $apcomScope);
+        $this->assertStringContainsString('later runtime claim/outbox/recovery', $apcomScope);
+        $this->assertStringNotContainsString(
+            'No runtime outbox/claim/recovery-authorization table, migration',
+            $apcomScope,
+        );
+        $this->assertStringContainsString('Design PR #211 is merged.', $phasesInProgress);
+        $this->assertStringContainsString('Phase I\'s canonical schema is implemented through PR #212', $phasesInProgress);
+        $this->assertStringContainsString('Phase II\'s guarded models', $phasesInProgress);
+        $this->assertStringNotContainsString(
+            'remediated locally and require a fresh aggregate review',
+            $phasesInProgress,
+        );
+
+        foreach ([$phasesInProgress, $roadmap, $onboarding] as $currentStatus) {
+            $this->assertStringContainsString('`PH3-RDY-001`', $currentStatus);
+            $this->assertStringContainsString('`PH3-RDY-002`', $currentStatus);
+            $this->assertStringContainsString('`PH3-RDY-003`', $currentStatus);
+            $this->assertStringContainsString('`PH3-RDY-004`', $currentStatus);
+            $this->assertStringNotContainsString(
+                '`PH3-RDY-001` and `PH3-RDY-004` are closed',
+                $currentStatus,
+            );
+        }
+    }
+
+    private function readDocument(string $path): string
+    {
+        $contents = file_get_contents(base_path($path));
+
+        $this->assertIsString($contents, "Unable to read {$path}.");
+
+        return $contents;
+    }
+
+    private function markdownSection(string $contents, string $startHeading, string $endHeading): string
+    {
+        $start = strpos($contents, $startHeading);
+        $this->assertNotFalse($start, "Missing section {$startHeading}.");
+
+        $end = strpos($contents, $endHeading, $start + strlen($startHeading));
+        $this->assertNotFalse($end, "Missing section boundary {$endHeading}.");
+
+        return substr($contents, $start, $end - $start);
     }
 }

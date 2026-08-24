@@ -33,11 +33,14 @@ The current implementation baseline is `origin/main` at
 - Phase III snapshot persistence/cohort authorization: readiness remediation
   only, unimplemented, and not implementation-authorized.
 
-Phase III remains blocked by `PH3-RDY-002` and `PH3-RDY-003`. The first requires
-a separately approved additive claim/source relational binding; the second
+Phase III remains blocked by `PH3-RDY-001`, `PH3-RDY-002`, and `PH3-RDY-003`.
+The first requires a separately approved immutable application-candidate source
+provenance contract; the second requires a separately approved additive
+claim/source relational binding for durable authorization; and the third
 requires approved importer/source maxima from which every spool, sort, insert,
-and transaction bound can be derived. The authoritative proof, selection
-matrices, proposed schema delta, and limit inventory are in the
+and transaction bound can be derived. Claim source binding does not close
+candidate provenance. The authoritative proof, fail-closed selection matrices,
+proposed schema delta, and limit inventory are in the
 [Cohort Enrollment Contract](IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md#cohort-enrollment-contract).
 
 This planning phase authorizes no migration, runtime behavior, queue routing,
@@ -508,10 +511,10 @@ immutability.
 ### Phase III - Snapshot persistence and cohort authorization core
 
 **Status.** Readiness remediation only. Runtime implementation is not
-authorized. `PH3-RDY-001` and `PH3-RDY-004` are closed in the design contract;
-`PH3-RDY-002` and `PH3-RDY-003` remain blockers. No class listed below may be
-implemented until both blockers are separately remediated and independently
-reviewed.
+authorized. `PH3-RDY-001`, `PH3-RDY-002`, and `PH3-RDY-003` remain separate
+blockers; only the status-consistency finding `PH3-RDY-004` is closed. No class
+listed below may be implemented until all three blockers are separately
+remediated and independently reviewed.
 
 **Goal.** Implement deterministic, atomic snapshot persistence behind a
 service API that is not yet called by production import paths.
@@ -1200,12 +1203,14 @@ mutation.
     existing completion notification and Supplier timestamp mutation. Phase X
     durable alert intents are the only future protected notification source.
 
-The Phase III readiness review found two implementation design conflicts that
-the deployed contracts cannot close: the capture-start authorization is not
-immutably bound to `source_identity`, and the authorized importer has no hard
-source limits from which all required operational bounds can be derived. These
-are `PH3-RDY-002` and `PH3-RDY-003`; Phase III implementation is prohibited
-until their separate remediation is approved and verified.
+The Phase III readiness review found three implementation design conflicts that
+the deployed contracts cannot close: application candidate rows lack immutable
+original-source provenance (`PH3-RDY-001`), the capture-start authorization is
+not immutably bound to `source_identity` (`PH3-RDY-002`), and the authorized
+importer has no hard source limits from which all required operational bounds
+can be derived (`PH3-RDY-003`). Claim source binding does not repair candidate
+provenance. Phase III implementation is prohibited until all three separate
+remediations are approved and verified.
 
 ## Review and rollout boundary
 
