@@ -421,10 +421,12 @@ evidence. Exact ownership/outbox checks, transactional cross-record rules and
 the canonical 66-row by 11-column SupplierImportRun/ImportJob/ImportHistory plus
 monitor/alert/observer crash matrix closes every terminal path without replay and explicitly
 separates action-stopped republication from newly authorized terminalization.
-The future outbox adds
-`delivery_watchdog_at`, set from MySQL UTC plus exactly 4,320 seconds after
-acknowledged publication, and the exact
+The deployed, inactive Phase I outbox schema already contains
+`delivery_watchdog_at` and the exact
 `ix_import_dispatch_outbox_state_watchdog_id(state, delivery_watchdog_at, id)`.
+That schema capability does not activate the later watchdog runtime. When the
+runtime is separately implemented and enabled, it sets the field from MySQL UTC
+plus exactly 4,320 seconds after acknowledged publication.
 The marker is non-null only for exact `queued/published` and is cleared on every
 departure. Delivery admission, lock contention, release, duplicate delivery
 and `failed()` never refresh it. A due null-owner row proves only no durable

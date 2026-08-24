@@ -793,28 +793,25 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
             $this->assertStringContainsString($bindingContract, $sourceBinding);
         }
 
-        $expectedAuthorizationTuple = [
-            'cohort_authorization_version',
-            'cohort_authorized_at',
-            'cohort_seed_count',
-            'cohort_seed_fingerprint',
-            'cohort_source_identity',
-        ];
+        $expectedAuthorizationTuple = $this->expectedAuthorizationTuple();
         $canonicalAuthorizationTuple = $this->canonicalAuthorizationCompletenessTuple($sourceBinding);
-        $authorizationProcedures = $this->authorizationProcedureTuples($design);
+        $authorizationProcedureContract = $this->authorizationProcedureContract(
+            $design,
+            $canonicalAuthorizationTuple,
+        );
 
         $this->assertSame($expectedAuthorizationTuple, $canonicalAuthorizationTuple);
-        $this->assertSame([
+        $this->assertSame(
+            [],
+            $authorizationProcedureContract['violations'],
+            implode(PHP_EOL, $authorizationProcedureContract['violations']),
+        );
+        foreach ([
             'authorization-member-persistence',
             'capture-start-coordinator',
             'bounded-capture-collector',
-        ], array_keys($authorizationProcedures));
-        foreach ($authorizationProcedures as $procedure => $tuple) {
-            $this->assertSame(
-                $canonicalAuthorizationTuple,
-                $tuple,
-                "Authorization procedure {$procedure} must use the exact ordered canonical tuple.",
-            );
+        ] as $currentProcedure) {
+            $this->assertContains($currentProcedure, $authorizationProcedureContract['registry_ids']);
         }
 
         preg_match(
@@ -1023,6 +1020,9 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
         );
         $roadmap = $this->readDocument('docs/ROADMAP.md');
         $onboarding = $this->readDocument('docs/SUPPLIER_ONBOARDING_FRAMEWORK.md');
+        $outboxMigration = $this->readDocument(
+            'database/migrations/2026_08_20_120002_create_supplier_import_dispatch_outbox_table.php',
+        );
 
         $this->assertMatchesRegularExpression('/Phase I\'s\s+persistence schema/', $apcomScope);
         $this->assertStringContainsString('tables and migrations, is implemented', $apcomScope);
@@ -1043,6 +1043,21 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
             $this->readDocument('docs/PHASES.md'),
         );
         $this->assertStringNotContainsString('but no outbox/claim', $roadmap);
+        $this->assertStringContainsString(
+            "\$table->timestamp('delivery_watchdog_at', 6)->nullable();",
+            $outboxMigration,
+        );
+        $this->assertStringContainsString(
+            "['state', 'delivery_watchdog_at', 'id']",
+            $outboxMigration,
+        );
+        $this->assertStringContainsString(
+            "'ix_import_dispatch_outbox_state_watchdog_id'",
+            $outboxMigration,
+        );
+        foreach ([$apcomScope, $onboarding] as $currentStatusDocument) {
+            $this->assertSame([], $this->watchdogStatusViolations($currentStatusDocument));
+        }
 
         $reviewBoundaryStart = strpos($plan, '## Review and rollout boundary');
         $this->assertNotFalse($reviewBoundaryStart);
@@ -1079,6 +1094,96 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
         }
     }
 
+    public function test_readiness_status_and_procedure_enumeration_reject_adversarial_mutations(): void
+    {
+        $design = $this->readDocument('docs/IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md');
+        $expectedTuple = $this->expectedAuthorizationTuple();
+        $validBlock = $this->markedAuthorizationProcedureBlock('future-procedure', $expectedTuple);
+
+        $procedureMutations = [
+            'marked four-field procedure' => $this->appendRegisteredProcedure(
+                $design,
+                'future-four-fields',
+                $this->markedAuthorizationProcedureBlock(
+                    'future-four-fields',
+                    array_slice($expectedTuple, 0, 4),
+                ),
+            ),
+            'marked procedure with wrong fifth field' => $this->appendRegisteredProcedure(
+                $design,
+                'future-wrong-field',
+                $this->markedAuthorizationProcedureBlock(
+                    'future-wrong-field',
+                    [...array_slice($expectedTuple, 0, 4), 'wrong_source_identity'],
+                ),
+            ),
+            'marked procedure with sixth field' => $this->appendRegisteredProcedure(
+                $design,
+                'future-six-fields',
+                $this->markedAuthorizationProcedureBlock(
+                    'future-six-fields',
+                    [...$expectedTuple, 'unexpected_sixth_field'],
+                ),
+            ),
+            'marked procedure missing atomic source binding' => $this->appendRegisteredProcedure(
+                $design,
+                'future-no-atomic-source',
+                $this->markedAuthorizationProcedureBlock(
+                    'future-no-atomic-source',
+                    $expectedTuple,
+                    includeAtomicSourceBinding: false,
+                ),
+            ),
+            'marked procedure omitted from registry' => $design.PHP_EOL.PHP_EOL.$validBlock,
+            'phantom registry procedure' => $this->registerAuthorizationProcedure($design, 'phantom-procedure'),
+            'duplicate procedure ID' => $design.PHP_EOL.PHP_EOL.$this->markedAuthorizationProcedureBlock(
+                'authorization-member-persistence',
+                $expectedTuple,
+            ),
+            'source token outside a four-field tuple' => $this->appendRegisteredProcedure(
+                $design,
+                'future-outside-source',
+                $this->markedAuthorizationProcedureBlock(
+                    'future-outside-source',
+                    array_slice($expectedTuple, 0, 4),
+                ),
+            ),
+            'existing procedure loses marker' => str_replace(
+                '<!-- normative-authorization-procedure:start id=authorization-member-persistence -->',
+                '<!-- authorization procedure start marker removed -->',
+                $design,
+            ),
+            'registry and section rename mismatch' => $this->renameRegisteredAuthorizationProcedure(
+                $design,
+                'authorization-member-persistence',
+                'renamed-member-persistence',
+            ),
+        ];
+
+        foreach ($procedureMutations as $mutation => $mutatedDesign) {
+            $this->assertNotSame(
+                [],
+                $this->authorizationProcedureContract($mutatedDesign, $expectedTuple)['violations'],
+                "Mutation must fail closed: {$mutation}",
+            );
+        }
+
+        $apcom = $this->readDocument('docs/APCOM_OPERATIONAL_OFFER_LIFECYCLE_PREVIEW.md');
+        $onboarding = $this->readDocument('docs/SUPPLIER_ONBOARDING_FRAMEWORK.md');
+        $this->assertNotSame(
+            [],
+            $this->watchdogStatusViolations(
+                $apcom.PHP_EOL.'The future outbox includes `delivery_watchdog_at`.',
+            ),
+        );
+        $this->assertNotSame(
+            [],
+            $this->watchdogStatusViolations(
+                $onboarding.PHP_EOL.'The future outbox adds `ix_import_dispatch_outbox_state_watchdog_id`.',
+            ),
+        );
+    }
+
     /** @return array<int, string> */
     private function canonicalAuthorizationCompletenessTuple(string $sourceBinding): array
     {
@@ -1093,28 +1198,261 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
         return $this->lineSeparatedFields($tuple['fields'] ?? '');
     }
 
-    /** @return array<string, array<int, string>> */
-    private function authorizationProcedureTuples(string $design): array
+    /**
+     * @param  array<int, string>  $expectedTuple
+     * @return array{registry_ids: array<int, string>, violations: array<int, string>}
+     */
+    private function authorizationProcedureContract(string $design, array $expectedTuple): array
+    {
+        $registryIds = $this->authorizationProcedureRegistryIds($design);
+        $startIds = $this->authorizationProcedureMarkerIds($design, 'start');
+        $endIds = $this->authorizationProcedureMarkerIds($design, 'end');
+        $declarationIds = $this->authorizationProcedureDeclarationIds($design);
+        $blocks = $this->authorizationProcedureBlocks($design);
+        $violations = [];
+
+        if ($registryIds === []) {
+            $violations[] = 'Normative authorization procedure registry is missing or empty.';
+        }
+
+        foreach ([
+            'registry' => $registryIds,
+            'start markers' => $startIds,
+            'end markers' => $endIds,
+            'declarations' => $declarationIds,
+        ] as $source => $ids) {
+            if (count($ids) !== count(array_unique($ids))) {
+                $violations[] = "Duplicate normative authorization procedure ID in {$source}.";
+            }
+        }
+
+        foreach ([
+            'start markers' => $startIds,
+            'end markers' => $endIds,
+            'declarations' => $declarationIds,
+            'bounded blocks' => array_keys($blocks),
+        ] as $source => $ids) {
+            if ($registryIds !== $ids) {
+                $violations[] = "Registry IDs do not exactly match {$source}.";
+            }
+        }
+
+        foreach ($registryIds as $procedureId) {
+            if (! isset($blocks[$procedureId])) {
+                continue;
+            }
+
+            $block = $blocks[$procedureId];
+            $tuple = $this->authorizationProcedureTuple($block);
+            if ($tuple !== $expectedTuple) {
+                $violations[] = "Authorization procedure {$procedureId} does not use the exact ordered tuple.";
+            }
+
+            $normalized = preg_replace('/\s+/', ' ', $block);
+            if (! is_string($normalized)) {
+                $violations[] = "Authorization procedure {$procedureId} cannot be normalized.";
+
+                continue;
+            }
+
+            if (! str_contains(
+                $normalized,
+                'Atomic authorization transaction: authorization members + exact five-field tuple + `cohort_source_identity` `NULL -> A`.',
+            )) {
+                $violations[] = "Authorization procedure {$procedureId} lacks atomic member/source binding.";
+            }
+
+            if (! str_contains(
+                $normalized,
+                'Retry/recovery source authority: persisted `cohort_source_identity` only; mutable current SupplierFeed configuration is prohibited.',
+            )) {
+                $violations[] = "Authorization procedure {$procedureId} lacks persisted-source retry/recovery authority.";
+            }
+        }
+
+        return [
+            'registry_ids' => $registryIds,
+            'violations' => $violations,
+        ];
+    }
+
+    /** @return array<int, string> */
+    private function authorizationProcedureRegistryIds(string $design): array
+    {
+        $matched = preg_match(
+            '/Normative authorization procedure registry \(ordered\):\R\R```text\R(?<ids>.*?)\R```/s',
+            $design,
+            $registry,
+        );
+
+        return $matched === 1
+            ? $this->lineSeparatedFields($registry['ids'] ?? '')
+            : [];
+    }
+
+    /** @return array<int, string> */
+    private function authorizationProcedureMarkerIds(string $design, string $marker): array
     {
         preg_match_all(
-            '/Normative authorization procedure `(?<name>[a-z0-9-]+)`\R'.
-            'completeness tuple \(ordered\):\R\R```text\R(?<fields>.*?)\R```\R\R'.
-            'Atomic authorization transaction: authorization members \+ exact five-field\R'.
-            'tuple \+ `cohort_source_identity` `NULL -> A`\.\R'.
-            'Retry\/recovery source authority: persisted `cohort_source_identity` only;\R'.
-            'mutable current SupplierFeed configuration is prohibited\./s',
+            '/^<!-- normative-authorization-procedure:'.preg_quote($marker, '/').' id=(?<id>[a-z0-9-]+) -->$/m',
+            $design,
+            $matches,
+        );
+
+        return array_values($matches['id'] ?? []);
+    }
+
+    /** @return array<int, string> */
+    private function authorizationProcedureDeclarationIds(string $design): array
+    {
+        preg_match_all(
+            '/^Normative authorization procedure `(?<id>[a-z0-9-]+)`$/m',
+            $design,
+            $matches,
+        );
+
+        return array_values($matches['id'] ?? []);
+    }
+
+    /** @return array<string, string> */
+    private function authorizationProcedureBlocks(string $design): array
+    {
+        preg_match_all(
+            '/^<!-- normative-authorization-procedure:start id=(?<id>[a-z0-9-]+) -->\R'.
+            '(?<body>.*?)\R'.
+            '<!-- normative-authorization-procedure:end id=\k<id> -->$/ms',
             $design,
             $matches,
             PREG_SET_ORDER,
         );
 
-        $tuples = [];
-
+        $blocks = [];
         foreach ($matches as $match) {
-            $tuples[$match['name']] = $this->lineSeparatedFields($match['fields']);
+            $blocks[$match['id']] = $match['body'];
         }
 
-        return $tuples;
+        return $blocks;
+    }
+
+    /** @return array<int, string> */
+    private function authorizationProcedureTuple(string $block): array
+    {
+        $matched = preg_match(
+            '/^Normative authorization procedure `[a-z0-9-]+`\R'.
+            'completeness tuple \(ordered\):\R\R```text\R(?<fields>.*?)\R```/s',
+            $block,
+            $tuple,
+        );
+
+        return $matched === 1
+            ? $this->lineSeparatedFields($tuple['fields'] ?? '')
+            : [];
+    }
+
+    /** @return array<int, string> */
+    private function expectedAuthorizationTuple(): array
+    {
+        return [
+            'cohort_authorization_version',
+            'cohort_authorized_at',
+            'cohort_seed_count',
+            'cohort_seed_fingerprint',
+            'cohort_source_identity',
+        ];
+    }
+
+    /** @return array<int, string> */
+    private function watchdogStatusViolations(string $document): array
+    {
+        $normalized = preg_replace('/\s+/', ' ', $document);
+        if (! is_string($normalized)) {
+            return ['Unable to normalize watchdog status documentation.'];
+        }
+
+        $violations = [];
+        foreach (['delivery_watchdog_at', 'ix_import_dispatch_outbox_state_watchdog_id'] as $artifact) {
+            if (preg_match(
+                '/(?:future\s+outbox|future\s+(?:addition|column|index)|not\s+present|not\s+created|must\s+be\s+added)[^.]{0,240}`?'.preg_quote($artifact, '/').'`?/i',
+                $normalized,
+            ) === 1) {
+                $violations[] = "Deployed watchdog artifact {$artifact} is described as future or absent.";
+            }
+        }
+
+        return $violations;
+    }
+
+    private function registerAuthorizationProcedure(string $design, string $procedureId): string
+    {
+        $updated = preg_replace(
+            '/(Normative authorization procedure registry \(ordered\):\R\R```text\R.*?)(\R```)/s',
+            '$1'.PHP_EOL.$procedureId.'$2',
+            $design,
+            1,
+            $count,
+        );
+
+        $this->assertSame(1, $count, 'Unable to mutate the authorization procedure registry.');
+        $this->assertIsString($updated);
+
+        return $updated;
+    }
+
+    private function appendRegisteredProcedure(string $design, string $procedureId, string $block): string
+    {
+        return $this->registerAuthorizationProcedure($design, $procedureId).PHP_EOL.PHP_EOL.$block;
+    }
+
+    private function renameRegisteredAuthorizationProcedure(
+        string $design,
+        string $oldProcedureId,
+        string $newProcedureId,
+    ): string {
+        $updated = preg_replace(
+            '/(Normative authorization procedure registry \(ordered\):\R\R```text\R.*?)'.
+            preg_quote($oldProcedureId, '/').
+            '(\R```|\R)/s',
+            '$1'.$newProcedureId.'$2',
+            $design,
+            1,
+            $count,
+        );
+
+        $this->assertSame(1, $count, 'Unable to rename the registered authorization procedure.');
+        $this->assertIsString($updated);
+
+        return $updated;
+    }
+
+    /** @param array<int, string> $fields */
+    private function markedAuthorizationProcedureBlock(
+        string $procedureId,
+        array $fields,
+        bool $includeAtomicSourceBinding = true,
+    ): string {
+        $lines = [
+            "<!-- normative-authorization-procedure:start id={$procedureId} -->",
+            "Normative authorization procedure `{$procedureId}`",
+            'completeness tuple (ordered):',
+            '',
+            '```text',
+            ...$fields,
+            '```',
+            '',
+            $includeAtomicSourceBinding
+                ? 'Atomic authorization transaction: authorization members + exact five-field'
+                : 'Atomic authorization transaction: authorization members commit before source binding.',
+        ];
+
+        if ($includeAtomicSourceBinding) {
+            $lines[] = 'tuple + `cohort_source_identity` `NULL -> A`.';
+        }
+
+        $lines[] = 'Retry/recovery source authority: persisted `cohort_source_identity` only;';
+        $lines[] = 'mutable current SupplierFeed configuration is prohibited.';
+        $lines[] = "<!-- normative-authorization-procedure:end id={$procedureId} -->";
+
+        return implode(PHP_EOL, $lines);
     }
 
     /** @return array<int, string> */

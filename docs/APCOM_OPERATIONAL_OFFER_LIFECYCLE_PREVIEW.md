@@ -55,9 +55,11 @@ authorization and is never terminalized by republish authority. Exact
 ownership/outbox checks,
 transactional cross-state rules, and the 66-row by 11-column canonical crash
 matrix prevent stranded or contradictory SupplierImportRun, ImportJob,
-ImportHistory, monitor, alert-delivery and observer states. The future outbox includes exact
-`delivery_watchdog_at` liveness state and
+ImportHistory, monitor, alert-delivery and observer states. The deployed,
+inactive Phase I outbox schema already includes the exact
+`delivery_watchdog_at` liveness field and
 `ix_import_dispatch_outbox_state_watchdog_id(state, delivery_watchdog_at, id)`.
+That schema capability does not activate the later watchdog runtime.
 Acknowledged publication sets the watchdog from MySQL UTC plus exactly 4,320
 seconds, and every departure from exact `queued/published` clears it atomically.
 Observation, admission, lock contention, release, duplicate delivery and

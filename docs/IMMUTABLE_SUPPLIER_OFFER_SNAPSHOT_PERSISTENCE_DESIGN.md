@@ -984,6 +984,23 @@ contains no raw SKU, EAN, MPN, source row, name, URL, path, credential, price,
 quantity, or XML. Before Phase III can be authorized, the proposed additive
 claim/source remediation makes the following future procedure normative.
 
+### Normative authorization procedure registry
+
+This ordered registry is authoritative for every normative authorization
+commit procedure in this design. Each registered ID must have exactly one
+matching marked block, and every marked block must be registered. Procedure
+discovery uses only the registry and structural markers; tuple contents and
+atomicity wording are validated separately.
+
+Normative authorization procedure registry (ordered):
+
+```text
+authorization-member-persistence
+capture-start-coordinator
+bounded-capture-collector
+```
+
+<!-- normative-authorization-procedure:start id=authorization-member-persistence -->
 Normative authorization procedure `authorization-member-persistence`
 completeness tuple (ordered):
 
@@ -999,6 +1016,7 @@ Atomic authorization transaction: authorization members + exact five-field
 tuple + `cohort_source_identity` `NULL -> A`.
 Retry/recovery source authority: persisted `cohort_source_identity` only;
 mutable current SupplierFeed configuration is prohibited.
+<!-- normative-authorization-procedure:end id=authorization-member-persistence -->
 
 That future transaction inserts the complete sorted member set and atomically
 commits the exact five-field tuple above. The source binding is the same
@@ -3603,6 +3621,7 @@ hashes, and computes the exact seed count and
 `snapshot_cohort_authorization_v1` fingerprint. It then locks the canonical
 outbox and claim and verifies `queued/published`.
 
+<!-- normative-authorization-procedure:start id=capture-start-coordinator -->
 Normative authorization procedure `capture-start-coordinator`
 completeness tuple (ordered):
 
@@ -3618,6 +3637,7 @@ Atomic authorization transaction: authorization members + exact five-field
 tuple + `cohort_source_identity` `NULL -> A`.
 Retry/recovery source authority: persisted `cohort_source_identity` only;
 mutable current SupplierFeed configuration is prohibited.
+<!-- normative-authorization-procedure:end id=capture-start-coordinator -->
 
 The same authorization transaction inserts the complete immutable member set
 and atomically commits that exact five-field tuple. The source identity uses the
@@ -4338,6 +4358,7 @@ not a second feed request and does not retain raw source data.
 6. The authorization collector validates, hashes, sorts, and deduplicates the
    seed under outbox-then-claim locks.
 
+<!-- normative-authorization-procedure:start id=bounded-capture-collector -->
 Normative authorization procedure `bounded-capture-collector`
 completeness tuple (ordered):
 
@@ -4353,6 +4374,7 @@ Atomic authorization transaction: authorization members + exact five-field
 tuple + `cohort_source_identity` `NULL -> A`.
 Retry/recovery source authority: persisted `cohort_source_identity` only;
 mutable current SupplierFeed configuration is prohibited.
+<!-- normative-authorization-procedure:end id=bounded-capture-collector -->
 
    The same transaction inserts every immutable authorization member and
    atomically commits that exact five-field tuple, including the trigger-guarded
