@@ -191,30 +191,86 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
         $this->assertStringContainsString("event_kind = BINARY _ascii'action_stopped'", $actionConstraint['republish']);
         $this->assertStringNotContainsString("event_kind = BINARY _ascii'terminalization_succeeded'", $actionConstraint['republish']);
 
-        $protocolRows = $this->markdownTableRows(
-            $design,
+        $protocolTable = $this->structuralMarkdownTable(
+            $this->markdownSection(
+                $design,
+                '### Operationally governed recovery protocol outcomes',
+                '## Cohort Enrollment Contract',
+            ),
             '| Ownership and payload observation | Transport/response boundary | Permitted protocol outcome |',
+            '| --- | --- | --- |',
+            'recovery protocol outcome',
+            3,
         );
-        $crashRows = $this->markdownTableRows(
-            $design,
+        $crashTable = $this->structuralMarkdownTable(
+            $this->markdownSection(
+                $design,
+                '### Crash and recovery matrix',
+                'Rows 52 through 66 are coordination-only crash domains.',
+            ),
             '| Boundary | Path | SupplierImportRun | ImportJob | ImportHistory | Claim | Outbox | Evidence | Allowed recovery | Prohibited actions | Required operator action |',
+            '| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |',
+            'crash and recovery',
+            11,
         );
-        $rolloutRows = $this->markdownTableRows(
-            $design,
-            '| # | Checkpoint | Prerequisite | Separately responsible authorization | Permitted action | Result/artifact | Failure behavior | Next |',
+        $rolloutTable = $this->rolloutCheckpointContract(
+            $this->markdownSection(
+                $design,
+                '### Fine-grained rollout checkpoints',
+                '### Forward-only operational rollback and bounded schema downgrade',
+            ),
         );
-        $stateFieldRows = $this->markdownTableRows(
-            $design,
+        $stateFieldTable = $this->structuralMarkdownTable(
+            $this->markdownSection(
+                $design,
+                'The canonical object contains exactly these 20 keys in this exact order;',
+                'The state machine still enforces every cross-field path',
+            ),
             '| Position | Key | Exact JSON type and value contract | Nullable |',
+            '| --- | --- | --- | --- |',
+            'expected-state field inventory',
+            4,
         );
-        $digestRows = $this->markdownTableRows(
-            $design,
+        $digestTable = $this->structuralMarkdownTable(
+            $this->markdownSection(
+                $design,
+                '### Authoritative cryptographic and digest identity inventory',
+                '### Exact hexadecimal storage contract',
+            ),
             '| # | Identity | Purpose | Producer | Canonical bytes and domain | Algorithm | Persistence location | Immutability | Comparison point |',
+            '| --- | --- | --- | --- | --- | --- | --- | --- | --- |',
+            'cryptographic identity inventory',
+            9,
         );
-        $hexStorageRows = $this->markdownTableRows(
-            $design,
+        $hexStorageTable = $this->structuralMarkdownTable(
+            $this->markdownSection(
+                $design,
+                '### Exact hexadecimal storage contract',
+                '## Append-only Enforcement',
+            ),
             '| Table | Non-null lowercase hexadecimal columns | Nullable lowercase hexadecimal columns |',
+            '| --- | --- | --- |',
+            'hexadecimal storage',
+            3,
         );
+
+        foreach ([
+            'recovery protocol outcome' => $protocolTable,
+            'crash and recovery' => $crashTable,
+            'rollout checkpoint' => $rolloutTable,
+            'expected-state field inventory' => $stateFieldTable,
+            'cryptographic identity inventory' => $digestTable,
+            'hexadecimal storage' => $hexStorageTable,
+        ] as $context => $table) {
+            $this->assertSame([], $table['violations'], $context.': '.implode(PHP_EOL, $table['violations']));
+        }
+
+        $protocolRows = $protocolTable['rows'];
+        $crashRows = $crashTable['rows'];
+        $rolloutRows = $rolloutTable['rows'];
+        $stateFieldRows = $stateFieldTable['rows'];
+        $digestRows = $digestTable['rows'];
+        $hexStorageRows = $hexStorageTable['rows'];
 
         $this->assertCount(19, $protocolRows);
         $this->assertCount(66, $crashRows);
@@ -1330,10 +1386,13 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
             'D3 duplicate procedure start-marker ID must fail closed.',
         );
 
-        $rolloutRows = $this->markdownTableRows(
-            $design,
-            '| # | Checkpoint | Prerequisite | Separately responsible authorization | Permitted action | Result/artifact | Failure behavior | Next |',
-        );
+        $rolloutRows = $this->rolloutCheckpointContract(
+            $this->markdownSection(
+                $design,
+                '### Fine-grained rollout checkpoints',
+                '### Forward-only operational rollback and bounded schema downgrade',
+            ),
+        )['rows'];
         $duplicatedRolloutRows = [...$rolloutRows, $rolloutRows[0]];
         $duplicatedRolloutKeys = array_map(
             static function (string $row): array {
@@ -1504,6 +1563,395 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
         $this->assertSame(23, $canonicalInventory['parsed_count']);
         $this->assertSame(23, $canonicalInventory['unique_count']);
         $this->assertSame(23, $canonicalInventory['expected_count']);
+    }
+
+    public function test_bounded_contract_regions_reject_terminal_and_malformed_structural_omissions(): void
+    {
+        $design = $this->readDocument('docs/IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md');
+        $plan = $this->readDocument('docs/PHASE_9C6_5C3D1_RUNTIME_IMPLEMENTATION_PLAN.md');
+        $readiness = $this->markdownSection(
+            $design,
+            '### Phase III readiness findings and authority',
+            '### Canonical source scope',
+        );
+        $runtimeInventory = $this->markdownSection(
+            $plan,
+            '### Current deployed artifact inventory',
+            '### Remaining runtime implementation gaps',
+        );
+        $rollout = $this->markdownSection(
+            $design,
+            '### Fine-grained rollout checkpoints',
+            '### Forward-only operational rollback and bounded schema downgrade',
+        );
+
+        $statusOne = $this->structuralMarkdownRow($readiness, 'PH3-RDY-001');
+        $statusTwo = $this->structuralMarkdownRow($readiness, 'PH3-RDY-002');
+        $statusThree = $this->structuralMarkdownRow($readiness, 'PH3-RDY-003');
+        $statusFour = $this->structuralMarkdownRow($readiness, 'PH3-RDY-004');
+        $readinessLineEnding = str_contains($readiness, "\r\n") ? "\r\n" : "\n";
+        $terminalReadiness = '`PH3-RDY-002` | `UNKNOWN` | Terminal malformed declaration. |';
+        $readinessMutations = [
+            'RT1 terminal missing opening pipe' => $this->insertStructuralRow(
+                $readiness,
+                $statusFour,
+                $terminalReadiness,
+            ),
+            'RT2 middle missing opening pipe' => $this->insertStructuralRow(
+                $readiness,
+                $statusTwo,
+                $terminalReadiness,
+            ),
+            'RT3 leading missing opening pipe' => $this->insertStructuralRow(
+                $readiness,
+                $statusOne,
+                $terminalReadiness,
+                before: true,
+            ),
+            'RT4 missing closing pipe' => $this->replaceStructuralText(
+                $readiness,
+                $statusTwo,
+                '| `PH3-RDY-002` | `BLOCKED` | Missing closing delimiter.',
+            ),
+            'RT5 wrong cell count' => $this->replaceStructuralText(
+                $readiness,
+                $statusTwo,
+                '| `PH3-RDY-002` | `BLOCKED` |',
+            ),
+            'RT6 plain text declaration' => $this->replaceStructuralText(
+                $readiness,
+                $statusTwo,
+                'PH3-RDY-002 = UNKNOWN',
+            ),
+            'RT7 malformed delimiters' => $this->replaceStructuralText(
+                $readiness,
+                $statusTwo,
+                'PH3-RDY-002 | UNKNOWN',
+            ),
+            'RT8 duplicate followed by malformed variant' => $this->insertStructuralRow(
+                $readiness,
+                $statusTwo,
+                $statusTwo.$readinessLineEnding.$terminalReadiness,
+            ),
+            'RT9 malformed unknown readiness ID' => $this->insertStructuralRow(
+                $readiness,
+                $statusFour,
+                '`PH3-RDY-005` | `BLOCKED` | Unknown malformed declaration. |',
+            ),
+        ];
+
+        foreach ($readinessMutations as $mutation => $mutatedReadiness) {
+            $this->assertNotSame(
+                [],
+                $this->readinessStatusContract($mutatedReadiness)['violations'],
+                "Terminal readiness mutation must fail closed: {$mutation}",
+            );
+        }
+        $terminalReadinessContract = $this->readinessStatusContract(
+            $readinessMutations['RT1 terminal missing opening pipe'],
+        );
+        $this->assertSame(5, $terminalReadinessContract['raw_count']);
+        $this->assertSame(4, $terminalReadinessContract['parsed_count']);
+        $this->assertSame([], $this->readinessStatusContract($readiness)['violations'], 'RT10 canonical');
+
+        $firstInventoryRow = $this->structuralMarkdownRow(
+            $runtimeInventory,
+            'supplier_import_execution_claims',
+        );
+        $outboxRow = $this->structuralMarkdownRow(
+            $runtimeInventory,
+            'supplier_import_dispatch_outbox',
+        );
+        $monitorRow = $this->structuralMarkdownRow(
+            $runtimeInventory,
+            'supplier_import_dispatch_monitor_health',
+        );
+        $claimModelRow = $this->structuralMarkdownRow(
+            $runtimeInventory,
+            'SupplierImportExecutionClaim',
+        );
+        $finalInventoryRow = $this->structuralMarkdownRow($runtimeInventory, 'SnapshotSourceIdentity');
+        $terminalUnquotedOutbox = 'supplier_import_dispatch_outbox | `PRESENT / DEPLOYED` | `INACTIVE / UNWIRED` | Terminal malformed declaration. |';
+        $inventoryMutations = [
+            'IT1 terminal unquoted outbox' => $this->insertStructuralRow(
+                $runtimeInventory,
+                $finalInventoryRow,
+                $terminalUnquotedOutbox,
+            ),
+            'IT2 leading unquoted outbox' => $this->insertStructuralRow(
+                $runtimeInventory,
+                $firstInventoryRow,
+                $terminalUnquotedOutbox,
+                before: true,
+            ),
+            'IT3 middle unquoted outbox' => $this->insertStructuralRow(
+                $runtimeInventory,
+                $monitorRow,
+                $terminalUnquotedOutbox,
+                before: true,
+            ),
+            'IT4 missing opening pipe' => $this->insertStructuralRow(
+                $runtimeInventory,
+                $outboxRow,
+                '`supplier_import_dispatch_outbox` | `PRESENT / DEPLOYED` | `INACTIVE / UNWIRED` | Missing opening delimiter. |',
+            ),
+            'IT5 missing closing pipe' => $this->replaceStructuralText(
+                $runtimeInventory,
+                $outboxRow,
+                '| `supplier_import_dispatch_outbox` | `PRESENT / DEPLOYED` | `INACTIVE / UNWIRED` | Missing closing delimiter.',
+            ),
+            'IT6 wrong cell count' => $this->replaceStructuralText(
+                $runtimeInventory,
+                $outboxRow,
+                '| `supplier_import_dispatch_outbox` | `PRESENT / DEPLOYED` | `INACTIVE / UNWIRED` |',
+            ),
+            'IT7 plain text known artifact' => $this->replaceStructuralText(
+                $runtimeInventory,
+                $outboxRow,
+                'supplier_import_dispatch_outbox = PRESENT / DEPLOYED',
+            ),
+            'IT8 malformed unknown artifact' => $this->insertStructuralRow(
+                $runtimeInventory,
+                $outboxRow,
+                'UnknownRuntimeArtifact | `PRESENT / DEPLOYED` | `UNCALLED` | Unknown malformed declaration. |',
+            ),
+            'IT9 terminal malformed Phase II model' => $this->insertStructuralRow(
+                $runtimeInventory,
+                $finalInventoryRow,
+                'SupplierImportExecutionClaim = PRESENT / DEPLOYED',
+            ),
+        ];
+
+        foreach ($inventoryMutations as $mutation => $mutatedInventory) {
+            $this->assertNotSame(
+                [],
+                $this->runtimeInventoryContract($mutatedInventory)['violations'],
+                "Terminal inventory mutation must fail closed: {$mutation}",
+            );
+        }
+        $terminalInventoryContract = $this->runtimeInventoryContract(
+            $inventoryMutations['IT1 terminal unquoted outbox'],
+        );
+        $this->assertSame(24, $terminalInventoryContract['raw_count']);
+        $this->assertSame(23, $terminalInventoryContract['parsed_count']);
+        $this->assertSame([], $this->runtimeInventoryContract($runtimeInventory)['violations'], 'IT10 canonical');
+
+        $canonicalRollout = $this->rolloutCheckpointContract($rollout);
+        $this->assertSame([], $canonicalRollout['violations'], 'RO7 canonical');
+        $row102 = collect($canonicalRollout['rows'])->first(
+            static fn (string $row): bool => str_starts_with($row, '| 102 |'),
+        );
+        $row103 = collect($canonicalRollout['rows'])->first(
+            static fn (string $row): bool => str_starts_with($row, '| 103 |'),
+        );
+        $this->assertIsString($row102);
+        $this->assertIsString($row103);
+        $malformedCheckpoint = '104 | malformed | none | none | none | none | fail | stop |';
+        $rolloutMutations = [
+            'RO1 terminal missing opening pipe' => $this->insertStructuralRow(
+                $rollout,
+                $row103,
+                $malformedCheckpoint,
+            ),
+            'RO2 terminal missing closing pipe' => $this->insertStructuralRow(
+                $rollout,
+                $row103,
+                '| 104 | malformed | none | none | none | none | fail | stop',
+            ),
+            'RO3 syntactically valid extra checkpoint' => $this->insertStructuralRow(
+                $rollout,
+                $row103,
+                '| 104 | Extra checkpoint | checkpoint 103 | none | none | none | fail | stop |',
+            ),
+            'RO4 malformed duplicate checkpoint 103' => $this->insertStructuralRow(
+                $rollout,
+                $row103,
+                '103 | duplicate | none | none | none | none | fail | stop |',
+            ),
+            'RO5 malformed checkpoint between 102 and 103' => $this->insertStructuralRow(
+                $rollout,
+                $row102,
+                $malformedCheckpoint,
+            ),
+            'RO6 malformed unknown checkpoint ID' => $this->insertStructuralRow(
+                $rollout,
+                $row103,
+                'checkpoint-x | malformed | none | none | none | none | fail | stop |',
+            ),
+        ];
+
+        foreach ($rolloutMutations as $mutation => $mutatedRollout) {
+            $this->assertNotSame(
+                [],
+                $this->rolloutCheckpointContract($mutatedRollout)['violations'],
+                "Terminal rollout mutation must fail closed: {$mutation}",
+            );
+        }
+        $terminalRolloutContract = $this->rolloutCheckpointContract(
+            $rolloutMutations['RO1 terminal missing opening pipe'],
+        );
+        $this->assertSame(104, $terminalRolloutContract['raw_count']);
+        $this->assertSame(103, $terminalRolloutContract['parsed_count']);
+
+        $expectedTuple = $this->expectedAuthorizationTuple();
+        $memberStart = '<!-- normative-authorization-procedure:start id=authorization-member-persistence -->';
+        $memberEnd = '<!-- normative-authorization-procedure:end id=authorization-member-persistence -->';
+        $memberDeclaration = 'Normative authorization procedure `authorization-member-persistence`';
+        $malformedMarker = '<!-- normative-authorization-procedure start id=authorization-member-persistence -->';
+        $procedureMutations = [
+            'PM1 malformed start delimiter' => $this->replaceStructuralText(
+                $design,
+                $memberStart,
+                $malformedMarker,
+            ),
+            'PM2 malformed end delimiter' => $this->replaceStructuralText(
+                $design,
+                $memberEnd,
+                '<!-- normative-authorization-procedure end id=authorization-member-persistence -->',
+            ),
+            'PM3 malformed declaration delimiter' => $this->replaceStructuralText(
+                $design,
+                $memberDeclaration,
+                'Normative authorization procedure: authorization-member-persistence',
+            ),
+            'PM4 missing procedure ID' => $this->replaceStructuralText(
+                $design,
+                $memberStart,
+                '<!-- normative-authorization-procedure:start -->',
+            ),
+            'PM5 unknown marker type' => $this->replaceStructuralText(
+                $design,
+                $memberStart,
+                '<!-- normative-authorization-procedure:middle id=authorization-member-persistence -->',
+            ),
+            'PM6 invalid procedure ID syntax' => $this->replaceStructuralText(
+                $design,
+                $memberStart,
+                '<!-- normative-authorization-procedure:start id=Authorization_Member -->',
+            ),
+            'PM7 unexpected marker tokens' => $this->replaceStructuralText(
+                $design,
+                $memberStart,
+                '<!-- normative-authorization-procedure:start id=authorization-member-persistence unexpected=true -->',
+            ),
+            'PM8 terminal malformed marker' => $design.PHP_EOL.$malformedMarker,
+            'PM9 malformed marker between valid blocks' => $this->replaceStructuralText(
+                $design,
+                $memberEnd,
+                $memberEnd.PHP_EOL.'<!-- normative-authorization-procedure start id=between-blocks -->',
+            ),
+        ];
+
+        foreach ($procedureMutations as $mutation => $mutatedDesign) {
+            $this->assertNotSame(
+                [],
+                $this->authorizationProcedureContract($mutatedDesign, $expectedTuple)['violations'],
+                "Malformed procedure marker mutation must fail closed: {$mutation}",
+            );
+        }
+        $terminalProcedureContract = $this->authorizationProcedureContract(
+            $procedureMutations['PM8 terminal malformed marker'],
+            $expectedTuple,
+        );
+        $this->assertSame(7, $terminalProcedureContract['marker_candidate_count']);
+        $this->assertSame(3, $terminalProcedureContract['declaration_candidate_count']);
+        $this->assertSame(
+            [],
+            $this->authorizationProcedureContract($design, $expectedTuple)['violations'],
+            'PM10 canonical',
+        );
+    }
+
+    public function test_other_high_value_bounded_tables_reject_terminal_omissions(): void
+    {
+        $design = $this->readDocument('docs/IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md');
+        $tables = [
+            'recovery protocol outcome' => [
+                'section' => $this->markdownSection(
+                    $design,
+                    '### Operationally governed recovery protocol outcomes',
+                    '## Cohort Enrollment Contract',
+                ),
+                'header' => '| Ownership and payload observation | Transport/response boundary | Permitted protocol outcome |',
+                'separator' => '| --- | --- | --- |',
+                'columns' => 3,
+                'rows' => 19,
+            ],
+            'crash and recovery' => [
+                'section' => $this->markdownSection(
+                    $design,
+                    '### Crash and recovery matrix',
+                    'Rows 52 through 66 are coordination-only crash domains.',
+                ),
+                'header' => '| Boundary | Path | SupplierImportRun | ImportJob | ImportHistory | Claim | Outbox | Evidence | Allowed recovery | Prohibited actions | Required operator action |',
+                'separator' => '| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |',
+                'columns' => 11,
+                'rows' => 66,
+            ],
+            'expected-state field inventory' => [
+                'section' => $this->markdownSection(
+                    $design,
+                    'The canonical object contains exactly these 20 keys in this exact order;',
+                    'The state machine still enforces every cross-field path',
+                ),
+                'header' => '| Position | Key | Exact JSON type and value contract | Nullable |',
+                'separator' => '| --- | --- | --- | --- |',
+                'columns' => 4,
+                'rows' => 20,
+            ],
+            'cryptographic identity inventory' => [
+                'section' => $this->markdownSection(
+                    $design,
+                    '### Authoritative cryptographic and digest identity inventory',
+                    '### Exact hexadecimal storage contract',
+                ),
+                'header' => '| # | Identity | Purpose | Producer | Canonical bytes and domain | Algorithm | Persistence location | Immutability | Comparison point |',
+                'separator' => '| --- | --- | --- | --- | --- | --- | --- | --- | --- |',
+                'columns' => 9,
+                'rows' => 22,
+            ],
+            'hexadecimal storage' => [
+                'section' => $this->markdownSection(
+                    $design,
+                    '### Exact hexadecimal storage contract',
+                    '## Append-only Enforcement',
+                ),
+                'header' => '| Table | Non-null lowercase hexadecimal columns | Nullable lowercase hexadecimal columns |',
+                'separator' => '| --- | --- | --- |',
+                'columns' => 3,
+                'rows' => 10,
+            ],
+        ];
+
+        foreach ($tables as $context => $definition) {
+            $canonical = $this->structuralMarkdownTable(
+                $definition['section'],
+                $definition['header'],
+                $definition['separator'],
+                $context,
+                $definition['columns'],
+            );
+            $this->assertSame([], $canonical['violations'], "Canonical table must pass: {$context}");
+            $this->assertSame($definition['rows'], $canonical['physical_count']);
+
+            $lastRow = $canonical['rows'][array_key_last($canonical['rows'])];
+            $terminalMalformed = substr($lastRow, 1);
+            $mutated = $this->insertStructuralRow($definition['section'], $lastRow, $terminalMalformed);
+            $mutatedContract = $this->structuralMarkdownTable(
+                $mutated,
+                $definition['header'],
+                $definition['separator'],
+                $context,
+                $definition['columns'],
+            );
+
+            $this->assertSame($definition['rows'] + 1, $mutatedContract['physical_count']);
+            $this->assertNotSame(
+                [],
+                $mutatedContract['violations'],
+                "Terminal malformed declaration must be discovered and rejected: {$context}",
+            );
+        }
     }
 
     public function test_watchdog_contract_boundaries_are_discovered_before_pairing_and_body_validation(): void
@@ -1840,17 +2288,23 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
 
     /**
      * @param  array<int, string>  $expectedTuple
-     * @return array{registry_ids: array<int, string>, violations: array<int, string>}
+     * @return array{
+     *     registry_ids: array<int, string>,
+     *     marker_candidate_count: int,
+     *     declaration_candidate_count: int,
+     *     violations: array<int, string>
+     * }
      */
     private function authorizationProcedureContract(string $design, array $expectedTuple): array
     {
         $registryIds = $this->authorizationProcedureRegistryIds($design);
-        $startIds = $this->authorizationProcedureMarkerIds($design, 'start');
-        $endIds = $this->authorizationProcedureMarkerIds($design, 'end');
-        $declarationIds = $this->authorizationProcedureDeclarationIds($design);
+        $structure = $this->authorizationProcedureStructure($design);
+        $startIds = $structure['start_ids'];
+        $endIds = $structure['end_ids'];
+        $declarationIds = $structure['declaration_ids'];
         $blockRows = $this->authorizationProcedureBlockRows($design);
         $blockIds = array_column($blockRows, 'id');
-        $violations = [];
+        $violations = $structure['violations'];
 
         if ($registryIds === []) {
             $violations[] = 'Normative authorization procedure registry is missing or empty.';
@@ -1921,7 +2375,9 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
 
         return [
             'registry_ids' => $registryIds,
-            'violations' => $violations,
+            'marker_candidate_count' => $structure['marker_candidate_count'],
+            'declaration_candidate_count' => $structure['declaration_candidate_count'],
+            'violations' => array_values(array_unique($violations)),
         ];
     }
 
@@ -1939,28 +2395,78 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
             : [];
     }
 
-    /** @return array<int, string> */
-    private function authorizationProcedureMarkerIds(string $design, string $marker): array
+    /**
+     * @return array{
+     *     start_ids: array<int, string>,
+     *     end_ids: array<int, string>,
+     *     declaration_ids: array<int, string>,
+     *     marker_candidate_count: int,
+     *     declaration_candidate_count: int,
+     *     violations: array<int, string>
+     * }
+     */
+    private function authorizationProcedureStructure(string $design): array
     {
-        preg_match_all(
-            '/^<!-- normative-authorization-procedure:'.preg_quote($marker, '/').' id=(?<id>[a-z0-9-]+) -->$/m',
-            $design,
-            $matches,
-        );
+        $startIds = [];
+        $endIds = [];
+        $declarationIds = [];
+        $markerCandidateCount = 0;
+        $declarationCandidateCount = 0;
+        $violations = [];
 
-        return array_values($matches['id'] ?? []);
-    }
+        foreach (preg_split('/\R/', $design) ?: [] as $lineNumber => $line) {
+            if (str_contains($line, 'normative-authorization-procedure')) {
+                $markerCandidateCount++;
 
-    /** @return array<int, string> */
-    private function authorizationProcedureDeclarationIds(string $design): array
-    {
-        preg_match_all(
-            '/^Normative authorization procedure `(?<id>[a-z0-9-]+)`$/m',
-            $design,
-            $matches,
-        );
+                if (preg_match(
+                    '/^<!-- normative-authorization-procedure:(?<marker>start|end) id=(?<id>[a-z0-9-]+) -->$/',
+                    $line,
+                    $marker,
+                ) !== 1) {
+                    $violations[] = 'Malformed normative authorization procedure marker at line '.($lineNumber + 1).'.';
 
-        return array_values($matches['id'] ?? []);
+                    continue;
+                }
+
+                if ($marker['marker'] === 'start') {
+                    $startIds[] = $marker['id'];
+                } else {
+                    $endIds[] = $marker['id'];
+                }
+            }
+
+            if (! str_contains($line, 'Normative authorization procedure')) {
+                continue;
+            }
+            if (in_array($line, [
+                '### Normative authorization procedure registry',
+                'Normative authorization procedure registry (ordered):',
+            ], true)) {
+                continue;
+            }
+
+            $declarationCandidateCount++;
+            if (preg_match(
+                '/^Normative authorization procedure `(?<id>[a-z0-9-]+)`$/',
+                $line,
+                $declaration,
+            ) !== 1) {
+                $violations[] = 'Malformed normative authorization procedure declaration at line '.($lineNumber + 1).'.';
+
+                continue;
+            }
+
+            $declarationIds[] = $declaration['id'];
+        }
+
+        return [
+            'start_ids' => $startIds,
+            'end_ids' => $endIds,
+            'declaration_ids' => $declarationIds,
+            'marker_candidate_count' => $markerCandidateCount,
+            'declaration_candidate_count' => $declarationCandidateCount,
+            'violations' => $violations,
+        ];
     }
 
     /** @return array<int, array{id: string, body: string}> */
@@ -2658,6 +3164,8 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
             '| Finding | Verdict | Exact boundary |',
             '| --- | --- | --- |',
             'readiness status',
+            3,
+            '/^\s*(?:\|\s*)?`?PH3-RDY-[0-9]+`?\s*(?:\||=)/',
         );
         $rows = [];
         $violations = $table['violations'];
@@ -2771,6 +3279,8 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
             '| Artifact | Artifact status | Supplier-runtime status | Repository evidence |',
             '| --- | --- | --- | --- |',
             'runtime inventory',
+            4,
+            '/^\s*(?:\|\s*)?`?[A-Za-z_][A-Za-z0-9_\/-]*(?: [A-Za-z0-9_\/ -]+)*`?\s*(?:\||=)/',
         );
         $rows = [];
         $violations = $table['violations'];
@@ -2912,6 +3422,78 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
     }
 
     /**
+     * @return array{
+     *     rows: array<int, string>,
+     *     violations: array<int, string>,
+     *     raw_count: int,
+     *     parsed_count: int
+     * }
+     */
+    private function rolloutCheckpointContract(string $rollout): array
+    {
+        $table = $this->structuralMarkdownTable(
+            $rollout,
+            '| # | Checkpoint | Prerequisite | Separately responsible authorization | Permitted action | Result/artifact | Failure behavior | Next |',
+            '| --- | --- | --- | --- | --- | --- | --- | --- |',
+            'rollout checkpoint',
+            8,
+            '/^\s*(?:\|\s*)?`?(?:[0-9]+|[A-Za-z][A-Za-z0-9_-]*)`?\s*(?:\||=)/',
+        );
+        $rows = [];
+        $keys = [];
+        $violations = $table['violations'];
+
+        foreach ($table['rows'] as $position => $physicalRow) {
+            $parsed = $this->structuralMarkdownRowCells(
+                $physicalRow,
+                8,
+                'rollout checkpoint',
+                $position + 1,
+            );
+            $violations = [...$violations, ...$parsed['violations']];
+
+            if ($parsed['cells'] === null) {
+                continue;
+            }
+
+            $idCell = $parsed['cells'][0];
+            if (preg_match('/^[0-9]+$/', $idCell) !== 1) {
+                $violations[] = 'Malformed rollout checkpoint ID at physical row '.($position + 1).'.';
+
+                continue;
+            }
+
+            $id = (int) $idCell;
+            $rows[] = $physicalRow;
+            $keys[] = ['id' => $id];
+        }
+
+        $expectedIds = range(1, 103);
+        $actualIds = array_column($keys, 'id');
+        $violations = [
+            ...$violations,
+            ...$this->duplicateStructuralKeyViolations($keys, 'id', 'rollout checkpoint'),
+        ];
+
+        if ($table['physical_count'] !== count($expectedIds)) {
+            $violations[] = 'Rollout checkpoint raw declaration count does not match the expected registry.';
+        }
+        if (count($rows) !== $table['physical_count']) {
+            $violations[] = 'Every physical rollout checkpoint declaration must parse successfully.';
+        }
+        if ($actualIds !== $expectedIds) {
+            $violations[] = 'Rollout checkpoint IDs must be exactly the ordered range 1 through 103.';
+        }
+
+        return [
+            'rows' => $rows,
+            'violations' => array_values(array_unique($violations)),
+            'raw_count' => $table['physical_count'],
+            'parsed_count' => count($rows),
+        ];
+    }
+
+    /**
      * @return array{rows: array<int, string>, violations: array<int, string>, physical_count: int}
      */
     private function structuralMarkdownTable(
@@ -2919,50 +3501,53 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
         string $expectedHeader,
         string $expectedSeparator,
         string $context,
+        int $expectedColumns,
+        ?string $declarationIntentPattern = null,
     ): array {
         $lines = preg_split('/\R/', $contents) ?: [];
-        $blocks = [];
-        $currentBlock = [];
-        $headerCount = 0;
+        $headerPositions = [];
+        $separatorPositions = [];
+        $rows = [];
 
-        foreach ($lines as $line) {
+        foreach ($lines as $lineNumber => $line) {
             if ($line === $expectedHeader) {
-                $headerCount++;
-            }
+                $headerPositions[] = $lineNumber;
 
-            if (str_starts_with(ltrim($line), '|')) {
-                $currentBlock[] = $line;
+                continue;
+            }
+            if ($line === $expectedSeparator) {
+                $separatorPositions[] = $lineNumber;
 
                 continue;
             }
 
-            if ($currentBlock !== []) {
-                $blocks[] = $currentBlock;
-                $currentBlock = [];
+            $hasDeclarationIntent = $declarationIntentPattern !== null
+                && preg_match($declarationIntentPattern, $line) === 1;
+            if (str_contains($line, '|') || $hasDeclarationIntent) {
+                $rows[] = $line;
             }
         }
 
-        if ($currentBlock !== []) {
-            $blocks[] = $currentBlock;
-        }
-
         $violations = [];
-        if (count($blocks) !== 1) {
-            $violations[] = "The bounded {$context} section must contain exactly one physical table.";
-        }
-        if ($headerCount !== 1) {
+        if (count($headerPositions) !== 1) {
             $violations[] = "The {$context} table must contain exactly one canonical header.";
         }
-
-        $table = $blocks[0] ?? [];
-        if (($table[0] ?? null) !== $expectedHeader) {
-            $violations[] = "The {$context} table header is malformed.";
+        if (count($separatorPositions) !== 1) {
+            $violations[] = "The {$context} table must contain exactly one canonical separator.";
         }
-        if (($table[1] ?? null) !== $expectedSeparator) {
-            $violations[] = "The {$context} table separator is malformed.";
+        if (count($headerPositions) === 1 && count($separatorPositions) === 1
+            && $separatorPositions[0] !== $headerPositions[0] + 1) {
+            $violations[] = "The {$context} table separator must immediately follow its header.";
         }
-
-        $rows = array_slice($table, 2);
+        foreach ($rows as $position => $row) {
+            $parsed = $this->structuralMarkdownRowCells(
+                $row,
+                $expectedColumns,
+                $context,
+                $position + 1,
+            );
+            $violations = [...$violations, ...$parsed['violations']];
+        }
 
         return [
             'rows' => $rows,
@@ -3084,25 +3669,6 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
         $documents[$path] = $this->replaceStructuralText($documents[$path], $search, $replacement);
 
         return $documents;
-    }
-
-    /** @return array<int, string> */
-    private function markdownTableRows(string $contents, string $header): array
-    {
-        $lines = preg_split('/\\R/', $contents);
-        $headerIndex = array_search($header, $lines, true);
-
-        if ($headerIndex === false) {
-            return [];
-        }
-
-        $rows = [];
-
-        for ($index = $headerIndex + 2; isset($lines[$index]) && str_starts_with($lines[$index], '|'); $index++) {
-            $rows[] = $lines[$index];
-        }
-
-        return $rows;
     }
 
     /** @return array<int, string> */
