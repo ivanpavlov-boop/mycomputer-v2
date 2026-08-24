@@ -191,29 +191,30 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
         $this->assertStringContainsString("event_kind = BINARY _ascii'action_stopped'", $actionConstraint['republish']);
         $this->assertStringNotContainsString("event_kind = BINARY _ascii'terminalization_succeeded'", $actionConstraint['republish']);
 
-        $tableRows = static function (string $header) use ($design): array {
-            $lines = preg_split('/\\R/', $design);
-            $headerIndex = array_search($header, $lines, true);
-
-            if ($headerIndex === false) {
-                return [];
-            }
-
-            $rows = [];
-
-            for ($index = $headerIndex + 2; isset($lines[$index]) && str_starts_with($lines[$index], '|'); $index++) {
-                $rows[] = $lines[$index];
-            }
-
-            return $rows;
-        };
-
-        $protocolRows = $tableRows('| Ownership and payload observation | Transport/response boundary | Permitted protocol outcome |');
-        $crashRows = $tableRows('| Boundary | Path | SupplierImportRun | ImportJob | ImportHistory | Claim | Outbox | Evidence | Allowed recovery | Prohibited actions | Required operator action |');
-        $rolloutRows = $tableRows('| # | Checkpoint | Prerequisite | Separately responsible authorization | Permitted action | Result/artifact | Failure behavior | Next |');
-        $stateFieldRows = $tableRows('| Position | Key | Exact JSON type and value contract | Nullable |');
-        $digestRows = $tableRows('| # | Identity | Purpose | Producer | Canonical bytes and domain | Algorithm | Persistence location | Immutability | Comparison point |');
-        $hexStorageRows = $tableRows('| Table | Non-null lowercase hexadecimal columns | Nullable lowercase hexadecimal columns |');
+        $protocolRows = $this->markdownTableRows(
+            $design,
+            '| Ownership and payload observation | Transport/response boundary | Permitted protocol outcome |',
+        );
+        $crashRows = $this->markdownTableRows(
+            $design,
+            '| Boundary | Path | SupplierImportRun | ImportJob | ImportHistory | Claim | Outbox | Evidence | Allowed recovery | Prohibited actions | Required operator action |',
+        );
+        $rolloutRows = $this->markdownTableRows(
+            $design,
+            '| # | Checkpoint | Prerequisite | Separately responsible authorization | Permitted action | Result/artifact | Failure behavior | Next |',
+        );
+        $stateFieldRows = $this->markdownTableRows(
+            $design,
+            '| Position | Key | Exact JSON type and value contract | Nullable |',
+        );
+        $digestRows = $this->markdownTableRows(
+            $design,
+            '| # | Identity | Purpose | Producer | Canonical bytes and domain | Algorithm | Persistence location | Immutability | Comparison point |',
+        );
+        $hexStorageRows = $this->markdownTableRows(
+            $design,
+            '| Table | Non-null lowercase hexadecimal columns | Nullable lowercase hexadecimal columns |',
+        );
 
         $this->assertCount(19, $protocolRows);
         $this->assertCount(66, $crashRows);
@@ -531,6 +532,20 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
             }
         }
 
+        $rolloutCheckpointRows = array_map(
+            static function (string $row): array {
+                $cells = array_map('trim', explode('|', trim($row, '|')));
+
+                return ['id' => (int) $cells[0]];
+            },
+            $rolloutRows,
+        );
+        $this->assertSame(
+            [],
+            $this->duplicateStructuralKeyViolations($rolloutCheckpointRows, 'id', 'rollout checkpoint'),
+        );
+        $this->assertSame(range(1, 103), array_column($rolloutCheckpointRows, 'id'));
+
         $rolloutByCheckpoint = collect($rolloutRows)->mapWithKeys(
             static function (string $row): array {
                 $cells = array_map('trim', explode('|', trim($row, '|')));
@@ -680,18 +695,22 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
             '### Canonical source scope',
         );
 
-        preg_match_all(
-            '/^\| `(PH3-RDY-[0-9]{3})` \| `(BLOCKED|CLOSED)` \|/m',
-            $readiness,
-            $statusMatches,
-            PREG_SET_ORDER,
-        );
-        $this->assertSame([
+        $readinessStatusContract = $this->readinessStatusContract($readiness);
+        $expectedReadinessStatuses = [
             'PH3-RDY-001' => 'BLOCKED',
             'PH3-RDY-002' => 'BLOCKED',
             'PH3-RDY-003' => 'BLOCKED',
             'PH3-RDY-004' => 'CLOSED',
-        ], array_column($statusMatches, 2, 1));
+        ];
+        $this->assertSame(
+            [],
+            $readinessStatusContract['violations'],
+            implode(PHP_EOL, $readinessStatusContract['violations']),
+        );
+        $this->assertSame(4, $readinessStatusContract['raw_count']);
+        $this->assertSame(4, $readinessStatusContract['unique_count']);
+        $this->assertSame(4, $readinessStatusContract['expected_count']);
+        $this->assertSame($expectedReadinessStatuses, $readinessStatusContract['statuses']);
         $this->assertStringNotContainsString('| `PH3-RDY-001` | `CLOSED` |', $readiness);
         $this->assertStringContainsString(
             'Existing application candidate rows do not carry immutable source provenance',
@@ -943,7 +962,16 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
             '### Current deployed artifact inventory',
             '### Remaining runtime implementation gaps',
         );
-        $runtimeInventoryRows = $this->runtimeInventoryRows($runtimeInventory);
+        $runtimeInventoryContract = $this->runtimeInventoryContract($runtimeInventory);
+        $this->assertSame(
+            [],
+            $runtimeInventoryContract['violations'],
+            implode(PHP_EOL, $runtimeInventoryContract['violations']),
+        );
+        $this->assertSame(23, $runtimeInventoryContract['raw_count']);
+        $this->assertSame(23, $runtimeInventoryContract['unique_count']);
+        $this->assertSame(23, $runtimeInventoryContract['expected_count']);
+        $runtimeInventoryRows = $runtimeInventoryContract['artifacts'];
         $phaseOneTables = [
             'supplier_import_execution_claims' => 'database/migrations/2026_08_20_120001_create_supplier_import_execution_claims_table.php',
             'supplier_import_dispatch_outbox' => 'database/migrations/2026_08_20_120002_create_supplier_import_dispatch_outbox_table.php',
@@ -1079,7 +1107,7 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
         $this->assertCount(
             3,
             array_filter(
-                array_column($statusMatches, 2, 1),
+                $readinessStatusContract['statuses'],
                 static fn (string $status): bool => $status === 'BLOCKED',
             ),
         );
@@ -1094,6 +1122,232 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
                 $currentStatus,
             );
         }
+    }
+
+    public function test_phase_three_readiness_structural_collections_reject_duplicate_shadowing(): void
+    {
+        $design = $this->readDocument('docs/IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md');
+        $plan = $this->readDocument('docs/PHASE_9C6_5C3D1_RUNTIME_IMPLEMENTATION_PLAN.md');
+        $readiness = $this->markdownSection(
+            $design,
+            '### Phase III readiness findings and authority',
+            '### Canonical source scope',
+        );
+        $runtimeInventory = $this->markdownSection(
+            $plan,
+            '### Current deployed artifact inventory',
+            '### Remaining runtime implementation gaps',
+        );
+
+        $statusRows = [
+            'PH3-RDY-001' => $this->structuralMarkdownRow($readiness, 'PH3-RDY-001'),
+            'PH3-RDY-002' => $this->structuralMarkdownRow($readiness, 'PH3-RDY-002'),
+            'PH3-RDY-003' => $this->structuralMarkdownRow($readiness, 'PH3-RDY-003'),
+            'PH3-RDY-004' => $this->structuralMarkdownRow($readiness, 'PH3-RDY-004'),
+        ];
+        $closedTwo = '| `PH3-RDY-002` | `CLOSED` | Contradictory mutation row. |';
+        $readinessMutations = [
+            'R1 conflicting duplicate before canonical' => $this->insertStructuralRow(
+                $readiness,
+                $statusRows['PH3-RDY-002'],
+                $closedTwo,
+                before: true,
+            ),
+            'R2 conflicting duplicate after canonical' => $this->insertStructuralRow(
+                $readiness,
+                $statusRows['PH3-RDY-002'],
+                $closedTwo,
+            ),
+            'R3 identical PH3-RDY-002 duplicate before canonical' => $this->insertStructuralRow(
+                $readiness,
+                $statusRows['PH3-RDY-002'],
+                $statusRows['PH3-RDY-002'],
+                before: true,
+            ),
+            'R4 identical PH3-RDY-002 duplicate after canonical' => $this->insertStructuralRow(
+                $readiness,
+                $statusRows['PH3-RDY-002'],
+                $statusRows['PH3-RDY-002'],
+            ),
+            'R5 identical PH3-RDY-001 duplicate' => $this->insertStructuralRow(
+                $readiness,
+                $statusRows['PH3-RDY-001'],
+                $statusRows['PH3-RDY-001'],
+            ),
+            'R6 identical PH3-RDY-004 duplicate' => $this->insertStructuralRow(
+                $readiness,
+                $statusRows['PH3-RDY-004'],
+                $statusRows['PH3-RDY-004'],
+            ),
+            'R7 unknown readiness ID' => $this->insertStructuralRow(
+                $readiness,
+                $statusRows['PH3-RDY-004'],
+                '| `PH3-RDY-005` | `BLOCKED` | Unknown mutation row. |',
+            ),
+            'R8 missing readiness ID' => $this->removeStructuralRow(
+                $readiness,
+                $statusRows['PH3-RDY-003'],
+            ),
+        ];
+
+        foreach ($readinessMutations as $mutation => $mutatedReadiness) {
+            $this->assertNotSame(
+                [],
+                $this->readinessStatusContract($mutatedReadiness)['violations'],
+                "Mutation must fail closed: {$mutation}",
+            );
+        }
+        $this->assertContains(
+            'Duplicate readiness status key: PH3-RDY-002 (2 occurrences).',
+            $this->readinessStatusContract(
+                $readinessMutations['R1 conflicting duplicate before canonical'],
+            )['violations'],
+        );
+
+        $canonicalStatusBlock = implode("\n", array_values($statusRows));
+        $reorderedStatusBlock = implode("\n", [
+            $statusRows['PH3-RDY-004'],
+            $statusRows['PH3-RDY-002'],
+            $statusRows['PH3-RDY-001'],
+            $statusRows['PH3-RDY-003'],
+        ]);
+        $this->assertSame(1, substr_count($readiness, $canonicalStatusBlock));
+        $reorderedReadiness = str_replace($canonicalStatusBlock, $reorderedStatusBlock, $readiness);
+        $this->assertSame(
+            [],
+            $this->readinessStatusContract($reorderedReadiness)['violations'],
+            'R9 readiness row order is non-normative; exact IDs, uniqueness, and values remain normative.',
+        );
+
+        $outboxRow = $this->structuralMarkdownRow($runtimeInventory, 'supplier_import_dispatch_outbox');
+        $claimModelRow = $this->structuralMarkdownRow($runtimeInventory, 'SupplierImportExecutionClaim');
+        $sourceIdentityRow = $this->structuralMarkdownRow($runtimeInventory, 'SnapshotSourceIdentity');
+        $conflictingOutbox = '| `supplier_import_dispatch_outbox` | `NOT IMPLEMENTED / FUTURE` | `INACTIVE` | Contradictory mutation row. |';
+        $inventoryMutations = [
+            'I1 conflicting outbox duplicate before canonical' => $this->insertStructuralRow(
+                $runtimeInventory,
+                $outboxRow,
+                $conflictingOutbox,
+                before: true,
+            ),
+            'I2 conflicting outbox duplicate after canonical' => $this->insertStructuralRow(
+                $runtimeInventory,
+                $outboxRow,
+                $conflictingOutbox,
+            ),
+            'I3 identical outbox duplicate before canonical' => $this->insertStructuralRow(
+                $runtimeInventory,
+                $outboxRow,
+                $outboxRow,
+                before: true,
+            ),
+            'I4 identical outbox duplicate after canonical' => $this->insertStructuralRow(
+                $runtimeInventory,
+                $outboxRow,
+                $outboxRow,
+            ),
+            'I5 conflicting Phase II model duplicate' => $this->insertStructuralRow(
+                $runtimeInventory,
+                $claimModelRow,
+                '| `SupplierImportExecutionClaim` | `MISSING` | `INACTIVE` | Contradictory mutation row. |',
+            ),
+            'I6 identical Phase II model duplicate' => $this->insertStructuralRow(
+                $runtimeInventory,
+                $claimModelRow,
+                $claimModelRow,
+            ),
+            'I7 unknown artifact' => $this->insertStructuralRow(
+                $runtimeInventory,
+                $sourceIdentityRow,
+                '| `UnknownPhaseThreeArtifact` | `PRESENT / DEPLOYED` | `UNCALLED` | Unknown mutation row. |',
+            ),
+            'I8 missing required artifact' => $this->removeStructuralRow(
+                $runtimeInventory,
+                $sourceIdentityRow,
+            ),
+            'I9 whitespace-variant artifact identity' => $this->insertStructuralRow(
+                $runtimeInventory,
+                $outboxRow,
+                '| `supplier_import_dispatch_outbox ` | `PRESENT / DEPLOYED` | `INACTIVE / UNWIRED` | Non-canonical mutation row. |',
+            ),
+            'I9 case-variant artifact identity' => $this->insertStructuralRow(
+                $runtimeInventory,
+                $outboxRow,
+                '| `Supplier_Import_Dispatch_Outbox` | `PRESENT / DEPLOYED` | `INACTIVE / UNWIRED` | Non-canonical mutation row. |',
+            ),
+        ];
+
+        foreach ($inventoryMutations as $mutation => $mutatedInventory) {
+            $this->assertNotSame(
+                [],
+                $this->runtimeInventoryContract($mutatedInventory)['violations'],
+                "Mutation must fail closed: {$mutation}",
+            );
+        }
+        $this->assertContains(
+            'Duplicate runtime inventory artifact key: supplier_import_dispatch_outbox (2 occurrences).',
+            $this->runtimeInventoryContract(
+                $inventoryMutations['I1 conflicting outbox duplicate before canonical'],
+            )['violations'],
+        );
+
+        $documents = $this->watchdogDocumentation();
+        $watchdogPath = 'docs/IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md';
+        $this->assertSame(
+            1,
+            preg_match(
+                $this->watchdogStateContractPattern(),
+                $documents[$watchdogPath],
+                $watchdogContractMatch,
+            ),
+        );
+        $documents[$watchdogPath] .= PHP_EOL.$watchdogContractMatch[0];
+        $this->assertNotSame(
+            [],
+            $this->watchdogDocumentationContract(
+                $documents,
+                $this->readDocument(
+                    'database/migrations/2026_08_20_120002_create_supplier_import_dispatch_outbox_table.php',
+                ),
+            )['violations'],
+            'D1 duplicate watchdog contract ID must fail closed.',
+        );
+
+        $this->assertNotSame(
+            [],
+            $this->authorizationProcedureContract(
+                $this->registerAuthorizationProcedure($design, 'authorization-member-persistence'),
+                $this->expectedAuthorizationTuple(),
+            )['violations'],
+            'D2 duplicate procedure registry ID must fail closed.',
+        );
+        $this->assertNotSame(
+            [],
+            $this->authorizationProcedureContract(
+                $design.PHP_EOL.'<!-- normative-authorization-procedure:start id=authorization-member-persistence -->',
+                $this->expectedAuthorizationTuple(),
+            )['violations'],
+            'D3 duplicate procedure start-marker ID must fail closed.',
+        );
+
+        $rolloutRows = $this->markdownTableRows(
+            $design,
+            '| # | Checkpoint | Prerequisite | Separately responsible authorization | Permitted action | Result/artifact | Failure behavior | Next |',
+        );
+        $duplicatedRolloutRows = [...$rolloutRows, $rolloutRows[0]];
+        $duplicatedRolloutKeys = array_map(
+            static function (string $row): array {
+                $cells = array_map('trim', explode('|', trim($row, '|')));
+
+                return ['id' => (int) $cells[0]];
+            },
+            $duplicatedRolloutRows,
+        );
+        $this->assertNotSame(
+            [],
+            $this->duplicateStructuralKeyViolations($duplicatedRolloutKeys, 'id', 'rollout checkpoint'),
+            'D4 duplicate rollout checkpoint ID must fail before keyed conversion.',
+        );
     }
 
     public function test_readiness_status_and_procedure_enumeration_reject_adversarial_mutations(): void
@@ -1346,7 +1600,8 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
         $startIds = $this->authorizationProcedureMarkerIds($design, 'start');
         $endIds = $this->authorizationProcedureMarkerIds($design, 'end');
         $declarationIds = $this->authorizationProcedureDeclarationIds($design);
-        $blocks = $this->authorizationProcedureBlocks($design);
+        $blockRows = $this->authorizationProcedureBlockRows($design);
+        $blockIds = array_column($blockRows, 'id');
         $violations = [];
 
         if ($registryIds === []) {
@@ -1358,9 +1613,17 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
             'start markers' => $startIds,
             'end markers' => $endIds,
             'declarations' => $declarationIds,
+            'bounded blocks' => $blockIds,
         ] as $source => $ids) {
             if (count($ids) !== count(array_unique($ids))) {
                 $violations[] = "Duplicate normative authorization procedure ID in {$source}.";
+            }
+        }
+
+        $blocks = [];
+        if (count($blockIds) === count(array_unique($blockIds))) {
+            foreach ($blockRows as $blockRow) {
+                $blocks[$blockRow['id']] = $blockRow['body'];
             }
         }
 
@@ -1368,7 +1631,7 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
             'start markers' => $startIds,
             'end markers' => $endIds,
             'declarations' => $declarationIds,
-            'bounded blocks' => array_keys($blocks),
+            'bounded blocks' => $blockIds,
         ] as $source => $ids) {
             if ($registryIds !== $ids) {
                 $violations[] = "Registry IDs do not exactly match {$source}.";
@@ -1452,8 +1715,8 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
         return array_values($matches['id'] ?? []);
     }
 
-    /** @return array<string, string> */
-    private function authorizationProcedureBlocks(string $design): array
+    /** @return array<int, array{id: string, body: string}> */
+    private function authorizationProcedureBlockRows(string $design): array
     {
         preg_match_all(
             '/^<!-- normative-authorization-procedure:start id=(?<id>[a-z0-9-]+) -->\R'.
@@ -1464,12 +1727,13 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
             PREG_SET_ORDER,
         );
 
-        $blocks = [];
-        foreach ($matches as $match) {
-            $blocks[$match['id']] = $match['body'];
-        }
-
-        return $blocks;
+        return array_map(
+            static fn (array $match): array => [
+                'id' => $match['id'],
+                'body' => $match['body'],
+            ],
+            $matches,
+        );
     }
 
     /** @return array<int, string> */
@@ -1949,8 +2213,147 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
         ));
     }
 
-    /** @return array<string, array{artifact_status: string, runtime_status: string}> */
-    private function runtimeInventoryRows(string $inventory): array
+    /**
+     * @return array{
+     *     rows: array<int, array{id: string, status: string}>,
+     *     statuses: array<string, string>,
+     *     violations: array<int, string>,
+     *     raw_count: int,
+     *     unique_count: int,
+     *     expected_count: int
+     * }
+     */
+    private function readinessStatusContract(string $readiness): array
+    {
+        preg_match_all(
+            '/^\| `(?<id>PH3-RDY-[0-9]{3})` \| `(?<status>BLOCKED|CLOSED)` \|/m',
+            $readiness,
+            $matches,
+            PREG_SET_ORDER,
+        );
+
+        $rows = array_map(
+            static fn (array $match): array => [
+                'id' => $match['id'],
+                'status' => $match['status'],
+            ],
+            $matches,
+        );
+        $expectedStatuses = [
+            'PH3-RDY-001' => 'BLOCKED',
+            'PH3-RDY-002' => 'BLOCKED',
+            'PH3-RDY-003' => 'BLOCKED',
+            'PH3-RDY-004' => 'CLOSED',
+        ];
+        $ids = array_column($rows, 'id');
+        $uniqueIds = array_values(array_unique($ids));
+        $duplicateViolations = $this->duplicateStructuralKeyViolations($rows, 'id', 'readiness status');
+        $violations = $duplicateViolations;
+        $expectedIds = array_keys($expectedStatuses);
+        $actualIdSet = $uniqueIds;
+        sort($actualIdSet);
+        $expectedIdSet = $expectedIds;
+        sort($expectedIdSet);
+
+        if (count($rows) !== count($expectedIds)) {
+            $violations[] = 'Readiness status raw declaration count does not match the expected registry.';
+        }
+        if (count($uniqueIds) !== count($expectedIds)) {
+            $violations[] = 'Readiness status unique ID count does not match the expected registry.';
+        }
+        if ($actualIdSet !== $expectedIdSet) {
+            $violations[] = 'Readiness status IDs do not exactly match the expected registry.';
+        }
+
+        $statuses = [];
+        if ($duplicateViolations === []) {
+            foreach ($rows as $row) {
+                $statuses[$row['id']] = $row['status'];
+            }
+            ksort($statuses);
+
+            if ($statuses !== $expectedStatuses) {
+                $violations[] = 'Readiness statuses do not match the expected values.';
+            }
+        }
+
+        return [
+            'rows' => $rows,
+            'statuses' => $statuses,
+            'violations' => array_values(array_unique($violations)),
+            'raw_count' => count($rows),
+            'unique_count' => count($uniqueIds),
+            'expected_count' => count($expectedIds),
+        ];
+    }
+
+    /**
+     * @return array{
+     *     rows: array<int, array{artifact: string, artifact_status: string, runtime_status: string}>,
+     *     artifacts: array<string, array{artifact_status: string, runtime_status: string}>,
+     *     violations: array<int, string>,
+     *     raw_count: int,
+     *     unique_count: int,
+     *     expected_count: int
+     * }
+     */
+    private function runtimeInventoryContract(string $inventory): array
+    {
+        $rows = $this->runtimeInventoryRowList($inventory);
+        $expectedArtifacts = $this->expectedRuntimeInventory();
+        $artifactIds = array_column($rows, 'artifact');
+        $uniqueArtifactIds = array_values(array_unique($artifactIds));
+        $duplicateViolations = $this->duplicateStructuralKeyViolations(
+            $rows,
+            'artifact',
+            'runtime inventory artifact',
+        );
+        $violations = $duplicateViolations;
+        $expectedArtifactIds = array_keys($expectedArtifacts);
+        $actualIdSet = $uniqueArtifactIds;
+        sort($actualIdSet);
+        $expectedIdSet = $expectedArtifactIds;
+        sort($expectedIdSet);
+
+        if (count($rows) !== count($expectedArtifactIds)) {
+            $violations[] = 'Runtime inventory raw declaration count does not match the expected registry.';
+        }
+        if (count($uniqueArtifactIds) !== count($expectedArtifactIds)) {
+            $violations[] = 'Runtime inventory unique artifact count does not match the expected registry.';
+        }
+        if ($actualIdSet !== $expectedIdSet) {
+            $violations[] = 'Runtime inventory artifacts do not exactly match the expected registry.';
+        }
+
+        $artifacts = [];
+        if ($duplicateViolations === []) {
+            foreach ($rows as $row) {
+                $artifacts[$row['artifact']] = [
+                    'artifact_status' => $row['artifact_status'],
+                    'runtime_status' => $row['runtime_status'],
+                ];
+            }
+            ksort($artifacts);
+            $sortedExpectedArtifacts = $expectedArtifacts;
+            ksort($sortedExpectedArtifacts);
+
+            if ($artifacts !== $sortedExpectedArtifacts) {
+                $violations[] = 'Runtime inventory classifications do not match the expected registry.';
+            }
+        }
+
+        return [
+            'rows' => $rows,
+            'artifacts' => $artifacts,
+            'violations' => array_values(array_unique($violations)),
+            'raw_count' => count($rows),
+            'unique_count' => count($uniqueArtifactIds),
+            'expected_count' => count($expectedArtifactIds),
+        ];
+    }
+
+    /** @return array<int, array{artifact: string, artifact_status: string, runtime_status: string}> */
+    private function runtimeInventoryRowList(string $inventory): array
     {
         preg_match_all(
             '/^\| `(?<artifact>[^`]+)` \| `(?<artifact_status>[^`]+)` \| `(?<runtime_status>[^`]+)` \| .+ \|$/m',
@@ -1959,13 +2362,134 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
             PREG_SET_ORDER,
         );
 
-        $rows = [];
-
-        foreach ($matches as $match) {
-            $rows[$match['artifact']] = [
+        return array_map(
+            static fn (array $match): array => [
+                'artifact' => $match['artifact'],
                 'artifact_status' => $match['artifact_status'],
                 'runtime_status' => $match['runtime_status'],
-            ];
+            ],
+            $matches,
+        );
+    }
+
+    /** @return array<string, array{artifact_status: string, runtime_status: string}> */
+    private function expectedRuntimeInventory(): array
+    {
+        $presentInactive = [
+            'artifact_status' => 'PRESENT / DEPLOYED',
+            'runtime_status' => 'INACTIVE / UNWIRED',
+        ];
+        $presentUncalled = [
+            'artifact_status' => 'PRESENT / DEPLOYED',
+            'runtime_status' => 'UNCALLED',
+        ];
+
+        return [
+            'supplier_import_execution_claims' => $presentInactive,
+            'supplier_import_dispatch_outbox' => $presentInactive,
+            'supplier_import_dispatch_monitor_health' => $presentInactive,
+            'supplier_import_dispatch_alert_intents' => $presentInactive,
+            'supplier_import_dispatch_recovery_authorizations' => $presentInactive,
+            'supplier_import_dispatch_recovery_results' => $presentInactive,
+            'supplier_import_cohort_authorization_members' => $presentInactive,
+            'supplier_offer_snapshot_generations' => $presentInactive,
+            'supplier_offer_snapshot_enrollments' => $presentInactive,
+            'supplier_offer_snapshot_observations' => $presentInactive,
+            'SupplierImportExecutionClaim' => $presentUncalled,
+            'SupplierImportDispatchOutbox' => $presentUncalled,
+            'SupplierImportDispatchMonitorHealth' => $presentUncalled,
+            'SupplierImportDispatchAlertIntent' => $presentUncalled,
+            'SupplierImportDispatchRecoveryAuthorization' => $presentUncalled,
+            'SupplierImportDispatchRecoveryResult' => $presentUncalled,
+            'SupplierImportCohortAuthorizationMember' => $presentUncalled,
+            'SupplierOfferSnapshotGeneration' => $presentUncalled,
+            'SupplierOfferSnapshotEnrollment' => $presentUncalled,
+            'SupplierOfferSnapshotObservation' => $presentUncalled,
+            'Phase II canonical byte/value contracts' => $presentUncalled,
+            'SupplierSnapshotFingerprintService' => $presentUncalled,
+            'SnapshotSourceIdentity' => $presentUncalled,
+        ];
+    }
+
+    /**
+     * @param  array<int, array<string, int|string>>  $rows
+     * @return array<int, string>
+     */
+    private function duplicateStructuralKeyViolations(array $rows, string $key, string $context): array
+    {
+        $counts = [];
+        $violations = [];
+
+        foreach ($rows as $row) {
+            if (! array_key_exists($key, $row)) {
+                $violations[] = "Missing {$context} structural key {$key}.";
+
+                continue;
+            }
+
+            $value = (string) $row[$key];
+            $counts[$value] = ($counts[$value] ?? 0) + 1;
+        }
+
+        foreach ($counts as $value => $count) {
+            if ($count > 1) {
+                $violations[] = "Duplicate {$context} key: {$value} ({$count} occurrences).";
+            }
+        }
+
+        return $violations;
+    }
+
+    private function structuralMarkdownRow(string $section, string $identity): string
+    {
+        preg_match_all(
+            '/^\| `'.preg_quote($identity, '/').'` \|.*\|$/m',
+            $section,
+            $matches,
+        );
+
+        $this->assertCount(1, $matches[0], "Expected exactly one structural row for {$identity}.");
+
+        return $matches[0][0];
+    }
+
+    private function insertStructuralRow(
+        string $section,
+        string $anchor,
+        string $row,
+        bool $before = false,
+    ): string {
+        $this->assertSame(1, substr_count($section, $anchor), 'Structural mutation anchor must be unique.');
+        $lineEnding = str_contains($section, "\r\n") ? "\r\n" : "\n";
+
+        return str_replace(
+            $anchor,
+            $before ? $row.$lineEnding.$anchor : $anchor.$lineEnding.$row,
+            $section,
+        );
+    }
+
+    private function removeStructuralRow(string $section, string $row): string
+    {
+        $this->assertSame(1, substr_count($section, $row), 'Structural removal target must be unique.');
+
+        return str_replace($row, '', $section);
+    }
+
+    /** @return array<int, string> */
+    private function markdownTableRows(string $contents, string $header): array
+    {
+        $lines = preg_split('/\\R/', $contents);
+        $headerIndex = array_search($header, $lines, true);
+
+        if ($headerIndex === false) {
+            return [];
+        }
+
+        $rows = [];
+
+        for ($index = $headerIndex + 2; isset($lines[$index]) && str_starts_with($lines[$index], '|'); $index++) {
+            $rows[] = $lines[$index];
         }
 
         return $rows;
