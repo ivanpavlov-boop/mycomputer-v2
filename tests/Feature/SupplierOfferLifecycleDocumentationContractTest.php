@@ -1350,6 +1350,254 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
         );
     }
 
+    public function test_readiness_tables_discover_malformed_physical_rows_before_validation(): void
+    {
+        $design = $this->readDocument('docs/IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md');
+        $plan = $this->readDocument('docs/PHASE_9C6_5C3D1_RUNTIME_IMPLEMENTATION_PLAN.md');
+        $readiness = $this->markdownSection(
+            $design,
+            '### Phase III readiness findings and authority',
+            '### Canonical source scope',
+        );
+        $runtimeInventory = $this->markdownSection(
+            $plan,
+            '### Current deployed artifact inventory',
+            '### Remaining runtime implementation gaps',
+        );
+
+        $statusTwo = $this->structuralMarkdownRow($readiness, 'PH3-RDY-002');
+        $statusThree = $this->structuralMarkdownRow($readiness, 'PH3-RDY-003');
+        $unknownTwo = '| `PH3-RDY-002` | `UNKNOWN` | Invalid status mutation. |';
+        $readinessMutations = [
+            'S1 malformed duplicate before canonical' => $this->insertStructuralRow(
+                $readiness,
+                $statusTwo,
+                $unknownTwo,
+                before: true,
+            ),
+            'S2 malformed duplicate after canonical' => $this->insertStructuralRow(
+                $readiness,
+                $statusTwo,
+                $unknownTwo,
+            ),
+            'S3 malformed replacement' => $this->replaceStructuralText($readiness, $statusTwo, $unknownTwo),
+            'S4 pending status' => $this->replaceStructuralText(
+                $readiness,
+                $statusTwo,
+                '| `PH3-RDY-002` | `PENDING` | Invalid status mutation. |',
+            ),
+            'S5 lowercase status' => $this->replaceStructuralText(
+                $readiness,
+                $statusTwo,
+                '| `PH3-RDY-002` | `blocked` | Invalid status mutation. |',
+            ),
+            'S6 suffixed status' => $this->replaceStructuralText(
+                $readiness,
+                $statusTwo,
+                '| `PH3-RDY-002` | `CLOSEDX` | Invalid status mutation. |',
+            ),
+            'S7 blank status' => $this->replaceStructuralText(
+                $readiness,
+                $statusTwo,
+                '| `PH3-RDY-002` | `` | Invalid status mutation. |',
+            ),
+            'S8 malformed physical row' => $this->replaceStructuralText(
+                $readiness,
+                $statusTwo,
+                '| PH3-RDY-002 | `UNKNOWN` | Invalid row mutation. |',
+            ),
+            'S9 unknown readiness ID' => $this->insertStructuralRow(
+                $readiness,
+                $statusTwo,
+                '| `PH3-RDY-005` | `BLOCKED` | Unknown ID mutation. |',
+            ),
+            'S10 missing canonical row' => $this->removeStructuralRow($readiness, $statusThree),
+        ];
+
+        foreach ($readinessMutations as $mutation => $mutatedReadiness) {
+            $this->assertNotSame(
+                [],
+                $this->readinessStatusContract($mutatedReadiness)['violations'],
+                "Malformed readiness mutation must fail closed: {$mutation}",
+            );
+        }
+        foreach (['S1 malformed duplicate before canonical', 'S2 malformed duplicate after canonical'] as $mutation) {
+            $contract = $this->readinessStatusContract($readinessMutations[$mutation]);
+            $this->assertSame(5, $contract['raw_count']);
+            $this->assertSame(5, $contract['parsed_count']);
+            $this->assertContains(['id' => 'PH3-RDY-002', 'status' => 'UNKNOWN'], $contract['rows']);
+        }
+
+        $outboxRow = $this->structuralMarkdownRow($runtimeInventory, 'supplier_import_dispatch_outbox');
+        $claimModelRow = $this->structuralMarkdownRow($runtimeInventory, 'SupplierImportExecutionClaim');
+        $sourceIdentityRow = $this->structuralMarkdownRow($runtimeInventory, 'SnapshotSourceIdentity');
+        $unquotedOutbox = '| supplier_import_dispatch_outbox | `PRESENT / DEPLOYED` | `INACTIVE / UNWIRED` | Invalid syntax mutation. |';
+        $inventoryHeader = '| Artifact | Artifact status | Supplier-runtime status | Repository evidence |';
+        $inventoryMutations = [
+            'I-M1 malformed duplicate before canonical' => $this->insertStructuralRow(
+                $runtimeInventory,
+                $outboxRow,
+                $unquotedOutbox,
+                before: true,
+            ),
+            'I-M2 malformed duplicate after canonical' => $this->insertStructuralRow(
+                $runtimeInventory,
+                $outboxRow,
+                $unquotedOutbox,
+            ),
+            'I-M3 missing column' => $this->insertStructuralRow(
+                $runtimeInventory,
+                $outboxRow,
+                '| `supplier_import_dispatch_outbox` | `PRESENT / DEPLOYED` | Missing column mutation. |',
+            ),
+            'I-M4 extra column' => $this->insertStructuralRow(
+                $runtimeInventory,
+                $outboxRow,
+                '| `supplier_import_dispatch_outbox` | `PRESENT / DEPLOYED` | `INACTIVE / UNWIRED` | Evidence. | Extra. |',
+            ),
+            'I-M5 malformed status' => $this->replaceStructuralText(
+                $runtimeInventory,
+                $outboxRow,
+                '| `supplier_import_dispatch_outbox` | `PRESENT / UNKNOWN` | `INACTIVE / UNWIRED` | Invalid status mutation. |',
+            ),
+            'I-M6 blank status' => $this->replaceStructuralText(
+                $runtimeInventory,
+                $outboxRow,
+                '| `supplier_import_dispatch_outbox` | `` | `INACTIVE / UNWIRED` | Invalid status mutation. |',
+            ),
+            'I-M7 malformed Phase II model row' => $this->replaceStructuralText(
+                $runtimeInventory,
+                $claimModelRow,
+                '| SupplierImportExecutionClaim | `PRESENT / DEPLOYED` | `UNCALLED` | Invalid syntax mutation. |',
+            ),
+            'I-M8 unknown artifact' => $this->insertStructuralRow(
+                $runtimeInventory,
+                $sourceIdentityRow,
+                '| `UnknownPhaseThreeArtifact` | `PRESENT / DEPLOYED` | `UNCALLED` | Unknown mutation. |',
+            ),
+            'I-M9 missing required artifact' => $this->removeStructuralRow(
+                $runtimeInventory,
+                $sourceIdentityRow,
+            ),
+            'I-M10 malformed table header' => $this->replaceStructuralText(
+                $runtimeInventory,
+                $inventoryHeader,
+                '| Artifact | Wrong status header | Supplier-runtime status | Repository evidence |',
+            ),
+        ];
+
+        foreach ($inventoryMutations as $mutation => $mutatedInventory) {
+            $this->assertNotSame(
+                [],
+                $this->runtimeInventoryContract($mutatedInventory)['violations'],
+                "Malformed runtime inventory mutation must fail closed: {$mutation}",
+            );
+        }
+        foreach (['I-M1 malformed duplicate before canonical', 'I-M2 malformed duplicate after canonical'] as $mutation) {
+            $contract = $this->runtimeInventoryContract($inventoryMutations[$mutation]);
+            $this->assertSame(24, $contract['raw_count']);
+            $this->assertSame(23, $contract['parsed_count']);
+        }
+
+        $canonicalInventory = $this->runtimeInventoryContract($runtimeInventory);
+        $this->assertSame(23, $canonicalInventory['raw_count']);
+        $this->assertSame(23, $canonicalInventory['parsed_count']);
+        $this->assertSame(23, $canonicalInventory['unique_count']);
+        $this->assertSame(23, $canonicalInventory['expected_count']);
+    }
+
+    public function test_watchdog_contract_boundaries_are_discovered_before_pairing_and_body_validation(): void
+    {
+        $documents = $this->watchdogDocumentation();
+        $path = 'docs/IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md';
+        $start = '<!-- watchdog-current-state-contract:start id=watchdog-current-state-v1 -->';
+        $end = '<!-- watchdog-current-state-contract:end id=watchdog-current-state-v1 -->';
+        $this->assertSame(
+            1,
+            preg_match($this->watchdogStateContractPattern(), $documents[$path], $contractMatch),
+        );
+        $fullContract = $contractMatch[0];
+        $malformedBody = str_replace('```text', '```json', $fullContract);
+
+        $mutations = [
+            'W-M1 mismatched IDs' => $this->mutateDocument(
+                $documents,
+                $path,
+                $end,
+                '<!-- watchdog-current-state-contract:end id=watchdog-current-state-v2 -->',
+            ),
+            'W-M2 orphan start' => $this->mutateDocument($documents, $path, $end, ''),
+            'W-M3 orphan end' => $this->mutateDocument($documents, $path, $start, ''),
+            'W-M4 duplicate start' => $this->mutateDocument(
+                $documents,
+                $path,
+                $start,
+                $start.PHP_EOL.$start,
+            ),
+            'W-M5 duplicate end' => $this->mutateDocument(
+                $documents,
+                $path,
+                $end,
+                $end.PHP_EOL.$end,
+            ),
+            'W-M6 duplicate contract' => [
+                ...$documents,
+                $path => $documents[$path].PHP_EOL.$fullContract,
+            ],
+            'W-M7 malformed start syntax' => $this->mutateDocument(
+                $documents,
+                $path,
+                $start,
+                '<!-- watchdog-current-state-contract:start id=watchdog-current-state-v1 ->',
+            ),
+            'W-M8 malformed end syntax' => $this->mutateDocument(
+                $documents,
+                $path,
+                $end,
+                '<!-- watchdog-current-state-contract:end id=watchdog-current-state-v1 ->',
+            ),
+            'W-M9 malformed body' => $this->mutateDocument(
+                $documents,
+                $path,
+                $fullContract,
+                $malformedBody,
+            ),
+        ];
+
+        $migration = $this->readDocument(
+            'database/migrations/2026_08_20_120002_create_supplier_import_dispatch_outbox_table.php',
+        );
+        foreach ($mutations as $mutation => $mutatedDocuments) {
+            $this->assertNotSame(
+                [],
+                $this->watchdogDocumentationContract($mutatedDocuments, $migration)['violations'],
+                "Malformed watchdog mutation must fail closed: {$mutation}",
+            );
+        }
+
+        $mismatchedBoundaries = $this->watchdogBoundedDeclarations(
+            $mutations['W-M1 mismatched IDs'],
+            'watchdog-current-state-contract',
+            'id',
+            'watchdog current-state contract',
+        );
+        $this->assertSame(1, $mismatchedBoundaries['start_count']);
+        $this->assertSame(1, $mismatchedBoundaries['end_count']);
+        $this->assertNotSame([], $mismatchedBoundaries['violations']);
+
+        $canonicalBoundaries = $this->watchdogBoundedDeclarations(
+            $documents,
+            'watchdog-current-state-contract',
+            'id',
+            'watchdog current-state contract',
+        );
+        $this->assertSame([], $canonicalBoundaries['violations']);
+        $this->assertSame(1, $canonicalBoundaries['start_count']);
+        $this->assertSame(1, $canonicalBoundaries['end_count']);
+        $this->assertCount(1, $canonicalBoundaries['declarations']);
+        $this->assertSame([], $this->watchdogDocumentationContract($documents, $migration)['violations']);
+    }
+
     public function test_readiness_status_and_procedure_enumeration_reject_adversarial_mutations(): void
     {
         $design = $this->readDocument('docs/IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md');
@@ -1816,34 +2064,42 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
             'FUTURE_RUNTIME_BEHAVIOR',
             'SCHEMA_DEFINITION_REFERENCE',
         ];
-        $violations = [];
+        $stateBoundaryContract = $this->watchdogBoundedDeclarations(
+            $documents,
+            'watchdog-current-state-contract',
+            'id',
+            'watchdog current-state contract',
+        );
+        $referenceBoundaryContract = $this->watchdogBoundedDeclarations(
+            $documents,
+            'watchdog-current-state-reference',
+            'contract',
+            'watchdog current-state reference',
+        );
+        $violations = [
+            ...$stateBoundaryContract['violations'],
+            ...$referenceBoundaryContract['violations'],
+        ];
         $relevantDocuments = [];
         $contexts = [];
-        $stateContracts = [];
+        $stateContracts = $stateBoundaryContract['declarations'];
+        $referenceDeclarations = $referenceBoundaryContract['declarations'];
         $stateReferences = [];
 
         ksort($documents);
 
         foreach ($documents as $path => $document) {
-            preg_match_all(
-                $this->watchdogStateContractPattern(),
-                $document,
-                $contractMatches,
-                PREG_SET_ORDER,
-            );
-
-            foreach ($contractMatches as $match) {
-                $stateContracts[] = [
-                    'path' => $path,
-                    'id' => $match['id'],
-                    'body' => $match['body'],
-                ];
-            }
+            $referenceMatches = array_values(array_filter(
+                $referenceDeclarations,
+                static fn (array $declaration): bool => $declaration['path'] === $path,
+            ));
 
             preg_match_all(
-                $this->watchdogStateReferencePattern(),
+                '/^<!-- watchdog-document-context classification=(?<classification>[A-Z_]+) '.
+                'column_occurrences=(?<column>\d+) index_occurrences=(?<index>\d+) '.
+                'contract=(?<contract>[a-z0-9-]+) -->\r?$/m',
                 $document,
-                $referenceMatches,
+                $contextMatches,
                 PREG_SET_ORDER,
             );
 
@@ -1859,15 +2115,6 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
             }
             $columnOccurrences = substr_count($residualDocument, $column);
             $indexOccurrences = substr_count($residualDocument, $index);
-
-            preg_match_all(
-                '/^<!-- watchdog-document-context classification=(?<classification>[A-Z_]+) '.
-                'column_occurrences=(?<column>\d+) index_occurrences=(?<index>\d+) '.
-                'contract=(?<contract>[a-z0-9-]+) -->\r?$/m',
-                $document,
-                $contextMatches,
-                PREG_SET_ORDER,
-            );
 
             if (! $isRelevant) {
                 if ($contextMatches !== [] || $referenceMatches !== []) {
@@ -1916,7 +2163,7 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
                     $violations[] = "{$path} must contain exactly one structural current-state reference.";
                 } else {
                     $stateReferences[$path] = [
-                        'contract' => $referenceMatches[0]['contract'],
+                        'contract' => $referenceMatches[0]['id'],
                         'body' => $referenceMatches[0]['body'],
                     ];
                 }
@@ -2035,6 +2282,186 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
             'state' => $state,
             'contexts' => $contexts,
             'relevant_documents' => $relevantDocuments,
+        ];
+    }
+
+    /**
+     * @param  array<string, string>  $documents
+     * @return array{
+     *     declarations: array<int, array{path: string, id: string, body: string}>,
+     *     violations: array<int, string>,
+     *     start_count: int,
+     *     end_count: int
+     * }
+     */
+    private function watchdogBoundedDeclarations(
+        array $documents,
+        string $marker,
+        string $identityAttribute,
+        string $context,
+    ): array {
+        $rawStarts = [];
+        $rawEnds = [];
+        $validStarts = [];
+        $validEnds = [];
+        $documentLines = [];
+        $violations = [];
+
+        foreach ($documents as $path => $document) {
+            $lines = preg_split('/\R/', $document) ?: [];
+            $documentLines[$path] = $lines;
+
+            foreach ($lines as $lineNumber => $line) {
+                if (! str_contains($line, $marker)) {
+                    continue;
+                }
+
+                $boundary = match (true) {
+                    str_contains($line, "{$marker}:start") => 'start',
+                    str_contains($line, "{$marker}:end") => 'end',
+                    default => null,
+                };
+
+                if ($boundary === null) {
+                    $violations[] = "Malformed {$context} boundary in {$path} at line ".($lineNumber + 1).'.';
+
+                    continue;
+                }
+
+                $candidate = [
+                    'path' => $path,
+                    'line' => $lineNumber,
+                ];
+                if ($boundary === 'start') {
+                    $rawStarts[] = $candidate;
+                } else {
+                    $rawEnds[] = $candidate;
+                }
+
+                $pattern = '/^<!-- '.preg_quote($marker, '/').':'.$boundary.' '.
+                    preg_quote($identityAttribute, '/').'=(?<id>[a-z0-9-]+) -->$/';
+                if (preg_match($pattern, $line, $match) !== 1) {
+                    $violations[] = "Malformed {$context} {$boundary} marker in {$path} at line ".($lineNumber + 1).'.';
+
+                    continue;
+                }
+
+                $validCandidate = [
+                    ...$candidate,
+                    'id' => $match['id'],
+                ];
+                if ($boundary === 'start') {
+                    $validStarts[] = $validCandidate;
+                } else {
+                    $validEnds[] = $validCandidate;
+                }
+            }
+        }
+
+        $declarations = [];
+        $paths = array_values(array_unique(array_map(
+            static fn (array $candidate): string => $candidate['path'],
+            [...$rawStarts, ...$rawEnds],
+        )));
+
+        foreach ($paths as $path) {
+            $pathRawStarts = array_values(array_filter(
+                $rawStarts,
+                static fn (array $candidate): bool => $candidate['path'] === $path,
+            ));
+            $pathRawEnds = array_values(array_filter(
+                $rawEnds,
+                static fn (array $candidate): bool => $candidate['path'] === $path,
+            ));
+            $pathStarts = array_values(array_filter(
+                $validStarts,
+                static fn (array $candidate): bool => $candidate['path'] === $path,
+            ));
+            $pathEnds = array_values(array_filter(
+                $validEnds,
+                static fn (array $candidate): bool => $candidate['path'] === $path,
+            ));
+
+            if (count($pathRawStarts) !== count($pathRawEnds)) {
+                $violations[] = "{$path} has unbalanced {$context} start/end counts.";
+            }
+            if (count($pathRawStarts) !== count($pathStarts) || count($pathRawEnds) !== count($pathEnds)) {
+                $violations[] = "{$path} contains an invalid {$context} boundary.";
+            }
+
+            $startDuplicates = $this->duplicateStructuralKeyViolations($pathStarts, 'id', "{$context} start");
+            $endDuplicates = $this->duplicateStructuralKeyViolations($pathEnds, 'id', "{$context} end");
+            $violations = [...$violations, ...$startDuplicates, ...$endDuplicates];
+
+            $startIds = array_column($pathStarts, 'id');
+            $endIds = array_column($pathEnds, 'id');
+            $sortedStartIds = $startIds;
+            $sortedEndIds = $endIds;
+            sort($sortedStartIds);
+            sort($sortedEndIds);
+            if ($sortedStartIds !== $sortedEndIds) {
+                $violations[] = "{$path} has mismatched {$context} start/end IDs.";
+            }
+
+            if ($startDuplicates !== [] || $endDuplicates !== [] || $sortedStartIds !== $sortedEndIds) {
+                continue;
+            }
+
+            $endsById = [];
+            foreach ($pathEnds as $end) {
+                $endsById[$end['id']] = $end;
+            }
+
+            $intervals = [];
+            foreach ($pathStarts as $start) {
+                $end = $endsById[$start['id']] ?? null;
+                if ($end === null || $end['line'] <= $start['line']) {
+                    $violations[] = "{$path} has an invalid {$context} boundary order for {$start['id']}.";
+
+                    continue;
+                }
+
+                $intervals[] = [
+                    'id' => $start['id'],
+                    'start' => $start['line'],
+                    'end' => $end['line'],
+                ];
+            }
+
+            usort($intervals, static fn (array $left, array $right): int => $left['start'] <=> $right['start']);
+            $previousEnd = -1;
+            foreach ($intervals as $interval) {
+                if ($interval['start'] <= $previousEnd) {
+                    $violations[] = "{$path} contains crossed or nested {$context} boundaries.";
+
+                    continue;
+                }
+                $previousEnd = $interval['end'];
+
+                $bodyLines = array_slice(
+                    $documentLines[$path],
+                    $interval['start'] + 1,
+                    $interval['end'] - $interval['start'] - 1,
+                );
+                if (count($bodyLines) < 3 || $bodyLines[0] !== '```text' || end($bodyLines) !== '```') {
+                    $violations[] = "{$path} has a malformed {$context} body for {$interval['id']}.";
+
+                    continue;
+                }
+
+                $declarations[] = [
+                    'path' => $path,
+                    'id' => $interval['id'],
+                    'body' => implode(PHP_EOL, array_slice($bodyLines, 1, -1)),
+                ];
+            }
+        }
+
+        return [
+            'declarations' => $declarations,
+            'violations' => array_values(array_unique($violations)),
+            'start_count' => count($rawStarts),
+            'end_count' => count($rawEnds),
         ];
     }
 
@@ -2219,26 +2646,61 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
      *     statuses: array<string, string>,
      *     violations: array<int, string>,
      *     raw_count: int,
+     *     parsed_count: int,
      *     unique_count: int,
      *     expected_count: int
      * }
      */
     private function readinessStatusContract(string $readiness): array
     {
-        preg_match_all(
-            '/^\| `(?<id>PH3-RDY-[0-9]{3})` \| `(?<status>BLOCKED|CLOSED)` \|/m',
+        $table = $this->structuralMarkdownTable(
             $readiness,
-            $matches,
-            PREG_SET_ORDER,
+            '| Finding | Verdict | Exact boundary |',
+            '| --- | --- | --- |',
+            'readiness status',
         );
+        $rows = [];
+        $violations = $table['violations'];
 
-        $rows = array_map(
-            static fn (array $match): array => [
-                'id' => $match['id'],
-                'status' => $match['status'],
-            ],
-            $matches,
-        );
+        foreach ($table['rows'] as $position => $physicalRow) {
+            $parsed = $this->structuralMarkdownRowCells(
+                $physicalRow,
+                3,
+                'readiness status',
+                $position + 1,
+            );
+            $violations = [...$violations, ...$parsed['violations']];
+
+            if ($parsed['cells'] === null) {
+                continue;
+            }
+
+            [$idCell, $statusCell, $boundary] = $parsed['cells'];
+            if (preg_match('/^`(?<id>PH3-RDY-[0-9]{3})`$/', $idCell, $idMatch) !== 1) {
+                $violations[] = 'Malformed readiness status ID at physical row '.($position + 1).'.';
+
+                continue;
+            }
+            if (preg_match('/^`(?<status>[^`]*)`$/', $statusCell, $statusMatch) !== 1) {
+                $violations[] = "Malformed readiness status value for {$idMatch['id']}.";
+
+                continue;
+            }
+            if ($boundary === '') {
+                $violations[] = "Readiness status {$idMatch['id']} has an empty boundary.";
+
+                continue;
+            }
+
+            $rows[] = [
+                'id' => $idMatch['id'],
+                'status' => $statusMatch['status'],
+            ];
+
+            if (! in_array($statusMatch['status'], ['BLOCKED', 'CLOSED'], true)) {
+                $violations[] = "Unsupported readiness status {$statusMatch['status']} for {$idMatch['id']}.";
+            }
+        }
         $expectedStatuses = [
             'PH3-RDY-001' => 'BLOCKED',
             'PH3-RDY-002' => 'BLOCKED',
@@ -2248,15 +2710,18 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
         $ids = array_column($rows, 'id');
         $uniqueIds = array_values(array_unique($ids));
         $duplicateViolations = $this->duplicateStructuralKeyViolations($rows, 'id', 'readiness status');
-        $violations = $duplicateViolations;
+        $violations = [...$violations, ...$duplicateViolations];
         $expectedIds = array_keys($expectedStatuses);
         $actualIdSet = $uniqueIds;
         sort($actualIdSet);
         $expectedIdSet = $expectedIds;
         sort($expectedIdSet);
 
-        if (count($rows) !== count($expectedIds)) {
+        if ($table['physical_count'] !== count($expectedIds)) {
             $violations[] = 'Readiness status raw declaration count does not match the expected registry.';
+        }
+        if (count($rows) !== $table['physical_count']) {
+            $violations[] = 'Every physical readiness declaration must parse successfully.';
         }
         if (count($uniqueIds) !== count($expectedIds)) {
             $violations[] = 'Readiness status unique ID count does not match the expected registry.';
@@ -2266,7 +2731,7 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
         }
 
         $statuses = [];
-        if ($duplicateViolations === []) {
+        if ($violations === []) {
             foreach ($rows as $row) {
                 $statuses[$row['id']] = $row['status'];
             }
@@ -2281,7 +2746,8 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
             'rows' => $rows,
             'statuses' => $statuses,
             'violations' => array_values(array_unique($violations)),
-            'raw_count' => count($rows),
+            'raw_count' => $table['physical_count'],
+            'parsed_count' => count($rows),
             'unique_count' => count($uniqueIds),
             'expected_count' => count($expectedIds),
         ];
@@ -2293,13 +2759,63 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
      *     artifacts: array<string, array{artifact_status: string, runtime_status: string}>,
      *     violations: array<int, string>,
      *     raw_count: int,
+     *     parsed_count: int,
      *     unique_count: int,
      *     expected_count: int
      * }
      */
     private function runtimeInventoryContract(string $inventory): array
     {
-        $rows = $this->runtimeInventoryRowList($inventory);
+        $table = $this->structuralMarkdownTable(
+            $inventory,
+            '| Artifact | Artifact status | Supplier-runtime status | Repository evidence |',
+            '| --- | --- | --- | --- |',
+            'runtime inventory',
+        );
+        $rows = [];
+        $violations = $table['violations'];
+
+        foreach ($table['rows'] as $position => $physicalRow) {
+            $parsed = $this->structuralMarkdownRowCells(
+                $physicalRow,
+                4,
+                'runtime inventory',
+                $position + 1,
+            );
+            $violations = [...$violations, ...$parsed['violations']];
+
+            if ($parsed['cells'] === null) {
+                continue;
+            }
+
+            [$artifactCell, $artifactStatusCell, $runtimeStatusCell, $evidence] = $parsed['cells'];
+            if (preg_match('/^`(?<value>[^`]+)`$/', $artifactCell, $artifactMatch) !== 1) {
+                $violations[] = 'Malformed runtime inventory artifact at physical row '.($position + 1).'.';
+
+                continue;
+            }
+            if (preg_match('/^`(?<value>[^`]*)`$/', $artifactStatusCell, $artifactStatusMatch) !== 1) {
+                $violations[] = "Malformed artifact status for {$artifactMatch['value']}.";
+
+                continue;
+            }
+            if (preg_match('/^`(?<value>[^`]*)`$/', $runtimeStatusCell, $runtimeStatusMatch) !== 1) {
+                $violations[] = "Malformed runtime status for {$artifactMatch['value']}.";
+
+                continue;
+            }
+            if ($evidence === '') {
+                $violations[] = "Runtime inventory artifact {$artifactMatch['value']} has empty evidence.";
+
+                continue;
+            }
+
+            $rows[] = [
+                'artifact' => $artifactMatch['value'],
+                'artifact_status' => $artifactStatusMatch['value'],
+                'runtime_status' => $runtimeStatusMatch['value'],
+            ];
+        }
         $expectedArtifacts = $this->expectedRuntimeInventory();
         $artifactIds = array_column($rows, 'artifact');
         $uniqueArtifactIds = array_values(array_unique($artifactIds));
@@ -2308,15 +2824,18 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
             'artifact',
             'runtime inventory artifact',
         );
-        $violations = $duplicateViolations;
+        $violations = [...$violations, ...$duplicateViolations];
         $expectedArtifactIds = array_keys($expectedArtifacts);
         $actualIdSet = $uniqueArtifactIds;
         sort($actualIdSet);
         $expectedIdSet = $expectedArtifactIds;
         sort($expectedIdSet);
 
-        if (count($rows) !== count($expectedArtifactIds)) {
+        if ($table['physical_count'] !== count($expectedArtifactIds)) {
             $violations[] = 'Runtime inventory raw declaration count does not match the expected registry.';
+        }
+        if (count($rows) !== $table['physical_count']) {
+            $violations[] = 'Every physical runtime inventory row must parse successfully.';
         }
         if (count($uniqueArtifactIds) !== count($expectedArtifactIds)) {
             $violations[] = 'Runtime inventory unique artifact count does not match the expected registry.';
@@ -2326,7 +2845,7 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
         }
 
         $artifacts = [];
-        if ($duplicateViolations === []) {
+        if ($violations === []) {
             foreach ($rows as $row) {
                 $artifacts[$row['artifact']] = [
                     'artifact_status' => $row['artifact_status'],
@@ -2346,30 +2865,11 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
             'rows' => $rows,
             'artifacts' => $artifacts,
             'violations' => array_values(array_unique($violations)),
-            'raw_count' => count($rows),
+            'raw_count' => $table['physical_count'],
+            'parsed_count' => count($rows),
             'unique_count' => count($uniqueArtifactIds),
             'expected_count' => count($expectedArtifactIds),
         ];
-    }
-
-    /** @return array<int, array{artifact: string, artifact_status: string, runtime_status: string}> */
-    private function runtimeInventoryRowList(string $inventory): array
-    {
-        preg_match_all(
-            '/^\| `(?<artifact>[^`]+)` \| `(?<artifact_status>[^`]+)` \| `(?<runtime_status>[^`]+)` \| .+ \|$/m',
-            $inventory,
-            $matches,
-            PREG_SET_ORDER,
-        );
-
-        return array_map(
-            static fn (array $match): array => [
-                'artifact' => $match['artifact'],
-                'artifact_status' => $match['artifact_status'],
-                'runtime_status' => $match['runtime_status'],
-            ],
-            $matches,
-        );
     }
 
     /** @return array<string, array{artifact_status: string, runtime_status: string}> */
@@ -2408,6 +2908,98 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
             'Phase II canonical byte/value contracts' => $presentUncalled,
             'SupplierSnapshotFingerprintService' => $presentUncalled,
             'SnapshotSourceIdentity' => $presentUncalled,
+        ];
+    }
+
+    /**
+     * @return array{rows: array<int, string>, violations: array<int, string>, physical_count: int}
+     */
+    private function structuralMarkdownTable(
+        string $contents,
+        string $expectedHeader,
+        string $expectedSeparator,
+        string $context,
+    ): array {
+        $lines = preg_split('/\R/', $contents) ?: [];
+        $blocks = [];
+        $currentBlock = [];
+        $headerCount = 0;
+
+        foreach ($lines as $line) {
+            if ($line === $expectedHeader) {
+                $headerCount++;
+            }
+
+            if (str_starts_with(ltrim($line), '|')) {
+                $currentBlock[] = $line;
+
+                continue;
+            }
+
+            if ($currentBlock !== []) {
+                $blocks[] = $currentBlock;
+                $currentBlock = [];
+            }
+        }
+
+        if ($currentBlock !== []) {
+            $blocks[] = $currentBlock;
+        }
+
+        $violations = [];
+        if (count($blocks) !== 1) {
+            $violations[] = "The bounded {$context} section must contain exactly one physical table.";
+        }
+        if ($headerCount !== 1) {
+            $violations[] = "The {$context} table must contain exactly one canonical header.";
+        }
+
+        $table = $blocks[0] ?? [];
+        if (($table[0] ?? null) !== $expectedHeader) {
+            $violations[] = "The {$context} table header is malformed.";
+        }
+        if (($table[1] ?? null) !== $expectedSeparator) {
+            $violations[] = "The {$context} table separator is malformed.";
+        }
+
+        $rows = array_slice($table, 2);
+
+        return [
+            'rows' => $rows,
+            'violations' => $violations,
+            'physical_count' => count($rows),
+        ];
+    }
+
+    /**
+     * @return array{cells: array<int, string>|null, violations: array<int, string>}
+     */
+    private function structuralMarkdownRowCells(
+        string $row,
+        int $expectedColumns,
+        string $context,
+        int $position,
+    ): array {
+        if (! str_starts_with($row, '|') || ! str_ends_with($row, '|')) {
+            return [
+                'cells' => null,
+                'violations' => ["Malformed {$context} physical row {$position}."],
+            ];
+        }
+
+        $cells = array_map('trim', explode('|', substr($row, 1, -1)));
+        if (count($cells) !== $expectedColumns) {
+            return [
+                'cells' => null,
+                'violations' => [
+                    "Malformed {$context} physical row {$position}: expected {$expectedColumns} columns, found ".count($cells).'.',
+                ],
+            ];
+        }
+
+        return [
+            'cells' => $cells,
+            'violations' => [],
         ];
     }
 
@@ -2474,6 +3066,24 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
         $this->assertSame(1, substr_count($section, $row), 'Structural removal target must be unique.');
 
         return str_replace($row, '', $section);
+    }
+
+    private function replaceStructuralText(string $contents, string $search, string $replacement): string
+    {
+        $this->assertSame(1, substr_count($contents, $search), 'Structural replacement target must be unique.');
+
+        return str_replace($search, $replacement, $contents);
+    }
+
+    /**
+     * @param  array<string, string>  $documents
+     * @return array<string, string>
+     */
+    private function mutateDocument(array $documents, string $path, string $search, string $replacement): array
+    {
+        $documents[$path] = $this->replaceStructuralText($documents[$path], $search, $replacement);
+
+        return $documents;
     }
 
     /** @return array<int, string> */
