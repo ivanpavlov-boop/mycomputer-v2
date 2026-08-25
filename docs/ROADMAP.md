@@ -351,11 +351,13 @@ disabled. `CART-025` remains open.
     inactive. No runtime queue setting, worker, command, parser change, capture
     repository/hook, producer, historical backfill or operational evidence
     exists. Phase III is unimplemented and not authorized. The architecture
-    selects an append-only source-execution/revision chain for immutable
-    candidate provenance (`PH3-RDY-001` = `CLOSED`) and the exact five-field
+    selects an immutable source profile, append-only execution, stable
+    supplier/feed/SKU identity head and append-only revision chain for immutable
+    candidate provenance (`PH3-RDY-001` = `CLOSED IN DESIGN`) and the exact five-field
     claim/composite-FK authority for durable source binding
-    (`PH3-RDY-002` = `CLOSED`). All nine production operational bounds remain
-    `NOT SPECIFIED`, so `PH3-RDY-003` = `BLOCKED`; status consistency remains
+    (`PH3-RDY-002` = `CLOSED IN DESIGN`). All nine production operational bounds remain
+    `NOT SPECIFIED`, so `PH3-RDY-003` = `BLOCKED` and is the single remaining
+    architecture blocker; status consistency remains
     `PH3-RDY-004` = `CLOSED`. Claim source binding does not replace candidate
     provenance. C3D.1 remains blocked until the bounds gate and later
     checkpoints collect one future baseline plus three qualified comparable

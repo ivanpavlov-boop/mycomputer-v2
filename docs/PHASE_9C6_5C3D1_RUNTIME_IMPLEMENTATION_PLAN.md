@@ -35,10 +35,12 @@ The current implementation baseline is `origin/main` at
   implementation-authorized.
 
 `PH3-RDY-001` and `PH3-RDY-002` are closed in architecture design. The selected
-future authority is an append-only import-source execution plus append-only
-supplier-product source revision, a guarded current-revision pointer, and the
-exact five-field claim source binding. `PH3-RDY-003` remains blocked because all
-nine production bounds lack production evidence and remain `NOT SPECIFIED`.
+future authority is an immutable source profile, append-only source execution,
+stable supplier/feed/SKU identity head, append-only supplier-product source
+revision, guarded current-revision pointer, and the exact five-field claim
+source binding. `PH3-RDY-003` is the single remaining architecture blocker
+because all nine production bounds lack authorized production evidence and
+remain `NOT SPECIFIED`.
 Claim source binding does not replace candidate provenance. The authoritative
 proof, fail-closed matrices, selected future schema and limit inventory are in the
 [Cohort Enrollment Contract](IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md#cohort-enrollment-contract).
@@ -1249,9 +1251,11 @@ binding but cannot become active. Phase X supplies the DB-backed binding; even
 that merge does not activate recovery without canonical fresh evidence and a
 separate operational authorization.
 
-The first safe next action is a fresh independent read-only review of the Phase
-III readiness-remediation documentation. That review may authorize only the
-separate design work for immutable candidate-row source provenance, durable
-authorization source binding, and approved production operational bounds. It
-cannot authorize Phase III implementation while any of the three independent
-blockers remains open.
+The first safe next action is a fresh independent read-only review of the
+complete Phase III architecture-design checkpoint. `PH3-RDY-001` is closed in
+design pending that review and later implementation; `PH3-RDY-002` remains
+closed in design pending later implementation; `PH3-RDY-004` remains closed.
+`PH3-RDY-003` alone remains blocked pending a separately authorized production-
+evidence collection and review for all nine numeric bounds. That review cannot
+authorize Phase III implementation, which remains unimplemented and
+unauthorized until the remaining gate is separately closed.
