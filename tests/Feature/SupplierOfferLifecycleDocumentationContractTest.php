@@ -758,8 +758,8 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
 
         $readinessStatusContract = $this->readinessStatusContract($readiness);
         $expectedReadinessStatuses = [
-            'PH3-RDY-001' => 'BLOCKED',
-            'PH3-RDY-002' => 'BLOCKED',
+            'PH3-RDY-001' => 'CLOSED',
+            'PH3-RDY-002' => 'CLOSED',
             'PH3-RDY-003' => 'BLOCKED',
             'PH3-RDY-004' => 'CLOSED',
         ];
@@ -772,12 +772,13 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
         $this->assertSame(4, $readinessStatusContract['unique_count']);
         $this->assertSame(4, $readinessStatusContract['expected_count']);
         $this->assertSame($expectedReadinessStatuses, $readinessStatusContract['statuses']);
-        $this->assertStringNotContainsString('| `PH3-RDY-001` | `CLOSED` |', $readiness);
+        $this->assertStringContainsString('| `PH3-RDY-001` | `CLOSED` |', $readiness);
+        $this->assertStringContainsString('| `PH3-RDY-002` | `CLOSED` |', $readiness);
         $this->assertStringContainsString(
-            'Existing application candidate rows do not carry immutable source provenance',
+            'immutable source execution plus immutable supplier-product source revision',
             $readiness,
         );
-        $this->assertStringContainsString('Three independent blockers remain', $readiness);
+        $this->assertStringContainsString('production operational bounds remain an', $readiness);
 
         $sourceScope = $this->markdownSection(
             $design,
@@ -810,7 +811,7 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
             'source-defining feed configuration changes from `A` to `B` without',
             'historical `A` rows MUST NOT be admitted into the `B` authorization',
             'current candidate rows do not immutably record `A`',
-            'Phase III remains blocked until a separate immutable candidate-row/source',
+            'selected immutable candidate-revision contract below prevents that',
         ] as $adversarialInvariant) {
             $this->assertStringContainsString($adversarialInvariant, $sourceAB);
         }
@@ -855,8 +856,8 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
             '**Problem A - authorization binding (`PH3-RDY-002`).**',
             '**Problem B - candidate-row provenance (`PH3-RDY-001`).**',
             'Claim source binding does not solve this problem.',
-            'Candidate provenance remediation is',
-            '**REQUIRED / UNRESOLVED**',
+            'combined append-only execution plus revision chain',
+            '**CLOSED IN DESIGN / NOT IMPLEMENTED**',
             'supplier_import_execution_claims.cohort_source_identity VARCHAR(128)',
             'CHARACTER SET ascii COLLATE ascii_bin NULL',
             '^snapshot-source-v1:[a-z0-9]+([._-][a-z0-9]+)*(:[a-z0-9]+([._-][a-z0-9]+)*)*$',
@@ -868,7 +869,7 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
             '`A -> B`, `A -> NULL`',
             'current mutable SupplierFeed URL/type/mapping/configuration',
             'is not safe and must fail migration/readiness',
-            'canonical serializer/fingerprint revision is currently **NOT REQUIRED**',
+            'canonical serializer/fingerprint revision is **NOT REQUIRED**',
         ] as $bindingContract) {
             $this->assertStringContainsString($bindingContract, $sourceBinding);
         }
@@ -1012,8 +1013,8 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
         foreach ([
             'Phase I canonical schema: implemented, merged through PR #212',
             'Phase II guarded models and canonical byte contracts: implemented, merged',
-            'Phase III snapshot persistence/cohort authorization: readiness remediation',
-            'Phase III remains blocked by `PH3-RDY-001`, `PH3-RDY-002`, and `PH3-RDY-003`',
+            'Phase III snapshot persistence/cohort authorization: provenance and durable',
+            '`PH3-RDY-001` and `PH3-RDY-002` are closed in architecture design',
         ] as $status) {
             $this->assertStringContainsString($status, $plan);
         }
@@ -1155,18 +1156,8 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
         $reviewBoundary = substr($plan, $reviewBoundaryStart);
         $this->assertIsString($reviewBoundary);
 
-        foreach ([$readiness, $reviewBoundary] as $currentReadinessSection) {
-            $this->assertMatchesRegularExpression(
-                '/\bthree\s+independent\s+blockers\b/i',
-                $currentReadinessSection,
-            );
-            $this->assertDoesNotMatchRegularExpression(
-                '/\b(?:two|both|either)\s+(?:(?:remaining|unresolved)\s+)?blockers?\b/i',
-                $currentReadinessSection,
-            );
-        }
         $this->assertCount(
-            3,
+            1,
             array_filter(
                 $readinessStatusContract['statuses'],
                 static fn (string $status): bool => $status === 'BLOCKED',
@@ -1178,10 +1169,152 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
             $this->assertStringContainsString('`PH3-RDY-002`', $currentStatus);
             $this->assertStringContainsString('`PH3-RDY-003`', $currentStatus);
             $this->assertStringContainsString('`PH3-RDY-004`', $currentStatus);
-            $this->assertStringNotContainsString(
-                '`PH3-RDY-001` and `PH3-RDY-004` are closed',
-                $currentStatus,
-            );
+        }
+    }
+
+    public function test_phase_three_provenance_source_binding_and_bounds_architecture_is_fail_closed(): void
+    {
+        $design = $this->readDocument('docs/IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md');
+        $architecture = $this->markdownSection(
+            $design,
+            '### Phase III provenance and bounds architecture decision',
+            '## Generation Header Data Dictionary',
+        );
+
+        $alternatives = $this->structuralMarkdownTable(
+            $architecture,
+            '| Alternative | Immutable evidence | A to B / reused-row safety | Retry/concurrency | Decision |',
+            '| --- | --- | --- | --- | --- |',
+            'Phase III provenance alternatives',
+            5,
+            'The canonical design is **B + C**.',
+        );
+        $this->assertSame([], $alternatives['violations'], implode(PHP_EOL, $alternatives['violations']));
+        $this->assertSame(4, $alternatives['physical_count']);
+
+        foreach ([
+            'supplier_import_source_executions',
+            'supplier_product_source_revisions',
+            'supplier_products.current_source_revision_id',
+            'uq_import_source_execution_scope',
+            'uq_supplier_product_revision_current',
+            'fk_supplier_product_current_source_revision',
+            'chk_supplier_product_current_source_revision_scope',
+            'supplier_import_source_execution_v1',
+            'supplier_product_source_revision_v1',
+        ] as $provenanceAuthority) {
+            $this->assertStringContainsString($provenanceAuthority, $architecture);
+        }
+        foreach ([
+            'current configuration is not historical evidence',
+            'supplier_id + supplier_feed_id` is **NO**',
+            '`product_supplier_offers.supplier_product_id` is also',
+            'Legacy rows keep `current_source_revision_id = NULL` and are ineligible',
+            'must not infer provenance from current feed URL/type/mapping',
+            'candidate_provenance_missing',
+            'candidate_source_mismatch',
+            'candidate_revision_mismatch',
+            'candidate_projection_mismatch',
+        ] as $failClosedProvenance) {
+            $this->assertStringContainsString($failClosedProvenance, $architecture);
+        }
+
+        $this->assertSame($this->expectedAuthorizationTuple(), $this->canonicalAuthorizationCompletenessTuple($architecture));
+        foreach ([
+            '`NULL -> A`',
+            '`A -> B`',
+            '`A -> NULL`',
+            'trg_import_execution_claim_cohort_source_immutable',
+            'uq_import_execution_claim_id_cohort_source',
+            'ix_snapshot_generation_claim_source',
+            'fk_snapshot_generation_claim_source',
+            'persisted A',
+            'Both proofs are mandatory',
+        ] as $sourceBindingAuthority) {
+            $this->assertStringContainsString($sourceBindingAuthority, $architecture);
+        }
+
+        $bounds = $this->structuralMarkdownTable(
+            $architecture,
+            '| Bound | Exact semantic, unit and scope | Enforcement and failure | Value/status |',
+            '| :--- | --- | --- | ---: |',
+            'Phase III operational bounds',
+            4,
+            'All are hard, application-owned, supplier-invariant limits.',
+        );
+        $this->assertSame([], $bounds['violations'], implode(PHP_EOL, $bounds['violations']));
+        $this->assertSame(9, $bounds['physical_count']);
+        $expectedBounds = [
+            '`max_source_rows`',
+            '`max_spool_rows`',
+            '`max_spool_bytes`',
+            '`max_enrollments`',
+            '`max_observations`',
+            '`max_canonical_children`',
+            '`external_sort_chunk`',
+            '`db_insert_batch_ceiling`',
+            '`snapshot_transaction_bound`',
+        ];
+        $actualBounds = [];
+        foreach ($bounds['rows'] as $position => $row) {
+            $parsed = $this->structuralMarkdownRowCells($row, 4, 'Phase III operational bounds', $position + 1);
+            $this->assertSame([], $parsed['violations'], implode(PHP_EOL, $parsed['violations']));
+            $this->assertNotNull($parsed['cells']);
+            $actualBounds[] = $parsed['cells'][0];
+            $this->assertSame('`NOT SPECIFIED`', $parsed['cells'][3]);
+        }
+        $this->assertSame($expectedBounds, $actualBounds);
+        $this->assertStringNotContainsString('| `APPROVED` |', $architecture);
+        foreach ([
+            'deployment capacity evidence',
+            'test limit',
+            'staging/preview or diagnostic limit',
+            'current dataset evidence unavailable',
+            '`capture_overflow`',
+            'Silent truncation',
+            'unchanged-policy retry are forbidden',
+            'supplier_snapshot_operational_bounds_policy_v1',
+            'cohort_bounds_policy_key',
+            'cohort_bounds_policy_version',
+            'cohort_bounds_policy_fingerprint',
+            'chk_import_claim_cohort_policy_authority',
+            'Retry/recovery always uses the persisted policy A',
+        ] as $boundAuthority) {
+            $this->assertStringContainsString($boundAuthority, $architecture);
+        }
+
+        $concurrency = $this->structuralMarkdownTable(
+            $architecture,
+            '| Case | Authority and winner | Loser / retry behavior |',
+            '| :--- | --- | ---: |',
+            'Phase III concurrency matrix',
+            3,
+            '#### Crash/protocol integration and closure',
+        );
+        $this->assertSame([], $concurrency['violations'], implode(PHP_EOL, $concurrency['violations']));
+        $this->assertSame(10, $concurrency['physical_count']);
+        foreach (range('A', 'J') as $position => $letter) {
+            $this->assertStringStartsWith("| {$letter}.", $concurrency['rows'][$position]);
+        }
+
+        foreach ([
+            '`PH3-RDY-001 = CLOSED`',
+            '`PH3-RDY-002 = CLOSED`',
+            '`PH3-RDY-003 = BLOCKED`',
+            '`PH3-RDY-004 = CLOSED`',
+            'existing 66 by 11 crash matrix keeps its row numbers',
+            'existing 19 by 3 protocol matrix needs no new protocol state',
+            'frozen 22 identities',
+        ] as $closureAuthority) {
+            $this->assertStringContainsString($closureAuthority, $architecture);
+        }
+
+        foreach ([
+            'app/Models/SupplierImportSourceExecution.php',
+            'app/Models/SupplierProductSourceRevision.php',
+            'config/supplier_snapshot.php',
+        ] as $futureRuntimeArtifact) {
+            $this->assertFileDoesNotExist(base_path($futureRuntimeArtifact));
         }
     }
 
@@ -3682,7 +3815,7 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
             '| --- | --- | --- |',
             'readiness status',
             3,
-            'Phase III implementation remains prohibited while any of `PH3-RDY-001`,',
+            'Phase III implementation remains prohibited while `PH3-RDY-003` is `BLOCKED`',
         );
         $rows = [];
         $violations = $table['violations'];
@@ -3727,8 +3860,8 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
             }
         }
         $expectedStatuses = [
-            'PH3-RDY-001' => 'BLOCKED',
-            'PH3-RDY-002' => 'BLOCKED',
+            'PH3-RDY-001' => 'CLOSED',
+            'PH3-RDY-002' => 'CLOSED',
             'PH3-RDY-003' => 'BLOCKED',
             'PH3-RDY-004' => 'CLOSED',
         ];

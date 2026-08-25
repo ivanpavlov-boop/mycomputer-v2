@@ -3282,22 +3282,22 @@ Enrollment is privacy-safe, monotonic, and source-scoped.
 
 ### Phase III readiness findings and authority
 
-This section is the authoritative Phase III readiness-remediation contract. It
+This section is the authoritative Phase III architecture-design contract. It
 clarifies candidate-row selection without changing any Phase II canonical byte
-contract. Three independent blockers remain and cannot be closed in
-documentation: immutable candidate-row source provenance, durable authorization
-source binding, and approved operational bounds. Each requires separately
-approved design work before Phase III implementation can be authorized.
+contract. The repository-grounded design below closes the provenance and
+authorization-source design forks; production operational bounds remain an
+independent blocker. Design closure is not runtime implementation authorization.
 
 | Finding | Verdict | Exact boundary |
 | --- | --- | --- |
-| `PH3-RDY-001` | `BLOCKED` | Existing application candidate rows do not carry immutable source provenance sufficient to prove membership in `(supplier_id, supplier_feed_id, source_identity)`. Exact supplier/feed equality alone is insufficient. |
-| `PH3-RDY-002` | `BLOCKED` | The deployed claim/authorization schema does not persist an immutable source identity before authorization. A separate additive schema and guarded-model design is required, and it does not close candidate-row provenance. |
+| `PH3-RDY-001` | `CLOSED` | The canonical future authority is an immutable source execution plus immutable supplier-product source revision selected by a guarded current-revision pointer. Existing rows remain ineligible until explicitly recaptured; exact supplier/feed equality alone remains insufficient. |
+| `PH3-RDY-002` | `CLOSED` | The exact five-field claim authorization tuple, atomic `NULL -> A` transition, DB checks/trigger, and generation-to-claim composite FK are fixed below. This binding remains separate from candidate provenance. |
 | `PH3-RDY-003` | `BLOCKED` | The authorized importer has no approved hard source-row or source-byte maximum from which all spool, sort, batch, and transaction bounds can be derived. |
 | `PH3-RDY-004` | `CLOSED` | Phase I and II are deployed/inactive; Phase III remains unimplemented and not implementation-authorized. |
 
-Phase III implementation remains prohibited while any of `PH3-RDY-001`,
-`PH3-RDY-002`, or `PH3-RDY-003` is `BLOCKED`.
+Phase III implementation remains prohibited while `PH3-RDY-003` is `BLOCKED`
+and until a later explicit implementation authorization is issued for the
+independently reviewed design.
 
 This remediation does not change the 22 cryptographic/digest identities, the
 20-field expected state, 16-field resume state, 42-field generation header,
@@ -3351,8 +3351,9 @@ This is a required design invariant, not an explanatory example:
    cohort merely because supplier ID and feed ID still match;
 6. current candidate rows do not immutably record `A`, so their original-source
    provenance cannot currently be proven; and
-7. Phase III remains blocked until a separate immutable candidate-row/source
-   provenance contract is approved, implemented, deployed, and verified.
+7. the selected immutable candidate-revision contract below prevents that
+   admission, but Phase III remains inactive until it is separately implemented,
+   deployed, verified, and explicitly enabled.
 
 Reading the current `SupplierFeed.feed_url`, `feed_type`, `mapping`, name,
 adapter selection, credentials, or other mutable configuration at T4 is never
@@ -3372,9 +3373,9 @@ and Catalog Sync state do not determine cohort identity.
 | matching supplier with `supplier_feed_id IS NULL` | `FAIL CLOSED` | Null does not mean every feed, current feed, or legacy feed; source provenance is unavailable. |
 | exact supplier/feed but immutable original-source provenance is missing | `NOT ADMISSIBLE / FAIL CLOSED / BLOCKED BY PROVENANCE` | `supplier_products.supplier_feed_id` equality proves feed ownership only; it does not prove historical source identity. This is every current application candidate row. |
 | exact supplier/feed with immutable provenance for another or inconsistent source | `FAIL CLOSED` | A cross-source merge is forbidden even when feed ID is unchanged. |
-| exact supplier/feed, immutable provenance for the exact capture source, and one valid canonical supplier SKU | `INCLUDE`, only after a future provenance design is approved | All three semantic proofs exist; mutable commercial status remains irrelevant. |
+| exact supplier/feed, immutable provenance for the exact capture source, and one valid canonical supplier SKU | `INCLUDE`, only after the selected provenance schema/importer path is implemented and enabled | All three semantic proofs exist; mutable commercial status remains irrelevant. |
 | exact supplier/feed with null, empty, whitespace-only, malformed, conflicting, or otherwise ambiguous supplier SKU | `FAIL CLOSED` | The collector may not invent or reconcile an identity. |
-| repeated rows with exact supplier/feed, exact immutable source provenance, and the same valid canonical supplier SKU | `INCLUDE`, then deduplicate, only after a future provenance design is approved | They authorize one immutable identity only when every row carries the same proven source. |
+| repeated rows with exact supplier/feed, exact immutable source provenance, and the same valid canonical supplier SKU | `INCLUDE`, then deduplicate, only after the selected provenance schema/importer path is implemented and enabled | They authorize one immutable identity only when every row carries the same proven source. |
 
 `supplier_products.supplier_feed_id` proves feed ownership only and never proves
 historical source identity. A candidate MUST NOT enter the cohort merely because
@@ -3403,7 +3404,7 @@ problem.
 | linked SupplierProduct has another non-null feed | `EXCLUDE` | The offer is attributable to another feed. |
 | linked SupplierProduct has the exact scope supplier/feed but no immutable original-source provenance | `NOT ADMISSIBLE / FAIL CLOSED / BLOCKED BY PROVENANCE` | The link proves supplier/feed/SKU lineage only; current schema cannot prove the original canonical source. |
 | linked SupplierProduct has immutable provenance for another or inconsistent source | `FAIL CLOSED` | Cross-source merge remains prohibited even under the same feed ID. |
-| linked SupplierProduct has exact supplier/feed/source provenance and both rows resolve to the same valid canonical supplier SKU | `INCLUDE`, then deduplicate, only after a future provenance design is approved | The offer contributes the same proven source identity as its staging parent. |
+| linked SupplierProduct has exact supplier/feed/source provenance and both rows resolve to the same valid canonical supplier SKU | `INCLUDE`, then deduplicate, only after the selected provenance schema/importer path is implemented and enabled | The offer contributes the same proven source identity as its staging parent. |
 | either SKU is invalid or their canonical supplier-SKU hashes differ | `FAIL CLOSED` | A mutable or contradictory link cannot authorize membership. |
 
 The linked-row derivation is used only to select the member within the
@@ -3471,10 +3472,10 @@ originated from source `A` rather than a later source `B` under the same feed
 ID. Current answer: **NO**. Claim source binding does not solve this problem.
 Every candidate admitted to a source-scoped seed must instead carry or be
 transitively bound to immutable persisted evidence of its original canonical
-source identity. Direct source persistence, immutable import-history
-provenance, and another immutable FK chain are possible future alternatives,
-not approved solutions. Candidate provenance remediation is
-**REQUIRED / UNRESOLVED** and requires a separate design comparison.
+source identity. Direct fields on the mutable row, execution-only provenance,
+and an immutable revision chain were evaluated. The canonical selection is the
+combined append-only execution plus revision chain defined below. Candidate
+provenance is **CLOSED IN DESIGN / NOT IMPLEMENTED**.
 
 The proposed future Problem A schema contract is exact but not implemented:
 
@@ -3551,14 +3552,15 @@ relationship is unambiguous and complete. For candidate provenance, the same
 rule applies independently; a claim backfill never manufactures candidate-row
 history. No historical source may be inferred from current configuration.
 
-This is an additive Phase I schema and Phase II guarded-model remediation. It
-requires a separate design, migration/model implementation, validation,
-independent review, deployment, and post-deployment verification before Phase
-III. The proposed claim field is not one of the 22 approved canonical
+This is the selected future additive schema and guarded-model remediation. It
+still requires separately authorized migration/model implementation,
+validation, independent review, deployment, and post-deployment verification
+before Phase III. The proposed claim field is not one of the 22 approved canonical
 identities and is not part of the 20/16/42/13/5 field serializers, so a Phase II
-canonical serializer/fingerprint revision is currently **NOT REQUIRED**. That
-conclusion must be reconfirmed against the exact future schema design; it is not
-final implementation approval.
+canonical serializer/fingerprint revision is **NOT REQUIRED**. The future
+operational-policy identity described below is separate and does not mutate any
+frozen serializer or golden fixture. This conclusion is architecture authority,
+not implementation approval.
 
 ### PH3-RDY-003 authoritative-limit inventory and unresolved gate
 
@@ -3735,6 +3737,438 @@ unauthorized failure freezes the generation, cannot silently create a baseline
 or absence fact, and requires separate operator investigation or authorization.
 A later explicitly authorized expansion begins another epoch under the baseline
 rule above.
+
+### Phase III provenance and bounds architecture decision
+
+This subsection is the selected future architecture. It records design
+authority only. No table, model, importer, repository, job, configuration or
+feature gate described here exists until a later implementation phase adds it.
+
+#### Current runtime and lineage inventory
+
+| Hop | Current identity and link | Mutability and reuse | Historical source proof |
+| --- | --- | --- | --- |
+| source/feed | `supplier_feeds.id` plus `supplier_id`; URL, type, mapping, credentials and status are fields on the same row | source-defining fields are mutable and one feed ID can represent A then B | none; current configuration is not historical evidence |
+| supplier import | `import_jobs.id` and append-restricted `import_histories.id` bind supplier/feed | an XML retry may write the same staging identity; `ImportHistory` has no source identity | supplier/feed execution lineage only |
+| staging | `supplier_products.id`; importer lookup uses supplier/feed plus first SKU, EAN, MPN or payload hash | `updateOrCreate` overwrites source-owned columns and reuses rows | current row only; no original source or revision identity |
+| catalog offer | `product_supplier_offers.id` and nullable `supplier_product_id` | offer price/quantity/link are mutable | a live staging link only; no source identity |
+| claim | `supplier_import_execution_claims.id` and its supplier/feed/history parents | guarded state machine; current authorization tuple has four fields | no authorization source binding |
+| generation | one generation per claim with immutable `source_identity` | append-only | generation source exists, but no composite claim/source authority |
+| enrollment/observation | immutable supplier/source/SKU enrollment and one observation per generation/enrollment | append-only | historical only after a valid generation exists |
+
+The implemented XML path materializes the full XPath result, calls
+`SupplierProduct::updateOrCreate`, deletes/recreates staged attributes and then
+updates ImportHistory. Therefore `supplier_id + supplier_feed_id` is **NO** as
+original-source proof. `product_supplier_offers.supplier_product_id` is also
+**NO**: it reaches the same mutable row and adds no immutable source fact. The
+feed-A-to-B failure is reproducible directly from these schemas and services.
+
+#### Provenance alternatives and canonical selection
+
+| Alternative | Immutable evidence | A to B / reused-row safety | Retry/concurrency | Decision |
+| --- | --- | --- | --- | --- |
+| A - source fields directly on `supplier_products` | no; a field changes with the mutable row | either destroys A history or detaches A provenance from B content | out-of-band writes and overlapping imports remain ambiguous | rejected |
+| B - append-only supplier-product revision | yes; each revision is immutable and the mutable row selects one exact revision | preserves A and B and prevents a B row from claiming A | supports idempotent execution/member uniqueness and deterministic snapshot reads | selected |
+| C - immutable import/source execution only | proves execution supplier/feed/source but not which revision of a reused staging row is current | execution A survives reconfiguration, but the row can later contain B | insufficient alone | selected only as B's required parent |
+| D - copy all mutable application candidates into claim members | freezes only SKU hashes after admission | cannot prove that admission itself used A | retry-safe after a potentially unsafe admission | rejected |
+
+The canonical design is **B + C**.
+
+Its immutable object is a
+`supplier_product_source_revision`, not the mutable `supplier_products` row.
+The revision is transitively bound to one immutable
+`supplier_import_source_execution`. The mutable row contains only a guarded
+pointer selecting its current immutable revision.
+
+#### Selected future provenance schema
+
+`supplier_import_source_executions` is append-only and contains at minimum:
+
+```text
+id
+supplier_id
+supplier_feed_id
+import_history_id
+source_identity
+source_descriptor_fingerprint
+source_profile_key
+source_profile_version
+importer_version
+captured_at
+created_at
+```
+
+`import_history_id` is unique. A composite unique key
+`uq_import_source_execution_scope(id, supplier_id, supplier_feed_id,
+source_identity)` supplies exact parent authority. Supplier, feed and
+ImportHistory FKs are `RESTRICT`. Exact ownership also requires parent uniques
+`supplier_feeds(id, supplier_id)` and
+`import_histories(id, supplier_id, supplier_feed_id)`, with matching composite
+FKs from the source execution; separate single-column FKs are insufficient.
+The source identity is captured from the
+approved importer source profile before any staging write; mutable
+`SupplierFeed` configuration is input at that instant, never later evidence.
+The row and all source facts are protected by no-update/no-delete triggers.
+
+`supplier_product_source_revisions` is append-only and contains at minimum:
+
+```text
+id
+supplier_product_id
+supplier_import_source_execution_id
+supplier_id
+supplier_feed_id
+source_identity
+source_member_identity_hash
+source_row_fingerprint
+staging_projection_fingerprint
+revision_fingerprint
+observed_at
+created_at
+```
+
+Its composite FK to the execution uses `(supplier_import_source_execution_id,
+supplier_id, supplier_feed_id, source_identity)`. A unique key on
+`(supplier_import_source_execution_id, source_member_identity_hash)` makes an
+identical execution retry idempotent and makes conflicting duplicate source
+members fail closed. A composite unique key
+`uq_supplier_product_revision_current(id, supplier_product_id, supplier_id,
+supplier_feed_id)` supports the current-revision pointer. Every digest is
+lowercase SHA-256 ASCII and every identity column uses the exact existing
+`SnapshotSourceIdentity` `VARCHAR(128) CHARACTER SET ascii COLLATE ascii_bin`
+contract. The revision and all its facts have no-update/no-delete triggers.
+
+`supplier_products.current_source_revision_id` is nullable for migration and
+legacy rows. The composite FK
+`fk_supplier_product_current_source_revision(current_source_revision_id, id,
+supplier_id, supplier_feed_id)` targets
+`supplier_product_source_revisions(id, supplier_product_id, supplier_id,
+supplier_feed_id)` with `RESTRICT`. The future importer inserts the immutable
+revision first, then changes all source-owned staging fields and the pointer in
+one transaction. A trigger rejects a source-owned staging-field change unless
+the pointer changes to another exact revision. It also rejects pointer clearing
+or arbitrary pointer rebinding after provenance has been established.
+`chk_supplier_product_current_source_revision_scope` additionally requires
+`current_source_revision_id IS NULL OR supplier_feed_id IS NOT NULL`; otherwise
+MySQL would skip the composite FK when any child column is null. A null pointer
+is always ineligible, including a newly inserted row before its transaction
+commits the revision pointer.
+
+The revision's staging projection is fixed-order canonical data containing the
+source-owned candidate identity and imported staging values: supplier/feed,
+canonical supplier-SKU hash, EAN, MPN, name, brand/category labels, prices,
+quantity, external and mapped availability, currency, raw-data fingerprint,
+payload fingerprint, and the deterministic staged-attribute projection.
+Catalog-owned `product_id`, `synced_at`, workflow `status`, `mapping_notes` and
+ordinary timestamps are excluded. Candidate admission uses the revision's
+canonical SKU hash and recomputes the current source-owned projection; a
+mismatch is not repaired or inferred.
+
+This design introduces three future, separately versioned identities:
+
+```text
+supplier_import_source_execution_v1
+supplier_product_source_revision_v1
+supplier_snapshot_operational_bounds_policy_v1
+```
+
+Each uses an ASCII domain, one NUL delimiter and fixed-order canonical JSON
+before SHA-256. Their exact ordered canonical fields are:
+
+```text
+supplier_import_source_execution_v1:
+schema, supplier_id, supplier_feed_id, import_history_id, source_identity,
+source_profile_key, source_profile_version, importer_version, captured_at
+
+supplier_product_source_revision_v1:
+schema, supplier_product_id, supplier_import_source_execution_id, supplier_id,
+supplier_feed_id, source_identity, source_member_identity_hash,
+source_row_fingerprint, staging_projection_fingerprint, observed_at
+
+supplier_snapshot_operational_bounds_policy_v1:
+schema, policy_key, policy_version, max_source_rows, max_spool_rows,
+max_spool_bytes, max_enrollments, max_observations, max_canonical_children,
+external_sort_chunk, db_insert_batch_ceiling, snapshot_transaction_bound,
+algorithm_version
+```
+
+Exact independent golden fixtures are implementation prerequisites. They are
+additions outside the frozen 22 identities; none of
+the existing expected-state, resume, generation, enrollment, observation or
+empty-seed bytes changes.
+
+#### Import, retry and concurrency rules
+
+One protected import owns one source execution. For each canonical supplier SKU
+it either reuses the byte-identical revision already identified by the unique
+execution/member key or inserts one new revision. Conflicting duplicates in the
+same execution fail before moving the current pointer. Two imports lock the
+same `supplier_products` identity in ascending ID order; the first committed
+revision wins the pointer CAS and the loser rereads, creates no mixed revision,
+and either retries from its own immutable execution or fails with an ownership
+conflict. A later B import may move the pointer from revision A to revision B,
+but can neither update nor delete revision A.
+
+Legacy rows keep `current_source_revision_id = NULL` and are ineligible.
+Migration must not infer provenance from current feed URL/type/mapping,
+credentials, current offer links, timestamps or payload similarity. Only a
+future explicit re-import through the protected provenance writer can create a
+source execution/revision and move the pointer. There is no historical
+backfill, silent repair or Product/supplier-offer mutation.
+
+#### Exact candidate admission contract
+
+A candidate is eligible for source A only when all of these facts are visible
+in the capture-start `REPEATABLE READ` consistent snapshot:
+
+1. the claim supplier/feed equals the candidate supplier/feed;
+2. `current_source_revision_id` is non-null and resolves through the exact
+   composite FK to that same supplier-product/supplier/feed tuple;
+3. the revision resolves through its exact composite FK to one immutable source
+   execution with the same supplier/feed/source A;
+4. revision `source_identity` byte-equals claim source A;
+5. the revision's canonical SKU hash is valid and equals the candidate/offer
+   canonical SKU hash where an offer contributes;
+6. the current source-owned staging projection recomputes to the immutable
+   `staging_projection_fingerprint`; and
+7. revision and execution fingerprints validate under their explicit versions.
+
+The collector persists only sorted distinct SKU hashes in authorization
+members. It never copies raw source identity evidence into those members.
+Failure classifications for the future implementation are fixed as
+`candidate_provenance_missing`, `candidate_source_mismatch`,
+`candidate_revision_mismatch`, `candidate_projection_mismatch` and
+`candidate_provenance_conflict`. These are future coordinator failure codes,
+not additions to the frozen generation reason allowlist. No member or claim
+authorization tuple commits after any such failure.
+
+The consistent snapshot is the deterministic admission cut. Later pointer
+movement does not rewrite the authorized member set; retries use persisted
+members and claim source only. A new logical execution is required to observe a
+later committed revision. `product_supplier_offers` may contribute only through
+the exact current revision chain and matching SKU hash; the offer never becomes
+provenance authority.
+
+#### Durable five-field claim source binding
+
+The field is exactly
+`cohort_source_identity VARCHAR(128) CHARACTER SET ascii COLLATE ascii_bin
+NULL`, hidden and guarded.
+
+Canonical proposed future authorization completeness tuple (ordered):
+
+```text
+cohort_authorization_version
+cohort_authorized_at
+cohort_seed_count
+cohort_seed_fingerprint
+cohort_source_identity
+```
+
+| Old state | Requested state | Result |
+| --- | --- | --- |
+| all five null | complete tuple for A | allowed only in the one authorization transaction |
+| complete tuple for A | byte-identical complete tuple for A | idempotent no-op |
+| complete tuple for A | any tuple for B | forbidden |
+| complete tuple for A | null/partial tuple | forbidden |
+| null/partial tuple | committed partial/non-null source | forbidden |
+
+In shorthand: `NULL -> A` is the sole establishing transition; `A -> A` is
+only a byte-identical idempotent no-op; `A -> B` and `A -> NULL` are forbidden.
+
+The authorization transaction (1) starts one consistent snapshot, (2) validates
+the immutable provenance chain and bound policy, (3) writes the bounded private
+member spool, (4) locks the claim, (5) proves the claim still has an all-null
+five-field tuple, (6) inserts the complete immutable member set, and (7) updates
+all five claim fields including `NULL -> A` in the same commit. A crash commits
+neither step 6 nor step 7, or commits both. Retry before commit rebuilds under a
+new transaction; retry after commit verifies persisted version/source/count/
+fingerprint and members without rereading SupplierFeed or candidates.
+
+DB authority is the combination of:
+
+- an all-null/all-non-null five-field CHECK and processing-owner CHECK;
+- the exact nullable SnapshotSourceIdentity grammar CHECK;
+- `trg_import_execution_claim_cohort_source_immutable`, allowing only the
+  atomic all-null to complete-A transition and byte-equal complete-A no-op;
+- parent unique
+  `uq_import_execution_claim_id_cohort_source(id, cohort_source_identity)`;
+- child index
+  `ix_snapshot_generation_claim_source(supplier_import_execution_claim_id,
+  source_identity)`; and
+- `fk_snapshot_generation_claim_source` from that child pair to the parent pair
+  with `ON UPDATE RESTRICT ON DELETE RESTRICT`.
+
+MySQL requires the referenced parent pair to be unique and both pairs to have
+compatible order, type, length, charset and collation. The nullable parent does
+not weaken the child: a generation has non-null source identity, the claim
+CHECK forbids partial authorization, and the composite FK cannot match an
+all-null parent. Migration order is claim column/check/trigger/unique first,
+generation child index/FK second. Existing rows may be bound only from exact
+immutable evidence; otherwise migration/readiness fails. No current feed
+configuration is a backfill source.
+
+Once A is committed, ordinary retry, same-key republication, expired queued
+ownership recovery and terminalization use persisted A. They neither change A
+nor reread feed configuration. The later Phase VII-IX action matrices retain
+their exact target/CAS authority; none gains permission to rebind source.
+Candidate provenance answers which source produced a revision. Claim binding
+answers which source the cohort was authorized for. Both proofs are mandatory.
+
+#### Operational bounds evidence and semantics
+
+Repository evidence was classified without promotion:
+
+| Evidence | Value | Classification | Phase III authority |
+| --- | ---: | --- | --- |
+| queue worker / current jobs | 1,200 / 3,600 seconds, 3 tries | deployment capacity evidence | no; no protected Phase III worker exists |
+| largest committed supplier fixture | 5,222 bytes; all fixtures total 38,337 bytes | test limit | no; too small and synthetic |
+| controlled/preview scan caps | 5,000 rows | staging/preview or diagnostic limit | no |
+| ASBIS staging batch | default 500, maximum 1,000 | staging/preview limit | no |
+| evidence reader | 8,388,608-byte file and 65,536-byte chunk | diagnostic limit | no |
+| Docker resources / PHP memory / MySQL packet or transaction timeout | not committed | deployment capacity evidence unavailable | no |
+| local aggregate database query | unavailable in this workstation environment | current dataset evidence unavailable | no |
+
+The nine bounds have exact semantics but remain numerically `NOT SPECIFIED`:
+
+| Bound | Exact semantic, unit and scope | Enforcement and failure | Value/status |
+| :--- | --- | --- | ---: |
+| `max_source_rows` | physical parser records emitted for one execution, including valid, invalid and duplicate records; rows | hard check before accepting the next record; overflow aborts source processing | `NOT SPECIFIED` |
+| `max_spool_rows` | aggregate logical records admitted to all capture input spools before dedupe, counting each enrollment, candidate revision and source record once; rows | hard pre-write check; overflow rolls back authorization/finalization as applicable | `NOT SPECIFIED` |
+| `max_spool_bytes` | aggregate encoded bytes physically written across private capture spool, sort-run and merge files, not filesystem allocation blocks; bytes | hard pre-write check and `finally` cleanup | `NOT SPECIFIED` |
+| `max_enrollments` | distinct effective cohort identities after seed/source union for one supplier/source epoch; rows | checked after dedupe and before DB allocation | `NOT SPECIFIED` |
+| `max_observations` | exhaustive one-per-enrollment observations for one generation; rows | checked before finalization; no prefix may commit | `NOT SPECIFIED` |
+| `max_canonical_children` | new enrollment inserts plus exhaustive observation inserts for one generation; rows | checked before transaction; generation parent excluded | `NOT SPECIFIED` |
+| `external_sort_chunk` | maximum records and their encoded bytes loaded in memory for one sort run | hard per-run allocation check; run file removed in `finally` | `NOT SPECIFIED` |
+| `db_insert_batch_ceiling` | maximum immutable child rows in one SQL insert statement; rows/statement | application-owned hard ceiling before SQL construction | `NOT SPECIFIED` |
+| `snapshot_transaction_bound` | total row mutations in one snapshot finalization transaction: one generation, new enrollments, observations and fixed terminal parent transitions; rows/transaction | checked before BEGIN; overflow never opens/commits a partial transaction | `NOT SPECIFIED` |
+
+All are hard, application-owned, supplier-invariant limits.
+
+No supplier,
+request, command option or mutable database row may raise them. `capture_overflow`
+remains the canonical frozen outcome. Silent truncation, partial canonical
+children and unchanged-policy retry are forbidden. Authorization overflow
+rolls back members and claim tuple. Post-authorization capture overflow commits
+no partial children; it may record only the already approved safe frozen header
+when all header facts are complete, otherwise no generation. Every temp path is
+cleaned in `finally`.
+
+For an approved policy let `R`, `S`, `B`, `E`, `O`, `C`, `K`, `I`, and `T`
+denote the nine bounds in table order, `W` the approved maximum encoded record
+bytes, and `H` the fixed finalization parent/header mutation count. Required
+relationships are:
+
+```text
+R <= S
+E <= S
+O = E
+C = new_enrollments + O and C <= E + O
+K <= S
+I <= C
+T >= 1 + C + H
+B >= maximum physical sort/spool bytes implied by S, K and W
+insert statements = ceil(new_enrollments / I) + ceil(O / I)
+estimated memory = fixed parser overhead + K * W + serializer overhead
+```
+
+The equal observation/enrollment count follows the unique generation/enrollment
+key and exhaustive absence contract. `new_enrollments` may be lower than E.
+Formula outputs are estimates until measured; they are not production values.
+
+Future configuration belongs in one application-owned, config-cache-safe
+`config/supplier_snapshot.php` policy selected only by a closed allowlisted key.
+Environment may select an approved key but may not supply arbitrary individual
+numbers. Missing/unknown policy or any null bound fails readiness. The exact
+nine-value canonical policy plus units/algorithm version has a separate
+`supplier_snapshot_operational_bounds_policy_v1` SHA-256 fingerprint. The claim
+must persist `cohort_bounds_policy_key`, `cohort_bounds_policy_version` and
+`cohort_bounds_policy_fingerprint` as a separate all-null/all-non-null immutable
+tuple in the same authorization transaction, and generation `policy_versions`
+records the same key, version and fingerprint. These fields have an exact
+shape/hex CHECK and write-once trigger independent of the source tuple.
+`chk_import_claim_cohort_policy_authority` requires the policy tuple to be null
+exactly when the five authorization fields are all null and complete exactly
+when those five fields are complete; the processing-owner CHECK also requires
+the complete policy tuple. Thus the five-field authorization tuple is not
+reordered or enlarged, but no authorized committed claim can lack policy
+authority.
+Retry/recovery always uses the persisted policy A. A later configured policy B
+requires a new logical execution; it cannot reinterpret or retry A. These
+future claim policy fields are separate from, and do not reorder, the exact
+five-field authorization completeness tuple.
+
+No numeric value is approved. Closing `PH3-RDY-003` requires, for all nine:
+production per-supplier/feed row and encoded-byte percentiles/maxima from a
+separately authorized read-only evidence run; parser expansion/invalid/duplicate
+ratios; effective enrollment growth; observed row widths; sort memory and temp
+disk measurements; MySQL packet/placeholder/lock/transaction measurements;
+worker memory and timeout headroom; batch latency; and overflow/recovery load
+tests. Until every value, headroom and tuning path is reviewed together, all
+nine remain `NOT SPECIFIED` and `PH3-RDY-003` remains `BLOCKED`.
+
+#### Integrated source, authorization and policy flow
+
+The future flow is: resolve source A -> create immutable source execution A ->
+write immutable supplier-product revisions and guarded current pointers ->
+enumerate only exact valid current revisions in one consistent snapshot ->
+validate policy A and spool bounds -> atomically persist members plus the
+five-field claim tuple with source A and persisted policy A -> enforce remaining
+bounds while parsing source A -> create generation whose composite FK proves
+claim source A -> insert the complete enrollment/observation set -> retry or
+recovery using persisted source A and policy A. Failures occur before candidate
+admission on missing/mismatching provenance, before authorization on member or
+spool overflow, before finalization on source/child/transaction overflow, and
+at DB write on any source or tuple mismatch.
+
+#### Concurrency decision matrix
+
+| Case | Authority and winner | Loser / retry behavior |
+| :--- | --- | ---: |
+| A. feed A changes to B during enumeration | immutable revision A plus consistent snapshot wins | B is visible only to a later execution; current config cannot reinterpret A |
+| B. staging pointer changes after enumeration | snapshot-selected revision wins current claim | later revision is deferred; retry uses members, not staging |
+| C. two imports update one staging row | ordered row lock and pointer CAS choose first commit | loser rereads and retries under its own immutable execution or fails ownership |
+| D. two authorizations for one claim | claim lock and all-null tuple CAS choose one | loser verifies byte-identical tuple or fails conflict |
+| E. authorization versus retry | committed complete tuple is authority | pre-commit retry restarts; post-commit retry verifies persisted facts |
+| F. claim source A versus attempted B | persisted A plus trigger wins | B rebind is rejected by trigger/check/FK |
+| G. bound overflow during spool | persisted policy and pre-write counters win | no partial member/claim or child commit; cleanup in `finally` |
+| H. policy changes during retry | persisted policy A wins | configured B requires a new logical execution |
+| I. provenance disappears or is invalidated | append-only evidence cannot disappear; broken pointer/projection fails closed | no candidate admission or silent repair |
+| J. generation source differs from claim | composite FK claim/source pair wins | generation insert fails with zero canonical children |
+
+#### Crash/protocol integration and closure
+
+The existing 66 by 11 crash matrix keeps its row numbers. A later
+implementation PR must append, never renumber, scenarios for: source execution
+committed before revision, revision committed before pointer CAS, pointer CAS
+loss, crash before and after the atomic five-field authorization commit, spool
+overflow/cleanup, policy change on retry, and generation composite-FK mismatch.
+Each added row must distinguish no commit, complete immutable provenance,
+complete authorization, and complete snapshot finalization.
+
+The existing 19 by 3 protocol matrix needs no new protocol state. It gains
+preconditions only: an immutable current revision and exact source execution,
+complete five-field claim authorization, a persisted approved bounds policy,
+and all pre-allocation checks. Existing dispatch/recovery states and reason
+allowlists remain unchanged. The future candidate failure codes above are
+coordinator admission results, not generation reasons.
+
+Architecture verdicts are therefore independent:
+
+- `PH3-RDY-001 = CLOSED`: one immutable execution-plus-revision authority is
+  selected, A-to-B/reuse/concurrency and legacy behavior are fixed;
+- `PH3-RDY-002 = CLOSED`: field, tuple, transaction, state machine, DB authority,
+  migration and retry behavior are fixed;
+- `PH3-RDY-003 = BLOCKED`: semantics/policy design are fixed but all nine
+  production numbers lack authorized evidence; and
+- `PH3-RDY-004 = CLOSED`: status remains consistent and Phase III remains
+  unimplemented and unauthorized.
+
+Catalog safety is unchanged: supplier import continues to stage only in
+`supplier_products`; it does not directly mutate Product. Manual selected
+CREATE remains the only enabled creation path, UPDATE remains disabled by
+default, Sync All and automatic sync remain disabled, and no supplier-driven
+name, slug, SEO, description, image, category or attribute overwrite is added.
 
 ## Generation Header Data Dictionary
 

@@ -24,23 +24,23 @@ The approved design entered `main` through PR #211:
 - republish resume-state fingerprint: exactly 16 ordered fields.
 
 The current implementation baseline is `origin/main` at
-`37a66f2e448ee0f8691dc0f5d4249b6ecb851b8a`:
+`096beef3e619e769ac703fa7c1ea8fa38939db0d`:
 
 - Phase I canonical schema: implemented, merged through PR #212, CI-verified,
   deployed to staging, and behaviorally dormant;
 - Phase II guarded models and canonical byte contracts: implemented, merged
   through PR #213, CI-verified, deployed to staging, and uncalled;
-- Phase III snapshot persistence/cohort authorization: readiness remediation
-  only, unimplemented, and not implementation-authorized.
+- Phase III snapshot persistence/cohort authorization: provenance and durable
+  source-binding architecture selected, still unimplemented and not
+  implementation-authorized.
 
-Phase III remains blocked by `PH3-RDY-001`, `PH3-RDY-002`, and `PH3-RDY-003`.
-The first requires a separately approved immutable application-candidate source
-provenance contract; the second requires a separately approved additive
-claim/source relational binding for durable authorization; and the third
-requires approved importer/source maxima from which every spool, sort, insert,
-and transaction bound can be derived. Claim source binding does not close
-candidate provenance. The authoritative proof, fail-closed selection matrices,
-proposed schema delta, and limit inventory are in the
+`PH3-RDY-001` and `PH3-RDY-002` are closed in architecture design. The selected
+future authority is an append-only import-source execution plus append-only
+supplier-product source revision, a guarded current-revision pointer, and the
+exact five-field claim source binding. `PH3-RDY-003` remains blocked because all
+nine production bounds lack production evidence and remain `NOT SPECIFIED`.
+Claim source binding does not replace candidate provenance. The authoritative
+proof, fail-closed matrices, selected future schema and limit inventory are in the
 [Cohort Enrollment Contract](IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md#cohort-enrollment-contract).
 
 This planning phase authorizes no migration, runtime behavior, queue routing,
@@ -235,8 +235,8 @@ the artifact.
 | Future runtime component | Artifact status | Runtime status | Evidence and required direction |
 | --- | --- | --- | --- |
 | Phase III persistence repository and service API | `NOT IMPLEMENTED / MISSING` | `INACTIVE` | No `ImmutableSupplierOfferSnapshotRepository`, cohort-authorization repository/service, collector or capture service exists |
-| Immutable candidate-row source provenance | `NOT IMPLEMENTED / MISSING` | `BLOCKED` | Current application candidates cannot prove original canonical source identity; `PH3-RDY-001` remains open |
-| Durable claim authorization source binding | `NOT IMPLEMENTED / MISSING` | `BLOCKED` | Proposed `cohort_source_identity` schema/model remediation is documentation only; `PH3-RDY-002` remains open |
+| Immutable candidate-row source provenance | `DESIGNED / NOT IMPLEMENTED` | `INACTIVE` | Append-only source execution plus immutable staging revision is canonical; existing rows remain ineligible until recaptured; `PH3-RDY-001` is closed in design only |
+| Durable claim authorization source binding | `DESIGNED / NOT IMPLEMENTED` | `INACTIVE` | Exact five-field tuple, atomic transition, trigger/checks and generation composite FK are fixed; `PH3-RDY-002` is closed in design only |
 | Approved production operational bounds | `NOT SPECIFIED` | `BLOCKED` | The nine Phase III limits remain unapproved; `PH3-RDY-003` remains open |
 | MySQL ownership CAS repository | `NOT IMPLEMENTED / MISSING` | `INACTIVE` | Deployed claim fields exist, but no one-statement MySQL-UTC acquisition service owns the 4,200-second lease |
 | Protected supplier Redis lock | `NOT IMPLEMENTED / MISSING` | `INACTIVE` | The legacy generic lock and `forceRelease()` remain outside the future protected path |
@@ -533,11 +533,11 @@ immutability.
 
 ### Phase III - Snapshot persistence and cohort authorization core
 
-**Status.** Readiness remediation only. Runtime implementation is not
-authorized. `PH3-RDY-001`, `PH3-RDY-002`, and `PH3-RDY-003` remain separate
-blockers; only the status-consistency finding `PH3-RDY-004` is closed. No class
-listed below may be implemented until all three blockers are separately
-remediated and independently reviewed.
+**Status.** Architecture design only. Runtime implementation is not authorized.
+`PH3-RDY-001`, `PH3-RDY-002`, and `PH3-RDY-004` are closed in design/status;
+`PH3-RDY-003` remains blocked. No class listed below may be implemented until
+all nine operational bounds are evidence-backed and approved and a later
+explicit implementation authorization is issued after independent review.
 
 **Goal.** Implement deterministic, atomic snapshot persistence behind a
 service API that is not yet called by production import paths.
@@ -1226,14 +1226,14 @@ mutation.
     existing completion notification and Supplier timestamp mutation. Phase X
     durable alert intents are the only future protected notification source.
 
-The Phase III readiness review found three implementation design conflicts that
-the deployed contracts cannot close: application candidate rows lack immutable
-original-source provenance (`PH3-RDY-001`), the capture-start authorization is
-not immutably bound to `source_identity` (`PH3-RDY-002`), and the authorized
-importer has no hard source limits from which all required operational bounds
-can be derived (`PH3-RDY-003`). Claim source binding does not repair candidate
-provenance. Phase III implementation is prohibited until all three separate
-remediations are approved and verified.
+The Phase III architecture design resolves the provenance fork
+(`PH3-RDY-001`) and durable claim-source fork (`PH3-RDY-002`) without adding
+runtime artifacts. The authorized importer still has no evidence-backed hard
+limits from which all required operational bounds can be approved
+(`PH3-RDY-003`). Claim source binding does not repair candidate provenance;
+both selected mechanisms remain mandatory. Phase III implementation is
+prohibited while the bounds gate is blocked and until a later explicit
+implementation authorization follows independent design review.
 
 ## Review and rollout boundary
 
