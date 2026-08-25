@@ -1639,6 +1639,228 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
         );
     }
 
+    public function test_phase_three_architecture_authority_discovery_is_global_and_validity_independent(): void
+    {
+        $design = $this->readDocument('docs/IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md');
+        $lineEnding = str_contains($design, "\r\n") ? "\r\n" : "\n";
+        $canonical = $this->phaseThreeArchitectureAuthorityContract($design);
+        $this->assertSame([], $canonical['violations'], 'CP1 canonical');
+        $this->assertSame(2, $canonical['marker_candidate_count']);
+        $this->assertSame(2, $canonical['valid_marker_count']);
+        $this->assertSame(1, $canonical['current_count']);
+        $this->assertSame(1, $canonical['historical_count']);
+        $this->assertSame(0, $canonical['superseded_count']);
+        $this->assertSame(0, $canonical['malformed_marker_count']);
+        $this->assertSame(20, $canonical['status_lexical_occurrence_count']);
+        $this->assertSame(8, $canonical['status_candidate_count']);
+        $this->assertSame(4, $canonical['current_status_declaration_count']);
+        $this->assertSame(4, $canonical['historical_status_declaration_count']);
+        $this->assertSame(0, $canonical['unclassified_status_declaration_count']);
+        $this->assertSame(0, $canonical['malformed_status_candidate_count']);
+        $this->assertSame(0, $canonical['heading_candidate_count']);
+        $this->assertSame(0, $canonical['unclassified_heading_count']);
+
+        $statusRow = static fn (string $id, string $status): string => "| `{$id}` | `{$status}` | Global authority mutation. |";
+        $currentHeading = '### Current Phase III architecture status';
+        $currentStatusTable = $currentHeading.$lineEnding.
+            '| Finding | Status |'.$lineEnding.
+            '| --- | --- |'.$lineEnding.
+            $statusRow('PH3-RDY-001', 'BLOCKED').$lineEnding.
+            $statusRow('PH3-RDY-002', 'CLOSED IN DESIGN').$lineEnding.
+            $statusRow('PH3-RDY-003', 'BLOCKED').$lineEnding.
+            $statusRow('PH3-RDY-004', 'CLOSED');
+
+        $mutations = [
+            'UA1 unmarked current assignment' => [
+                'document' => $design.$lineEnding.'PH3-RDY-001 = BLOCKED (current architecture status)',
+                'discoveries' => ['status_candidate_count' => 1, 'unclassified_status_declaration_count' => 1],
+            ],
+            'UA2 unmarked current heading and table' => [
+                'document' => $design.$lineEnding.$currentStatusTable,
+                'discoveries' => [
+                    'status_candidate_count' => 4,
+                    'unclassified_status_declaration_count' => 4,
+                    'heading_candidate_count' => 1,
+                    'unclassified_heading_count' => 1,
+                ],
+            ],
+            'UA3 mixed-case authority marker' => [
+                'document' => $design.$lineEnding.'<!-- Phase-III-Architecture-Authority classification=CURRENT id=phase-iii-outside-review-v1 -->',
+                'discoveries' => ['marker_candidate_count' => 1, 'malformed_marker_count' => 1],
+            ],
+            'UA4 Markdown-list-prefixed authority marker' => [
+                'document' => $design.$lineEnding.'- <!-- phase-iii-architecture-authority classification=CURRENT id=phase-iii-outside-review-v1 -->',
+                'discoveries' => ['marker_candidate_count' => 1, 'malformed_marker_count' => 1],
+            ],
+            'UA5 blockquote-prefixed authority marker' => [
+                'document' => $design.$lineEnding.'> <!-- phase-iii-architecture-authority classification=CURRENT id=phase-iii-outside-review-v1 -->',
+                'discoveries' => ['marker_candidate_count' => 1, 'malformed_marker_count' => 1],
+            ],
+            'UA6 authority marker with trailing tokens' => [
+                'document' => $design.$lineEnding.'<!-- phase-iii-architecture-authority classification=CURRENT id=phase-iii-outside-review-v1 trailing=true -->',
+                'discoveries' => ['marker_candidate_count' => 1, 'malformed_marker_count' => 1],
+            ],
+            'UA7 authority marker missing classification' => [
+                'document' => $design.$lineEnding.'<!-- phase-iii-architecture-authority id=phase-iii-outside-review-v1 -->',
+                'discoveries' => ['marker_candidate_count' => 1, 'malformed_marker_count' => 1],
+            ],
+            'UA8 authority marker with unknown classification' => [
+                'document' => $design.$lineEnding.'<!-- phase-iii-architecture-authority classification=REFERENCE id=phase-iii-outside-review-v1 -->',
+                'discoveries' => ['marker_candidate_count' => 1, 'malformed_marker_count' => 1],
+            ],
+            'UA9 duplicate identical valid current marker' => [
+                'document' => $design.$lineEnding.'<!-- phase-iii-architecture-authority classification=CURRENT id=phase-iii-architecture-contract-v1 -->',
+                'discoveries' => ['marker_candidate_count' => 1, 'valid_marker_count' => 1, 'current_count' => 1],
+            ],
+            'UA10 PH3-RDY-001 plain assignment' => [
+                'document' => $design.$lineEnding.'PH3-RDY-001 = BLOCKED',
+                'discoveries' => ['status_candidate_count' => 1, 'unclassified_status_declaration_count' => 1],
+            ],
+            'UA11 PH3-RDY-002 plain assignment' => [
+                'document' => $design.$lineEnding.'PH3-RDY-002 = BLOCKED',
+                'discoveries' => ['status_candidate_count' => 1, 'unclassified_status_declaration_count' => 1],
+            ],
+            'UA12 PH3-RDY-003 plain assignment' => [
+                'document' => $design.$lineEnding.'PH3-RDY-003 = CLOSED',
+                'discoveries' => ['status_candidate_count' => 1, 'unclassified_status_declaration_count' => 1],
+            ],
+            'UA13 PH3-RDY-004 plain assignment' => [
+                'document' => $design.$lineEnding.'PH3-RDY-004 = BLOCKED',
+                'discoveries' => ['status_candidate_count' => 1, 'unclassified_status_declaration_count' => 1],
+            ],
+            'UA14 unknown status assignment' => [
+                'document' => $design.$lineEnding.'PH3-RDY-001 = UNKNOWN',
+                'discoveries' => ['status_candidate_count' => 1, 'malformed_status_candidate_count' => 1],
+            ],
+            'UA15 invalid CLOSEDX status assignment' => [
+                'document' => $design.$lineEnding.'PH3-RDY-001 = CLOSEDX',
+                'discoveries' => ['status_candidate_count' => 1, 'malformed_status_candidate_count' => 1],
+            ],
+            'UA16 lowercase pending status assignment' => [
+                'document' => $design.$lineEnding.'PH3-RDY-001 = pending',
+                'discoveries' => ['status_candidate_count' => 1, 'malformed_status_candidate_count' => 1],
+            ],
+            'UA17 empty status assignment' => [
+                'document' => $design.$lineEnding.'PH3-RDY-001 =',
+                'discoveries' => ['status_candidate_count' => 1, 'malformed_status_candidate_count' => 1],
+            ],
+            'UA18 dash-prefixed status assignment' => [
+                'document' => $design.$lineEnding.'- PH3-RDY-001 = BLOCKED',
+                'discoveries' => ['status_candidate_count' => 1, 'unclassified_status_declaration_count' => 1],
+            ],
+            'UA19 star-prefixed status assignment' => [
+                'document' => $design.$lineEnding.'* PH3-RDY-001 = BLOCKED',
+                'discoveries' => ['status_candidate_count' => 1, 'unclassified_status_declaration_count' => 1],
+            ],
+            'UA20 blockquote-prefixed status assignment' => [
+                'document' => $design.$lineEnding.'> PH3-RDY-001 = BLOCKED',
+                'discoveries' => ['status_candidate_count' => 1, 'unclassified_status_declaration_count' => 1],
+            ],
+            'UA21 ordered-list-prefixed status assignment' => [
+                'document' => $design.$lineEnding.'1. PH3-RDY-001 = BLOCKED',
+                'discoveries' => ['status_candidate_count' => 1, 'unclassified_status_declaration_count' => 1],
+            ],
+            'UA22 table-style declaration' => [
+                'document' => $design.$lineEnding.'| PH3-RDY-001 | BLOCKED |',
+                'discoveries' => ['status_candidate_count' => 1, 'unclassified_status_declaration_count' => 1],
+            ],
+            'UA23 pipe-free table-style declaration' => [
+                'document' => $design.$lineEnding.'PH3-RDY-001 | BLOCKED',
+                'discoveries' => ['status_candidate_count' => 1, 'unclassified_status_declaration_count' => 1],
+            ],
+            'UA24 extended table-style declaration' => [
+                'document' => $design.$lineEnding.'| PH3-RDY-001 | CLOSED IN DESIGN | current |',
+                'discoveries' => ['status_candidate_count' => 1, 'unclassified_status_declaration_count' => 1],
+            ],
+            'UA25 empty unmarked current authority section' => [
+                'document' => $design.$lineEnding.$currentHeading,
+                'discoveries' => ['heading_candidate_count' => 1, 'unclassified_heading_count' => 1],
+            ],
+            'UA26 mixed-case unmarked current authority section' => [
+                'document' => $design.$lineEnding.'### cUrReNt PhAsE III ArChItEcTuRe StAtUs',
+                'discoveries' => ['heading_candidate_count' => 1, 'unclassified_heading_count' => 1],
+            ],
+        ];
+
+        foreach ($mutations as $mutation => $case) {
+            $authority = $this->phaseThreeArchitectureAuthorityContract($case['document']);
+            foreach ($case['discoveries'] as $field => $increment) {
+                $this->assertSame($canonical[$field] + $increment, $authority[$field], "{$mutation}: {$field}");
+            }
+            $this->assertNotSame(
+                [],
+                $this->phaseThreeArchitectureSemanticContract($case['document'])['violations'],
+                $mutation,
+            );
+        }
+
+        $mixedCaseStatusId = $design.$lineEnding.'| `ph3-rdy-001` | `BLOCKED` | Case mutation. |';
+        $mixedCaseStatusAuthority = $this->phaseThreeArchitectureAuthorityContract($mixedCaseStatusId);
+        $this->assertSame($canonical['status_candidate_count'] + 1, $mixedCaseStatusAuthority['status_candidate_count']);
+        $this->assertSame($canonical['malformed_status_candidate_count'] + 1, $mixedCaseStatusAuthority['malformed_status_candidate_count']);
+        $this->assertNotSame(
+            [],
+            $this->phaseThreeArchitectureSemanticContract($mixedCaseStatusId)['violations'],
+            'Case-insensitive status-ID discovery must feed case-sensitive exact validation.',
+        );
+        $combinedInvalidLine = $design.$lineEnding.
+            '<!-- Phase-III-Architecture-Authority classification=CURRENT --> PH3-RDY-001 = BLOCKED';
+        $combinedInvalidAuthority = $this->phaseThreeArchitectureAuthorityContract($combinedInvalidLine);
+        $this->assertSame($canonical['marker_candidate_count'] + 1, $combinedInvalidAuthority['marker_candidate_count']);
+        $this->assertSame($canonical['status_candidate_count'] + 1, $combinedInvalidAuthority['status_candidate_count']);
+        $this->assertNotSame(
+            [],
+            $this->phaseThreeArchitectureSemanticContract($combinedInvalidLine)['violations'],
+            'Marker and status discovery channels must remain independent on the same physical line.',
+        );
+
+        $this->assertSame([], $this->phaseThreeArchitectureSemanticContract($design)['violations'], 'HP1 existing historical block');
+        $historical = $design.$lineEnding.
+            '<!-- phase-iii-architecture-authority classification=SUPERSEDED id=phase-iii-prior-status-v1 -->'.$lineEnding.
+            '### Historical Phase III architecture readiness status'.$lineEnding.
+            $statusRow('PH3-RDY-001', 'BLOCKED');
+        $historicalAuthority = $this->phaseThreeArchitectureAuthorityContract($historical);
+        $this->assertSame([], $this->phaseThreeArchitectureSemanticContract($historical)['violations'], 'HP2 classified historical status');
+        $this->assertSame(1, $historicalAuthority['superseded_count']);
+        $this->assertSame(5, $historicalAuthority['historical_status_declaration_count']);
+        $historicalMention = $design.$lineEnding.'PH3-RDY-001 was evaluated during readiness review.';
+        $historicalMentionAuthority = $this->phaseThreeArchitectureAuthorityContract($historicalMention);
+        $this->assertSame([], $this->phaseThreeArchitectureSemanticContract($historicalMention)['violations'], 'HP3 identifier-only prose');
+        $this->assertSame($canonical['status_candidate_count'], $historicalMentionAuthority['status_candidate_count']);
+        $this->assertSame([], $this->phaseThreeArchitectureSemanticContract($design)['violations'], 'CP1 canonical semantic contract');
+    }
+
+    public function test_phase_three_architecture_authority_direct_root_cause_reproductions_are_closed(): void
+    {
+        $design = $this->readDocument('docs/IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md');
+        $lineEnding = str_contains($design, "\r\n") ? "\r\n" : "\n";
+        $statusRow = static fn (string $id, string $status): string => "| `{$id}` | `{$status}` | Direct reproduction. |";
+        $rc1 = $design.$lineEnding.'PH3-RDY-001 = BLOCKED (current architecture status)';
+        $rc2 = $design.$lineEnding.
+            '### Current Phase III architecture status'.$lineEnding.
+            '| Finding | Status |'.$lineEnding.
+            '| --- | --- |'.$lineEnding.
+            $statusRow('PH3-RDY-001', 'BLOCKED').$lineEnding.
+            $statusRow('PH3-RDY-002', 'CLOSED IN DESIGN').$lineEnding.
+            $statusRow('PH3-RDY-003', 'BLOCKED').$lineEnding.
+            $statusRow('PH3-RDY-004', 'CLOSED');
+        $rc3 = $design.$lineEnding.
+            '<!-- Phase-III-Architecture-Authority classification=CURRENT id=phase-iii-outside-review-v1 -->';
+        $rc5 = $design.$lineEnding.
+            '<!-- phase-iii-architecture-authority classification=HISTORICAL id=phase-iii-prior-review-v2 -->'.$lineEnding.
+            $statusRow('PH3-RDY-001', 'BLOCKED');
+
+        foreach (['RC1' => $rc1, 'RC2' => $rc2, 'RC3' => $rc3] as $reproduction => $mutatedDesign) {
+            $this->assertNotSame(
+                [],
+                $this->phaseThreeArchitectureSemanticContract($mutatedDesign)['violations'],
+                $reproduction,
+            );
+        }
+        $this->assertSame([], $this->phaseThreeArchitectureSemanticContract($design)['violations'], 'RC4');
+        $this->assertSame([], $this->phaseThreeArchitectureSemanticContract($rc5)['violations'], 'RC5');
+    }
+
     public function test_phase_three_readiness_structural_collections_reject_duplicate_shadowing(): void
     {
         $design = $this->readDocument('docs/IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md');
@@ -3072,46 +3294,79 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
      *     current_count: int,
      *     historical_count: int,
      *     superseded_count: int,
+     *     malformed_marker_count: int,
+     *     status_lexical_occurrence_count: int,
+     *     status_candidate_count: int,
+     *     current_status_declaration_count: int,
+     *     historical_status_declaration_count: int,
+     *     unclassified_status_declaration_count: int,
+     *     malformed_status_candidate_count: int,
+     *     heading_candidate_count: int,
+     *     unclassified_heading_count: int,
      *     violations: array<int, string>
      * }
      */
     private function phaseThreeArchitectureAuthorityContract(string $design): array
     {
         $intent = 'phase-iii-architecture-authority';
+        $expectedCurrentId = 'phase-iii-architecture-contract-v1';
         $lines = preg_split('/\R/', $design) ?: [];
-        $markerCandidateCount = 0;
+        $markerCandidates = [];
         $markers = [];
-        $unmarkedCurrentClaims = [];
+        $statusCandidates = [];
+        $statusLexicalOccurrenceCount = 0;
+        $headingCandidates = [];
         $violations = [];
 
         foreach ($lines as $lineNumber => $line) {
-            if (str_contains($line, $intent)) {
-                $markerCandidateCount++;
+            if (stripos($line, $intent) !== false) {
+                $markerCandidates[] = ['line' => $lineNumber, 'raw' => $line];
                 if (preg_match(
                     '/^<!-- phase-iii-architecture-authority classification=(?<classification>CURRENT|HISTORICAL|SUPERSEDED) id=(?<id>[a-z0-9-]+) -->$/',
                     $line,
                     $match,
                 ) !== 1) {
                     $violations[] = 'Malformed Phase III architecture authority marker candidate at line '.($lineNumber + 1).'.';
-
-                    continue;
+                } else {
+                    $markers[] = [
+                        'classification' => $match['classification'],
+                        'id' => $match['id'],
+                        'line' => $lineNumber,
+                    ];
                 }
-
-                $markers[] = [
-                    'classification' => $match['classification'],
-                    'id' => $match['id'],
-                    'line' => $lineNumber,
-                ];
-
-                continue;
             }
 
-            if (preg_match(
-                '/\b(?:authoritative|current) Phase III architecture(?:-design)?(?: contract| authority| status)?\b|\bPhase III architecture(?:-design)?(?: contract| authority| status)? is (?:authoritative|current)\b/i',
-                $line,
-            ) === 1) {
-                $unmarkedCurrentClaims[] = $lineNumber;
-                $violations[] = 'Unmarked current Phase III architecture authority claim at line '.($lineNumber + 1).'.';
+            $statusIdCount = preg_match_all('/\bPH3-RDY-00[1-4]\b/i', $line, $statusIds);
+            if (is_int($statusIdCount) && $statusIdCount > 0) {
+                $statusLexicalOccurrenceCount += $statusIdCount;
+                $hasStatusLexeme = preg_match('/\b(?:CLOSED|BLOCKED|UNKNOWN|PENDING)\b/i', $line) === 1;
+                $hasAssignmentSyntax = preg_match('/\bPH3-RDY-00[1-4]\b`?\s*=/i', $line) === 1;
+                $hasTableSyntax = preg_match('/\bPH3-RDY-00[1-4]\b`?\s*\|/i', $line) === 1;
+
+                if ($hasStatusLexeme || $hasAssignmentSyntax || $hasTableSyntax) {
+                    $statusCandidates[] = [
+                        'line' => $lineNumber,
+                        'raw' => $line,
+                        'lexical_ids' => $statusIds[0],
+                    ];
+                }
+            }
+
+            if (preg_match('/^\s{0,3}#{1,6}\s+(?<heading>.+)$/', $line, $heading) === 1
+                && preg_match('/\bPhase\s+III\b/i', $heading['heading']) === 1
+                && preg_match('/\barchitecture(?:-design)?\b/i', $heading['heading']) === 1
+                && preg_match(
+                    '/\b(?:current|historical|superseded|status|readiness|authority|authoritative)\b/i',
+                    $heading['heading'],
+                ) === 1) {
+                $hasCurrentIntent = preg_match('/\bcurrent\b/i', $heading['heading']) === 1;
+                $hasHistoricalIntent = preg_match('/\b(?:historical|superseded)\b/i', $heading['heading']) === 1;
+                $headingCandidates[] = [
+                    'line' => $lineNumber,
+                    'intent' => $hasCurrentIntent && $hasHistoricalIntent
+                        ? 'CONFLICTING'
+                        : ($hasCurrentIntent ? 'CURRENT' : ($hasHistoricalIntent ? 'HISTORICAL' : 'GENERIC')),
+                ];
             }
         }
 
@@ -3137,20 +3392,169 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
         if (count($current) !== 1) {
             $violations[] = 'Exactly one current Phase III architecture authority marker is required.';
         }
+
+        foreach ($current as $marker) {
+            if ($marker['id'] !== $expectedCurrentId) {
+                $violations[] = "Unexpected current Phase III architecture authority ID {$marker['id']}.";
+            }
+        }
+
+        $regions = [];
+        foreach ($markers as $marker) {
+            $nextCandidateLine = count($lines);
+            foreach ($markerCandidates as $candidate) {
+                if ($candidate['line'] > $marker['line']) {
+                    $nextCandidateLine = $candidate['line'];
+
+                    break;
+                }
+            }
+
+            $regionEnd = $nextCandidateLine - 1;
+            if ($marker['classification'] === 'CURRENT') {
+                $expectedStart = "<!-- phase-iii-architecture-contract:start id={$marker['id']} -->";
+                if (($lines[$marker['line'] + 1] ?? null) !== $expectedStart) {
+                    $violations[] = 'The current Phase III architecture authority must directly own the canonical contract block with the same ID.';
+
+                    continue;
+                }
+
+                $expectedEnd = "<!-- phase-iii-architecture-contract:end id={$marker['id']} -->";
+                $matchingEndLines = [];
+                for ($candidateLine = $marker['line'] + 2; $candidateLine < $nextCandidateLine; $candidateLine++) {
+                    if (($lines[$candidateLine] ?? null) === $expectedEnd) {
+                        $matchingEndLines[] = $candidateLine;
+                    }
+                }
+                if (count($matchingEndLines) !== 1) {
+                    $violations[] = 'The current Phase III architecture authority must own exactly one matching contract end marker.';
+
+                    continue;
+                }
+                $regionEnd = $matchingEndLines[0];
+            }
+
+            $regions[] = [
+                'classification' => $marker['classification'],
+                'id' => $marker['id'],
+                'start' => $marker['line'],
+                'end' => $regionEnd,
+            ];
+        }
+
+        $regionForLine = static function (int $lineNumber) use ($regions): array {
+            return array_values(array_filter(
+                $regions,
+                static fn (array $region): bool => $lineNumber >= $region['start'] && $lineNumber <= $region['end'],
+            ));
+        };
+
+        $unclassifiedHeadingCount = 0;
+        foreach ($headingCandidates as $heading) {
+            $matchingRegions = $regionForLine($heading['line']);
+            if (count($matchingRegions) !== 1) {
+                $unclassifiedHeadingCount++;
+                $violations[] = 'Unclassified Phase III architecture authority heading at line '.($heading['line'] + 1).'.';
+
+                continue;
+            }
+
+            $classification = $matchingRegions[0]['classification'];
+            if ($heading['intent'] === 'CONFLICTING'
+                || ($heading['intent'] === 'CURRENT' && $classification !== 'CURRENT')
+                || ($heading['intent'] === 'HISTORICAL' && ! in_array($classification, ['HISTORICAL', 'SUPERSEDED'], true))) {
+                $violations[] = 'Phase III architecture heading intent conflicts with its classified authority region at line '.($heading['line'] + 1).'.';
+            }
+        }
+
+        $currentStatusDeclarationCount = 0;
+        $historicalStatusDeclarationCount = 0;
+        $unclassifiedStatusDeclarationCount = 0;
+        $malformedStatusCandidateCount = 0;
+        $regionRows = [];
+        foreach ($statusCandidates as $candidate) {
+            $matchingRegions = $regionForLine($candidate['line']);
+            if (count($matchingRegions) !== 1) {
+                $unclassifiedStatusDeclarationCount++;
+                $violations[] = 'Unclassified Phase III architecture status declaration at line '.($candidate['line'] + 1).'.';
+            } else {
+                $classification = $matchingRegions[0]['classification'];
+                if ($classification === 'CURRENT') {
+                    $currentStatusDeclarationCount++;
+                } else {
+                    $historicalStatusDeclarationCount++;
+                }
+            }
+
+            $canonicalIds = array_values(array_filter(
+                $candidate['lexical_ids'],
+                static fn (string $id): bool => preg_match('/^PH3-RDY-00[1-4]$/', $id) === 1,
+            ));
+            $isCanonicalRow = preg_match(
+                '/^\| `(?<id>PH3-RDY-00[1-4])` \| `(?<status>CLOSED IN DESIGN|CLOSED|BLOCKED)` \| (?<boundary>.+) \|$/',
+                $candidate['raw'],
+                $status,
+            ) === 1;
+            if (count($canonicalIds) !== count($candidate['lexical_ids']) || ! $isCanonicalRow) {
+                $malformedStatusCandidateCount++;
+                $violations[] = 'Malformed Phase III architecture status declaration candidate at line '.($candidate['line'] + 1).'.';
+
+                continue;
+            }
+
+            if (count($matchingRegions) === 1) {
+                $regionKey = $matchingRegions[0]['classification'].':'.$matchingRegions[0]['id'];
+                $regionRows[$regionKey][] = [
+                    'id' => $status['id'],
+                    'status' => $status['status'],
+                ];
+            }
+        }
+
+        foreach ($regionRows as $regionKey => $rows) {
+            $duplicates = $this->duplicateStructuralKeyViolations(
+                $rows,
+                'id',
+                "Phase III architecture authority region {$regionKey}",
+            );
+            $violations = [...$violations, ...$duplicates];
+        }
+
         if (count($current) === 1) {
-            $marker = $current[0];
-            $expectedStart = "<!-- phase-iii-architecture-contract:start id={$marker['id']} -->";
-            if (($lines[$marker['line'] + 1] ?? null) !== $expectedStart) {
-                $violations[] = 'The current Phase III architecture authority must directly own the canonical contract block with the same ID.';
+            $currentRegionKey = 'CURRENT:'.$current[0]['id'];
+            $currentRows = $regionRows[$currentRegionKey] ?? [];
+            $expectedCurrentStatuses = [
+                'PH3-RDY-001' => 'CLOSED IN DESIGN',
+                'PH3-RDY-002' => 'CLOSED IN DESIGN',
+                'PH3-RDY-003' => 'BLOCKED',
+                'PH3-RDY-004' => 'CLOSED',
+            ];
+            $currentStatuses = [];
+            foreach ($currentRows as $row) {
+                $currentStatuses[$row['id']] = $row['status'];
+            }
+            ksort($currentStatuses);
+            if ($currentStatusDeclarationCount !== count($expectedCurrentStatuses)
+                || $currentStatuses !== $expectedCurrentStatuses) {
+                $violations[] = 'Current Phase III architecture status declarations do not exactly match the canonical registry.';
             }
         }
 
         return [
-            'marker_candidate_count' => $markerCandidateCount + count($unmarkedCurrentClaims),
+            'marker_candidate_count' => count($markerCandidates),
             'valid_marker_count' => count($markers),
             'current_count' => count($current),
             'historical_count' => count($historical),
             'superseded_count' => count($superseded),
+            'malformed_marker_count' => count($markerCandidates) - count($markers),
+            'status_lexical_occurrence_count' => $statusLexicalOccurrenceCount,
+            'status_candidate_count' => count($statusCandidates),
+            'current_status_declaration_count' => $currentStatusDeclarationCount,
+            'historical_status_declaration_count' => $historicalStatusDeclarationCount,
+            'unclassified_status_declaration_count' => $unclassifiedStatusDeclarationCount,
+            'malformed_status_candidate_count' => $malformedStatusCandidateCount,
+            'heading_candidate_count' => count($headingCandidates),
+            'unclassified_heading_count' => $unclassifiedHeadingCount,
             'violations' => array_values(array_unique($violations)),
         ];
     }
@@ -4586,7 +4990,7 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
             '| --- | --- | --- |',
             'readiness status',
             3,
-            'Phase III implementation remains prohibited while `PH3-RDY-003` is `BLOCKED`',
+            'Phase III implementation remains prohibited while the historical',
         );
         $rows = [];
         $violations = $table['violations'];

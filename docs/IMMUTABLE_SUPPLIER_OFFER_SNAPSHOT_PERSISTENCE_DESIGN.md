@@ -3300,9 +3300,9 @@ not runtime implementation authorization.
 | `PH3-RDY-003` | `BLOCKED` | The authorized importer has no approved hard source-row or source-byte maximum from which all spool, sort, batch, and transaction bounds can be derived. |
 | `PH3-RDY-004` | `CLOSED` | Phase I and II are deployed/inactive; Phase III remains unimplemented and not implementation-authorized. |
 
-Phase III implementation remains prohibited while `PH3-RDY-003` is `BLOCKED`
-and until a later explicit implementation authorization is issued for the
-independently reviewed design.
+Phase III implementation remains prohibited while the historical
+`PH3-RDY-003` readiness gate remains unresolved and until a later explicit
+implementation authorization is issued for the independently reviewed design.
 
 This remediation does not change the 22 cryptographic/digest identities, the
 20-field expected state, 16-field resume state, 42-field generation header,
@@ -4484,7 +4484,8 @@ ratios; effective enrollment growth; observed row widths; sort memory and temp
 disk measurements; MySQL packet/placeholder/lock/transaction measurements;
 worker memory and timeout headroom; batch latency; and overflow/recovery load
 tests. Until every value, headroom and tuning path is reviewed together, all
-nine remain `NOT SPECIFIED` and `PH3-RDY-003` remains `BLOCKED`.
+nine remain `NOT SPECIFIED`; the `PH3-RDY-003` evidence gate therefore remains
+unresolved.
 
 #### Integrated source, authorization and policy flow
 
