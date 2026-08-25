@@ -1,5 +1,7 @@
 # APCOM Operational Offer Lifecycle Preview
 
+<!-- watchdog-document-context classification=CURRENT_SCHEMA_STATUS column_occurrences=0 index_occurrences=0 contract=watchdog-current-state-v1 -->
+
 ## Scope
 
 Phase 9C.6.5C.3D adds the first input-driven operationally shaped preview for
@@ -16,9 +18,9 @@ separately gated. The current database has no immutable per-generation
 offer-observation history, and mutable staging, aggregate import reports and
 logs cannot be reconstructed as qualified history.
 
-The documentation-only persistence prerequisite is defined in
+The canonical persistence prerequisite is defined in
 [Immutable Supplier Offer Snapshot Persistence Design](IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md).
-Its remediated local architecture uses a durable capture-start authorization
+Its architecture uses a durable capture-start authorization
 header plus immutable hashed seed members, immutable generation headers,
 first-enrollment cohort rows and exhaustive physical presence/absence
 observations. A separate stable parent-execution claim makes both importer job
@@ -55,9 +57,22 @@ authorization and is never terminalized by republish authority. Exact
 ownership/outbox checks,
 transactional cross-state rules, and the 66-row by 11-column canonical crash
 matrix prevent stranded or contradictory SupplierImportRun, ImportJob,
-ImportHistory, monitor, alert-delivery and observer states. The future outbox includes exact
-`delivery_watchdog_at` liveness state and
-`ix_import_dispatch_outbox_state_watchdog_id(state, delivery_watchdog_at, id)`.
+ImportHistory, monitor, alert-delivery and observer states.
+
+<!-- watchdog-current-state-reference:start contract=watchdog-current-state-v1 -->
+```text
+classification=CURRENT_SCHEMA_STATUS
+column_name=delivery_watchdog_at
+column_state=PRESENT / DEPLOYED
+index_name=ix_import_dispatch_outbox_state_watchdog_id
+index_state=PRESENT / DEPLOYED
+index_ordered_columns=state,delivery_watchdog_at,id
+runtime_state=INACTIVE / UNWIRED
+future_work=RUNTIME ENABLEMENT ONLY; NO SCHEMA ADDITION
+```
+<!-- watchdog-current-state-reference:end contract=watchdog-current-state-v1 -->
+
+These deployed schema artifacts do not activate the later watchdog runtime.
 Acknowledged publication sets the watchdog from MySQL UTC plus exactly 4,320
 seconds, and every departure from exact `queued/published` clears it atomically.
 Observation, admission, lock contention, release, duplicate delivery and
@@ -128,22 +143,32 @@ Exact `ascii`/`ascii_bin` lowercase-hexadecimal checks, byte-exact immutable
 `uq_import_execution_claim_run`, the exact
 `chk_import_execution_claim_path_parent` parent-shape check, retained one-job
 uniqueness, a separate named three-column child FK index, a common supplier
-lock and a behavior-equivalent streaming traversal are required. One consistent
-MySQL snapshot authorizes prior enrollments and current application identities
-before source work; exact-source-only additions are the only later expansion,
-and finalization never rereads mutable membership. An authorized expansion makes
+lock and a behavior-equivalent streaming traversal are required. A future
+approved design must prove immutable original-source provenance for every
+application candidate before source work; supplier/feed equality alone cannot
+authorize membership, including after one feed ID changes from source A to
+source B. Immutably proven exact-source-only additions are the only later
+expansion, and
+finalization never rereads mutable membership. An authorized expansion makes
 its complete enrollment generation the new non-comparable baseline; only a
 deterministic authorization mismatch emits `capture_cohort_changed` and freezes.
 The dedicated import worker adds no import or automatic-recovery schedule; the
 only planned automatic cadence is the watchdog monitor and independent health
-observer, neither of which mutates supplier/catalog domain state. No runtime
-outbox/claim/recovery-authorization table, migration, watchdog monitor,
-recovery repository, command, parser change, capture implementation,
-historical backfill or evidence producer exists yet. C3D.1 remains blocked until the fine-grained
-checkpoints below and future qualified warm-up complete. Supplier #3 remains
-unselected and unstarted.
-The persistence prerequisite remains local, unapproved, unimplemented and
-undeployed. No evidence candidate exists and no operational preview is
+observer, neither of which mutates supplier/catalog domain state. Phase I's
+persistence schema, including claim, outbox, monitor/alert, recovery-
+authorization/result, cohort-member, generation, enrollment, and observation
+tables and migrations, is implemented, merged, CI-verified, and deployed to
+staging. It remains behaviorally inactive: later runtime claim/outbox/recovery
+execution is unwired, and no watchdog service, recovery repository, command,
+parser change, capture implementation, historical backfill, or evidence
+producer exists. Phase II's guarded models/canonical byte contracts are also
+implemented, merged, CI-verified, deployed to staging, and uncalled. Phase III
+snapshot persistence remains unimplemented and not implementation-authorized;
+immutable candidate-row provenance, durable authorization source binding, and
+approved operational bounds remain explicit readiness blockers. C3D.1 remains
+blocked until those prerequisites, the fine-grained checkpoints below, and
+future qualified warm-up complete. Supplier #3 remains unselected and
+unstarted. No evidence candidate exists and no operational preview is
 authorized.
 
 ## Immutable Persistence Rollout Checkpoints

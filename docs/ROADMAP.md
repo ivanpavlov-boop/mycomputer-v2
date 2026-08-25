@@ -1,5 +1,7 @@
 # Roadmap
 
+<!-- watchdog-document-context classification=SCHEMA_DEFINITION_REFERENCE column_occurrences=2 index_occurrences=1 contract=watchdog-current-state-v1 -->
+
 ## Purpose
 
 Track current phase status and planned Catalog Sync work.
@@ -260,9 +262,13 @@ disabled. `CART-025` remains open.
 10. **APCOM Authoritative Human Decision Evidence and Profile Approval Gate -
    documentation decisions complete.** V4 is the semantic authority, while
    implementation approval remains closed.
-11. **Immutable supplier-offer snapshot persistence prerequisite - queued
-    payload and terminal-recovery findings remediated locally.**
-    The complete-branch follow-up design has
+11. **Immutable supplier-offer snapshot persistence prerequisite - Phase I and
+    Phase II deployed inactive; Phase III readiness remediation blocked.**
+    Phase I's canonical schema was merged through PR #212, CI-verified and
+    deployed to staging. Phase II's guarded models and canonical byte contracts
+    were merged through PR #213, CI-verified and deployed to staging. Neither
+    layer has activated capture or importer integration. The complete-branch
+    design has
     transactional `supplier_import_dispatch_outbox` and a stable claim shared
     by both XML paths; pair-null orchestrated dispatch followed by owner-checked
     atomic feed/ImportJob allocation; early pair-bound legacy authorization
@@ -327,7 +333,7 @@ disabled. `CART-025` remains open.
     abandoned-owner new-lock/expired-tuple APIs; exact `ascii`/`ascii_bin`
     hexadecimal checks; immutable consistent-snapshot capture-start cohort
     authorization fields and hashed members before source work; immutable
-    enrollment and physical observations; exact-source-only authorized
+    enrollment and physical observations; immutably proven exact-source-only
     enrollment-generation baselines with deterministic authorization drift
     frozen; no mutable membership reread; deterministic V4 gaps; bounded streaming;
     retained one-job uniqueness, nullable unique one-claim-per-orchestrated-run,
@@ -340,21 +346,25 @@ disabled. `CART-025` remains open.
     checkpoints with all five PR chains separating candidate/implementation,
     validation, independent review, remediation/fresh PASS, push authorization, push, remote-SHA
     verification, Draft PR creation, PR base/head verification, CI and review,
-    merge, disabled deployment and monitor/sink/observer enablement gates. No runtime
-    outbox/claim/recovery-authorization table,
-    migration, queue setting, worker, command, parser change, capture hook, producer,
-    historical backfill or operational evidence exists. C3D.1 remains blocked
-    until a fresh independent aggregate review of the complete branch approves the design and later
+    merge, disabled deployment and monitor/sink/observer enablement gates. The
+    Phase I tables/migrations and Phase II models/contracts now exist but remain
+    inactive. No runtime queue setting, worker, command, parser change, capture
+    repository/hook, producer, historical backfill or operational evidence
+    exists. Phase III is unimplemented and not authorized: immutable
+    application-candidate source provenance (`PH3-RDY-001`), durable
+    authorization source binding (`PH3-RDY-002`), and approved importer/source
+    plus derived operational bounds (`PH3-RDY-003`) remain blocked; only the
+    status-consistency finding `PH3-RDY-004` is closed. Claim source binding
+    does not close candidate provenance.
+    C3D.1 remains blocked until those prerequisites and later
     checkpoints collect one future baseline plus three qualified comparable
     snapshots in an unchanged cohort epoch over at least 48 hours from absence
     1. See
     `docs/IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md`.
     The underlying read-only C3D tooling was already merged and deployed at
-    `c22fc9a8dddf3c6778ab0b88e5a50cbc02fe3f21`; the persistence design itself is
-    local, documentation-only, unapproved and undeployed. The planned dedicated
-    worker adds no automatic schedule. No evidence candidate exists, no
-    operational preview is authorized, and Supplier #3 remains unselected and
-    unstarted.
+    `c22fc9a8dddf3c6778ab0b88e5a50cbc02fe3f21`. The planned dedicated worker adds
+    no automatic schedule. No evidence candidate exists, no operational preview
+    is authorized, and Supplier #3 remains unselected and unstarted.
 12. Select Supplier #3 only after a reviewed readiness matrix and explicit human
    decision; ASBIS remains Supplier #2.
 13. Supplier #3 preview-only integration.
@@ -804,8 +814,11 @@ by Phase 1D.2B and CART-023 remains open. Operational boundaries are documented 
    synced and verified. APCOM schedule remains disabled; Catalog Sync UPDATE,
    Sync All, and automatic sync remain disabled.
 4. Keep the merged PR #210 C3D evaluator dormant. It is deterministic,
-   non-persistent and zero-mutation, but no outbox/claim, qualified immutable
-   history or producer exists. The local prerequisite design also requires
+   non-persistent and zero-mutation. Phase I's outbox/claim/evidence schema is
+   deployed and inactive, and Phase II's guarded models/canonical byte
+   contracts are deployed and uncalled; no runtime persistence repository,
+   qualified immutable history row, capture integration or producer exists.
+   The local prerequisite design also requires
    dedicated `redis_supplier_import` / `supplier-imports` routing at
    `retry_after=3900` while unrelated Redis queues retain
    `retry_after=1300`; exact

@@ -23,6 +23,26 @@ The approved design entered `main` through PR #211:
   ordered fields including `claimed_at`;
 - republish resume-state fingerprint: exactly 16 ordered fields.
 
+The current implementation baseline is `origin/main` at
+`37a66f2e448ee0f8691dc0f5d4249b6ecb851b8a`:
+
+- Phase I canonical schema: implemented, merged through PR #212, CI-verified,
+  deployed to staging, and behaviorally dormant;
+- Phase II guarded models and canonical byte contracts: implemented, merged
+  through PR #213, CI-verified, deployed to staging, and uncalled;
+- Phase III snapshot persistence/cohort authorization: readiness remediation
+  only, unimplemented, and not implementation-authorized.
+
+Phase III remains blocked by `PH3-RDY-001`, `PH3-RDY-002`, and `PH3-RDY-003`.
+The first requires a separately approved immutable application-candidate source
+provenance contract; the second requires a separately approved additive
+claim/source relational binding for durable authorization; and the third
+requires approved importer/source maxima from which every spool, sort, insert,
+and transaction bound can be derived. Claim source binding does not close
+candidate provenance. The authoritative proof, fail-closed selection matrices,
+proposed schema delta, and limit inventory are in the
+[Cohort Enrollment Contract](IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md#cohort-enrollment-contract).
+
 This planning phase authorizes no migration, runtime behavior, queue routing,
 Redis write, recovery action, monitor schedule, provider call, supplier import,
 Catalog Sync action, Product mutation, `supplier_products` mutation, deployment,
@@ -65,18 +85,18 @@ change any approved canonical design contract.
 | `app/Models/Supplier.php` | Supplier identity, schedule and safety settings | Parent of claims, snapshots and enrollments |
 | `app/Models/SupplierFeed.php` | Supplier feed identity/configuration | Parent/provenance for protected executions and snapshots |
 | `app/Models/SupplierImportRun.php` | Mutable orchestrated-run status/report | Existing parent projection, not the durable execution authority |
-| `app/Models/ImportJob.php` | Mutable import counters/state and protected supplier/feed identity once history exists | Needs the exact additive ownership index; remains a constrained execution parent |
+| `app/Models/ImportJob.php` | Mutable import counters/state and protected supplier/feed identity once history exists | The Phase I additive ownership index now exists; the model remains a constrained execution parent |
 | `app/Models/ImportHistory.php` | Importer-only creation and one `started -> finished/failed` CAS transition; deletion forbidden | Reusable partial immutable generation identity, but not snapshot evidence or execution ownership |
 | `app/Models/Concerns/GuardsImportHistoryIdentity.php` | Blocks parent identity changes after history references exist | Reusable parent-identity safety pattern |
 | `app/Models/SupplierProduct.php` | Mutable supplier staging record | Existing importer target; not immutable evidence and never a source for snapshot backfill |
 | `app/Models/FailedImport.php` | Per-row import failures | Demonstrates why importer replay after `processing` is unsafe |
-| `database/migrations/2026_06_07_121751_2_create_import_jobs_table.php` | Creates `import_jobs` | Needs additive `uq_import_job_id_supplier_feed`; historical migration stays unchanged |
-| `database/migrations/2026_06_07_121751_3_create_import_histories_table.php` | Creates `import_histories` | Needs additive `ix_import_history_supplier_id`; historical migration stays unchanged |
+| `database/migrations/2026_06_07_121751_2_create_import_jobs_table.php` | Creates `import_jobs` | Historical migration remains unchanged; Phase I added `uq_import_job_id_supplier_feed` separately |
+| `database/migrations/2026_06_07_121751_3_create_import_histories_table.php` | Creates `import_histories` | Historical migration remains unchanged; Phase I added `ix_import_history_supplier_id` separately |
 | `database/migrations/2026_08_13_090000_restrict_import_history_parent_foreign_keys.php` | Makes history parent deletion restrictive | Existing MySQL `RESTRICT` precedent |
 | `database/migrations/2026_06_11_170000_create_supplier_import_scheduling_tables.php` | Adds supplier schedule fields and `supplier_import_runs` | Existing orchestrated parent schema; it is not a claim/outbox implementation |
 
-No current table or model is equivalent to any of the ten approved proposed
-tables.
+All ten canonical Phase I tables and their guarded Phase II models now exist.
+They remain inactive and have no production persistence/runtime caller.
 
 ### Locking, queue and Redis
 
@@ -90,9 +110,10 @@ tables.
 | `docker-compose.yml` | One general worker consumes `imports` with `--tries=3 --timeout=1200`; Redis 7 | Missing isolated supplier worker and general-worker exclusion of `supplier-imports` |
 | `.github/workflows/ci.yml` | Backend CI uses MySQL 8.4, but `CACHE_STORE=array` and `QUEUE_CONNECTION=sync` | Real MySQL exists; real Redis integration coverage is absent |
 
-There is no durable dispatch outbox, publication reservation, external Redis
-generation fence, one-use publication effect, Redis retirement receipt, or
-startup timing/readiness validator.
+The durable dispatch-outbox schema/model exists but has no runtime repository or
+caller. There is no publication reservation service, external Redis generation
+fence, one-use publication effect, Redis retirement receipt, or startup
+timing/readiness validator.
 
 ### Recovery, monitoring and alerting
 
@@ -149,18 +170,18 @@ permission is not sufficient.
 
 ## Approved concept to repository mapping
 
-| Approved table | Existing equivalent | Future owner | Mutability and CAS boundary |
+| Approved table | Deployed inactive foundation | Future runtime owner | Mutability and CAS boundary |
 | --- | --- | --- | --- |
-| `supplier_import_execution_claims` | None; `SupplierImportRun`/`ImportJob` are parents only | `SupplierImportExecutionClaim` and `SupplierImportExecutionClaimRepository` | Mutable only through canonical state/owner CAS; path and bound identity are write-once; no delete |
-| `supplier_import_dispatch_outbox` | None; current code dispatches directly | `SupplierImportDispatchOutbox` and `SupplierImportDispatchOutboxRepository` | Mutable publication/lease/watchdog state through exact owner/generation CAS; payload/key/deadline immutable; no delete |
-| `supplier_import_dispatch_monitor_health` | None | `SupplierImportDispatchMonitorHealth` plus monitor-gate repository/service | Singleton generation/owner CAS; observer sequence is independently committed |
-| `supplier_import_dispatch_alert_intents` | None | `SupplierImportDispatchAlertIntent` plus alert-intent repository/delivery service | Immutable identity/payload; generation-bound delivery lease and bounded state CAS |
-| `supplier_import_dispatch_recovery_authorizations` | None | `SupplierImportDispatchRecoveryAuthorization` and authorization repository/issuer | Append-only immutable authorization; no update/delete |
-| `supplier_import_dispatch_recovery_results` | None | `SupplierImportDispatchRecoveryResult` and result repository | Append-only sequence 1/2 result events; generated one-start/one-terminal guards |
-| `supplier_import_cohort_authorization_members` | None | `SupplierImportCohortAuthorizationMember` and cohort authorization repository | Append-only immutable hashed seed membership |
-| `supplier_offer_snapshot_generations` | `ImportHistory` is only a parent identity | `SupplierOfferSnapshotGeneration` and immutable snapshot repository | Append-only final header; one per claim and history; no update/delete |
-| `supplier_offer_snapshot_enrollments` | None | `SupplierOfferSnapshotEnrollment` and immutable snapshot repository | Append-only first enrollment per scope/offer |
-| `supplier_offer_snapshot_observations` | None | `SupplierOfferSnapshotObservation` and immutable snapshot repository | Append-only exhaustive generation/enrollment fact |
+| `supplier_import_execution_claims` | Phase I table plus guarded `SupplierImportExecutionClaim` model | `SupplierImportExecutionClaimRepository` | Mutable only through canonical state/owner CAS; path and bound identity are write-once; no delete |
+| `supplier_import_dispatch_outbox` | Phase I table plus guarded `SupplierImportDispatchOutbox` model | `SupplierImportDispatchOutboxRepository` | Mutable publication/lease/watchdog state through exact owner/generation CAS; payload/key/deadline immutable; no delete |
+| `supplier_import_dispatch_monitor_health` | Phase I singleton table plus guarded `SupplierImportDispatchMonitorHealth` model | monitor-gate repository/service | Singleton generation/owner CAS; observer sequence is independently committed |
+| `supplier_import_dispatch_alert_intents` | Phase I table plus guarded `SupplierImportDispatchAlertIntent` model | alert-intent repository/delivery service | Immutable identity/payload; generation-bound delivery lease and bounded state CAS |
+| `supplier_import_dispatch_recovery_authorizations` | Phase I table plus append-only `SupplierImportDispatchRecoveryAuthorization` model | authorization repository/issuer | Append-only immutable authorization; no update/delete |
+| `supplier_import_dispatch_recovery_results` | Phase I table plus append-only `SupplierImportDispatchRecoveryResult` model | result repository | Append-only sequence 1/2 result events; generated one-start/one-terminal guards |
+| `supplier_import_cohort_authorization_members` | Phase I table plus append-only `SupplierImportCohortAuthorizationMember` model | cohort authorization repository | Append-only immutable hashed seed membership |
+| `supplier_offer_snapshot_generations` | Phase I table plus append-only `SupplierOfferSnapshotGeneration` model | immutable snapshot repository | Append-only final header; one per claim and history; no update/delete |
+| `supplier_offer_snapshot_enrollments` | Phase I table plus append-only `SupplierOfferSnapshotEnrollment` model | immutable snapshot repository | Append-only first enrollment per scope/offer |
+| `supplier_offer_snapshot_observations` | Phase I table plus append-only `SupplierOfferSnapshotObservation` model | immutable snapshot repository | Append-only exhaustive generation/enrollment fact |
 
 The canonical helper locations are:
 
@@ -168,46 +189,69 @@ The canonical helper locations are:
   sorted-object contract is explicitly required by the approved 22 identities;
 - reuse `app/Services/Suppliers/Onboarding/OperationalSupplierOfferIdentityHasher.php`
   for the approved supplier SKU, product, and sample domains;
-- add the stricter `SnapshotSourceIdentity` value object without changing the
-  existing broader operational source-identity validator;
+- reuse the deployed stricter `SnapshotSourceIdentity` value object without
+  changing the existing broader operational source-identity validator;
 - keep fixed-order payload, expected-state, resume-state, result, and alert
   serializers separate from the recursively sorted generic helper where their
   approved byte order is security-relevant.
 
 ## Gap analysis
 
-| Subsystem | Status | Evidence and required direction |
-| --- | --- | --- |
-| Snapshot generation | MISSING | No generation header table/model/repository |
-| Snapshot enrollment | MISSING | No durable cohort enrollment |
-| Snapshot observation | MISSING | No immutable presence/absence observation |
-| Canonical identity | PARTIAL | Existing hasher and canonical-data helper are reusable; snapshot source grammar and most of the 22 exact producers are absent |
-| Immutable evidence | PARTIAL | `ImportHistory` is protected, but no snapshot evidence exists |
-| Execution claim | MISSING | Current parent status rows do not own a stable logical execution |
-| Ownership generation/token | MISSING | No complete claim owner tuple bound to a DB lease |
-| MySQL ownership CAS | MISSING | No one-statement MySQL-UTC claim acquisition with 4,200-second lease |
-| Supplier Redis lock | CONFLICTING | Generic cache lock is partial; `forceRelease()` violates owner safety and TTL/readiness are wrong |
-| Durable outbox | MISSING | Dispatch is direct from orchestrator/command/UI |
-| Dispatch payload identity | MISSING | No seven-key canonical payload or digest |
-| Publication attempt state | MISSING | No durable ordinal/generation/token reservation |
-| Retry/watchdog state | CONFLICTING | Current job tries/timeouts and direct `failed()` callbacks contradict the protected contract |
-| Recovery authorization | MISSING | No issuer, nonce, exact tuple, 20-field fingerprint, or immutable result |
-| Active Super Admin infrastructure | EXISTS | Reusable user predicates and last-admin protection exist |
-| `republish_same_key` | MISSING | No action-compatible Phase A/B implementation |
-| `recover_expired_queued_ownership` | MISSING | No atomic complete expired-owner CAS |
-| `terminalize_stale_dispatch` | MISSING | No exact pre-processing terminal action |
-| `terminalize_publication_mismatch` | MISSING | No one-target mismatch repository/command |
-| `terminalize_abandoned_processing` | MISSING | No expired processing-owner terminal repository/command |
-| Redis advance/publish/retire functions | MISSING | No external generation fence or one-use effect |
-| Monitor lease and health | MISSING | No singleton coordination row/service |
-| Independent observer | MISSING | No generation-bound observer heartbeat |
-| Freshness admission | MISSING | No 600-second monitor/sink plus 120-second observer gate |
-| Durable alert intent | MISSING | No canonical alert identity or state machine |
-| Provider capability gate | MISSING | No selected provider and no proven external-effect capability |
-| Legacy completion notification | EXISTS / CONFLICTING | May remain only in the legacy/unprotected transition path; protected execution must bypass it with zero legacy email dispatch and zero `last_import_notification_at` mutation |
-| Operational rollback | PARTIAL | Existing feature flags show fail-closed patterns, but snapshot/recovery/monitor gates and the complete schema-down guard do not exist |
-| MySQL CI | EXISTS | CI runs the backend against MySQL 8.4 |
-| Redis CI | MISSING | CI does not start Redis and uses array cache/sync queue |
+### Current deployed artifact inventory
+
+This table reports repository/deployment presence separately from supplier-
+runtime activation. `PRESENT / DEPLOYED` never means that a repository,
+coordinator, worker, schedule, recovery action, monitor or capture path calls
+the artifact.
+
+| Artifact | Artifact status | Supplier-runtime status | Repository evidence |
+| --- | --- | --- | --- |
+| `supplier_import_execution_claims` | `PRESENT / DEPLOYED` | `INACTIVE / UNWIRED` | Phase I migration `2026_08_20_120001_create_supplier_import_execution_claims_table.php` |
+| `supplier_import_dispatch_outbox` | `PRESENT / DEPLOYED` | `INACTIVE / UNWIRED` | Phase I migration `2026_08_20_120002_create_supplier_import_dispatch_outbox_table.php` |
+| `supplier_import_dispatch_monitor_health` | `PRESENT / DEPLOYED` | `INACTIVE / UNWIRED` | Phase I migration `2026_08_20_120003_create_supplier_import_dispatch_monitor_health_table.php` |
+| `supplier_import_dispatch_alert_intents` | `PRESENT / DEPLOYED` | `INACTIVE / UNWIRED` | Phase I migration `2026_08_20_120004_create_supplier_import_dispatch_alert_intents_table.php` |
+| `supplier_import_dispatch_recovery_authorizations` | `PRESENT / DEPLOYED` | `INACTIVE / UNWIRED` | Phase I migration `2026_08_20_120005_create_supplier_import_dispatch_recovery_authorizations_table.php` |
+| `supplier_import_dispatch_recovery_results` | `PRESENT / DEPLOYED` | `INACTIVE / UNWIRED` | Phase I migration `2026_08_20_120006_create_supplier_import_dispatch_recovery_results_table.php` |
+| `supplier_import_cohort_authorization_members` | `PRESENT / DEPLOYED` | `INACTIVE / UNWIRED` | Phase I migration `2026_08_20_120007_create_supplier_import_cohort_authorization_members_table.php` |
+| `supplier_offer_snapshot_generations` | `PRESENT / DEPLOYED` | `INACTIVE / UNWIRED` | Phase I migration `2026_08_20_120008_create_supplier_offer_snapshot_generations_table.php` |
+| `supplier_offer_snapshot_enrollments` | `PRESENT / DEPLOYED` | `INACTIVE / UNWIRED` | Phase I migration `2026_08_20_120009_create_supplier_offer_snapshot_enrollments_table.php` |
+| `supplier_offer_snapshot_observations` | `PRESENT / DEPLOYED` | `INACTIVE / UNWIRED` | Phase I migration `2026_08_20_120010_create_supplier_offer_snapshot_observations_table.php` |
+| `SupplierImportExecutionClaim` | `PRESENT / DEPLOYED` | `UNCALLED` | Phase II guarded model |
+| `SupplierImportDispatchOutbox` | `PRESENT / DEPLOYED` | `UNCALLED` | Phase II guarded model |
+| `SupplierImportDispatchMonitorHealth` | `PRESENT / DEPLOYED` | `UNCALLED` | Phase II guarded model |
+| `SupplierImportDispatchAlertIntent` | `PRESENT / DEPLOYED` | `UNCALLED` | Phase II guarded model |
+| `SupplierImportDispatchRecoveryAuthorization` | `PRESENT / DEPLOYED` | `UNCALLED` | Phase II guarded model |
+| `SupplierImportDispatchRecoveryResult` | `PRESENT / DEPLOYED` | `UNCALLED` | Phase II guarded model |
+| `SupplierImportCohortAuthorizationMember` | `PRESENT / DEPLOYED` | `UNCALLED` | Phase II guarded model |
+| `SupplierOfferSnapshotGeneration` | `PRESENT / DEPLOYED` | `UNCALLED` | Phase II guarded model |
+| `SupplierOfferSnapshotEnrollment` | `PRESENT / DEPLOYED` | `UNCALLED` | Phase II guarded model |
+| `SupplierOfferSnapshotObservation` | `PRESENT / DEPLOYED` | `UNCALLED` | Phase II guarded model |
+| `Phase II canonical byte/value contracts` | `PRESENT / DEPLOYED` | `UNCALLED` | `app/Data/Suppliers/Snapshots`, including the frozen dispatch, recovery, generation, enrollment, observation and reason contracts |
+| `SupplierSnapshotFingerprintService` | `PRESENT / DEPLOYED` | `UNCALLED` | Phase II service owns the frozen 22-identity inventory and digest producers |
+| `SnapshotSourceIdentity` | `PRESENT / DEPLOYED` | `UNCALLED` | Phase II strict snapshot-source value contract |
+
+### Remaining runtime implementation gaps
+
+| Future runtime component | Artifact status | Runtime status | Evidence and required direction |
+| --- | --- | --- | --- |
+| Phase III persistence repository and service API | `NOT IMPLEMENTED / MISSING` | `INACTIVE` | No `ImmutableSupplierOfferSnapshotRepository`, cohort-authorization repository/service, collector or capture service exists |
+| Immutable candidate-row source provenance | `NOT IMPLEMENTED / MISSING` | `BLOCKED` | Current application candidates cannot prove original canonical source identity; `PH3-RDY-001` remains open |
+| Durable claim authorization source binding | `NOT IMPLEMENTED / MISSING` | `BLOCKED` | Proposed `cohort_source_identity` schema/model remediation is documentation only; `PH3-RDY-002` remains open |
+| Approved production operational bounds | `NOT SPECIFIED` | `BLOCKED` | The nine Phase III limits remain unapproved; `PH3-RDY-003` remains open |
+| MySQL ownership CAS repository | `NOT IMPLEMENTED / MISSING` | `INACTIVE` | Deployed claim fields exist, but no one-statement MySQL-UTC acquisition service owns the 4,200-second lease |
+| Protected supplier Redis lock | `NOT IMPLEMENTED / MISSING` | `INACTIVE` | The legacy generic lock and `forceRelease()` remain outside the future protected path |
+| Durable outbox publisher/reconciler | `NOT IMPLEMENTED / MISSING` | `INACTIVE` | The outbox table/model and dispatch-payload contract exist, but direct legacy dispatch remains unwired to them |
+| Redis advance/publish/retire Functions | `NOT IMPLEMENTED / MISSING` | `INACTIVE` | No external generation fence or one-use publication effect exists |
+| Protected retry/watchdog coordinator | `NOT IMPLEMENTED / MISSING` | `INACTIVE` | Current job tries/timeouts and `failed()` behavior are still legacy behavior |
+| Recovery issuer, repositories and five actions | `NOT IMPLEMENTED / MISSING` | `INACTIVE` | Recovery tables/models/byte contracts exist, but no issuer, nonce flow, command or action implementation calls them |
+| Monitor and independent observer runtime | `NOT IMPLEMENTED / MISSING` | `INACTIVE` | Monitor/alert tables and models exist, but no monitor command, lease service, observer heartbeat or freshness admission implementation exists |
+| Alert provider capability and delivery runtime | `NOT IMPLEMENTED / MISSING` | `INACTIVE` | No provider is selected and no native-fence/provider-idempotency effect boundary is proven |
+| Protected queue/worker/config gates | `NOT IMPLEMENTED / MISSING` | `INACTIVE` | No dedicated supplier-import connection/worker or activatable readiness configuration exists |
+| Active Super Admin infrastructure | `PRESENT / DEPLOYED` | `ACTIVE LEGACY INFRASTRUCTURE` | Reusable user predicates and last-admin protection exist; they do not issue recovery authority |
+| Legacy completion notification | `PRESENT / DEPLOYED` | `ACTIVE LEGACY PATH ONLY` | The future protected path must bypass it with zero legacy email dispatch and zero `last_import_notification_at` mutation |
+| Phase I empty-schema down guard | `PRESENT / DEPLOYED` | `LOCAL/TESTING ONLY` | The complete fail-closed Phase I downgrade capability is implemented; operational rollback remains forward-only |
+| MySQL CI | `PRESENT / DEPLOYED` | `ACTIVE` | Backend CI runs against MySQL 8.4 |
+| Real Redis CI | `NOT IMPLEMENTED / MISSING` | `INACTIVE` | CI does not start Redis and still uses array cache/sync queue for this surface |
 
 These are expected implementation gaps, not an implementation design conflict.
 The current direct path can remain available only while the new protected path
@@ -420,6 +464,10 @@ implementation candidate, but ownership is fixed as follows.
 
 ### Phase I - Canonical MySQL schema foundation
 
+**Status.** Implemented, merged through PR #212, CI-verified, deployed to
+staging, and inactive. The text below records its approved implementation
+contract; it is no longer an unimplemented proposal.
+
 **Goal.** Create the complete ten-table schema and required existing-table
 indexes/constraints without changing runtime dispatch or capture.
 
@@ -446,13 +494,18 @@ generation/sequence zero.
 **Exclusions.** No Eloquent runtime use, queue change, Redis operation,
 schedule, recovery, import hook, backfill, or evidence row.
 
-**Mutation boundary.** Future deployment adds schema only. It does not mutate
-`products` or `supplier_products`.
+**Mutation boundary.** The completed Phase I staging deployment added schema
+only. It did not mutate `products` or `supplier_products`.
 
 **PR gate.** Independent Database, Security, and Catalog Sync Safety review;
 real MySQL 8.4 is mandatory.
 
 ### Phase II - Models and canonical byte contracts
+
+**Status.** Implemented, merged through PR #213, CI-verified, deployed to
+staging, and uncalled. The canonical 22 identities, 20-field expected state,
+16-field resume state, 42-field generation header, 13-field observation,
+5-field enrollment, reason allowlist, and golden hashes remain frozen.
 
 **Goal.** Add guarded Eloquent models, value objects, enums/constants, canonical
 serializers, and all approved digest producers without connecting them to live
@@ -479,6 +532,12 @@ schedule integration.
 immutability.
 
 ### Phase III - Snapshot persistence and cohort authorization core
+
+**Status.** Readiness remediation only. Runtime implementation is not
+authorized. `PH3-RDY-001`, `PH3-RDY-002`, and `PH3-RDY-003` remain separate
+blockers; only the status-consistency finding `PH3-RDY-004` is closed. No class
+listed below may be implemented until all three blockers are separately
+remediated and independently reviewed.
 
 **Goal.** Implement deterministic, atomic snapshot persistence behind a
 service API that is not yet called by production import paths.
@@ -1167,8 +1226,14 @@ mutation.
     existing completion notification and Supplier timestamp mutation. Phase X
     durable alert intents are the only future protected notification source.
 
-No inspected repository constraint makes the approved design impossible.
-There is therefore no `IMPLEMENTATION DESIGN CONFLICT` at planning time.
+The Phase III readiness review found three implementation design conflicts that
+the deployed contracts cannot close: application candidate rows lack immutable
+original-source provenance (`PH3-RDY-001`), the capture-start authorization is
+not immutably bound to `source_identity` (`PH3-RDY-002`), and the authorized
+importer has no hard source limits from which all required operational bounds
+can be derived (`PH3-RDY-003`). Claim source binding does not repair candidate
+provenance. Phase III implementation is prohibited until all three separate
+remediations are approved and verified.
 
 ## Review and rollout boundary
 
@@ -1184,7 +1249,9 @@ binding but cannot become active. Phase X supplies the DB-backed binding; even
 that merge does not activate recovery without canonical fresh evidence and a
 separate operational authorization.
 
-The first safe next action after this plan is a fresh independent read-only
-review of this document against the approved design and current runtime. Runtime
-implementation may begin only after that review and a separate explicit
-authorization for Phase I.
+The first safe next action is a fresh independent read-only review of the Phase
+III readiness-remediation documentation. That review may authorize only the
+separate design work for immutable candidate-row source provenance, durable
+authorization source binding, and approved production operational bounds. It
+cannot authorize Phase III implementation while any of the three independent
+blockers remains open.
