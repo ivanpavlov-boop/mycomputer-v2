@@ -494,8 +494,8 @@ generation/sequence zero.
 **Exclusions.** No Eloquent runtime use, queue change, Redis operation,
 schedule, recovery, import hook, backfill, or evidence row.
 
-**Mutation boundary.** Future deployment adds schema only. It does not mutate
-`products` or `supplier_products`.
+**Mutation boundary.** The completed Phase I staging deployment added schema
+only. It did not mutate `products` or `supplier_products`.
 
 **PR gate.** Independent Database, Security, and Catalog Sync Safety review;
 real MySQL 8.4 is mandatory.

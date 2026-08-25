@@ -3679,9 +3679,11 @@ requires a separately authorized new execution.
 Only the canonical hash is persisted. Raw SKU, EAN, MPN, source record, name,
 URL, or path is prohibited. An application row without one unambiguous
 canonical supplier SKU is a capture-integrity blocker; the coordinator must not
-guess its identity. The documented 86-identity APCOM staging-only cohort is
-therefore authorized exactly as visible in that first future capture-start
-snapshot, including identities absent from the later downloaded source.
+guess its identity. The documented 86-identity APCOM staging-only cohort
+remains historical/staging evidence only and is not current canonical Phase III
+authorization. A future capture may authorize only identities that satisfy the
+then-approved immutable candidate-provenance contract, including any identities
+absent from the later downloaded source.
 
 The exact generation cohort is the immutable capture-start seed union every
 valid identity observed in the exact downloaded temporary file. Source-only
@@ -4285,7 +4287,7 @@ CHECK (
 )
 ```
 
-The exact affected proposed columns are:
+The exact affected deployed Phase I hexadecimal columns are:
 
 | Table | Non-null lowercase hexadecimal columns | Nullable lowercase hexadecimal columns |
 | --- | --- | --- |

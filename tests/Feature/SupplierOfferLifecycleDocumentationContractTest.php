@@ -201,6 +201,7 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
             '| --- | --- | --- |',
             'recovery protocol outcome',
             3,
+            'This table contains exactly 19 data rows and 3 columns. Merely reaching',
         );
         $crashTable = $this->structuralMarkdownTable(
             $this->markdownSection(
@@ -212,6 +213,7 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
             '| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |',
             'crash and recovery',
             11,
+            null,
         );
         $rolloutTable = $this->rolloutCheckpointContract(
             $this->markdownSection(
@@ -230,6 +232,7 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
             '| --- | --- | --- | --- |',
             'expected-state field inventory',
             4,
+            null,
         );
         $digestTable = $this->structuralMarkdownTable(
             $this->markdownSection(
@@ -241,6 +244,7 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
             '| --- | --- | --- | --- | --- | --- | --- | --- | --- |',
             'cryptographic identity inventory',
             9,
+            'The inventory count is contractual. Repeated persistence of one identity, such',
         );
         $hexStorageTable = $this->structuralMarkdownTable(
             $this->markdownSection(
@@ -252,6 +256,7 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
             '| --- | --- | --- |',
             'hexadecimal storage',
             3,
+            'No listed field uses `BINARY(32)` in this design. A later implementation may',
         );
 
         foreach ([
@@ -1876,6 +1881,7 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
                 'separator' => '| --- | --- | --- |',
                 'columns' => 3,
                 'rows' => 19,
+                'end' => 'This table contains exactly 19 data rows and 3 columns. Merely reaching',
             ],
             'crash and recovery' => [
                 'section' => $this->markdownSection(
@@ -1887,6 +1893,7 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
                 'separator' => '| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |',
                 'columns' => 11,
                 'rows' => 66,
+                'end' => null,
             ],
             'expected-state field inventory' => [
                 'section' => $this->markdownSection(
@@ -1898,6 +1905,7 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
                 'separator' => '| --- | --- | --- | --- |',
                 'columns' => 4,
                 'rows' => 20,
+                'end' => null,
             ],
             'cryptographic identity inventory' => [
                 'section' => $this->markdownSection(
@@ -1909,6 +1917,7 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
                 'separator' => '| --- | --- | --- | --- | --- | --- | --- | --- | --- |',
                 'columns' => 9,
                 'rows' => 22,
+                'end' => 'The inventory count is contractual. Repeated persistence of one identity, such',
             ],
             'hexadecimal storage' => [
                 'section' => $this->markdownSection(
@@ -1920,6 +1929,7 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
                 'separator' => '| --- | --- | --- |',
                 'columns' => 3,
                 'rows' => 10,
+                'end' => 'No listed field uses `BINARY(32)` in this design. A later implementation may',
             ],
         ];
 
@@ -1930,12 +1940,13 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
                 $definition['separator'],
                 $context,
                 $definition['columns'],
+                $definition['end'],
             );
             $this->assertSame([], $canonical['violations'], "Canonical table must pass: {$context}");
             $this->assertSame($definition['rows'], $canonical['physical_count']);
 
             $lastRow = $canonical['rows'][array_key_last($canonical['rows'])];
-            $terminalMalformed = substr($lastRow, 1);
+            $terminalMalformed = "{$context} malformed terminal declaration";
             $mutated = $this->insertStructuralRow($definition['section'], $lastRow, $terminalMalformed);
             $mutatedContract = $this->structuralMarkdownTable(
                 $mutated,
@@ -1943,6 +1954,7 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
                 $definition['separator'],
                 $context,
                 $definition['columns'],
+                $definition['end'],
             );
 
             $this->assertSame($definition['rows'] + 1, $mutatedContract['physical_count']);
@@ -1950,6 +1962,323 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
                 [],
                 $mutatedContract['violations'],
                 "Terminal malformed declaration must be discovered and rejected: {$context}",
+            );
+        }
+    }
+
+    public function test_strict_bounded_tables_reject_markdown_prefixed_and_pipe_free_declarations(): void
+    {
+        $design = $this->readDocument('docs/IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md');
+        $plan = $this->readDocument('docs/PHASE_9C6_5C3D1_RUNTIME_IMPLEMENTATION_PLAN.md');
+        $readiness = $this->markdownSection(
+            $design,
+            '### Phase III readiness findings and authority',
+            '### Canonical source scope',
+        );
+        $runtimeInventory = $this->markdownSection(
+            $plan,
+            '### Current deployed artifact inventory',
+            '### Remaining runtime implementation gaps',
+        );
+        $rollout = $this->markdownSection(
+            $design,
+            '### Fine-grained rollout checkpoints',
+            '### Forward-only operational rollback and bounded schema downgrade',
+        );
+
+        $statusOne = $this->structuralMarkdownRow($readiness, 'PH3-RDY-001');
+        $statusTwo = $this->structuralMarkdownRow($readiness, 'PH3-RDY-002');
+        $statusFour = $this->structuralMarkdownRow($readiness, 'PH3-RDY-004');
+        $readinessMutations = [
+            'RD-P1 list dash' => $this->insertStructuralRow($readiness, $statusTwo, '- PH3-RDY-002 = UNKNOWN'),
+            'RD-P2 list star' => $this->insertStructuralRow($readiness, $statusTwo, '* PH3-RDY-002 = UNKNOWN'),
+            'RD-P3 blockquote' => $this->insertStructuralRow($readiness, $statusTwo, '> PH3-RDY-002 = UNKNOWN'),
+            'RD-P4 ordered list' => $this->insertStructuralRow($readiness, $statusTwo, '1. PH3-RDY-002 = UNKNOWN'),
+            'RD-P5 plain' => $this->insertStructuralRow($readiness, $statusTwo, 'PH3-RDY-002 = UNKNOWN'),
+            'RD-P6 malformed pipe row' => $this->insertStructuralRow($readiness, $statusTwo, '| PH3-RDY-002 | UNKNOWN |'),
+            'RD-P7 terminal malformed declaration' => $this->insertStructuralRow($readiness, $statusFour, 'PH3-RDY-002 = UNKNOWN'),
+            'RD-P8 leading malformed declaration' => $this->insertStructuralRow(
+                $readiness,
+                $statusOne,
+                'PH3-RDY-002 = UNKNOWN',
+                before: true,
+            ),
+        ];
+        foreach ($readinessMutations as $mutation => $mutatedReadiness) {
+            $contract = $this->readinessStatusContract($mutatedReadiness);
+            $this->assertSame(5, $contract['raw_count'], $mutation);
+            $this->assertNotSame([], $contract['violations'], $mutation);
+        }
+        $lineEnding = str_contains($readiness, "\r\n") ? "\r\n" : "\n";
+        $blankSeparatedDeclaration = $this->readinessStatusContract(
+            $this->insertStructuralRow(
+                $readiness,
+                $statusFour,
+                $lineEnding.'PH3-RDY-002 = UNKNOWN',
+            ),
+        );
+        $this->assertSame(5, $blankSeparatedDeclaration['raw_count']);
+        $this->assertNotSame([], $blankSeparatedDeclaration['violations']);
+        $this->assertSame([], $this->readinessStatusContract($readiness)['violations'], 'RD-P9 canonical');
+
+        $firstArtifact = $this->structuralMarkdownRow($runtimeInventory, 'supplier_import_execution_claims');
+        $outbox = $this->structuralMarkdownRow($runtimeInventory, 'supplier_import_dispatch_outbox');
+        $lastArtifact = $this->structuralMarkdownRow($runtimeInventory, 'SnapshotSourceIdentity');
+        $inventoryMutations = [
+            'RI-P1 list dash' => $this->insertStructuralRow($runtimeInventory, $outbox, '- supplier_import_dispatch_outbox = MISSING'),
+            'RI-P2 list star' => $this->insertStructuralRow($runtimeInventory, $outbox, '* supplier_import_dispatch_outbox = MISSING'),
+            'RI-P3 blockquote' => $this->insertStructuralRow($runtimeInventory, $outbox, '> supplier_import_dispatch_outbox = MISSING'),
+            'RI-P4 ordered list' => $this->insertStructuralRow($runtimeInventory, $outbox, '1. supplier_import_dispatch_outbox = MISSING'),
+            'RI-P5 plain' => $this->insertStructuralRow($runtimeInventory, $outbox, 'supplier_import_dispatch_outbox = MISSING'),
+            'RI-P6 malformed pipe row' => $this->insertStructuralRow($runtimeInventory, $outbox, '| supplier_import_dispatch_outbox | MISSING |'),
+            'RI-P7 terminal known artifact' => $this->insertStructuralRow($runtimeInventory, $lastArtifact, 'supplier_import_dispatch_outbox = MISSING'),
+            'RI-P8 leading unknown artifact' => $this->insertStructuralRow(
+                $runtimeInventory,
+                $firstArtifact,
+                'unknown_runtime_artifact = MISSING',
+                before: true,
+            ),
+        ];
+        foreach ($inventoryMutations as $mutation => $mutatedInventory) {
+            $contract = $this->runtimeInventoryContract($mutatedInventory);
+            $this->assertSame(24, $contract['raw_count'], $mutation);
+            $this->assertNotSame([], $contract['violations'], $mutation);
+        }
+        $this->assertSame([], $this->runtimeInventoryContract($runtimeInventory)['violations'], 'RI-P9 canonical');
+
+        $canonicalRollout = $this->rolloutCheckpointContract($rollout);
+        $row103 = $canonicalRollout['rows'][array_key_last($canonicalRollout['rows'])];
+        $rolloutMutations = [
+            'RO-P1 list dash' => '- Checkpoint 104 = malformed declaration',
+            'RO-P2 list star' => '* Checkpoint 104 = malformed declaration',
+            'RO-P3 blockquote' => '> Checkpoint 104 = malformed declaration',
+            'RO-P4 ordered list' => '1. Checkpoint 104 = malformed declaration',
+            'RO-P5 plain' => 'Checkpoint 104 = malformed declaration',
+            'RO-P6 malformed pipe row' => '| Checkpoint 104 | malformed |',
+            'RO-P7 valid extra checkpoint' => '| 104 | Extra checkpoint | checkpoint 103 | none | none | none | fail | stop |',
+        ];
+        foreach ($rolloutMutations as $mutation => $declaration) {
+            $contract = $this->rolloutCheckpointContract(
+                $this->insertStructuralRow($rollout, $row103, $declaration),
+            );
+            $this->assertSame(104, $contract['raw_count'], $mutation);
+            $this->assertNotSame([], $contract['violations'], $mutation);
+        }
+        $this->assertSame([], $canonicalRollout['violations'], 'RO-P8 canonical');
+    }
+
+    public function test_singleton_authority_blocks_and_lexical_markers_reject_shadowing(): void
+    {
+        $design = $this->readDocument('docs/IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md');
+        $expectedTuple = $this->expectedAuthorizationTuple();
+        $lineEnding = str_contains($design, "\r\n") ? "\r\n" : "\n";
+        $registryBlock = implode($lineEnding, [
+            'Normative authorization procedure registry (ordered):',
+            '',
+            '```text',
+            'authorization-member-persistence',
+            'capture-start-coordinator',
+            'bounded-capture-collector',
+            '```',
+        ]);
+        $registryMutations = [
+            'PR-B1 second identical registry block' => $design.$lineEnding.$lineEnding.$registryBlock,
+            'PR-B2 second conflicting registry block' => $design.$lineEnding.$lineEnding.str_replace(
+                'bounded-capture-collector',
+                'conflicting-procedure',
+                $registryBlock,
+            ),
+            'PR-B3 empty second registry block' => $design.$lineEnding.$lineEnding.implode($lineEnding, [
+                'Normative authorization procedure registry (ordered):',
+                '',
+                '```text',
+                '```',
+            ]),
+            'PR-B4 malformed second registry block' => $design.$lineEnding.$lineEnding.implode($lineEnding, [
+                'Normative authorization procedure registry ordered:',
+                '',
+                '```text',
+                'malformed-procedure',
+                '```',
+            ]),
+            'PR-B5 registry absent' => $this->replaceStructuralText($design, $registryBlock, ''),
+        ];
+        foreach ($registryMutations as $mutation => $mutatedDesign) {
+            $this->assertNotSame(
+                [],
+                $this->authorizationProcedureContract($mutatedDesign, $expectedTuple)['violations'],
+                $mutation,
+            );
+        }
+        $canonicalRegistry = $this->authorizationProcedureContract($design, $expectedTuple);
+        $this->assertSame([], $canonicalRegistry['violations'], 'PR-B6 canonical');
+        $this->assertSame(1, $canonicalRegistry['registry_declaration_count']);
+        $this->assertSame(1, $canonicalRegistry['registry_valid_block_count']);
+
+        $sourceBinding = $this->markdownSection(
+            $design,
+            '### PH3-RDY-002 authorization binding and PH3-RDY-001 candidate provenance',
+            '### PH3-RDY-003 authoritative-limit inventory and unresolved gate',
+        );
+        $tupleBlock = implode($lineEnding, [
+            'Canonical proposed future authorization completeness tuple (ordered):',
+            '',
+            '```text',
+            ...$expectedTuple,
+            '```',
+        ]);
+        $tupleMutations = [
+            'CT-B1 second identical tuple block' => $sourceBinding.$lineEnding.$lineEnding.$tupleBlock,
+            'CT-B2 second tuple with wrong fifth field' => $sourceBinding.$lineEnding.$lineEnding.str_replace(
+                'cohort_source_identity',
+                'wrong_source_identity',
+                $tupleBlock,
+            ),
+            'CT-B3 second four-field tuple' => $sourceBinding.$lineEnding.$lineEnding.implode($lineEnding, [
+                'Canonical proposed future authorization completeness tuple (ordered):',
+                '',
+                '```text',
+                ...array_slice($expectedTuple, 0, 4),
+                '```',
+            ]),
+            'CT-B4 second six-field tuple' => $sourceBinding.$lineEnding.$lineEnding.implode($lineEnding, [
+                'Canonical proposed future authorization completeness tuple (ordered):',
+                '',
+                '```text',
+                ...$expectedTuple,
+                'unexpected_sixth_field',
+                '```',
+            ]),
+            'CT-B5 malformed second tuple declaration' => $sourceBinding.$lineEnding.$lineEnding.implode($lineEnding, [
+                'Canonical proposed future authorization completeness tuple ordered:',
+                '',
+                '```text',
+                ...$expectedTuple,
+                '```',
+            ]),
+            'CT-B6 tuple absent' => $this->replaceStructuralText($sourceBinding, $tupleBlock, ''),
+        ];
+        foreach ($tupleMutations as $mutation => $mutatedSourceBinding) {
+            $this->assertNotSame(
+                [],
+                $this->canonicalAuthorizationCompletenessTupleContract($mutatedSourceBinding)['violations'],
+                $mutation,
+            );
+        }
+        $canonicalTuple = $this->canonicalAuthorizationCompletenessTupleContract($sourceBinding);
+        $this->assertSame([], $canonicalTuple['violations'], 'CT-B7 canonical');
+        $this->assertSame(1, $canonicalTuple['declaration_count']);
+        $this->assertSame(1, $canonicalTuple['valid_block_count']);
+
+        $memberStart = '<!-- normative-authorization-procedure:start id=authorization-member-persistence -->';
+        $procedureMarkerMutations = [
+            'PM-X1 malformed delimiter' => '<!-- normative-authorization-procedure start id=authorization-member-persistence -->',
+            'PM-X2 list-prefixed malformed marker' => '- '.$memberStart,
+            'PM-X3 blockquote-prefixed malformed marker' => '> '.$memberStart,
+            'PM-X4 missing marker type' => '<!-- normative-authorization-procedure id=authorization-member-persistence -->',
+            'PM-X5 invalid type' => '<!-- normative-authorization-procedure:middle id=authorization-member-persistence -->',
+            'PM-X6 missing procedure ID' => '<!-- normative-authorization-procedure:start -->',
+            'PM-X7 invalid procedure ID' => '<!-- normative-authorization-procedure:start id=Authorization_Member -->',
+            'PM-X8 extra trailing tokens' => '<!-- normative-authorization-procedure:start id=authorization-member-persistence extra=true -->',
+        ];
+        foreach ($procedureMarkerMutations as $mutation => $marker) {
+            $this->assertNotSame(
+                [],
+                $this->authorizationProcedureContract(
+                    $this->replaceStructuralText($design, $memberStart, $marker),
+                    $expectedTuple,
+                )['violations'],
+                $mutation,
+            );
+        }
+        $this->assertNotSame(
+            [],
+            $this->authorizationProcedureContract(
+                $design.$lineEnding.'<!-- normative-authorization-procedure start id=terminal-malformed -->',
+                $expectedTuple,
+            )['violations'],
+            'PM-X9 malformed marker after final valid block',
+        );
+        $this->assertSame([], $canonicalRegistry['violations'], 'PM-X10 canonical');
+    }
+
+    public function test_watchdog_context_and_current_state_contracts_reject_remaining_contradictions(): void
+    {
+        $documents = $this->watchdogDocumentation();
+        $path = 'docs/IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md';
+        $context = '<!-- watchdog-document-context classification=SCHEMA_DEFINITION_REFERENCE column_occurrences=40 index_occurrences=4 contract=watchdog-current-state-v1 -->';
+        $lineEnding = str_contains($documents[$path], "\r\n") ? "\r\n" : "\n";
+        $contextMutations = [
+            'WC1 identical duplicate' => $context.$lineEnding.$context,
+            'WC2 conflicting duplicate' => $context.$lineEnding.'<!-- watchdog-document-context classification=HISTORICAL column_occurrences=40 index_occurrences=4 contract=watchdog-current-state-v1 -->',
+            'WC3 malformed delimiter' => '<!-- watchdog-document-context: classification=SCHEMA_DEFINITION_REFERENCE column_occurrences=40 index_occurrences=4 contract=watchdog-current-state-v1 -->',
+            'WC4 malformed ID' => '<!-- watchdog-document-context classification=SCHEMA_DEFINITION_REFERENCE column_occurrences=40 index_occurrences=4 contract=Watchdog_Invalid -->',
+            'WC5 list-prefixed marker' => '- '.$context,
+            'WC6 blockquote-prefixed marker' => '> '.$context,
+            'WC7 extra trailing tokens' => '<!-- watchdog-document-context classification=SCHEMA_DEFINITION_REFERENCE column_occurrences=40 index_occurrences=4 contract=watchdog-current-state-v1 extra=true -->',
+            'WC9 missing marker' => '',
+        ];
+        $migration = $this->readDocument(
+            'database/migrations/2026_08_20_120002_create_supplier_import_dispatch_outbox_table.php',
+        );
+        foreach ($contextMutations as $mutation => $replacement) {
+            $mutated = $this->mutateDocument($documents, $path, $context, $replacement);
+            $this->assertNotSame(
+                [],
+                $this->watchdogDocumentationContract($mutated, $migration)['violations'],
+                $mutation,
+            );
+        }
+        $wrongDocument = [
+            ...$documents,
+            'docs/WATCHDOG_WRONG_CONTEXT_EXAMPLE.md' => $context,
+        ];
+        $this->assertNotSame(
+            [],
+            $this->watchdogDocumentationContract($wrongDocument, $migration)['violations'],
+            'WC8 context marker in wrong document',
+        );
+        $this->assertSame(
+            [],
+            $this->watchdogDocumentationContract($documents, $migration)['violations'],
+            'WC10 canonical',
+        );
+
+        $design = $documents[$path];
+        $plan = $this->readDocument('docs/PHASE_9C6_5C3D1_RUNTIME_IMPLEMENTATION_PLAN.md');
+        $this->assertSame([], $this->phaseThreeCurrentStateViolations($design, $plan));
+        $contradictions = [
+            'RC-H current authorization contradiction' => [
+                str_replace(
+                    'remains historical/staging evidence only and is not current canonical Phase III'.
+                    $lineEnding.'authorization',
+                    'is therefore authorized as current canonical Phase III authorization',
+                    $design,
+                ),
+                $plan,
+            ],
+            'RC-I proposed deployed hexadecimal columns' => [
+                str_replace(
+                    'The exact affected deployed Phase I hexadecimal columns are:',
+                    'The exact affected proposed columns are:',
+                    $design,
+                ),
+                $plan,
+            ],
+            'RC-J future Phase I deployment' => [
+                $design,
+                str_replace(
+                    'The completed Phase I staging deployment added schema'.$lineEnding.'only.',
+                    'Future deployment adds schema only.',
+                    $plan,
+                ),
+            ],
+        ];
+        foreach ($contradictions as $mutation => [$mutatedDesign, $mutatedPlan]) {
+            $this->assertNotSame(
+                [],
+                $this->phaseThreeCurrentStateViolations($mutatedDesign, $mutatedPlan),
+                $mutation,
             );
         }
     }
@@ -2275,21 +2604,74 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
     /** @return array<int, string> */
     private function canonicalAuthorizationCompletenessTuple(string $sourceBinding): array
     {
-        $matched = preg_match(
-            '/Canonical proposed future authorization completeness tuple \(ordered\):\R\R```text\R(?<fields>.*?)\R```/s',
-            $sourceBinding,
-            $tuple,
-        );
+        $contract = $this->canonicalAuthorizationCompletenessTupleContract($sourceBinding);
 
-        $this->assertSame(1, $matched, 'Canonical authorization completeness tuple is missing.');
+        $this->assertSame([], $contract['violations'], implode(PHP_EOL, $contract['violations']));
 
-        return $this->lineSeparatedFields($tuple['fields'] ?? '');
+        return $contract['fields'];
+    }
+
+    /**
+     * @return array{
+     *     fields: array<int, string>,
+     *     declaration_count: int,
+     *     valid_block_count: int,
+     *     violations: array<int, string>
+     * }
+     */
+    private function canonicalAuthorizationCompletenessTupleContract(string $sourceBinding): array
+    {
+        $declaration = 'Canonical proposed future authorization completeness tuple (ordered):';
+        $lexicalIntent = 'Canonical proposed future authorization completeness tuple';
+        $blocks = [];
+        $declarationCount = 0;
+        $violations = [];
+        $lines = preg_split('/\R/', $sourceBinding) ?: [];
+
+        foreach ($lines as $lineNumber => $line) {
+            if (! str_contains($line, $lexicalIntent)) {
+                continue;
+            }
+
+            $declarationCount++;
+            if ($line !== $declaration) {
+                $violations[] = 'Malformed canonical authorization tuple declaration at line '.($lineNumber + 1).'.';
+
+                continue;
+            }
+
+            $block = $this->lineSeparatedFencedBlock(
+                $lines,
+                $lineNumber,
+                'canonical authorization tuple',
+            );
+            $violations = [...$violations, ...$block['violations']];
+            if ($block['fields'] !== null) {
+                $blocks[] = $block['fields'];
+            }
+        }
+
+        if ($declarationCount !== 1) {
+            $violations[] = 'Exactly one canonical authorization tuple declaration is required.';
+        }
+        if (count($blocks) !== 1) {
+            $violations[] = 'Exactly one valid canonical authorization tuple block is required.';
+        }
+
+        return [
+            'fields' => count($blocks) === 1 ? $blocks[0] : [],
+            'declaration_count' => $declarationCount,
+            'valid_block_count' => count($blocks),
+            'violations' => array_values(array_unique($violations)),
+        ];
     }
 
     /**
      * @param  array<int, string>  $expectedTuple
      * @return array{
      *     registry_ids: array<int, string>,
+     *     registry_declaration_count: int,
+     *     registry_valid_block_count: int,
      *     marker_candidate_count: int,
      *     declaration_candidate_count: int,
      *     violations: array<int, string>
@@ -2297,14 +2679,15 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
      */
     private function authorizationProcedureContract(string $design, array $expectedTuple): array
     {
-        $registryIds = $this->authorizationProcedureRegistryIds($design);
+        $registry = $this->authorizationProcedureRegistryContract($design);
+        $registryIds = $registry['ids'];
         $structure = $this->authorizationProcedureStructure($design);
         $startIds = $structure['start_ids'];
         $endIds = $structure['end_ids'];
         $declarationIds = $structure['declaration_ids'];
         $blockRows = $this->authorizationProcedureBlockRows($design);
         $blockIds = array_column($blockRows, 'id');
-        $violations = $structure['violations'];
+        $violations = [...$registry['violations'], ...$structure['violations']];
 
         if ($registryIds === []) {
             $violations[] = 'Normative authorization procedure registry is missing or empty.';
@@ -2375,24 +2758,71 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
 
         return [
             'registry_ids' => $registryIds,
+            'registry_declaration_count' => $registry['declaration_count'],
+            'registry_valid_block_count' => $registry['valid_block_count'],
             'marker_candidate_count' => $structure['marker_candidate_count'],
             'declaration_candidate_count' => $structure['declaration_candidate_count'],
             'violations' => array_values(array_unique($violations)),
         ];
     }
 
-    /** @return array<int, string> */
-    private function authorizationProcedureRegistryIds(string $design): array
+    /**
+     * @return array{
+     *     ids: array<int, string>,
+     *     declaration_count: int,
+     *     valid_block_count: int,
+     *     violations: array<int, string>
+     * }
+     */
+    private function authorizationProcedureRegistryContract(string $design): array
     {
-        $matched = preg_match(
-            '/Normative authorization procedure registry \(ordered\):\R\R```text\R(?<ids>.*?)\R```/s',
-            $design,
-            $registry,
-        );
+        $heading = '### Normative authorization procedure registry';
+        $declaration = 'Normative authorization procedure registry (ordered):';
+        $lexicalIntent = 'Normative authorization procedure registry';
+        $blocks = [];
+        $declarationCount = 0;
+        $violations = [];
+        $lines = preg_split('/\R/', $design) ?: [];
 
-        return $matched === 1
-            ? $this->lineSeparatedFields($registry['ids'] ?? '')
-            : [];
+        foreach ($lines as $lineNumber => $line) {
+            if (! str_contains($line, $lexicalIntent) || $line === $heading) {
+                continue;
+            }
+
+            $declarationCount++;
+            if ($line !== $declaration) {
+                $violations[] = 'Malformed normative authorization procedure registry declaration at line '.($lineNumber + 1).'.';
+
+                continue;
+            }
+
+            $block = $this->lineSeparatedFencedBlock(
+                $lines,
+                $lineNumber,
+                'normative authorization procedure registry',
+            );
+            $violations = [...$violations, ...$block['violations']];
+            if ($block['fields'] !== null) {
+                $blocks[] = $block['fields'];
+            }
+        }
+
+        if ($declarationCount !== 1) {
+            $violations[] = 'Exactly one normative authorization procedure registry declaration is required.';
+        }
+        if (count($blocks) !== 1) {
+            $violations[] = 'Exactly one valid normative authorization procedure registry block is required.';
+        }
+        if (count($blocks) === 1 && $blocks[0] === []) {
+            $violations[] = 'The normative authorization procedure registry may not be empty.';
+        }
+
+        return [
+            'ids' => count($blocks) === 1 ? $blocks[0] : [],
+            'declaration_count' => $declarationCount,
+            'valid_block_count' => count($blocks),
+            'violations' => array_values(array_unique($violations)),
+        ];
     }
 
     /**
@@ -2600,14 +3030,9 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
                 static fn (array $declaration): bool => $declaration['path'] === $path,
             ));
 
-            preg_match_all(
-                '/^<!-- watchdog-document-context classification=(?<classification>[A-Z_]+) '.
-                'column_occurrences=(?<column>\d+) index_occurrences=(?<index>\d+) '.
-                'contract=(?<contract>[a-z0-9-]+) -->\r?$/m',
-                $document,
-                $contextMatches,
-                PREG_SET_ORDER,
-            );
+            $contextContract = $this->watchdogDocumentContextContract($document, $path);
+            $contextMatches = $contextContract['contexts'];
+            $violations = [...$violations, ...$contextContract['violations']];
 
             $isRelevant = str_contains($document, $column) || str_contains($document, $index);
             $residualDocument = preg_replace(
@@ -2623,7 +3048,7 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
             $indexOccurrences = substr_count($residualDocument, $index);
 
             if (! $isRelevant) {
-                if ($contextMatches !== [] || $referenceMatches !== []) {
+                if ($contextContract['candidate_count'] !== 0 || $referenceMatches !== []) {
                     $violations[] = "Watchdog context marker in {$path} has no watchdog occurrence.";
                 }
 
@@ -2632,7 +3057,7 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
 
             $relevantDocuments[] = $path;
 
-            if (count($contextMatches) !== 1) {
+            if ($contextContract['candidate_count'] !== 1 || count($contextMatches) !== 1) {
                 $violations[] = "{$path} must contain exactly one watchdog document context marker.";
 
                 continue;
@@ -2788,6 +3213,52 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
             'state' => $state,
             'contexts' => $contexts,
             'relevant_documents' => $relevantDocuments,
+        ];
+    }
+
+    /**
+     * @return array{
+     *     contexts: array<int, array{classification: string, column: string, index: string, contract: string}>,
+     *     candidate_count: int,
+     *     violations: array<int, string>
+     * }
+     */
+    private function watchdogDocumentContextContract(string $document, string $path): array
+    {
+        $contexts = [];
+        $candidateCount = 0;
+        $violations = [];
+
+        foreach (preg_split('/\R/', $document) ?: [] as $lineNumber => $line) {
+            if (! str_contains($line, 'watchdog-document-context')) {
+                continue;
+            }
+
+            $candidateCount++;
+            if (preg_match(
+                '/^<!-- watchdog-document-context classification=(?<classification>[A-Z_]+) '.
+                'column_occurrences=(?<column>\d+) index_occurrences=(?<index>\d+) '.
+                'contract=(?<contract>[a-z0-9-]+) -->$/',
+                $line,
+                $context,
+            ) !== 1) {
+                $violations[] = "Malformed watchdog document context marker in {$path} at line ".($lineNumber + 1).'.';
+
+                continue;
+            }
+
+            $contexts[] = [
+                'classification' => $context['classification'],
+                'column' => $context['column'],
+                'index' => $context['index'],
+                'contract' => $context['contract'],
+            ];
+        }
+
+        return [
+            'contexts' => $contexts,
+            'candidate_count' => $candidateCount,
+            'violations' => $violations,
         ];
     }
 
@@ -3134,6 +3605,52 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
         return implode(PHP_EOL, $lines);
     }
 
+    /**
+     * @param  array<int, string>  $lines
+     * @return array{fields: array<int, string>|null, violations: array<int, string>}
+     */
+    private function lineSeparatedFencedBlock(array $lines, int $declarationLine, string $context): array
+    {
+        $violations = [];
+        if (($lines[$declarationLine + 1] ?? null) !== ''
+            || ($lines[$declarationLine + 2] ?? null) !== '```text') {
+            return [
+                'fields' => null,
+                'violations' => ["The {$context} declaration has a malformed fenced-block opening."],
+            ];
+        }
+
+        $closingFence = null;
+        for ($lineNumber = $declarationLine + 3; $lineNumber < count($lines); $lineNumber++) {
+            if ($lines[$lineNumber] === '```') {
+                $closingFence = $lineNumber;
+
+                break;
+            }
+        }
+
+        if ($closingFence === null) {
+            return [
+                'fields' => null,
+                'violations' => ["The {$context} declaration has no closing fence."],
+            ];
+        }
+
+        $fields = $this->lineSeparatedFields(implode(PHP_EOL, array_slice(
+            $lines,
+            $declarationLine + 3,
+            $closingFence - $declarationLine - 3,
+        )));
+        if ($fields === []) {
+            $violations[] = "The {$context} declaration may not be empty.";
+        }
+
+        return [
+            'fields' => $fields,
+            'violations' => $violations,
+        ];
+    }
+
     /** @return array<int, string> */
     private function lineSeparatedFields(string $fields): array
     {
@@ -3165,7 +3682,7 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
             '| --- | --- | --- |',
             'readiness status',
             3,
-            '/^\s*(?:\|\s*)?`?PH3-RDY-[0-9]+`?\s*(?:\||=)/',
+            'Phase III implementation remains prohibited while any of `PH3-RDY-001`,',
         );
         $rows = [];
         $violations = $table['violations'];
@@ -3280,7 +3797,7 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
             '| --- | --- | --- | --- |',
             'runtime inventory',
             4,
-            '/^\s*(?:\|\s*)?`?[A-Za-z_][A-Za-z0-9_\/-]*(?: [A-Za-z0-9_\/ -]+)*`?\s*(?:\||=)/',
+            null,
         );
         $rows = [];
         $violations = $table['violations'];
@@ -3437,7 +3954,7 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
             '| --- | --- | --- | --- | --- | --- | --- | --- |',
             'rollout checkpoint',
             8,
-            '/^\s*(?:\|\s*)?`?(?:[0-9]+|[A-Za-z][A-Za-z0-9_-]*)`?\s*(?:\||=)/',
+            'The 103-row dependency audit checks 104 prerequisite edges and has zero missing',
         );
         $rows = [];
         $keys = [];
@@ -3502,31 +4019,15 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
         string $expectedSeparator,
         string $context,
         int $expectedColumns,
-        ?string $declarationIntentPattern = null,
+        ?string $expectedEndMarker,
     ): array {
         $lines = preg_split('/\R/', $contents) ?: [];
-        $headerPositions = [];
-        $separatorPositions = [];
+        $headerPositions = array_keys($lines, $expectedHeader, true);
+        $separatorPositions = array_keys($lines, $expectedSeparator, true);
+        $endPositions = $expectedEndMarker === null
+            ? []
+            : array_keys($lines, $expectedEndMarker, true);
         $rows = [];
-
-        foreach ($lines as $lineNumber => $line) {
-            if ($line === $expectedHeader) {
-                $headerPositions[] = $lineNumber;
-
-                continue;
-            }
-            if ($line === $expectedSeparator) {
-                $separatorPositions[] = $lineNumber;
-
-                continue;
-            }
-
-            $hasDeclarationIntent = $declarationIntentPattern !== null
-                && preg_match($declarationIntentPattern, $line) === 1;
-            if (str_contains($line, '|') || $hasDeclarationIntent) {
-                $rows[] = $line;
-            }
-        }
 
         $violations = [];
         if (count($headerPositions) !== 1) {
@@ -3535,9 +4036,30 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
         if (count($separatorPositions) !== 1) {
             $violations[] = "The {$context} table must contain exactly one canonical separator.";
         }
+        if ($expectedEndMarker !== null && count($endPositions) !== 1) {
+            $violations[] = "The {$context} table must contain exactly one canonical end marker.";
+        }
         if (count($headerPositions) === 1 && count($separatorPositions) === 1
             && $separatorPositions[0] !== $headerPositions[0] + 1) {
             $violations[] = "The {$context} table separator must immediately follow its header.";
+        }
+        if (count($headerPositions) === 1 && count($separatorPositions) === 1
+            && $separatorPositions[0] === $headerPositions[0] + 1) {
+            $bodyEnd = $expectedEndMarker === null || count($endPositions) !== 1
+                ? count($lines)
+                : $endPositions[0];
+            if ($bodyEnd <= $separatorPositions[0]) {
+                $violations[] = "The {$context} table end marker must follow its separator.";
+                $bodyEnd = $separatorPositions[0] + 1;
+            }
+
+            for ($lineNumber = $separatorPositions[0] + 1; $lineNumber < $bodyEnd; $lineNumber++) {
+                if (trim($lines[$lineNumber]) === '') {
+                    continue;
+                }
+
+                $rows[] = $lines[$lineNumber];
+            }
         }
         foreach ($rows as $position => $row) {
             $parsed = $this->structuralMarkdownRowCells(
@@ -3678,6 +4200,42 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
             static fn (string $column): string => trim($column),
             explode(',', $columns),
         );
+    }
+
+    /** @return array<int, string> */
+    private function phaseThreeCurrentStateViolations(string $design, string $plan): array
+    {
+        $violations = [];
+        $normalizedDesign = preg_replace('/\s+/', ' ', $design);
+        $normalizedPlan = preg_replace('/\s+/', ' ', $plan);
+
+        if (! is_string($normalizedDesign) || ! is_string($normalizedPlan)) {
+            return ['Unable to normalize Phase III current-state documentation.'];
+        }
+
+        if (! str_contains(
+            $normalizedDesign,
+            'The documented 86-identity APCOM staging-only cohort remains historical/staging evidence only and is not current canonical Phase III authorization.',
+        )) {
+            $violations[] = 'The 86-identity APCOM staging cohort is not explicitly historical and non-authoritative.';
+        }
+        if (str_contains($normalizedDesign, '86-identity APCOM staging-only cohort is therefore authorized')) {
+            $violations[] = 'The historical 86-identity APCOM staging cohort is described as currently authorized.';
+        }
+        if (! str_contains($design, 'The exact affected deployed Phase I hexadecimal columns are:')) {
+            $violations[] = 'The hexadecimal storage inventory is not classified as deployed Phase I schema.';
+        }
+        if (str_contains($design, 'The exact affected proposed columns are:')) {
+            $violations[] = 'Deployed Phase I hexadecimal columns are described as proposed.';
+        }
+        if (! str_contains($normalizedPlan, 'The completed Phase I staging deployment added schema only.')) {
+            $violations[] = 'The completed Phase I staging deployment is not recorded as past work.';
+        }
+        if (str_contains($plan, '**Mutation boundary.** Future deployment adds schema only.')) {
+            $violations[] = 'The completed Phase I staging deployment is described as future work.';
+        }
+
+        return $violations;
     }
 
     private function readDocument(string $path): string
