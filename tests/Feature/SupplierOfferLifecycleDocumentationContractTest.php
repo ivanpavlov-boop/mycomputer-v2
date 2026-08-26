@@ -1478,7 +1478,7 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
             'downloadSource(ResolvedSupplierImportSourceContext)',
             'parseSource(',
             'MUST NOT read',
-            'EA downloads locator A and parses mapping A exclusively from context A',
+            'EA downloads locator A with redirects disabled and parses mapping A exclusively from context A',
         ] as $boundAuthority) {
             $this->assertStringContainsString($boundAuthority, $architecture);
         }
@@ -1564,7 +1564,7 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
         $this->assertSame([], $canonical['violations'], 'AC10 canonical: '.implode(PHP_EOL, $canonical['violations']));
         $block = $canonical['full_block'];
         $lineEnding = str_contains($design, "\r\n") ? "\r\n" : "\n";
-        $statusOne = '| `PH3-RDY-001` | `CLOSED IN DESIGN` | One locking source-resolution boundary persists the complete secret-free locator/mapping authority, materializes one immutable resolved context, and makes downloader/parser/retry consume only A; profile/execution/revision, first-insert, admission, concurrency and legacy rules are exact; runtime remains absent. |';
+        $statusOne = '| `PH3-RDY-001` | `CLOSED IN DESIGN` | One locking source-resolution boundary persists the complete secret-free locator/mapping authority, materializes one immutable resolved context, and makes downloader/parser/retry consume only A; protected redirects fail closed before destination contact or payload acceptance; profile/execution/revision, first-insert, admission, concurrency and legacy rules are exact; runtime remains absent. |';
         $statusThree = '| `PH3-RDY-003` | `BLOCKED` | All ten semantics, including bounded decoded source bytes, are exact; all ten numeric values remain `NOT SPECIFIED` pending separately authorized production evidence. |';
         $conflictingBlock = str_replace(
             $statusOne,
@@ -1672,6 +1672,52 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
                     str_replace($search, $replacement, $design),
                 )['violations'],
                 $mutation,
+            );
+        }
+    }
+
+    public function test_phase_three_protected_redirect_policy_is_single_and_fail_closed(): void
+    {
+        $design = $this->readDocument('docs/IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md');
+        $canonical = $this->phaseThreeArchitectureSemanticContract($design);
+
+        $this->assertSame([], $canonical['violations'], 'R0 canonical redirect policy');
+        $this->assertSame(1, substr_count($canonical['full_block'], 'The selected protected redirect policy is exactly'));
+        $this->assertStringNotContainsString('Redirects are independently SSRF-revalidated', $canonical['full_block']);
+
+        $mutations = [
+            'R1 SSRF validation alone authorizes redirects' => [
+                'never provenance',
+                'sufficient provenance',
+            ],
+            'R2 final locator may differ without immutable attestation' => [
+                'redirect target can become source B implicitly',
+                'redirect target may become source B without immutable attestation',
+            ],
+            'R3 initial fingerprint may attest redirected payload' => [
+                'the downloader cannot consume a redirected locator',
+                'the downloader may consume a redirected locator',
+            ],
+            'R4 redirect target becomes source implicitly' => [
+                'must create or resolve profile/context/execution',
+                'may reuse execution EA without creating or resolving profile/context/execution',
+            ],
+            'R5 retry follows current redirect target' => [
+                'redirect following still disabled',
+                'the current redirect target followed as source authority',
+            ],
+            'R6 cross-scope redirect is accepted' => [
+                'same-scope or cross-scope redirect is rejected identically',
+                'cross-host or cross-scope redirect is accepted after SSRF validation',
+            ],
+        ];
+
+        foreach ($mutations as $case => [$search, $replacement]) {
+            $this->assertSame(1, substr_count($design, $search), "{$case}: mutation target must be unique.");
+            $this->assertNotSame(
+                [],
+                $this->phaseThreeArchitectureSemanticContract(str_replace($search, $replacement, $design))['violations'],
+                $case,
             );
         }
     }
@@ -2008,6 +2054,56 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
         }
     }
 
+    public function test_phase_three_authority_normalization_closes_final_structural_escapes_and_false_positives(): void
+    {
+        $design = $this->readDocument('docs/IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md');
+        $lineEnding = str_contains($design, "\r\n") ? "\r\n" : "\n";
+
+        $rejected = [
+            'S1 heading status declaration' => '### Governing PH3-RDY-001 = BLOCKED',
+            'S2 status-first heading' => "## BLOCKED \u{2014} PH3-RDY-002",
+            'S3 HTML entity hyphens' => 'Current PH3&#45;RDY&#45;003 = CLOSED.',
+            'S4 Unicode hyphens' => "Current PH3\u{2011}RDY\u{2011}004 = BLOCKED.",
+            'S5 comment inside identifier' => 'Current PH3-<!-- split -->RDY-001 = BLOCKED.',
+            'S6 split definition list' => "PH3-RDY-001\n: BLOCKED",
+            'S7 status before identifier split blocks' => "BLOCKED\n\nPH3-RDY-002",
+            'S8 split details block' => "<details>\n<summary>Current architecture</summary>\nPH3-RDY-003\nBLOCKED\n</details>",
+            'S9 split Markdown link' => "[PH3-RDY-004](#phase-status)\n\nBLOCKED",
+            'S10 inline HTML wrappers' => '<span>PH3-RDY-001</span> = <strong>BLOCKED</strong>',
+        ];
+        foreach ($rejected as $case => $fragment) {
+            $this->assertNotSame(
+                [],
+                $this->phaseThreeArchitectureSemanticContract($design.$lineEnding.$fragment)['violations'],
+                $case,
+            );
+        }
+
+        $accepted = [
+            'F1 inline-code example in explicit example region' => $design.$lineEnding.
+                '<!-- phase-iii-architecture-example:start -->'.$lineEnding.
+                'Example only: `PH3-RDY-001 = BLOCKED`.'.$lineEnding.
+                '<!-- phase-iii-architecture-example:end -->',
+            'F2 historical status prose in historical region' => $design.$lineEnding.
+                '<!-- phase-iii-architecture-authority classification=HISTORICAL id=phase-iii-history-prose-v1 -->'.$lineEnding.
+                'At the earlier readiness checkpoint PH3-RDY-001 was BLOCKED.',
+            'F3 blockquote mutation in explicit example region' => $design.$lineEnding.
+                '<!-- phase-iii-architecture-example:start -->'.$lineEnding.
+                '> Mutation fixture: PH3-RDY-002 = BLOCKED.'.$lineEnding.
+                '<!-- phase-iii-architecture-example:end -->',
+            'F4 identifier-only reference' => $design.$lineEnding.
+                'PH3-RDY-003 is discussed by the canonical architecture owner.',
+            'F5 canonical current authority' => $design,
+        ];
+        foreach ($accepted as $case => $document) {
+            $this->assertSame(
+                [],
+                $this->phaseThreeArchitectureSemanticContract($document)['violations'],
+                $case,
+            );
+        }
+    }
+
     public function test_phase_three_status_has_one_repository_authority_and_exact_references(): void
     {
         $documents = [
@@ -2049,6 +2145,44 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
                 $this->phaseThreeRepositoryStatusAuthorityContract($duplicate)['violations'],
                 "{$documentKey} duplicate authority/reference declaration",
             );
+        }
+    }
+
+    public function test_phase_three_non_owner_documents_reject_normalized_and_split_status_authority(): void
+    {
+        $documents = [
+            'design' => $this->readDocument('docs/IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md'),
+            'plan' => $this->readDocument('docs/PHASE_9C6_5C3D1_RUNTIME_IMPLEMENTATION_PLAN.md'),
+            'phases' => $this->readDocument('docs/PHASES.md'),
+            'roadmap' => $this->readDocument('docs/ROADMAP.md'),
+            'onboarding' => $this->readDocument('docs/SUPPLIER_ONBOARDING_FRAMEWORK.md'),
+            'apcom' => $this->readDocument('docs/APCOM_OPERATIONAL_OFFER_LIFECYCLE_PREVIEW.md'),
+        ];
+        $this->assertSame([], $this->phaseThreeRepositoryStatusAuthorityContract($documents)['violations']);
+
+        $mutations = [
+            'entity identifier' => 'Current PH3&#45;RDY&#45;003 = CLOSED.',
+            'Unicode-hyphen identifier' => "Current PH3\u{2011}RDY\u{2011}003 = CLOSED.",
+            'X1 identifier before split status' => "PH3-RDY-001\n\nBLOCKED",
+            'X2 status before split identifier' => "BLOCKED\n\nPH3-RDY-001",
+            'X3 HTML split cells' => "<table>\n<tr>\n<td>PH3-RDY-001</td>\n<td>BLOCKED</td>\n</tr>\n</table>",
+            'X4 definition list' => "PH3-RDY-001\n: BLOCKED",
+            'X5 heading status' => '### Current PH3-RDY-001 status: BLOCKED',
+            'X6 inline wrapped identifier' => '<span>PH3&#45;RDY&#45;001</span> = <strong>BLOCKED</strong>',
+            'X7 duplicate identical current map' => "| PH3-RDY-001 | CLOSED IN DESIGN |\n| PH3-RDY-002 | CLOSED IN DESIGN |\n| PH3-RDY-003 | BLOCKED |\n| PH3-RDY-004 | CLOSED |",
+            'X8 closed contradiction' => 'PH3-RDY-003 = CLOSED',
+        ];
+
+        foreach (['plan', 'phases', 'roadmap', 'onboarding', 'apcom'] as $documentKey) {
+            foreach ($mutations as $case => $fragment) {
+                $mutated = $documents;
+                $mutated[$documentKey] .= "\n{$fragment}";
+                $this->assertNotSame(
+                    [],
+                    $this->phaseThreeRepositoryStatusAuthorityContract($mutated)['violations'],
+                    "{$documentKey}: {$case}",
+                );
+            }
         }
     }
 
@@ -3519,7 +3653,7 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
                     }
                 }
 
-                if (preg_match('/\bPH3-RDY-00[1-4]\b/i', $block['raw']) === 1) {
+                if ($this->phaseThreeArchitectureIdentifiers($block['raw']) !== []) {
                     $violations[] = "{$key} mirrors a Phase III status identifier instead of using the canonical reference.";
                 }
             }
@@ -3594,32 +3728,30 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
                 }
             }
 
-            $blockIdCount = preg_match_all('/\bPH3-RDY-00[1-4]\b/i', $block['raw']);
-            if (is_int($blockIdCount)) {
-                $statusLexicalOccurrenceCount += $blockIdCount;
-            }
+            $statusLexicalOccurrenceCount += count($this->phaseThreeArchitectureIdentifiers($block['raw']));
 
-            foreach ($this->phaseThreeArchitectureStatusUnits($block) as $unit) {
-                $statusIdCount = preg_match_all('/\bPH3-RDY-00[1-4]\b/i', $unit, $statusIds);
-                if (! is_int($statusIdCount) || $statusIdCount === 0) {
+            foreach ($this->phaseThreeArchitectureStatusUnits($blocks, $blockIndex) as $unit) {
+                $statusIds = $this->phaseThreeArchitectureIdentifiers($unit);
+                if ($statusIds === []) {
                     continue;
                 }
 
                 $unitTokens = $this->phaseThreeArchitectureNormalizedTokens($unit);
+                $unitDiscovery = $this->phaseThreeArchitectureDiscoveryText($unit);
                 $id = 'ph3 rdy 00[1-4]';
                 $status = '(?:closed in design|closed|blocked|unknown|pending)';
                 $hasBoundedStatusAssociation = preg_match(
                     '/(?:\b'.$id.'\b(?: \w+){0,8} \b'.$status.'\b|\b'.$status.'\b(?: \w+){0,8} \b'.$id.'\b)/',
                     $unitTokens,
                 ) === 1;
-                $hasDeclarationSyntax = preg_match('/\bPH3-RDY-00[1-4]\b`?\s*(?:=|:|\|)/i', $unit) === 1
-                    || (stripos($unit, '<td') !== false && preg_match('/\bPH3-RDY-00[1-4]\b/i', $unit) === 1);
+                $hasDeclarationSyntax = preg_match('/\bPH3-RDY-00[1-4]\b\s*(?:=|:|\|)/i', $unitDiscovery) === 1
+                    || (stripos($unit, '<td') !== false && $statusIds !== []);
 
                 if ($hasBoundedStatusAssociation || $hasDeclarationSyntax) {
                     $statusCandidates[] = [
                         'block' => $blockIndex,
                         'raw' => $unit,
-                        'lexical_ids' => $statusIds[0],
+                        'lexical_ids' => $statusIds,
                     ];
                 }
             }
@@ -3840,6 +3972,8 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
         $bufferType = 'paragraph';
         $inFence = false;
         $fence = '';
+        $inExample = false;
+        $htmlContainer = null;
 
         $flush = static function () use (&$blocks, &$buffer, &$bufferType): void {
             if ($buffer === []) {
@@ -3856,12 +3990,53 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
 
         foreach ($lines as $line) {
             $trimmed = trim($line);
+            if ($htmlContainer !== null) {
+                $buffer[] = $line;
+                if (preg_match('/<\/'.preg_quote($htmlContainer, '/').'>/i', $trimmed) === 1) {
+                    $htmlContainer = null;
+                    $flush();
+                }
+
+                continue;
+            }
+
             if ($inFence) {
                 $buffer[] = $line;
                 if (preg_match('/^'.preg_quote($fence, '/').'\s*$/', $trimmed) === 1) {
                     $inFence = false;
                     $flush();
                 }
+
+                continue;
+            }
+
+            if ($trimmed === '<!-- phase-iii-architecture-example:start -->') {
+                $flush();
+                $inExample = true;
+                $blocks[] = ['type' => 'marker', 'raw' => $trimmed, 'literal' => true];
+
+                continue;
+            }
+
+            if ($trimmed === '<!-- phase-iii-architecture-example:end -->') {
+                $flush();
+                $blocks[] = ['type' => 'marker', 'raw' => $trimmed, 'literal' => true];
+                $inExample = false;
+
+                continue;
+            }
+
+            if ($inExample) {
+                if ($trimmed === '') {
+                    $flush();
+
+                    continue;
+                }
+                if ($buffer !== [] && $bufferType !== 'literal') {
+                    $flush();
+                }
+                $bufferType = 'literal';
+                $buffer[] = $line;
 
                 continue;
             }
@@ -3889,6 +4064,19 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
                 continue;
             }
 
+            if (preg_match('/^<(details|table|tr)\b/i', $trimmed, $htmlMatch) === 1) {
+                $flush();
+                $bufferType = 'html';
+                $buffer[] = $line;
+                $htmlContainer = strtolower($htmlMatch[1]);
+                if (preg_match('/<\/'.preg_quote($htmlContainer, '/').'>/i', $trimmed) === 1) {
+                    $htmlContainer = null;
+                    $flush();
+                }
+
+                continue;
+            }
+
             if (preg_match('/^#{1,6}\s+/', $trimmed) === 1) {
                 $flush();
                 $blocks[] = ['type' => 'heading', 'raw' => $trimmed, 'literal' => false];
@@ -3896,7 +4084,12 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
                 continue;
             }
 
-            $type = preg_match('/^\|.*\|$/', $trimmed) === 1 ? 'table' : 'paragraph';
+            $type = match (true) {
+                preg_match('/^\|.*\|$/', $trimmed) === 1 => 'table',
+                str_starts_with($trimmed, '>') => 'blockquote',
+                preg_match('/^:\s*/', $trimmed) === 1 => 'definition',
+                default => 'paragraph',
+            };
             $startsListItem = preg_match('/^(?:[-*+] |\d+[.)] )/', $trimmed) === 1;
             if ($buffer !== [] && ($type !== $bufferType || ($startsListItem && $bufferType === 'paragraph'))) {
                 $flush();
@@ -3912,10 +4105,45 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
         return $blocks;
     }
 
+    private function phaseThreeArchitectureDiscoveryText(string $value): string
+    {
+        if (str_contains($value, '<!--') && ! str_contains($value, '-->')) {
+            $value = str_replace('<!--', ' ', $value);
+        } else {
+            $value = preg_replace_callback('/<!--(?<content>.*?)-->/s', static function (array $comment): string {
+                $content = strtolower($comment['content']);
+                $tokens = preg_replace('/[^a-z0-9]+/', ' ', $content) ?? $content;
+
+                return str_contains($tokens, 'phase') && str_contains($tokens, 'architect')
+                    ? ' '.$comment['content'].' '
+                    : '';
+            }, $value) ?? $value;
+        }
+        $value = html_entity_decode($value, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+        $value = str_replace([
+            "\u{00AD}", "\u{2010}", "\u{2011}", "\u{2012}", "\u{2013}", "\u{2014}", "\u{2043}", "\u{2212}", "\u{FE63}", "\u{FF0D}",
+        ], '-', $value);
+        $value = str_replace(["\u{00A0}", "\u{202F}", "\t"], ' ', $value);
+        $value = preg_replace('/\[([^\]]+)\]\([^)]+\)/s', '$1', $value) ?? $value;
+        $value = preg_replace('/<[^>]+>/', ' ', $value) ?? strip_tags($value);
+        $value = str_replace(['`', '**', '__', '~~'], '', $value);
+        $value = preg_replace('/\bPH3\s*-\s*RDY\s*-\s*00([1-4])\b/iu', 'PH3-RDY-00$1', $value) ?? $value;
+
+        return trim(preg_replace('/[\p{Z}\s]+/u', ' ', $value) ?? $value);
+    }
+
+    /** @return array<int, string> */
+    private function phaseThreeArchitectureIdentifiers(string $value): array
+    {
+        $discovery = $this->phaseThreeArchitectureDiscoveryText($value);
+        $count = preg_match_all('/\bPH3-RDY-00[1-4]\b/i', $discovery, $matches);
+
+        return is_int($count) && $count > 0 ? $matches[0] : [];
+    }
+
     private function phaseThreeArchitectureNormalizedTokens(string $value): string
     {
-        $value = str_replace(['<!--', '-->'], ' ', $value);
-        $value = html_entity_decode(strip_tags($value), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+        $value = $this->phaseThreeArchitectureDiscoveryText($value);
         $value = strtolower($value);
         $value = preg_replace('/[^a-z0-9]+/', ' ', $value) ?? $value;
         $value = preg_replace('/\bphase\s+3\b/', 'phase iii', $value) ?? $value;
@@ -3924,23 +4152,74 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
         return trim(preg_replace('/\s+/', ' ', $value) ?? $value);
     }
 
-    /** @param array{type: string, raw: string, literal: bool} $block
+    /**
+     * @param  array<int, array{type: string, raw: string, literal: bool}>  $blocks
      * @return array<int, string>
      */
-    private function phaseThreeArchitectureStatusUnits(array $block): array
+    private function phaseThreeArchitectureStatusUnits(array $blocks, int $blockIndex): array
     {
+        $block = $blocks[$blockIndex];
         if ($block['literal'] || in_array($block['type'], ['heading', 'marker'], true)) {
-            return [];
+            if ($block['type'] !== 'heading' || $block['literal']) {
+                return [];
+            }
         }
 
         if ($block['type'] === 'table') {
             return array_values(array_filter(
                 preg_split('/\R/', $block['raw']) ?: [],
-                static fn (string $line): bool => preg_match('/\bPH3-RDY-00[1-4]\b/i', $line) === 1,
+                fn (string $line): bool => $this->phaseThreeArchitectureIdentifiers($line) !== [],
             ));
         }
 
-        return [$block['raw']];
+        $units = [$block['raw']];
+        $next = $blocks[$blockIndex + 1] ?? null;
+        if ($next !== null && ! $next['literal'] && $next['type'] !== 'marker') {
+            $blockHasIdentifier = $this->phaseThreeArchitectureIdentifiers($block['raw']) !== [];
+            $nextHasIdentifier = $this->phaseThreeArchitectureIdentifiers($next['raw']) !== [];
+            $blockIsStatus = $this->phaseThreeArchitectureIsStatusFragment($block['raw']);
+            $nextIsStatus = $this->phaseThreeArchitectureIsStatusFragment($next['raw']);
+            if (($blockHasIdentifier && $nextIsStatus) || ($blockIsStatus && $nextHasIdentifier)) {
+                $units[] = $block['raw']."\n".$next['raw'];
+            }
+        }
+
+        $afterNext = $blocks[$blockIndex + 2] ?? null;
+        if ($next !== null
+            && $afterNext !== null
+            && ! $next['literal']
+            && ! $afterNext['literal']
+            && $next['type'] !== 'marker'
+            && $afterNext['type'] !== 'marker'
+            && $this->phaseThreeArchitectureIsDeclarationBridge($next['raw'])) {
+            $blockHasIdentifier = $this->phaseThreeArchitectureIdentifiers($block['raw']) !== [];
+            $afterNextHasIdentifier = $this->phaseThreeArchitectureIdentifiers($afterNext['raw']) !== [];
+            $blockIsStatus = $this->phaseThreeArchitectureIsStatusFragment($block['raw']);
+            $afterNextIsStatus = $this->phaseThreeArchitectureIsStatusFragment($afterNext['raw']);
+            if (($blockHasIdentifier && $afterNextIsStatus) || ($blockIsStatus && $afterNextHasIdentifier)) {
+                $units[] = $block['raw']."\n".$next['raw']."\n".$afterNext['raw'];
+            }
+        }
+
+        return array_values(array_unique($units));
+    }
+
+    private function phaseThreeArchitectureIsDeclarationBridge(string $value): bool
+    {
+        return in_array(
+            $this->phaseThreeArchitectureNormalizedTokens($value),
+            ['', 'status'],
+            true,
+        ) && preg_match('/(?:^|\s)(?:=|:)(?:\s|$)/', $this->phaseThreeArchitectureDiscoveryText($value)) === 1;
+    }
+
+    private function phaseThreeArchitectureIsStatusFragment(string $value): bool
+    {
+        return in_array(
+            $this->phaseThreeArchitectureNormalizedTokens($value),
+            ['closed in design', 'closed', 'blocked', 'unknown', 'pending'],
+            true,
+        );
     }
 
     /**
@@ -4211,6 +4490,7 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
             }
         }
 
+        $semanticArchitecture = preg_replace('/\s+/', ' ', $architecture) ?? $architecture;
         foreach ([
             'The sole future registry is `supplier_import_source_profiles`.',
             'supplier_import_resolved_source_context_v1',
@@ -4235,16 +4515,25 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
             'rather than a gap or nonexistent SupplierProduct row lock',
             'legacy_supplier_product_identity_ambiguous',
             'Migration must not infer provenance from current feed URL/type/mapping',
+            'The selected protected redirect policy is exactly',
+            '`protected_source_redirect_policy_v1`: HTTP redirect following is disabled',
+            'fails closed as `source_redirect_rejected`',
+            'SSRF acceptance of a redirect target is never provenance equivalence and never authorizes contact on the protected path.',
+            'A same-host, cross-host, same-scope or cross-scope redirect is rejected identically; no redirect target can become source B implicitly.',
+            'To move from canonical locator A to B, mutable feed configuration must be changed and a later normal locking source-resolution transaction must create or resolve profile/context/execution B under the existing A-to-B rules.',
+            'Retry of execution EA reconstructs immutable context A and repeats only locator A with redirect following still disabled.',
+            'because the downloader cannot consume a redirected locator, EA cannot attest A while parsing bytes obtained from B.',
             '`K` always means records per',
             'T >= C + 6 for the policy worst case',
             'rows/transaction, never statements, bytes or time',
             'overflow never opens or commits a partial transaction',
         ] as $authority) {
-            if (! str_contains($architecture, $authority)) {
+            $semanticAuthority = preg_replace('/\s+/', ' ', $authority) ?? $authority;
+            if (! str_contains($semanticArchitecture, $semanticAuthority)) {
                 $violations[] = "Missing Phase III architecture authority: {$authority}.";
             }
         }
-        foreach (['maximum records and their encoded bytes', 'T >= 1 + C + H', '`H`'] as $forbidden) {
+        foreach (['maximum records and their encoded bytes', 'T >= 1 + C + H', '`H`', 'Redirects are independently SSRF-revalidated'] as $forbidden) {
             if (str_contains($architecture, $forbidden)) {
                 $violations[] = "Forbidden ambiguous Phase III architecture declaration: {$forbidden}.";
             }

@@ -375,9 +375,13 @@ implementation candidate, but ownership is fixed as follows.
   with no approved numeric policy key until all ten values are authorized;
 - `app/Services/Suppliers/SupplierImportSourceContextResolver.php`;
 - one protected bounded downloader/parser adapter boundary that accepts only
-  the resolved context and immutable payload, not a mutable `SupplierFeed`;
+  the resolved context and immutable payload, not a mutable `SupplierFeed`, and
+  implements `protected_source_redirect_policy_v1` by disabling redirect
+  following and failing every `3xx` before destination contact, payload
+  acceptance or parser invocation;
 - focused MySQL schema, immutable profile/execution/revision, A-to-B TOCTOU,
-  bounded source-byte, crash reconstruction and zero-Product-mutation tests.
+  redirect rejection, bounded source-byte, crash reconstruction and zero-
+  Product-mutation tests.
 
 **Phase III**
 
@@ -968,7 +972,7 @@ Phase I ten-table count and does not amend any Phase I migration.
 | `supplier_products` identity-head/current-revision pointers, indexes, checks, triggers and composite FKs | III-P0 migration 5 | all four new provenance tables | III-P0 protected staging writer | legacy-null/ineligible, pointer CAS and no-fabricated-backfill tests pass | every pointer null and new tables empty before local/testing down; no staging content rewrite |
 | claim `cohort_source_identity` plus generation-to-claim source authority | III-P0 migration 6A | deployed claims/generations and immutable profile identity | III-P0 claim/generation model metadata and authorization repository support | exact five-field atomic tuple, trigger and composite FK tests pass | no affected claim/generation evidence; ambiguous rows fail readiness |
 | policy-v2 key/version/fingerprint authority on claim/generation | III-P0 migration 6B | migration 6A and ten-bound policy-v2 contract | III-P0 policy resolver; consumed by Phase III capture | all ten values approved later, persisted policy validates, and no v1 reinterpretation occurs | no policy-bound evidence for local/testing down; operational rollback preserves policy facts |
-| `supplier_import_resolved_source_context_v1` and bounded source-payload boundary | III-P0 code subphase after migrations 1-2 | immutable profile/execution bytes and policy-v2 contract | III-P0 resolver/downloader/parser adapters | A-to-B, no-post-resolution-read, N+1 byte overflow and cleanup tests pass; still no production activation | code/config gate remains false; missing context reconstruction fails closed |
+| `supplier_import_resolved_source_context_v1` and bounded source-payload boundary | III-P0 code subphase after migrations 1-2 | immutable profile/execution bytes and policy-v2 contract | III-P0 resolver/downloader/parser adapters with redirects disabled | A-to-B, no-post-resolution-read, all-`3xx` fail-closed, N+1 byte overflow and cleanup tests pass; still no production activation | code/config gate remains false; missing context reconstruction fails closed |
 
 Forward order is exactly migrations 1, 2, 3, 4, 5, 6A and 6B, followed by
 models/contracts, resolved context, bounded downloader/parser adapters and only

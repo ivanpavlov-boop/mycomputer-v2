@@ -4049,6 +4049,37 @@ current `SupplierFeed.feed_url`, `SupplierFeed.mapping`, a newly selected
 protected signatures do not accept a `SupplierFeed` or mapping model as source
 authority.
 
+The selected protected redirect policy is exactly
+`protected_source_redirect_policy_v1`: HTTP redirect following is disabled for
+every Phase III protected source request. Every HTTP `3xx` response fails closed
+as `source_redirect_rejected`, and no redirect target is followed. The protected
+downloader discards any redirect response body, accepts no byte from the
+`Location` destination, produces no `BoundedImmutableSourcePayload`, invokes no
+parser and permits no staging, candidate-admission or snapshot progression.
+`source_redirect_rejected` is a future pre-capture coordinator failure
+classification; it is not a generation reason and does not change the frozen
+Phase II reason allowlist.
+
+SSRF validation and source provenance answer different questions. SSRF
+validation answers whether a network destination may be contacted safely.
+Provenance answers whether that exact immutable destination is authorized as
+execution A. SSRF acceptance of a redirect target is never provenance
+equivalence and never authorizes contact on the protected path. A same-host,
+cross-host, same-scope or cross-scope redirect is rejected identically; no
+redirect target can become source B implicitly. To move from canonical locator
+A to B, mutable feed configuration must be changed and a later normal locking
+source-resolution transaction must create or resolve profile/context/execution
+B under the existing A-to-B rules.
+
+Retry of execution EA reconstructs immutable context A and repeats only locator
+A with redirect following still disabled. It neither persists nor follows a
+previous `Location` value and never consults a current redirect target. The
+initial locator, execution fingerprint and accepted payload therefore retain
+one authority: because the downloader cannot consume a redirected locator, EA
+cannot attest A while parsing bytes obtained from B. The existing legacy
+`SsrfProtectionService` redirect behavior remains outside this future protected
+contract and is not changed or reused as provenance authority.
+
 Raw authentication material remains ephemeral. At execution start the
 allowlisted adapter resolves credentials only by the immutable
 `source_access_scope_key` and fills only locator components classified as
@@ -4541,8 +4572,10 @@ accepting the chunk cannot exceed `max_source_bytes`. If N+1 would be accepted,
 it cancels and closes the response/stream, marks `capture_overflow`, retains no
 partial canonical snapshot or partial source payload, and removes the temporary
 payload in `finally`. A full unbounded response may never be materialized before
-the check. Redirects are independently SSRF-revalidated and share the same
-single execution byte counter.
+the check. Under `protected_source_redirect_policy_v1`, every `3xx` redirect is
+rejected before any redirected request or redirected payload byte. Redirect
+count is therefore neither a configurable protected-path limit nor a hidden
+eleventh operational bound.
 
 No supplier,
 request, command option or mutable database row may raise them. `capture_overflow`
@@ -4708,7 +4741,7 @@ at DB write on any source or tuple mismatch.
 
 | Case | Authority and winner | Loser / retry behavior |
 | :--- | --- | ---: |
-| A. feed A changes to B after source resolution and before download/parse | locked profile/context/execution A plus immutable revision A win | EA downloads locator A and parses mapping A exclusively from context A; B is visible only to later execution EB |
+| A. feed A changes to B after source resolution and before download/parse | locked profile/context/execution A plus immutable revision A win | EA downloads locator A with redirects disabled and parses mapping A exclusively from context A; any `3xx` fails `source_redirect_rejected`, and B is visible only to later execution EB |
 | B. staging pointer changes after enumeration | snapshot-selected revision wins current claim | later revision is deferred; retry uses members, not staging |
 | C. two imports first-insert one logical staging identity | unique identity-head insert plus `FOR UPDATE` head lock chooses one creator | loser waits on the unique key, observes the committed head/SupplierProduct, then reuses its execution/head revision or retries after rollback |
 | D. two authorizations for one claim | claim lock and all-null tuple CAS choose one | loser verifies byte-identical tuple or fails conflict |
@@ -4745,7 +4778,7 @@ Architecture verdicts are therefore independent:
 <!-- phase-iii-architecture-contract:status id=phase-iii-architecture-contract-v1 -->
 | Finding | Architecture status | Exact boundary |
 | :--- | :--- | --- |
-| `PH3-RDY-001` | `CLOSED IN DESIGN` | One locking source-resolution boundary persists the complete secret-free locator/mapping authority, materializes one immutable resolved context, and makes downloader/parser/retry consume only A; profile/execution/revision, first-insert, admission, concurrency and legacy rules are exact; runtime remains absent. |
+| `PH3-RDY-001` | `CLOSED IN DESIGN` | One locking source-resolution boundary persists the complete secret-free locator/mapping authority, materializes one immutable resolved context, and makes downloader/parser/retry consume only A; protected redirects fail closed before destination contact or payload acceptance; profile/execution/revision, first-insert, admission, concurrency and legacy rules are exact; runtime remains absent. |
 | `PH3-RDY-002` | `CLOSED IN DESIGN` | Five-field source binding, DB authority and persisted-source retry remain exact and use the admitted immutable profile identity. |
 | `PH3-RDY-003` | `BLOCKED` | All ten semantics, including bounded decoded source bytes, are exact; all ten numeric values remain `NOT SPECIFIED` pending separately authorized production evidence. |
 | `PH3-RDY-004` | `CLOSED` | Phase III remains unimplemented and unauthorized. |
