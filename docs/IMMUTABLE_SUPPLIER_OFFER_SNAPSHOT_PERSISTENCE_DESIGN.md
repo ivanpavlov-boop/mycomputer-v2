@@ -3594,6 +3594,7 @@ Consequently every Phase III operational bound remains `NOT SPECIFIED`:
 | Required bound | Current value | Required derivation before closure |
 | --- | --- | --- |
 | `max_source_rows` | `NOT SPECIFIED` | approved hard importer/source row maximum `R` |
+| `max_source_bytes` | `NOT SPECIFIED` | approved maximum decoded source-payload bytes accepted into parser input for one execution |
 | `max_spool_rows` | `NOT SPECIFIED` | approved maximum prior enrollments plus both candidate-table maxima and `R` |
 | `max_spool_bytes` | `NOT SPECIFIED` | exact approved spool-row count multiplied by the approved encoded record ceiling |
 | `max_enrollments` | `NOT SPECIFIED` | maximum distinct seed union exact-source identities |
@@ -3616,7 +3617,7 @@ filename, and no raw SKU, URL, credential, XML, name, or payload content. Normal
 and PHP-observable failure cleanup occurs in `finally`; a future startup janitor
 may delete only stale files with the exact prefix, owner, regular-file type and
 mode and must never read or log contents. The exact stale age is a separate
-future janitor decision; all nine numeric Phase III policy values remain
+future janitor decision; all ten numeric Phase III policy values remain
 blocked pending the evidence specified below.
 
 Authorization-spool overflow is detected before its member/claim commit and
@@ -3796,8 +3797,9 @@ source. It is append-only and its authority columns are exactly
 `id`, `supplier_id`, `supplier_feed_id`, `source_identity`,
 `descriptor_version`, `source_locator_contract_key`,
 `source_locator_contract_version`, `source_locator_key`,
-`source_access_scope_key`, `feed_type`,
-`importer_key`, `importer_version`, `mapping_contract_fingerprint`,
+`source_locator_canonical_bytes`, `source_access_scope_key`, `feed_type`,
+`importer_key`, `importer_version`, `mapping_contract_version`,
+`mapping_canonical_bytes`, `mapping_contract_fingerprint`,
 `source_descriptor_fingerprint`, and `created_at`.
 
 `id`, `supplier_id` and `supplier_feed_id` are unsigned bigints. `id` is the
@@ -3809,7 +3811,11 @@ ascii_bin`. `descriptor_version`, `source_locator_contract_key` and
 CHARACTER SET ascii COLLATE ascii_bin`; `feed_type` is `VARCHAR(16) CHARACTER
 SET ascii COLLATE ascii_bin` and lowercase. Both fingerprints are `CHAR(64)
 CHARACTER SET ascii COLLATE ascii_bin`; `created_at` is UTC `TIMESTAMP(6)`.
-Every column is `NOT NULL`.
+`mapping_contract_version` is `VARCHAR(32) CHARACTER SET ascii COLLATE
+ascii_bin`. `source_locator_canonical_bytes` and `mapping_canonical_bytes` are
+`MEDIUMBLOB`. Every column is `NOT NULL`. The two blobs contain only the exact
+validated, secret-free canonical bytes defined below; their database type is a
+storage representation, not approval of a source-byte or mapping-size policy.
 
 Canonical source-profile descriptor fields (ordered):
 
@@ -3824,6 +3830,7 @@ source_access_scope_key
 feed_type
 importer_key
 importer_version
+mapping_contract_version
 mapping_contract_fingerprint
 ```
 
@@ -3878,6 +3885,11 @@ normalized key and then original duplicate-key ordinal, with exact objects
 Unreserved URI percent-encodings are decoded to their byte, all other escapes
 use uppercase hexadecimal, and invalid UTF-8/source components fail closed.
 SHA-256 over these canonical non-secret bytes becomes the locator-key suffix.
+The complete bytes are persisted byte-for-byte in
+`source_locator_canonical_bytes`; the key alone is never accepted as enough
+information to drive a later download. On every context reconstruction the
+bytes are rehashed, the key is recomputed and every parsed field is revalidated
+before any credential resolution or network operation.
 
 `source_access_scope_key` is a non-secret application-owned value of one to 128
 ASCII bytes matching `source-access-v1:` plus the lowercase component grammar.
@@ -3890,14 +3902,18 @@ ambiguous scope mapping fails before profile resolution.
 
 `feed_type` is the exact lowercase allowlisted transport format. `importer_key`
 and `importer_version` identify the exact allowlisted parser/adapter contract.
-`mapping_contract_fingerprint` uses the separate
+`mapping_contract_version` is exactly `supplier_import_mapping_contract_v1`.
+`mapping_contract_fingerprint` uses that separate
 `supplier_import_mapping_contract_v1` identity. For XML its canonical payload
 is the exact effective `root_path`, `field_map`, `validation_rules`, and
 `defaults`; for CSV it is the exact effective `SupplierFeed.mapping`. Associative
 keys are recursively sorted by `CanonicalOnboardingData`; lists preserve order;
 strings and nulls preserve their validated values. Its bytes are the identity
-domain, one NUL byte and canonical JSON, and only its lowercase SHA-256 digest
-enters the source-profile descriptor.
+domain, one NUL byte and canonical JSON. Those exact bytes are persisted
+byte-for-byte in `mapping_canonical_bytes`; their lowercase SHA-256 digest
+enters the source-profile descriptor. The fingerprint alone is never parser
+authority. The parser reconstructs its immutable mapping snapshot only from
+the persisted canonical bytes after version, grammar and digest verification.
 
 The current `SupplierFeed` columns have one exhaustive future classification:
 
@@ -3905,8 +3921,8 @@ The current `SupplierFeed` columns have one exhaustive future classification:
 | :--- | --- |
 | `id`, `supplier_id` | included as `supplier_feed_id`, `supplier_id` |
 | `feed_type` | normalized to the exact lowercase allowlisted format and included |
-| `feed_url` | included only through the non-secret `source_locator_key` and its contract key/version |
-| `mapping` | included through `mapping_contract_fingerprint`; XML also fingerprints its effective active mapping-template contract |
+| `feed_url` | normalized into persisted secret-free `source_locator_canonical_bytes`; its key and contract key/version enter the descriptor |
+| `mapping` | persisted as exact effective `mapping_canonical_bytes` plus contract version/fingerprint; XML includes its exact selected active mapping-template contract |
 | `username`, `password` | credential material; excluded, while their reviewed logical data scope is represented by `source_access_scope_key` |
 | `feed_name` | mutable display label; excluded |
 | `update_interval`, `status` | operational scheduling/enablement state; excluded |
@@ -3934,7 +3950,8 @@ source_identity, source_descriptor_fingerprint)` supplies composite child
 authority. The feed parent is bound through `(supplier_feed_id, supplier_id)`.
 No UPDATE or DELETE is permitted; byte-identical descriptor lookup is a read,
 not a profile mutation. A descriptor-key hit is reusable only after all stored
-descriptor fields and the recomputed canonical fingerprint compare byte-equal;
+descriptor fields, both persisted canonical byte strings and all recomputed
+canonical fingerprints compare byte-equal;
 otherwise it fails `source_profile_descriptor_fingerprint_collision`. A random
 identity unique-key collision generates fresh CSPRNG bytes before insert and
 never aliases the new descriptor to an existing source identity.
@@ -3947,18 +3964,131 @@ approved locator contract replaces with `{credential}` retains the same
 descriptor. Any unclassified endpoint/configuration change fails before import
 rather than being treated as A or B. This is the exact same-feed A to B rule.
 
+#### Immutable resolved source context and capture boundary
+
+The sole future source-driving runtime value is
+`supplier_import_resolved_source_context_v1`, represented by an immutable
+`ResolvedSupplierImportSourceContext`.
+
+Canonical resolved source context fields (ordered):
+
+```text
+schema
+source_profile_id
+source_identity
+source_descriptor_version
+source_descriptor_fingerprint
+supplier_id
+supplier_feed_id
+source_locator_contract_key
+source_locator_contract_version
+source_locator_key
+source_locator_canonical_bytes
+source_access_scope_key
+feed_type
+importer_key
+importer_version
+mapping_contract_version
+mapping_canonical_bytes
+mapping_contract_fingerprint
+```
+
+The value is materialized only from a persisted, fully revalidated immutable
+source profile. It never contains a `SupplierFeed` model, a mutable mapping
+model, raw credentials or secret material. The canonical locator bytes contain
+the normalized scheme, ASCII host, port, ordered path and query components and
+literal credential slots required to construct the exact request target. The
+canonical mapping bytes contain every effective parser instruction. Together
+they are sufficient to drive download and parsing without another source-
+defining database read.
+
+The canonical source-resolution consistency boundary is one MySQL
+`REPEATABLE READ` transaction using locking reads. In deterministic ID order it
+locks the exact `supplier_feeds` row and, for XML, the exact effective
+`xml_mapping_templates` row selected for the ImportJob; CSV mapping is read from
+the locked feed row. The allowlisted locator/importer manifests are selected by
+their immutable code key/version, not mutable database state. The transaction
+then performs exactly this sequence:
+
+1. read every source-defining feed and effective mapping value from those
+   locked rows;
+2. validate and canonicalize descriptor A, locator bytes A and mapping bytes A;
+3. resolve or insert immutable profile A and byte-verify any existing hit;
+4. materialize `ResolvedSupplierImportSourceContext` A from persisted profile
+   A, not from the mutable model instances;
+5. insert the immutable source execution bound to profile/context A; and
+6. commit before network access begins.
+
+Any lock/read inconsistency, missing effective mapping, profile collision,
+canonical-byte mismatch or execution conflict rolls back the whole boundary.
+There is no torn descriptor and no profile/execution row without one complete
+reconstructable context.
+
+After that commit the selected future API boundary is exactly:
+
+```text
+resolveSourceContext(ImportJobIdentity)
+  -> ResolvedSupplierImportSourceContext
+
+downloadSource(ResolvedSupplierImportSourceContext)
+  -> BoundedImmutableSourcePayload
+
+parseSource(
+  ResolvedSupplierImportSourceContext,
+  BoundedImmutableSourcePayload
+)
+  -> bounded source records
+```
+
+`downloadSource` constructs the request target only from the context's verified
+canonical locator bytes. `parseSource` selects the importer and mapping only
+from the context's verified importer identity and canonical mapping bytes. Once
+execution EA is bound to A, downloader, parser and mapping code MUST NOT read
+current `SupplierFeed.feed_url`, `SupplierFeed.mapping`, a newly selected
+`XmlMappingTemplate`, or any other mutable source-defining value. Their future
+protected signatures do not accept a `SupplierFeed` or mapping model as source
+authority.
+
+Raw authentication material remains ephemeral. At execution start the
+allowlisted adapter resolves credentials only by the immutable
+`source_access_scope_key` and fills only locator components classified as
+credential slots. Secret bytes are neither persisted nor fingerprinted.
+Credential rotation inside the same logical scope retains provenance; changing
+principal, tenant, catalog or other source-defining scope requires another
+scope key and descriptor/profile.
+
+Crash recovery loads the immutable execution and its exact profile, revalidates
+both canonical byte strings and every fingerprint, and reconstructs context A.
+It never resolves current feed B under execution EA. If the persisted context
+cannot be reconstructed exactly, retry fails closed and no download, parse or
+staging write occurs.
+
+The adversarial A to B timeline is therefore exact:
+
+1. T1: mutable feed state is A;
+2. T2: the locking source-resolution transaction captures A;
+3. T3: profile A, context A and execution EA are established atomically;
+4. T4: after commit, the feed changes to B;
+5. T5: download for EA uses only locator A from context A;
+6. T6: parse for EA uses only mapping A from context A; and
+7. a later separately allocated execution EB may resolve B, but B cannot enter
+   EA's locator, mapping, source identity or execution fingerprint.
+
 #### Selected future execution, logical-head and revision schema
 
 `supplier_import_source_executions` is append-only and its columns are exactly:
 `id`, `supplier_id`, `supplier_feed_id`, `import_history_id`,
 `supplier_import_source_profile_id`, `source_identity`,
 `source_descriptor_fingerprint`, `importer_key`, `importer_version`,
-`captured_at`, `source_execution_fingerprint`, and `created_at`.
+`resolved_source_context_version`, `captured_at`,
+`source_execution_fingerprint`, and `created_at`.
 
 Its IDs are unsigned bigints; `id` is primary. Identity/version strings use the
 same exact types/collations as their profile parents, both fingerprints are
 ASCII `CHAR(64) ascii_bin`, and both instants are UTC `TIMESTAMP(6)`. Every
-column is `NOT NULL`.
+column is `NOT NULL`. `resolved_source_context_version` is `VARCHAR(96)
+CHARACTER SET ascii COLLATE ascii_bin` and must equal
+`supplier_import_resolved_source_context_v1`.
 
 Canonical source-execution fingerprint fields (ordered):
 
@@ -3969,9 +4099,18 @@ supplier_feed_id
 import_history_id
 supplier_import_source_profile_id
 source_identity
+source_descriptor_version
 source_descriptor_fingerprint
+resolved_source_context_version
+source_locator_contract_key
+source_locator_contract_version
+source_locator_key
+source_access_scope_key
+feed_type
 importer_key
 importer_version
+mapping_contract_version
+mapping_contract_fingerprint
 captured_at
 ```
 
@@ -3992,7 +4131,11 @@ source_execution_fingerprint)` supplies revision authority. No execution field
 may be updated or deleted. An execution-fingerprint/import-history unique-key
 hit is idempotent only when every ordered execution field compares byte-equal;
 otherwise it fails `source_execution_fingerprint_collision` without a staging
-write.
+write. The fingerprint attests to the persisted profile/context authority; it
+does not by itself prove which request or mapping code ran. That proof is the
+enforced API rule that download and parse accept source-defining input only
+from the byte-verified `ResolvedSupplierImportSourceContext` associated with
+this execution.
 
 The sole first-insert coordination authority is the append-only
 `supplier_product_identity_heads` table. It contains `id`, `supplier_id`,
@@ -4097,8 +4240,8 @@ Fingerprint authority is exact and exhaustive:
 
 | Fingerprint | Stored authority | Canonical input/version | Comparison and failure |
 | :--- | :--- | :--- | --- |
-| `mapping_contract_fingerprint` | source profile | effective XML/CSV mapping under `supplier_import_mapping_contract_v1` | exact lowercase SHA-256; mismatch means no profile match and no import |
-| `source_locator_key` | source profile | non-secret classified endpoint components under `supplier_import_source_locator_v1` | exact `source-locator-v1:sha256:` plus lowercase SHA-256; mismatch means a different profile or fail-closed unresolved source |
+| `mapping_contract_fingerprint` | source profile beside exact `mapping_canonical_bytes` | effective XML/CSV mapping under `supplier_import_mapping_contract_v1` | exact lowercase SHA-256; persisted bytes are rehashed before context construction, and mismatch means no profile match and no import |
+| `source_locator_key` | source profile beside exact `source_locator_canonical_bytes` | non-secret classified endpoint components under `supplier_import_source_locator_v1` | exact `source-locator-v1:sha256:` plus lowercase SHA-256; persisted bytes are rehashed before download, and mismatch means a different profile or fail-closed unresolved source |
 | `source_descriptor_fingerprint` | source profile, execution and revision | ordered source-profile fields under `supplier_import_source_profile_v1` | execution/revision must byte-equal their immutable profile; mismatch rejects before staging/admission |
 | `source_execution_fingerprint` | source execution and revision | ordered execution fields under `supplier_import_source_execution_v1` | recompute and byte-compare before write/admission/retry; mismatch is an execution integrity failure |
 | `source_member_identity_hash` | revision | existing `OperationalSupplierOfferIdentityHasher::supplierSku()` contract | exact revision/candidate equality; a mismatch rejects admission and never changes the byte-exact logical head |
@@ -4116,8 +4259,13 @@ supplier_import_source_execution_v1
 supplier_import_source_row_v1
 supplier_product_staging_projection_v1
 supplier_product_source_revision_v1
-supplier_snapshot_operational_bounds_policy_v1
+supplier_snapshot_operational_bounds_policy_v2
 ```
+
+`supplier_import_resolved_source_context_v1` is a separately versioned
+immutable value/data-flow contract, not an additional digest identity and not a
+change to the frozen Phase II 22-identity registry. The superseded design-only
+nine-field policy v1 never becomes execution authority.
 
 Each uses an ASCII domain, one NUL delimiter and fixed-order canonical JSON
 before SHA-256. Their exact ordered canonical fields are:
@@ -4133,12 +4281,17 @@ ascii_host, port, path_components, query_components
 supplier_import_source_profile_v1:
 schema, supplier_id, supplier_feed_id, source_locator_contract_key,
 source_locator_contract_version, source_locator_key, source_access_scope_key,
-feed_type, importer_key, importer_version, mapping_contract_fingerprint
+feed_type, importer_key, importer_version, mapping_contract_version,
+mapping_contract_fingerprint
 
 supplier_import_source_execution_v1:
 schema, supplier_id, supplier_feed_id, import_history_id,
 supplier_import_source_profile_id, source_identity,
-source_descriptor_fingerprint, importer_key, importer_version, captured_at
+source_descriptor_version, source_descriptor_fingerprint,
+resolved_source_context_version, source_locator_contract_key,
+source_locator_contract_version, source_locator_key, source_access_scope_key,
+feed_type, importer_key, importer_version, mapping_contract_version,
+mapping_contract_fingerprint, captured_at
 
 supplier_import_source_row_v1:
 schema, supplier_id, supplier_feed_id, source_identity,
@@ -4160,11 +4313,11 @@ supplier_sku_bytes, source_identity, source_descriptor_fingerprint,
 source_execution_fingerprint, source_member_identity_hash, source_row_fingerprint,
 staging_projection_fingerprint, observed_at
 
-supplier_snapshot_operational_bounds_policy_v1:
-schema, policy_key, policy_version, max_source_rows, max_spool_rows,
+supplier_snapshot_operational_bounds_policy_v2:
+schema, policy_key, policy_version, max_source_rows, max_source_bytes, max_spool_rows,
 max_spool_bytes, max_enrollments, max_observations, max_canonical_children,
 external_sort_chunk, db_insert_batch_ceiling, snapshot_transaction_bound,
-algorithm_version
+units_contract_version, algorithm_version
 ```
 
 `effective_mapping`, `parser_projection` and `attributes` are canonical nested
@@ -4357,11 +4510,12 @@ Repository evidence was classified without promotion:
 | Docker resources / PHP memory / MySQL packet or transaction timeout | not committed | deployment capacity evidence unavailable | no |
 | local aggregate database query | unavailable in this workstation environment | current dataset evidence unavailable | no |
 
-The nine bounds have exact semantics but remain numerically `NOT SPECIFIED`:
+The ten bounds have exact semantics but remain numerically `NOT SPECIFIED`:
 
 | Bound | Exact semantic, unit and scope | Enforcement and failure | Value/status |
 | :--- | --- | --- | ---: |
 | `max_source_rows` | physical parser records emitted for one execution, including valid, invalid and duplicate records; rows | hard check before accepting the next record; overflow aborts source processing | `NOT SPECIFIED` |
+| `max_source_bytes` | bytes emitted by the bounded downloader into the immutable decoded source payload consumed by the parser for one execution, after HTTP transfer/content decoding performed by the importer and before parsing; bytes | hard streaming check before accepting each chunk; when byte N+1 would be accepted, abort and close the response/stream without retaining a partial payload | `NOT SPECIFIED` |
 | `max_spool_rows` | aggregate logical records admitted to all capture input spools before dedupe, counting each enrollment, candidate revision and source record once; rows | hard pre-write check; overflow rolls back authorization/finalization as applicable | `NOT SPECIFIED` |
 | `max_spool_bytes` | aggregate encoded bytes physically written across private capture spool, sort-run and merge files, not filesystem allocation blocks; bytes | hard pre-write check and `finally` cleanup | `NOT SPECIFIED` |
 | `max_enrollments` | distinct effective cohort identities after seed/source union for one supplier/source epoch; rows | checked after dedupe and before DB allocation | `NOT SPECIFIED` |
@@ -4372,6 +4526,23 @@ The nine bounds have exact semantics but remain numerically `NOT SPECIFIED`:
 | `snapshot_transaction_bound` | total inserted or updated rows in one snapshot finalization transaction; rows/transaction, never statements, bytes or time | projected before BEGIN and revalidated after locks before first DML; overflow never opens or commits a partial transaction | `NOT SPECIFIED` |
 
 All are hard, application-owned, supplier-invariant limits.
+
+`max_source_bytes` and `max_spool_bytes` govern different resources.
+`max_source_bytes` counts only the decoded immutable source payload accepted
+before parsing; it does not count network wire framing, compressed wire bytes,
+filesystem allocation blocks or Phase III intermediate files.
+`max_spool_bytes` counts only the encoded Phase III capture/sort/merge temporary
+bytes generated after source acceptance. Neither bound may substitute for or
+raise the other.
+
+The future downloader consumes the response through bounded streaming into a
+private mode-0600 temporary payload. Before writing each chunk it proves that
+accepting the chunk cannot exceed `max_source_bytes`. If N+1 would be accepted,
+it cancels and closes the response/stream, marks `capture_overflow`, retains no
+partial canonical snapshot or partial source payload, and removes the temporary
+payload in `finally`. A full unbounded response may never be materialized before
+the check. Redirects are independently SSRF-revalidated and share the same
+single execution byte counter.
 
 No supplier,
 request, command option or mutable database row may raise them. `capture_overflow`
@@ -4406,13 +4577,14 @@ present only for an orchestrated import. The outbox and authorization rows may
 be locked/read, but are not mutated by snapshot finalization and do not count.
 No other parent, header or audit mutation may be hidden in a symbolic constant.
 
-For an approved policy let `R`, `S`, `B`, `E`, `O`, `C`, `K`, `I`, and `T`
-denote the nine bounds in table order, and let deterministic schema constant `W`
+For an approved policy let `R`, `D`, `S`, `B`, `E`, `O`, `C`, `K`, `I`, and `T`
+denote the ten bounds in table order, and let deterministic schema constant `W`
 denote maximum encoded bytes per canonical sort record. Required relationships
 are:
 
 ```text
 R <= S
+D is independently enforced before parse and is not derived from B
 E <= S
 O = E
 C = new_enrollments + O and C <= E + O
@@ -4442,6 +4614,7 @@ Future evidence required for each value is exact:
 | Bound | Separately authorized evidence required before numeric approval |
 | --- | --- |
 | `max_source_rows` | per supplier/feed physical parser-row maxima and percentiles, including invalid and duplicate records |
+| `max_source_bytes` | per supplier/feed/execution decoded source-payload byte distributions and maxima, largest normal payload, download duration, memory/temp-disk impact, malformed/oversized behavior and reviewed headroom |
 | `max_spool_rows` | measured aggregate pre-dedupe records across every private input/run/merge spool |
 | `max_spool_bytes` | measured encoded temp-file bytes, peak disk usage and cleanup headroom under representative largest feeds |
 | `max_enrollments` | measured effective-cohort cardinality and reviewed growth/headroom per source epoch |
@@ -4458,9 +4631,34 @@ retry, and no supplier-owned override.
 Future configuration belongs in one application-owned, config-cache-safe
 `config/supplier_snapshot.php` policy selected only by a closed allowlisted key.
 Environment may select an approved key but may not supply arbitrary individual
-numbers. Missing/unknown policy or any null bound fails readiness. The exact
-nine-value canonical policy plus units/algorithm version has a separate
-`supplier_snapshot_operational_bounds_policy_v1` SHA-256 fingerprint. The claim
+numbers. Missing/unknown policy or any null bound fails readiness. The prior
+design-only nine-field `supplier_snapshot_operational_bounds_policy_v1` is
+superseded and can never identify an authorized execution. The sole future
+policy identity is `supplier_snapshot_operational_bounds_policy_v2`, with these
+exact ordered fields:
+
+```text
+schema
+policy_key
+policy_version
+max_source_rows
+max_source_bytes
+max_spool_rows
+max_spool_bytes
+max_enrollments
+max_observations
+max_canonical_children
+external_sort_chunk
+db_insert_batch_ceiling
+snapshot_transaction_bound
+units_contract_version
+algorithm_version
+```
+
+Its bytes are the ASCII domain
+`supplier_snapshot_operational_bounds_policy_v2`, one NUL byte and fixed-order
+canonical JSON. The exact ten values, units contract and algorithm version have
+a separate SHA-256 fingerprint. The claim
 must persist `cohort_bounds_policy_key`, `cohort_bounds_policy_version` and
 `cohort_bounds_policy_fingerprint` as a separate all-null/all-non-null immutable
 tuple in the same authorization transaction, and generation `policy_versions`
@@ -4477,26 +4675,29 @@ requires a new logical execution; it cannot reinterpret or retry A. These
 future claim policy fields are separate from, and do not reorder, the exact
 five-field authorization completeness tuple.
 
-No numeric value is approved. Closing `PH3-RDY-003` requires, for all nine:
-production per-supplier/feed row and encoded-byte percentiles/maxima from a
+No numeric value is approved. Closing `PH3-RDY-003` requires, for all ten:
+production per-supplier/feed row, decoded source-payload and encoded-byte
+percentiles/maxima from a
 separately authorized read-only evidence run; parser expansion/invalid/duplicate
 ratios; effective enrollment growth; observed row widths; sort memory and temp
 disk measurements; MySQL packet/placeholder/lock/transaction measurements;
 worker memory and timeout headroom; batch latency; and overflow/recovery load
 tests. Until every value, headroom and tuning path is reviewed together, all
-nine remain `NOT SPECIFIED`; the `PH3-RDY-003` evidence gate therefore remains
+ten remain `NOT SPECIFIED`; the `PH3-RDY-003` evidence gate therefore remains
 unresolved.
 
 #### Integrated source, authorization and policy flow
 
 The future flow is: resolve or create immutable source profile A from the exact
-descriptor -> create immutable source execution A -> acquire/create the stable
+locked descriptor and persisted locator/mapping bytes -> materialize immutable
+resolved source context A -> create immutable source execution A in the same
+source-resolution transaction -> acquire/create the stable
 supplier/feed/SKU identity head -> create/reuse its SupplierProduct -> write
 immutable supplier-product revisions and guarded current pointers ->
 enumerate only exact valid current revisions in one consistent snapshot ->
 validate policy A and spool bounds -> atomically persist members plus the
 five-field claim tuple with source A and persisted policy A -> enforce remaining
-bounds while parsing source A -> create generation whose composite FK proves
+bounds while downloading and parsing source A only through context A -> create generation whose composite FK proves
 claim source A -> insert the complete enrollment/observation set -> retry or
 recovery using persisted source A and policy A. Failures occur before candidate
 admission on missing/mismatching provenance, before authorization on member or
@@ -4507,7 +4708,7 @@ at DB write on any source or tuple mismatch.
 
 | Case | Authority and winner | Loser / retry behavior |
 | :--- | --- | ---: |
-| A. feed A changes to B during enumeration | immutable revision A plus consistent snapshot wins | B is visible only to a later execution; current config cannot reinterpret A |
+| A. feed A changes to B after source resolution and before download/parse | locked profile/context/execution A plus immutable revision A win | EA downloads locator A and parses mapping A exclusively from context A; B is visible only to later execution EB |
 | B. staging pointer changes after enumeration | snapshot-selected revision wins current claim | later revision is deferred; retry uses members, not staging |
 | C. two imports first-insert one logical staging identity | unique identity-head insert plus `FOR UPDATE` head lock chooses one creator | loser waits on the unique key, observes the committed head/SupplierProduct, then reuses its execution/head revision or retries after rollback |
 | D. two authorizations for one claim | claim lock and all-null tuple CAS choose one | loser verifies byte-identical tuple or fails conflict |
@@ -4544,9 +4745,9 @@ Architecture verdicts are therefore independent:
 <!-- phase-iii-architecture-contract:status id=phase-iii-architecture-contract-v1 -->
 | Finding | Architecture status | Exact boundary |
 | :--- | :--- | --- |
-| `PH3-RDY-001` | `CLOSED IN DESIGN` | Immutable profile/execution/revision authority, stable first-insert head, admission fingerprints, A-to-B, concurrency and legacy behavior are exact; runtime remains absent. |
+| `PH3-RDY-001` | `CLOSED IN DESIGN` | One locking source-resolution boundary persists the complete secret-free locator/mapping authority, materializes one immutable resolved context, and makes downloader/parser/retry consume only A; profile/execution/revision, first-insert, admission, concurrency and legacy rules are exact; runtime remains absent. |
 | `PH3-RDY-002` | `CLOSED IN DESIGN` | Five-field source binding, DB authority and persisted-source retry remain exact and use the admitted immutable profile identity. |
-| `PH3-RDY-003` | `BLOCKED` | All nine semantics are exact; all nine numeric values remain `NOT SPECIFIED` pending separately authorized production evidence. |
+| `PH3-RDY-003` | `BLOCKED` | All ten semantics, including bounded decoded source bytes, are exact; all ten numeric values remain `NOT SPECIFIED` pending separately authorized production evidence. |
 | `PH3-RDY-004` | `CLOSED` | Phase III remains unimplemented and unauthorized. |
 
 Exactly one architecture blocker remains: `PH3-RDY-003`, solely for approved
@@ -6117,6 +6318,14 @@ migration and Phase II model/canonical-contract entries are deployed inactive;
 its Phase III and later runtime entries remain future and subject to separate
 implementation review:
 
+The six provenance/source-policy migration entries below belong only to the
+future dormant **Phase III-P0 protected source provenance prerequisite
+foundation**. They are not part of the deployed Phase I ten-table count. Phase
+III-P0 must deploy and verify the four provenance tables, guarded
+`supplier_products` pointers, claim/generation source authority, policy v2,
+resolved context and bounded downloader/parser boundary before Phase III
+snapshot persistence can be implemented or activated.
+
 ```text
 database/migrations/*_create_supplier_import_execution_claims_table.php
 database/migrations/*_create_supplier_import_dispatch_outbox_table.php
@@ -6130,6 +6339,12 @@ database/migrations/*_create_supplier_offer_snapshot_enrollments_table.php
 database/migrations/*_create_supplier_offer_snapshot_observations_table.php
 database/migrations/*_add_supplier_id_id_index_to_import_histories_table.php
 database/migrations/*_add_supplier_feed_allocation_constraints_to_import_jobs_table.php
+database/migrations/*_create_supplier_import_source_profiles_table.php
+database/migrations/*_create_supplier_import_source_executions_table.php
+database/migrations/*_create_supplier_product_identity_heads_table.php
+database/migrations/*_create_supplier_product_source_revisions_table.php
+database/migrations/*_add_source_revision_pointers_to_supplier_products_table.php
+database/migrations/*_add_source_and_policy_authority_to_snapshot_claims_and_generations.php
 .env.example
 config/queue.php
 docker-compose.yml
@@ -6145,7 +6360,13 @@ app/Models/SupplierImportCohortAuthorizationMember.php
 app/Models/SupplierOfferSnapshotGeneration.php
 app/Models/SupplierOfferSnapshotEnrollment.php
 app/Models/SupplierOfferSnapshotObservation.php
+app/Models/SupplierImportSourceProfile.php
+app/Models/SupplierImportSourceExecution.php
+app/Models/SupplierProductIdentityHead.php
+app/Models/SupplierProductSourceRevision.php
 app/Data/Suppliers/Onboarding/SnapshotSourceIdentity.php
+app/Data/Suppliers/Imports/ResolvedSupplierImportSourceContext.php
+app/Data/Suppliers/Imports/BoundedImmutableSourcePayload.php
 app/Repositories/Suppliers/ImmutableSupplierOfferSnapshotRepository.php
 app/Repositories/Suppliers/SupplierImportExecutionClaimRepository.php
 app/Repositories/Suppliers/SupplierImportDispatchOutboxRepository.php
@@ -6168,6 +6389,9 @@ app/Services/Suppliers/SupplierImportDispatchMonitorGate.php
 app/Services/Suppliers/SupplierImportDispatchAlertSink.php
 app/Services/Suppliers/SupplierImportTransportFailureService.php
 app/Services/Suppliers/SupplierImportQueueTimingValidator.php
+app/Services/Suppliers/SupplierImportSourceContextResolver.php
+app/Services/Suppliers/BoundedSupplierSourceDownloader.php
+app/Services/Suppliers/ResolvedContextSupplierSourceParser.php
 app/Services/Suppliers/Snapshots/SupplierImportCohortAuthorizationService.php
 app/Services/Suppliers/Snapshots/SupplierOfferSnapshotCollector.php
 app/Services/Suppliers/Snapshots/SupplierOfferSnapshotCaptureService.php
@@ -6180,6 +6404,7 @@ app/Console/Commands/ObserveSupplierImportDispatchMonitorHealth.php
 app/Console/Commands/ReconcileAbandonedSupplierImportExecutions.php
 app/Console/Commands/ResolveImportPublicationMismatch.php
 config/supplier_snapshot_capture.php
+config/supplier_snapshot.php
 tests/Feature/SupplierOfferSnapshotPersistenceTest.php
 tests/Feature/SupplierOfferSnapshotCaptureTest.php
 tests/Feature/SupplierOfferSnapshotConcurrencyTest.php

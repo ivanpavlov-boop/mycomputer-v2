@@ -526,13 +526,14 @@ Phase I's canonical schema is implemented, merged through PR #212, CI-verified,
 deployed to staging and inactive. Phase II's guarded models and canonical byte
 contracts are implemented, merged through PR #213, CI-verified, deployed to
 staging and uncalled. Phase III persistence remains unimplemented and is not
-implementation-authorized. The immutable source-profile, append-only execution,
-stable supplier/feed/SKU identity-head and append-only revision design closes
-candidate provenance (`PH3-RDY-001`) and the exact five-field claim plus
-composite generation FK closes durable source binding (`PH3-RDY-002`) in design
-only. All nine production operational bounds remain `NOT SPECIFIED`, so
-`PH3-RDY-003` is the single remaining architecture blocker; `PH3-RDY-004`
-remains closed. Claim source binding does not replace candidate provenance. No
+implementation-authorized.
+<!-- phase-iii-architecture-status-reference authority=phase-iii-architecture-contract-v1 -->
+The exact current status map is owned only by the
+[canonical Phase III architecture contract](IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md#phase-iii-provenance-and-bounds-architecture-decision)
+and is not mirrored here. Its selected immutable profile/context/execution,
+revision, claim-source and ten-bound policy remain future design only; all ten
+numeric production bounds remain `NOT SPECIFIED`. Claim source binding does not
+replace candidate provenance. No
 evidence candidate exists and no operational preview is authorized.
 
 Operational rollback is forward-only after deployment or protected-state use:

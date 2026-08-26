@@ -1023,14 +1023,16 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
             'Phase I canonical schema: implemented, merged through PR #212',
             'Phase II guarded models and canonical byte contracts: implemented, merged',
             'Phase III snapshot persistence/cohort authorization: provenance and durable',
-            '`PH3-RDY-001` and `PH3-RDY-002` are closed in architecture design',
+            '<!-- phase-iii-architecture-status-reference authority=phase-iii-architecture-contract-v1 -->',
+            'This plan does not mirror or restate that map.',
         ] as $status) {
             $this->assertStringContainsString($status, $plan);
         }
-        $this->assertStringContainsString(
-            '`PH3-RDY-003` alone remains blocked pending a separately authorized production-',
-            $plan,
-        );
+        $this->assertStringNotContainsString('`PH3-RDY-001`', $plan);
+        $this->assertStringNotContainsString('`PH3-RDY-002`', $plan);
+        $this->assertStringNotContainsString('`PH3-RDY-003`', $plan);
+        $this->assertStringNotContainsString('`PH3-RDY-004`', $plan);
+        $this->assertStringContainsString('remaining numeric-evidence gate requires separately authorized production-', $plan);
         $this->assertStringContainsString('Phase III implementation, which remains unimplemented and', $plan);
         $this->assertStringNotContainsString(
             'separate design work for immutable candidate-row source provenance, durable',
@@ -1140,7 +1142,7 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
             $apcomScope,
         );
         $this->assertStringContainsString('Design PR #211 is merged.', $phasesInProgress);
-        $this->assertStringContainsString('Phase I\'s canonical schema is implemented through PR #212', $phasesInProgress);
+        $this->assertStringContainsString('Phase I\'s historical canonical ten-table schema is implemented through PR #212', $phasesInProgress);
         $this->assertStringContainsString('Phase II\'s guarded models', $phasesInProgress);
         $this->assertStringNotContainsString(
             'remediated locally and require a fresh aggregate review',
@@ -1182,17 +1184,22 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
             ),
         );
 
-        foreach ([$phasesInProgress, $roadmap, $onboarding] as $currentStatus) {
-            $this->assertStringContainsString('`PH3-RDY-001`', $currentStatus);
-            $this->assertStringContainsString('`PH3-RDY-002`', $currentStatus);
-            $this->assertStringContainsString('`PH3-RDY-003`', $currentStatus);
-            $this->assertStringContainsString('`PH3-RDY-004`', $currentStatus);
+        foreach ([$phasesInProgress, $roadmap, $onboarding] as $statusReference) {
+            $this->assertStringContainsString(
+                '<!-- phase-iii-architecture-status-reference authority=phase-iii-architecture-contract-v1 -->',
+                $statusReference,
+            );
+            $this->assertStringNotContainsString('`PH3-RDY-001`', $statusReference);
+            $this->assertStringNotContainsString('`PH3-RDY-002`', $statusReference);
+            $this->assertStringNotContainsString('`PH3-RDY-003`', $statusReference);
+            $this->assertStringNotContainsString('`PH3-RDY-004`', $statusReference);
         }
     }
 
     public function test_phase_three_provenance_source_binding_and_bounds_architecture_is_fail_closed(): void
     {
         $design = $this->readDocument('docs/IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md');
+        $plan = $this->readDocument('docs/PHASE_9C6_5C3D1_RUNTIME_IMPLEMENTATION_PLAN.md');
         $authority = $this->phaseThreeArchitectureAuthorityContract($design);
         $this->assertSame([], $authority['violations'], implode(PHP_EOL, $authority['violations']));
         $this->assertSame(1, $authority['current_count']);
@@ -1256,6 +1263,7 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
             'feed_type',
             'importer_key',
             'importer_version',
+            'mapping_contract_version',
             'mapping_contract_fingerprint',
         ], $this->phaseThreeOrderedFields(
             $architecture,
@@ -1278,14 +1286,47 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
         ));
         $this->assertSame([
             'schema',
+            'source_profile_id',
+            'source_identity',
+            'source_descriptor_version',
+            'source_descriptor_fingerprint',
+            'supplier_id',
+            'supplier_feed_id',
+            'source_locator_contract_key',
+            'source_locator_contract_version',
+            'source_locator_key',
+            'source_locator_canonical_bytes',
+            'source_access_scope_key',
+            'feed_type',
+            'importer_key',
+            'importer_version',
+            'mapping_contract_version',
+            'mapping_canonical_bytes',
+            'mapping_contract_fingerprint',
+        ], $this->phaseThreeOrderedFields(
+            $architecture,
+            'Canonical resolved source context fields (ordered):',
+            'Resolved source context fields',
+        ));
+        $this->assertSame([
+            'schema',
             'supplier_id',
             'supplier_feed_id',
             'import_history_id',
             'supplier_import_source_profile_id',
             'source_identity',
+            'source_descriptor_version',
             'source_descriptor_fingerprint',
+            'resolved_source_context_version',
+            'source_locator_contract_key',
+            'source_locator_contract_version',
+            'source_locator_key',
+            'source_access_scope_key',
+            'feed_type',
             'importer_key',
             'importer_version',
+            'mapping_contract_version',
+            'mapping_contract_fingerprint',
             'captured_at',
         ], $this->phaseThreeOrderedFields(
             $architecture,
@@ -1376,9 +1417,10 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
             'All are hard, application-owned, supplier-invariant limits.',
         );
         $this->assertSame([], $bounds['violations'], implode(PHP_EOL, $bounds['violations']));
-        $this->assertSame(9, $bounds['physical_count']);
+        $this->assertSame(10, $bounds['physical_count']);
         $expectedBounds = [
             '`max_source_rows`',
+            '`max_source_bytes`',
             '`max_spool_rows`',
             '`max_spool_bytes`',
             '`max_enrollments`',
@@ -1426,12 +1468,17 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
             '`capture_overflow`',
             'Silent truncation',
             'unchanged-policy retry are forbidden',
-            'supplier_snapshot_operational_bounds_policy_v1',
+            'supplier_snapshot_operational_bounds_policy_v2',
             'cohort_bounds_policy_key',
             'cohort_bounds_policy_version',
             'cohort_bounds_policy_fingerprint',
             'chk_import_claim_cohort_policy_authority',
             'Retry/recovery always uses the persisted policy A',
+            'supplier_import_resolved_source_context_v1',
+            'downloadSource(ResolvedSupplierImportSourceContext)',
+            'parseSource(',
+            'MUST NOT read',
+            'EA downloads locator A and parses mapping A exclusively from context A',
         ] as $boundAuthority) {
             $this->assertStringContainsString($boundAuthority, $architecture);
         }
@@ -1467,6 +1514,38 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
             $this->assertStringContainsString($closureAuthority, $architecture);
         }
 
+        $futureAllocation = $this->structuralMarkdownTable(
+            $plan,
+            '| Artifact | Migration/subphase | Dependency | Model/service phase | Activation gate | Rollback/readiness prerequisite |',
+            '| --- | --- | --- | --- | --- | --- |',
+            'Phase III-P0 provenance allocation',
+            6,
+            'Forward order is exactly migrations 1, 2, 3, 4, 5, 6A and 6B, followed by',
+        );
+        $this->assertSame([], $futureAllocation['violations'], implode(PHP_EOL, $futureAllocation['violations']));
+        $this->assertSame(8, $futureAllocation['physical_count']);
+        foreach ([
+            '`supplier_import_source_profiles`',
+            '`supplier_import_source_executions`',
+            '`supplier_product_identity_heads`',
+            '`supplier_product_source_revisions`',
+            '`supplier_products` identity-head/current-revision pointers, indexes, checks, triggers and composite FKs',
+            'claim `cohort_source_identity` plus generation-to-claim source authority',
+            'policy-v2 key/version/fingerprint authority on claim/generation',
+            '`supplier_import_resolved_source_context_v1` and bounded source-payload boundary',
+        ] as $position => $artifact) {
+            $this->assertStringStartsWith("| {$artifact} |", $futureAllocation['rows'][$position]);
+        }
+        foreach ([
+            'The historical deployed Phase I canonical table count remains exactly ten.',
+            'does not amend any Phase I migration',
+            'Forward order is exactly migrations 1, 2, 3, 4, 5, 6A and 6B',
+            'Phase III-P0 must precede Phase III.',
+            'with no approved numeric policy key until all ten values are authorized',
+        ] as $allocationAuthority) {
+            $this->assertStringContainsString($allocationAuthority, $plan);
+        }
+
         foreach ([
             'app/Models/SupplierImportSourceProfile.php',
             'app/Models/SupplierImportSourceExecution.php',
@@ -1485,8 +1564,8 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
         $this->assertSame([], $canonical['violations'], 'AC10 canonical: '.implode(PHP_EOL, $canonical['violations']));
         $block = $canonical['full_block'];
         $lineEnding = str_contains($design, "\r\n") ? "\r\n" : "\n";
-        $statusOne = '| `PH3-RDY-001` | `CLOSED IN DESIGN` | Immutable profile/execution/revision authority, stable first-insert head, admission fingerprints, A-to-B, concurrency and legacy behavior are exact; runtime remains absent. |';
-        $statusThree = '| `PH3-RDY-003` | `BLOCKED` | All nine semantics are exact; all nine numeric values remain `NOT SPECIFIED` pending separately authorized production evidence. |';
+        $statusOne = '| `PH3-RDY-001` | `CLOSED IN DESIGN` | One locking source-resolution boundary persists the complete secret-free locator/mapping authority, materializes one immutable resolved context, and makes downloader/parser/retry consume only A; profile/execution/revision, first-insert, admission, concurrency and legacy rules are exact; runtime remains absent. |';
+        $statusThree = '| `PH3-RDY-003` | `BLOCKED` | All ten semantics, including bounded decoded source bytes, are exact; all ten numeric values remain `NOT SPECIFIED` pending separately authorized production evidence. |';
         $conflictingBlock = str_replace(
             $statusOne,
             '| `PH3-RDY-001` | `BLOCKED` | Contradictory architecture mutation. |',
@@ -1523,12 +1602,18 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
 
         $semanticMutations = [
             'P1 descriptor omitted' => [
-                'source_locator_contract_key'.$lineEnding.'source_locator_contract_version'.$lineEnding.'source_locator_key',
-                'source_locator_contract_key'.$lineEnding.'source_locator_key',
+                'Canonical source-profile descriptor fields (ordered):'.$lineEnding.$lineEnding.'```text'.$lineEnding.
+                    'schema'.$lineEnding.'supplier_id'.$lineEnding.'supplier_feed_id'.$lineEnding.
+                    'source_locator_contract_key'.$lineEnding.'source_locator_contract_version'.$lineEnding.'source_locator_key',
+                'Canonical source-profile descriptor fields (ordered):'.$lineEnding.$lineEnding.'```text'.$lineEnding.
+                    'schema'.$lineEnding.'supplier_id'.$lineEnding.'supplier_feed_id'.$lineEnding.
+                    'source_locator_contract_key'.$lineEnding.'source_locator_key',
             ],
             'P2 source execution descriptor omitted' => [
-                'source_descriptor_fingerprint'.$lineEnding.'importer_key'.$lineEnding.'importer_version',
-                'importer_key'.$lineEnding.'importer_version',
+                'source_descriptor_version'.$lineEnding.'source_descriptor_fingerprint'.$lineEnding.
+                    'resolved_source_context_version'.$lineEnding.'source_locator_contract_key',
+                'source_descriptor_version'.$lineEnding.'resolved_source_context_version'.$lineEnding.
+                    'source_locator_contract_key',
             ],
             'P3 execution fingerprint storage undefined' => [
                 'source_execution_fingerprint CHAR(64) CHARACTER SET ascii COLLATE ascii_bin',
@@ -1580,10 +1665,11 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
             ],
         ];
         foreach ($semanticMutations as $mutation => [$search, $replacement]) {
+            $this->assertSame(1, substr_count($design, $search), "{$mutation}: mutation target must be unique.");
             $this->assertNotSame(
                 [],
                 $this->phaseThreeArchitectureSemanticContract(
-                    $this->replaceStructuralText($design, $search, $replacement),
+                    str_replace($search, $replacement, $design),
                 )['violations'],
                 $mutation,
             );
@@ -1859,6 +1945,111 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
         }
         $this->assertSame([], $this->phaseThreeArchitectureSemanticContract($design)['violations'], 'RC4');
         $this->assertSame([], $this->phaseThreeArchitectureSemanticContract($rc5)['violations'], 'RC5');
+    }
+
+    public function test_phase_three_architecture_authority_rejects_structural_evasions_without_false_positives(): void
+    {
+        $design = $this->readDocument('docs/IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md');
+        $lineEnding = str_contains($design, "\r\n") ? "\r\n" : "\n";
+
+        $rejected = [
+            'N01 split colon assignment' => "PH3-RDY-001\n:\nBLOCKED",
+            'N02 split equals assignment' => "PH3-RDY-001\n=\nBLOCKED",
+            'N03 one-line HTML status row' => '<table><tr><td>PH3-RDY-001</td><td>BLOCKED</td></tr></table>',
+            'N04 multiline HTML status row' => "<table>\n<tr>\n<td>PH3-RDY-001</td>\n<td>CLOSED</td>\n</tr>\n</table>",
+            'N05 spaced authority near-match' => '<!-- Phase III Architecture Authority classification=CURRENT id=shadow -->',
+            'N06 Arabic phase-number authority near-match' => '<!-- phase-3-architecture-authority classification=CURRENT id=shadow -->',
+            'N07 architectural authority near-match' => '<!-- phase-iii-architectural-authority classification=CURRENT id=shadow -->',
+            'N08 split status assignment' => "PH3-RDY-001\nstatus =\nBLOCKED",
+            'N09 active authority heading' => '### Active Phase III architecture status',
+            'N10 governing authority heading' => '### Governing current Phase III architecture',
+            'N11 authoritative authority heading' => '### Authoritative Phase III architecture status',
+            'N12 direct current prose' => 'Current PH3-RDY-001 status is BLOCKED.',
+            'N13 remains-current prose' => 'PH3-RDY-001 remains BLOCKED in the current architecture.',
+            'N14 JSON status object' => '{"PH3-RDY-001":"BLOCKED"}',
+            'N15 YAML status property' => 'PH3-RDY-001: BLOCKED',
+            'N16 split closed-in-design assignment' => "PH3-RDY-001\n:\nCLOSED IN DESIGN",
+            'N17 second split status' => "PH3-RDY-002\n=\nBLOCKED",
+            'N18 second multiline HTML status' => "<tr>\n<td>PH3-RDY-003</td>\n<td>CLOSED</td>\n</tr>",
+            'N19 status-authority marker near-match' => '<!-- phase-iii-architecture-status-authority classification=CURRENT id=shadow -->',
+            'N20 mixed-separator authority near-match' => '<!-- PHASE_III_ARCHITECTURE_AUTHORITY classification=CURRENT id=shadow -->',
+            'N21 records-as-current prose' => 'The current architecture records PH3-RDY-003 as CLOSED.',
+            'N22 architecture-status prose' => 'Architecture status: PH3-RDY-004 is BLOCKED.',
+            'N23 current-phase prose' => 'For current Phase III, PH3-RDY-002 is BLOCKED.',
+        ];
+        foreach ($rejected as $case => $fragment) {
+            $this->assertNotSame(
+                [],
+                $this->phaseThreeArchitectureSemanticContract($design.$lineEnding.$fragment)['violations'],
+                $case,
+            );
+        }
+
+        $statusRow = '| `PH3-RDY-001` | `BLOCKED` | Historical evidence only. |';
+        $accepted = [
+            'P1 classified historical status' => $design.$lineEnding.
+                '<!-- phase-iii-architecture-authority classification=HISTORICAL id=phase-iii-history-positive-v1 -->'.$lineEnding.
+                $statusRow,
+            'P2 classified superseded status' => $design.$lineEnding.
+                '<!-- phase-iii-architecture-authority classification=SUPERSEDED id=phase-iii-superseded-positive-v1 -->'.$lineEnding.
+                $statusRow,
+            'P3 identifier-only prose' => $design.$lineEnding.'PH3-RDY-001 was reviewed without declaring a status.',
+            'P4 fenced mutation example' => $design.$lineEnding."```text\nPH3-RDY-001 = BLOCKED\n```",
+            'P5 unchanged canonical document' => $design,
+            'P6 non-status architecture cross-reference' => $design.$lineEnding.
+                'See the canonical Phase III architecture contract for the current map.',
+        ];
+        foreach ($accepted as $case => $document) {
+            $this->assertSame(
+                [],
+                $this->phaseThreeArchitectureSemanticContract($document)['violations'],
+                $case,
+            );
+        }
+    }
+
+    public function test_phase_three_status_has_one_repository_authority_and_exact_references(): void
+    {
+        $documents = [
+            'design' => $this->readDocument('docs/IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md'),
+            'plan' => $this->readDocument('docs/PHASE_9C6_5C3D1_RUNTIME_IMPLEMENTATION_PLAN.md'),
+            'phases' => $this->readDocument('docs/PHASES.md'),
+            'roadmap' => $this->readDocument('docs/ROADMAP.md'),
+            'onboarding' => $this->readDocument('docs/SUPPLIER_ONBOARDING_FRAMEWORK.md'),
+            'apcom' => $this->readDocument('docs/APCOM_OPERATIONAL_OFFER_LIFECYCLE_PREVIEW.md'),
+        ];
+        $canonical = $this->phaseThreeRepositoryStatusAuthorityContract($documents);
+        $this->assertSame([], $canonical['violations'], implode(PHP_EOL, $canonical['violations']));
+        $this->assertSame([
+            'PH3-RDY-001' => 'CLOSED IN DESIGN',
+            'PH3-RDY-002' => 'CLOSED IN DESIGN',
+            'PH3-RDY-003' => 'BLOCKED',
+            'PH3-RDY-004' => 'CLOSED',
+        ], $canonical['statuses']);
+        $this->assertSame(5, $canonical['reference_count']);
+
+        foreach (array_keys($documents) as $documentKey) {
+            $contradiction = $documents;
+            $contradiction[$documentKey] .= "\nPH3-RDY-003 = CLOSED";
+            $this->assertNotSame(
+                [],
+                $this->phaseThreeRepositoryStatusAuthorityContract($contradiction)['violations'],
+                "{$documentKey} contradictory status declaration",
+            );
+
+            if ($documentKey === 'design') {
+                $duplicate = $documents;
+                $duplicate['design'] .= "\n<!-- phase-iii-architecture-authority classification=CURRENT id=phase-iii-architecture-contract-v1 -->";
+            } else {
+                $duplicate = $documents;
+                $duplicate[$documentKey] .= "\n<!-- phase-iii-architecture-status-reference authority=phase-iii-architecture-contract-v1 -->";
+            }
+            $this->assertNotSame(
+                [],
+                $this->phaseThreeRepositoryStatusAuthorityContract($duplicate)['violations'],
+                "{$documentKey} duplicate authority/reference declaration",
+            );
+        }
     }
 
     public function test_phase_three_readiness_structural_collections_reject_duplicate_shadowing(): void
@@ -3288,6 +3479,68 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
     }
 
     /**
+     * @param  array<string, string>  $documents
+     * @return array{statuses: array<string, string>, reference_count: int, violations: array<int, string>}
+     */
+    private function phaseThreeRepositoryStatusAuthorityContract(array $documents): array
+    {
+        $expectedKeys = ['design', 'plan', 'phases', 'roadmap', 'onboarding', 'apcom'];
+        $violations = [];
+        if (array_keys($documents) !== $expectedKeys) {
+            $violations[] = 'Phase III repository status documents do not match the canonical ordered registry.';
+        }
+
+        $design = $documents['design'] ?? '';
+        $semantic = $this->phaseThreeArchitectureSemanticContract($design);
+        $violations = [...$violations, ...$semantic['violations']];
+        $architecture = $this->phaseThreeArchitectureContract($design);
+        $status = $this->phaseThreeArchitectureStatusContract($architecture['body']);
+        $violations = [...$violations, ...$status['violations']];
+
+        $exactReference = '<!-- phase-iii-architecture-status-reference authority=phase-iii-architecture-contract-v1 -->';
+        $exactTarget = 'IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md#phase-iii-provenance-and-bounds-architecture-decision';
+        $referenceCount = 0;
+        foreach (array_diff($expectedKeys, ['design']) as $key) {
+            $document = $documents[$key] ?? '';
+            $candidateCount = 0;
+            $exactCount = 0;
+            $targetCount = substr_count($document, $exactTarget);
+            foreach ($this->phaseThreeArchitectureStructuralBlocks($document) as $block) {
+                if ($block['literal']) {
+                    continue;
+                }
+
+                $normalized = $this->phaseThreeArchitectureNormalizedTokens($block['raw']);
+                $isExactReference = trim($block['raw']) === $exactReference;
+                if ($isExactReference || preg_match('/\bphase iii architecture(?: status)? reference\b/', $normalized) === 1) {
+                    $candidateCount++;
+                    if ($isExactReference) {
+                        $exactCount++;
+                    }
+                }
+
+                if (preg_match('/\bPH3-RDY-00[1-4]\b/i', $block['raw']) === 1) {
+                    $violations[] = "{$key} mirrors a Phase III status identifier instead of using the canonical reference.";
+                }
+            }
+
+            if ($candidateCount !== 1 || $exactCount !== 1) {
+                $violations[] = "{$key} must contain exactly one exact Phase III architecture status reference marker.";
+            }
+            if ($targetCount !== 1) {
+                $violations[] = "{$key} must link exactly once to the canonical Phase III architecture contract.";
+            }
+            $referenceCount += $exactCount;
+        }
+
+        return [
+            'statuses' => $status['statuses'],
+            'reference_count' => $referenceCount,
+            'violations' => array_values(array_unique($violations)),
+        ];
+    }
+
+    /**
      * @return array{
      *     marker_candidate_count: int,
      *     valid_marker_count: int,
@@ -3308,9 +3561,8 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
      */
     private function phaseThreeArchitectureAuthorityContract(string $design): array
     {
-        $intent = 'phase-iii-architecture-authority';
         $expectedCurrentId = 'phase-iii-architecture-contract-v1';
-        $lines = preg_split('/\R/', $design) ?: [];
+        $blocks = $this->phaseThreeArchitectureStructuralBlocks($design);
         $markerCandidates = [];
         $markers = [];
         $statusCandidates = [];
@@ -3318,51 +3570,68 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
         $headingCandidates = [];
         $violations = [];
 
-        foreach ($lines as $lineNumber => $line) {
-            if (stripos($line, $intent) !== false) {
-                $markerCandidates[] = ['line' => $lineNumber, 'raw' => $line];
-                if (preg_match(
-                    '/^<!-- phase-iii-architecture-authority classification=(?<classification>CURRENT|HISTORICAL|SUPERSEDED) id=(?<id>[a-z0-9-]+) -->$/',
-                    $line,
-                    $match,
-                ) !== 1) {
-                    $violations[] = 'Malformed Phase III architecture authority marker candidate at line '.($lineNumber + 1).'.';
+        foreach ($blocks as $blockIndex => $block) {
+            if ($block['literal']) {
+                continue;
+            }
+
+            $normalized = $this->phaseThreeArchitectureNormalizedTokens($block['raw']);
+            $isExactMarker = preg_match(
+                '/^<!-- phase-iii-architecture-authority classification=(?<classification>CURRENT|HISTORICAL|SUPERSEDED) id=(?<id>[a-z0-9-]+) -->$/',
+                trim($block['raw']),
+                $match,
+            ) === 1;
+            if ($isExactMarker || preg_match('/\bphase iii architecture(?: \w+){0,2} authority\b/', $normalized) === 1) {
+                $markerCandidates[] = ['block' => $blockIndex, 'raw' => $block['raw']];
+                if (! $isExactMarker) {
+                    $violations[] = 'Malformed Phase III architecture authority marker candidate in structural block '.($blockIndex + 1).'.';
                 } else {
                     $markers[] = [
                         'classification' => $match['classification'],
                         'id' => $match['id'],
-                        'line' => $lineNumber,
+                        'block' => $blockIndex,
                     ];
                 }
             }
 
-            $statusIdCount = preg_match_all('/\bPH3-RDY-00[1-4]\b/i', $line, $statusIds);
-            if (is_int($statusIdCount) && $statusIdCount > 0) {
-                $statusLexicalOccurrenceCount += $statusIdCount;
-                $hasStatusLexeme = preg_match('/\b(?:CLOSED|BLOCKED|UNKNOWN|PENDING)\b/i', $line) === 1;
-                $hasAssignmentSyntax = preg_match('/\bPH3-RDY-00[1-4]\b`?\s*=/i', $line) === 1;
-                $hasTableSyntax = preg_match('/\bPH3-RDY-00[1-4]\b`?\s*\|/i', $line) === 1;
+            $blockIdCount = preg_match_all('/\bPH3-RDY-00[1-4]\b/i', $block['raw']);
+            if (is_int($blockIdCount)) {
+                $statusLexicalOccurrenceCount += $blockIdCount;
+            }
 
-                if ($hasStatusLexeme || $hasAssignmentSyntax || $hasTableSyntax) {
+            foreach ($this->phaseThreeArchitectureStatusUnits($block) as $unit) {
+                $statusIdCount = preg_match_all('/\bPH3-RDY-00[1-4]\b/i', $unit, $statusIds);
+                if (! is_int($statusIdCount) || $statusIdCount === 0) {
+                    continue;
+                }
+
+                $unitTokens = $this->phaseThreeArchitectureNormalizedTokens($unit);
+                $id = 'ph3 rdy 00[1-4]';
+                $status = '(?:closed in design|closed|blocked|unknown|pending)';
+                $hasBoundedStatusAssociation = preg_match(
+                    '/(?:\b'.$id.'\b(?: \w+){0,8} \b'.$status.'\b|\b'.$status.'\b(?: \w+){0,8} \b'.$id.'\b)/',
+                    $unitTokens,
+                ) === 1;
+                $hasDeclarationSyntax = preg_match('/\bPH3-RDY-00[1-4]\b`?\s*(?:=|:|\|)/i', $unit) === 1
+                    || (stripos($unit, '<td') !== false && preg_match('/\bPH3-RDY-00[1-4]\b/i', $unit) === 1);
+
+                if ($hasBoundedStatusAssociation || $hasDeclarationSyntax) {
                     $statusCandidates[] = [
-                        'line' => $lineNumber,
-                        'raw' => $line,
+                        'block' => $blockIndex,
+                        'raw' => $unit,
                         'lexical_ids' => $statusIds[0],
                     ];
                 }
             }
 
-            if (preg_match('/^\s{0,3}#{1,6}\s+(?<heading>.+)$/', $line, $heading) === 1
-                && preg_match('/\bPhase\s+III\b/i', $heading['heading']) === 1
-                && preg_match('/\barchitecture(?:-design)?\b/i', $heading['heading']) === 1
-                && preg_match(
-                    '/\b(?:current|historical|superseded|status|readiness|authority|authoritative)\b/i',
-                    $heading['heading'],
-                ) === 1) {
-                $hasCurrentIntent = preg_match('/\bcurrent\b/i', $heading['heading']) === 1;
-                $hasHistoricalIntent = preg_match('/\b(?:historical|superseded)\b/i', $heading['heading']) === 1;
+            if ($block['type'] === 'heading'
+                && str_contains($normalized, 'phase iii')
+                && str_contains($normalized, 'architecture')
+                && preg_match('/\b(?:active|current|governing|historical|superseded|status|readiness|authority|authoritative)\b/', $normalized) === 1) {
+                $hasCurrentIntent = preg_match('/\b(?:active|current|governing|authoritative)\b/', $normalized) === 1;
+                $hasHistoricalIntent = preg_match('/\b(?:historical|superseded)\b/', $normalized) === 1;
                 $headingCandidates[] = [
-                    'line' => $lineNumber,
+                    'block' => $blockIndex,
                     'intent' => $hasCurrentIntent && $hasHistoricalIntent
                         ? 'CONFLICTING'
                         : ($hasCurrentIntent ? 'CURRENT' : ($hasHistoricalIntent ? 'HISTORICAL' : 'GENERIC')),
@@ -3401,60 +3670,60 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
 
         $regions = [];
         foreach ($markers as $marker) {
-            $nextCandidateLine = count($lines);
+            $nextCandidateBlock = count($blocks);
             foreach ($markerCandidates as $candidate) {
-                if ($candidate['line'] > $marker['line']) {
-                    $nextCandidateLine = $candidate['line'];
+                if ($candidate['block'] > $marker['block']) {
+                    $nextCandidateBlock = $candidate['block'];
 
                     break;
                 }
             }
 
-            $regionEnd = $nextCandidateLine - 1;
+            $regionEnd = $nextCandidateBlock - 1;
             if ($marker['classification'] === 'CURRENT') {
                 $expectedStart = "<!-- phase-iii-architecture-contract:start id={$marker['id']} -->";
-                if (($lines[$marker['line'] + 1] ?? null) !== $expectedStart) {
+                if (trim($blocks[$marker['block'] + 1]['raw'] ?? '') !== $expectedStart) {
                     $violations[] = 'The current Phase III architecture authority must directly own the canonical contract block with the same ID.';
 
                     continue;
                 }
 
                 $expectedEnd = "<!-- phase-iii-architecture-contract:end id={$marker['id']} -->";
-                $matchingEndLines = [];
-                for ($candidateLine = $marker['line'] + 2; $candidateLine < $nextCandidateLine; $candidateLine++) {
-                    if (($lines[$candidateLine] ?? null) === $expectedEnd) {
-                        $matchingEndLines[] = $candidateLine;
+                $matchingEndBlocks = [];
+                for ($candidateBlock = $marker['block'] + 2; $candidateBlock < $nextCandidateBlock; $candidateBlock++) {
+                    if (trim($blocks[$candidateBlock]['raw'] ?? '') === $expectedEnd) {
+                        $matchingEndBlocks[] = $candidateBlock;
                     }
                 }
-                if (count($matchingEndLines) !== 1) {
+                if (count($matchingEndBlocks) !== 1) {
                     $violations[] = 'The current Phase III architecture authority must own exactly one matching contract end marker.';
 
                     continue;
                 }
-                $regionEnd = $matchingEndLines[0];
+                $regionEnd = $matchingEndBlocks[0];
             }
 
             $regions[] = [
                 'classification' => $marker['classification'],
                 'id' => $marker['id'],
-                'start' => $marker['line'],
+                'start' => $marker['block'],
                 'end' => $regionEnd,
             ];
         }
 
-        $regionForLine = static function (int $lineNumber) use ($regions): array {
+        $regionForBlock = static function (int $blockIndex) use ($regions): array {
             return array_values(array_filter(
                 $regions,
-                static fn (array $region): bool => $lineNumber >= $region['start'] && $lineNumber <= $region['end'],
+                static fn (array $region): bool => $blockIndex >= $region['start'] && $blockIndex <= $region['end'],
             ));
         };
 
         $unclassifiedHeadingCount = 0;
         foreach ($headingCandidates as $heading) {
-            $matchingRegions = $regionForLine($heading['line']);
+            $matchingRegions = $regionForBlock($heading['block']);
             if (count($matchingRegions) !== 1) {
                 $unclassifiedHeadingCount++;
-                $violations[] = 'Unclassified Phase III architecture authority heading at line '.($heading['line'] + 1).'.';
+                $violations[] = 'Unclassified Phase III architecture authority heading in structural block '.($heading['block'] + 1).'.';
 
                 continue;
             }
@@ -3463,7 +3732,7 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
             if ($heading['intent'] === 'CONFLICTING'
                 || ($heading['intent'] === 'CURRENT' && $classification !== 'CURRENT')
                 || ($heading['intent'] === 'HISTORICAL' && ! in_array($classification, ['HISTORICAL', 'SUPERSEDED'], true))) {
-                $violations[] = 'Phase III architecture heading intent conflicts with its classified authority region at line '.($heading['line'] + 1).'.';
+                $violations[] = 'Phase III architecture heading intent conflicts with its classified authority region in structural block '.($heading['block'] + 1).'.';
             }
         }
 
@@ -3473,10 +3742,10 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
         $malformedStatusCandidateCount = 0;
         $regionRows = [];
         foreach ($statusCandidates as $candidate) {
-            $matchingRegions = $regionForLine($candidate['line']);
+            $matchingRegions = $regionForBlock($candidate['block']);
             if (count($matchingRegions) !== 1) {
                 $unclassifiedStatusDeclarationCount++;
-                $violations[] = 'Unclassified Phase III architecture status declaration at line '.($candidate['line'] + 1).'.';
+                $violations[] = 'Unclassified Phase III architecture status declaration in structural block '.($candidate['block'] + 1).'.';
             } else {
                 $classification = $matchingRegions[0]['classification'];
                 if ($classification === 'CURRENT') {
@@ -3492,17 +3761,19 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
             ));
             $isCanonicalRow = preg_match(
                 '/^\| `(?<id>PH3-RDY-00[1-4])` \| `(?<status>CLOSED IN DESIGN|CLOSED|BLOCKED)` \| (?<boundary>.+) \|$/',
-                $candidate['raw'],
+                trim($candidate['raw']),
                 $status,
             ) === 1;
-            if (count($canonicalIds) !== count($candidate['lexical_ids']) || ! $isCanonicalRow) {
+            $isHistorical = count($matchingRegions) === 1
+                && in_array($matchingRegions[0]['classification'], ['HISTORICAL', 'SUPERSEDED'], true);
+            if (! $isHistorical && (count($canonicalIds) !== count($candidate['lexical_ids']) || ! $isCanonicalRow)) {
                 $malformedStatusCandidateCount++;
-                $violations[] = 'Malformed Phase III architecture status declaration candidate at line '.($candidate['line'] + 1).'.';
+                $violations[] = 'Malformed Phase III architecture status declaration candidate in structural block '.($candidate['block'] + 1).'.';
 
                 continue;
             }
 
-            if (count($matchingRegions) === 1) {
+            if (count($matchingRegions) === 1 && $isCanonicalRow) {
                 $regionKey = $matchingRegions[0]['classification'].':'.$matchingRegions[0]['id'];
                 $regionRows[$regionKey][] = [
                     'id' => $status['id'],
@@ -3555,8 +3826,121 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
             'malformed_status_candidate_count' => $malformedStatusCandidateCount,
             'heading_candidate_count' => count($headingCandidates),
             'unclassified_heading_count' => $unclassifiedHeadingCount,
+            'status_candidates' => $statusCandidates,
             'violations' => array_values(array_unique($violations)),
         ];
+    }
+
+    /** @return array<int, array{type: string, raw: string, literal: bool}> */
+    private function phaseThreeArchitectureStructuralBlocks(string $document): array
+    {
+        $lines = preg_split('/\R/', $document) ?: [];
+        $blocks = [];
+        $buffer = [];
+        $bufferType = 'paragraph';
+        $inFence = false;
+        $fence = '';
+
+        $flush = static function () use (&$blocks, &$buffer, &$bufferType): void {
+            if ($buffer === []) {
+                return;
+            }
+            $blocks[] = [
+                'type' => $bufferType,
+                'raw' => implode("\n", $buffer),
+                'literal' => $bufferType === 'literal',
+            ];
+            $buffer = [];
+            $bufferType = 'paragraph';
+        };
+
+        foreach ($lines as $line) {
+            $trimmed = trim($line);
+            if ($inFence) {
+                $buffer[] = $line;
+                if (preg_match('/^'.preg_quote($fence, '/').'\s*$/', $trimmed) === 1) {
+                    $inFence = false;
+                    $flush();
+                }
+
+                continue;
+            }
+
+            if (preg_match('/^(?<fence>`{3,}|~{3,}).*$/', $trimmed, $match) === 1) {
+                $flush();
+                $inFence = true;
+                $fence = $match['fence'];
+                $bufferType = 'literal';
+                $buffer[] = $line;
+
+                continue;
+            }
+
+            if ($trimmed === '') {
+                $flush();
+
+                continue;
+            }
+
+            if (preg_match('/^<!--.*-->$/', $trimmed) === 1) {
+                $flush();
+                $blocks[] = ['type' => 'marker', 'raw' => $trimmed, 'literal' => false];
+
+                continue;
+            }
+
+            if (preg_match('/^#{1,6}\s+/', $trimmed) === 1) {
+                $flush();
+                $blocks[] = ['type' => 'heading', 'raw' => $trimmed, 'literal' => false];
+
+                continue;
+            }
+
+            $type = preg_match('/^\|.*\|$/', $trimmed) === 1 ? 'table' : 'paragraph';
+            $startsListItem = preg_match('/^(?:[-*+] |\d+[.)] )/', $trimmed) === 1;
+            if ($buffer !== [] && ($type !== $bufferType || ($startsListItem && $bufferType === 'paragraph'))) {
+                $flush();
+            }
+            if ($buffer === []) {
+                $bufferType = $type;
+            }
+            $buffer[] = $line;
+        }
+
+        $flush();
+
+        return $blocks;
+    }
+
+    private function phaseThreeArchitectureNormalizedTokens(string $value): string
+    {
+        $value = str_replace(['<!--', '-->'], ' ', $value);
+        $value = html_entity_decode(strip_tags($value), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+        $value = strtolower($value);
+        $value = preg_replace('/[^a-z0-9]+/', ' ', $value) ?? $value;
+        $value = preg_replace('/\bphase\s+3\b/', 'phase iii', $value) ?? $value;
+        $value = preg_replace('/\barchitectural\b/', 'architecture', $value) ?? $value;
+
+        return trim(preg_replace('/\s+/', ' ', $value) ?? $value);
+    }
+
+    /** @param array{type: string, raw: string, literal: bool} $block
+     * @return array<int, string>
+     */
+    private function phaseThreeArchitectureStatusUnits(array $block): array
+    {
+        if ($block['literal'] || in_array($block['type'], ['heading', 'marker'], true)) {
+            return [];
+        }
+
+        if ($block['type'] === 'table') {
+            return array_values(array_filter(
+                preg_split('/\R/', $block['raw']) ?: [],
+                static fn (string $line): bool => preg_match('/\bPH3-RDY-00[1-4]\b/i', $line) === 1,
+            ));
+        }
+
+        return [$block['raw']];
     }
 
     /**
@@ -3791,7 +4175,7 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
             [
                 'Canonical source-profile descriptor fields (ordered):',
                 'Canonical source-profile descriptor fields',
-                ['schema', 'supplier_id', 'supplier_feed_id', 'source_locator_contract_key', 'source_locator_contract_version', 'source_locator_key', 'source_access_scope_key', 'feed_type', 'importer_key', 'importer_version', 'mapping_contract_fingerprint'],
+                ['schema', 'supplier_id', 'supplier_feed_id', 'source_locator_contract_key', 'source_locator_contract_version', 'source_locator_key', 'source_access_scope_key', 'feed_type', 'importer_key', 'importer_version', 'mapping_contract_version', 'mapping_contract_fingerprint'],
             ],
             [
                 'Canonical non-secret source-locator fields (ordered):',
@@ -3799,9 +4183,14 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
                 ['schema', 'source_locator_contract_key', 'source_locator_contract_version', 'scheme', 'ascii_host', 'port', 'path_components', 'query_components'],
             ],
             [
+                'Canonical resolved source context fields (ordered):',
+                'Canonical resolved source context fields',
+                ['schema', 'source_profile_id', 'source_identity', 'source_descriptor_version', 'source_descriptor_fingerprint', 'supplier_id', 'supplier_feed_id', 'source_locator_contract_key', 'source_locator_contract_version', 'source_locator_key', 'source_locator_canonical_bytes', 'source_access_scope_key', 'feed_type', 'importer_key', 'importer_version', 'mapping_contract_version', 'mapping_canonical_bytes', 'mapping_contract_fingerprint'],
+            ],
+            [
                 'Canonical source-execution fingerprint fields (ordered):',
                 'Canonical source-execution fingerprint fields',
-                ['schema', 'supplier_id', 'supplier_feed_id', 'import_history_id', 'supplier_import_source_profile_id', 'source_identity', 'source_descriptor_fingerprint', 'importer_key', 'importer_version', 'captured_at'],
+                ['schema', 'supplier_id', 'supplier_feed_id', 'import_history_id', 'supplier_import_source_profile_id', 'source_identity', 'source_descriptor_version', 'source_descriptor_fingerprint', 'resolved_source_context_version', 'source_locator_contract_key', 'source_locator_contract_version', 'source_locator_key', 'source_access_scope_key', 'feed_type', 'importer_key', 'importer_version', 'mapping_contract_version', 'mapping_contract_fingerprint', 'captured_at'],
             ],
             [
                 'Canonical supplier-product logical-head key fields (ordered):',
@@ -3824,6 +4213,12 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
 
         foreach ([
             'The sole future registry is `supplier_import_source_profiles`.',
+            'supplier_import_resolved_source_context_v1',
+            'source_locator_canonical_bytes',
+            'mapping_canonical_bytes',
+            'The canonical source-resolution consistency boundary is one MySQL',
+            'downloadSource(ResolvedSupplierImportSourceContext)',
+            'MUST NOT read',
             'source_execution_fingerprint CHAR(64) CHARACTER SET ascii COLLATE ascii_bin',
             'cannot reuse A\'s globally unique `source_identity`',
             'source_profile_descriptor_fingerprint_collision',
@@ -3875,7 +4270,7 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
             'All are hard, application-owned, supplier-invariant limits.',
         );
         $violations = [...$violations, ...$bounds['violations']];
-        $expectedBounds = ['`max_source_rows`', '`max_spool_rows`', '`max_spool_bytes`', '`max_enrollments`', '`max_observations`', '`max_canonical_children`', '`external_sort_chunk`', '`db_insert_batch_ceiling`', '`snapshot_transaction_bound`'];
+        $expectedBounds = ['`max_source_rows`', '`max_source_bytes`', '`max_spool_rows`', '`max_spool_bytes`', '`max_enrollments`', '`max_observations`', '`max_canonical_children`', '`external_sort_chunk`', '`db_insert_batch_ceiling`', '`snapshot_transaction_bound`'];
         $actualBounds = [];
         foreach ($bounds['rows'] as $position => $row) {
             $parsed = $this->structuralMarkdownRowCells($row, 4, 'Phase III operational bounds', $position + 1);
@@ -3897,7 +4292,7 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
             }
         }
         if ($actualBounds !== $expectedBounds) {
-            $violations[] = 'Phase III operational bounds do not match the exact nine-bound registry.';
+            $violations[] = 'Phase III operational bounds do not match the exact ten-bound registry.';
         }
 
         $status = $this->phaseThreeArchitectureStatusContract($architecture);

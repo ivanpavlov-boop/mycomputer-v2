@@ -165,10 +165,13 @@ parser change, capture implementation, historical backfill, or evidence
 producer exists. Phase II's guarded models/canonical byte contracts are also
 implemented, merged, CI-verified, deployed to staging, and uncalled. Phase III
 snapshot persistence remains unimplemented and not implementation-authorized.
-Immutable candidate-row provenance and durable authorization source binding are
-closed in architecture design but not implemented. All nine production
-operational bounds remain `NOT SPECIFIED`, so that readiness gate remains
-blocked. C3D.1 remains blocked until that gate, the fine-grained checkpoints below, and
+<!-- phase-iii-architecture-status-reference authority=phase-iii-architecture-contract-v1 -->
+The exact current readiness map is owned only by the
+[canonical Phase III architecture contract](IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md#phase-iii-provenance-and-bounds-architecture-decision).
+This preview does not mirror that map. Its selected provenance, resolved-source
+context, claim-source and ten-bound policy contracts remain future-only, and
+all ten numeric production bounds remain `NOT SPECIFIED`. C3D.1 remains blocked
+until the canonical remaining gate, the fine-grained checkpoints below, and
 future qualified warm-up complete. Supplier #3 remains unselected and
 unstarted. No evidence candidate exists and no operational preview is
 authorized.
