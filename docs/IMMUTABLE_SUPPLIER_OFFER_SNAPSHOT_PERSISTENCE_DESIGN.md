@@ -4014,9 +4014,13 @@ mapping, so they are excluded from historical selector identity.
 The sole future immutable selector snapshot is
 `supplier_import_job_identity_v1`, represented by `ImportJobIdentity`.
 
-The following registry is the exclusive CURRENT machine-checkable authority for
-the selector semantics in this architecture. Prose below explains and applies
-these values but cannot redefine them.
+The following marker-bounded registry is the exclusive CURRENT machine-checkable
+authority for the selector semantics in this architecture. Its body is
+closed-world: only the exact header, separator, eleven canonical rows, optional
+blank lines and closing marker are permitted. Any other nonblank structural unit
+inside the markers is invalid regardless of wording. For these keys, all text
+outside the registry is REFERENCE/EXPLANATION only: it may identify a key and
+describe consequences, but cannot own, restate, replace or add a CURRENT value.
 
 <!-- phase-iii-semantic-registry classification=CURRENT id=phase-iii-import-job-selector-contract-v1 -->
 | ImportJob selector semantic key | Canonical value |
@@ -4151,9 +4155,13 @@ contract and is not changed or reused as provenance authority.
 
 #### Write-once source-payload receipt and secure parser handle
 
-The following registry is the exclusive CURRENT machine-checkable authority for
-payload integrity. Explanatory prose and implementation allocation must remain
-consistent with every value and cannot create another current authority.
+The following marker-bounded registry is the exclusive CURRENT machine-checkable
+authority for payload integrity. Its body is closed-world: only the exact header,
+separator, ten canonical rows, optional blank lines and closing marker are
+permitted. Any other nonblank structural unit inside the markers is invalid
+regardless of wording. For these keys, all text outside the registry is
+REFERENCE/EXPLANATION only: it may identify a key and describe consequences, but
+cannot own, restate, replace or add a CURRENT value.
 
 <!-- phase-iii-semantic-registry classification=CURRENT id=phase-iii-payload-integrity-contract-v1 -->
 | Payload semantic key | Canonical value |

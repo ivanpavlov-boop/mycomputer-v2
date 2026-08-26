@@ -1952,25 +1952,27 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
             'phase-iii-payload-integrity-contract-v1',
         );
         $rejected = [
-            'CO1 contradictory receipt relation' => 'A payload receipt may belong to a different source execution.',
-            'CO2 SHA-1 payload digest' => 'The payload receipt digest uses SHA-1.',
-            'CO3 pathname reopen allowed' => 'The protected parser may reopen the temporary payload by pathname.',
-            'CO4 parser success before EOF' => 'The parser may return protected success before complete EOF digest verification.',
-            'CO5 template selector omitted' => 'The xml_mapping_template_id is optional in ImportJobIdentity.',
-            'CO6 reversed lock order' => 'Current lock authority: SupplierFeed -> ImportJob -> XML mapping template.',
-            'CO7 mutable template reread' => 'Execution A may reread the current mutable mapping template after source-resolution commit.',
-            'CO8 receipt replacement allowed' => 'A committed payload receipt may be replaced by a later byte-valid receipt.',
-            'CO9 MD5 payload digest' => 'The payload receipt digest algorithm is MD5.',
-            'CO10 receipt binding optional' => 'Payload receipt execution binding is optional.',
-            'CO11 retry pathname reopen' => 'The protected parser may reopen the payload path only on retry.',
-            'CO12 EOF verification advisory' => 'Parser EOF receipt verification is advisory rather than mandatory.',
-            'CO13 ImportJob row lock optional' => 'The ImportJob row lock is optional during source resolution.',
-            'CO14 selector outside transaction' => 'The template selector may be verified outside the source-resolution transaction.',
-            'CO15 retry current ImportJob reread' => 'Retry may reread the current ImportJob when source_identity matches.',
-            'CO16 duplicate canonical semantic registry' => $payloadRegistry,
+            'CO1 contradictory receipt relation' => ['phase-iii-payload-integrity-contract-v1', 'A payload receipt may belong to a different source execution.'],
+            'CO2 SHA-1 payload digest' => ['phase-iii-payload-integrity-contract-v1', 'The payload receipt digest uses SHA-1.'],
+            'CO3 pathname reopen allowed' => ['phase-iii-payload-integrity-contract-v1', 'The protected parser may reopen the temporary payload by pathname.'],
+            'CO4 parser success before EOF' => ['phase-iii-payload-integrity-contract-v1', 'The parser may return protected success before complete EOF digest verification.'],
+            'CO5 template selector omitted' => ['phase-iii-import-job-selector-contract-v1', 'The xml_mapping_template_id is optional in ImportJobIdentity.'],
+            'CO6 reversed lock order' => ['phase-iii-import-job-selector-contract-v1', 'Current lock authority: SupplierFeed -> ImportJob -> XML mapping template.'],
+            'CO7 mutable template reread' => ['phase-iii-import-job-selector-contract-v1', 'Execution A may reread the current mutable mapping template after source-resolution commit.'],
+            'CO8 receipt replacement allowed' => ['phase-iii-payload-integrity-contract-v1', 'A committed payload receipt may be replaced by a later byte-valid receipt.'],
+            'CO9 MD5 payload digest' => ['phase-iii-payload-integrity-contract-v1', 'The payload receipt digest algorithm is MD5.'],
+            'CO10 receipt binding optional' => ['phase-iii-payload-integrity-contract-v1', 'Payload receipt execution binding is optional.'],
+            'CO11 retry pathname reopen' => ['phase-iii-payload-integrity-contract-v1', 'The protected parser may reopen the payload path only on retry.'],
+            'CO12 EOF verification advisory' => ['phase-iii-payload-integrity-contract-v1', 'Parser EOF receipt verification is advisory rather than mandatory.'],
+            'CO13 ImportJob row lock optional' => ['phase-iii-import-job-selector-contract-v1', 'The ImportJob row lock is optional during source resolution.'],
+            'CO14 selector outside transaction' => ['phase-iii-import-job-selector-contract-v1', 'The template selector may be verified outside the source-resolution transaction.'],
+            'CO15 retry current ImportJob reread' => ['phase-iii-import-job-selector-contract-v1', 'Retry may reread the current ImportJob when source_identity matches.'],
+            'CO16 duplicate canonical semantic registry' => [null, $payloadRegistry],
         ];
-        foreach ($rejected as $case => $fragment) {
-            $mutated = $design.$lineEnding.$fragment;
+        foreach ($rejected as $case => [$registryId, $fragment]) {
+            $mutated = $registryId === null
+                ? $design.$lineEnding.$fragment
+                : $this->insertPhaseThreeSemanticAuthorityUnit($design, $registryId, $fragment);
             $this->assertNotSame(
                 [],
                 $this->phaseThreeExclusiveSemanticContract($mutated)['violations'],
@@ -2052,6 +2054,138 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
         }
 
         $this->assertSame([], $this->phaseThreeExclusiveSemanticContract($design)['violations'], 'SR8 canonical registries');
+    }
+
+    public function test_phase_three_semantic_authority_is_closed_world_without_synonym_interpretation(): void
+    {
+        $design = $this->readDocument('docs/IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md');
+        $canonical = $this->phaseThreeExclusiveSemanticContract($design);
+        $normalizedDesign = preg_replace('/\s+/', ' ', $design) ?? $design;
+
+        $this->assertSame([], $canonical['violations'], implode(PHP_EOL, $canonical['violations']));
+        $this->assertStringContainsString(
+            'only the exact header, separator, ten canonical rows, optional blank lines and closing marker are permitted',
+            $normalizedDesign,
+        );
+        $this->assertStringContainsString(
+            'only the exact header, separator, eleven canonical rows, optional blank lines and closing marker are permitted',
+            $normalizedDesign,
+        );
+        $this->assertSame(
+            2,
+            substr_count($normalizedDesign, 'all text outside the registry is REFERENCE/EXPLANATION only'),
+        );
+        $this->assertSame([
+            'raw_blocks' => 1,
+            'current_blocks' => 1,
+            'physical_rows' => 10,
+            'parsed_rows' => 10,
+            'unique_keys' => 10,
+            'expected_keys' => 10,
+            'unexpected_units' => 0,
+        ], $canonical['payload_inventory']);
+        $this->assertSame([
+            'raw_blocks' => 1,
+            'current_blocks' => 1,
+            'physical_rows' => 11,
+            'parsed_rows' => 11,
+            'unique_keys' => 11,
+            'expected_keys' => 11,
+            'unexpected_units' => 0,
+        ], $canonical['selector_inventory']);
+
+        $perKeyContradictions = [
+            'receipt_cardinality' => ['phase-iii-payload-integrity-contract-v1', 'More than one completed proof may be attached to a run.'],
+            'receipt_execution_binding' => ['phase-iii-payload-integrity-contract-v1', 'A byte proof can follow its payload into a successor run.'],
+            'payload_digest_algorithm' => ['phase-iii-payload-integrity-contract-v1', 'The byte proof uses secure hash algorithm 1.'],
+            'payload_digest_domain' => ['phase-iii-payload-integrity-contract-v1', 'The checksum may cover normalized parser records instead of original input octets.'],
+            'payload_path_reopen' => ['phase-iii-payload-integrity-contract-v1', 'The parser may open the file again by filename.'],
+            'parser_success_before_full_eof_verification' => ['phase-iii-payload-integrity-contract-v1', 'Complete stream consumption is optional before success.'],
+            'receipt_mutability' => ['phase-iii-payload-integrity-contract-v1', 'A committed receipt can be edited in place.'],
+            'receipt_rebinding' => ['phase-iii-payload-integrity-contract-v1', 'Ownership of recorded byte proof may be reassigned.'],
+            'parser_receipt_verification' => ['phase-iii-payload-integrity-contract-v1', 'Matching the recorded byte proof is advisory at parser completion.'],
+            'authoritative_handle_identity' => ['phase-iii-payload-integrity-contract-v1', 'A newly opened descriptor may replace the verified object.'],
+            'identity_ordered_fields' => ['phase-iii-import-job-selector-contract-v1', 'The selector fingerprint field sequence may vary.'],
+            'required_template_selector' => ['phase-iii-import-job-selector-contract-v1', 'The template selector is advisory for XML work.'],
+            'lock_order' => ['phase-iii-import-job-selector-contract-v1', 'Acquire the template, then the feed, then the job.'],
+            'import_job_row_locking' => ['phase-iii-import-job-selector-contract-v1', 'ImportJob locking is advisory.'],
+            'supplier_feed_row_locking' => ['phase-iii-import-job-selector-contract-v1', 'The feed may be read without an ownership lock.'],
+            'template_row_locking' => ['phase-iii-import-job-selector-contract-v1', 'The mapping template need not be locked.'],
+            'selector_verification_boundary' => ['phase-iii-import-job-selector-contract-v1', 'Relationship checks may finish in a later transaction.'],
+            'mapping_snapshot_authority' => ['phase-iii-import-job-selector-contract-v1', 'Historical mapping may be rebuilt from the latest template.'],
+            'mutable_template_reread_after_commit' => ['phase-iii-import-job-selector-contract-v1', 'Completed executions may consult the newest mapping definition.'],
+            'retry_current_selector_reread' => ['phase-iii-import-job-selector-contract-v1', 'A retry may consult whatever selectors the job has now.'],
+            'source_execution_identity_binding' => ['phase-iii-import-job-selector-contract-v1', 'A source execution does not need the captured job identity.'],
+        ];
+        $this->assertCount(21, $perKeyContradictions);
+        foreach ($perKeyContradictions as $key => [$registryId, $fragment]) {
+            $contract = $this->phaseThreeExclusiveSemanticContract(
+                $this->insertPhaseThreeSemanticAuthorityUnit($design, $registryId, $fragment),
+            );
+            $inventory = str_contains($registryId, 'payload')
+                ? $contract['payload_inventory']
+                : $contract['selector_inventory'];
+
+            $this->assertNotSame([], $contract['violations'], "Closed-world per-key mutation must fail: {$key}");
+            $this->assertSame(1, $inventory['unexpected_units'], "Mutation must fail structurally: {$key}");
+        }
+
+        $unseenContradictions = [
+            ['phase-iii-payload-integrity-contract-v1', 'A lunar cycle chooses the checksum family for each run.'],
+            ['phase-iii-payload-integrity-contract-v1', 'Proof ownership can migrate when the moon is full.'],
+            ['phase-iii-payload-integrity-contract-v1', 'The reader may swap to a fresh object after the first byte.'],
+            ['phase-iii-payload-integrity-contract-v1', 'A green light may precede the final stream symbol.'],
+            ['phase-iii-payload-integrity-contract-v1', 'Recorded evidence can be polished after acceptance.'],
+            ['phase-iii-import-job-selector-contract-v1', 'The three guardians may be visited in any sequence.'],
+            ['phase-iii-import-job-selector-contract-v1', 'Yesterday may be reconstructed from today\'s mapping.'],
+            ['phase-iii-import-job-selector-contract-v1', 'A later database visit may settle selector relationships.'],
+            ['phase-iii-import-job-selector-contract-v1', 'The execution may borrow identity from a neighboring job.'],
+            ['phase-iii-import-job-selector-contract-v1', 'XML can proceed when its template coordinate is merely suggested.'],
+        ];
+        foreach ($unseenContradictions as $index => [$registryId, $fragment]) {
+            $contract = $this->phaseThreeExclusiveSemanticContract(
+                $this->insertPhaseThreeSemanticAuthorityUnit($design, $registryId, $fragment),
+            );
+            $inventory = str_contains($registryId, 'payload')
+                ? $contract['payload_inventory']
+                : $contract['selector_inventory'];
+
+            $this->assertNotSame([], $contract['violations'], 'Unseen contradiction must fail: '.($index + 1));
+            $this->assertSame(1, $inventory['unexpected_units'], 'Unseen text must fail structurally: '.($index + 1));
+        }
+
+        foreach ([
+            'payload arbitrary text' => ['phase-iii-payload-integrity-contract-v1', 'The moon determines this policy.'],
+            'selector arbitrary text' => ['phase-iii-import-job-selector-contract-v1', 'A blue square is recorded here.'],
+            'payload arbitrary structural row' => ['phase-iii-payload-integrity-contract-v1', '| `unknown_payload_rule` | `BLUE_SQUARE` |'],
+            'selector arbitrary structural row' => ['phase-iii-import-job-selector-contract-v1', '| `unknown_selector_rule` | `BLUE_SQUARE` |'],
+        ] as $case => [$registryId, $fragment]) {
+            $contract = $this->phaseThreeExclusiveSemanticContract(
+                $this->insertPhaseThreeSemanticAuthorityUnit($design, $registryId, $fragment),
+            );
+            $inventory = str_contains($registryId, 'payload')
+                ? $contract['payload_inventory']
+                : $contract['selector_inventory'];
+
+            $this->assertNotSame([], $contract['violations'], $case);
+            $this->assertSame(1, $inventory['unexpected_units'], "{$case} must fail structurally");
+        }
+
+        $lineEnding = str_contains($design, "\r\n") ? "\r\n" : "\n";
+        $historical = $design.$lineEnding.
+            '<!-- phase-iii-architecture-authority classification=HISTORICAL id=phase-iii-closed-world-history-v1 -->'.$lineEnding.
+            'An earlier rejected design used a different checksum family.';
+        $literal = $design.$lineEnding.
+            '<!-- phase-iii-architecture-example:start -->'.$lineEnding.
+            'Literal mutation example: the parser obtains a replacement object.'.$lineEnding.
+            '<!-- phase-iii-architecture-example:end -->';
+        $reference = $design.$lineEnding.
+            'See payload semantic registry key `payload_digest_algorithm` and conform to selector key `lock_order`.';
+
+        $this->assertSame([], $this->phaseThreeExclusiveSemanticContract($historical)['violations'], 'Historical control');
+        $this->assertSame([], $this->phaseThreeExclusiveSemanticContract($literal)['violations'], 'Literal control');
+        $this->assertSame([], $this->phaseThreeExclusiveSemanticContract($reference)['violations'], 'Reference control');
+        $this->assertSame([], $this->phaseThreeExclusiveSemanticContract($design)['violations'], 'Canonical control');
     }
 
     public function test_phase_three_protected_redirect_policy_is_single_and_fail_closed(): void
@@ -4223,7 +4357,14 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
     }
 
     /**
-     * @return array{payload: array<string, string>, selector: array<string, string>, candidate_count: int, violations: array<int, string>}
+     * @return array{
+     *     payload: array<string, string>,
+     *     selector: array<string, string>,
+     *     payload_inventory: array<string, int>,
+     *     selector_inventory: array<string, int>,
+     *     candidate_count: int,
+     *     violations: array<int, string>
+     * }
      */
     private function phaseThreeExclusiveSemanticContract(string $design): array
     {
@@ -4284,18 +4425,20 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
 
         $payloadExpected = $this->expectedPhaseThreePayloadSemantics();
         $selectorExpected = $this->expectedPhaseThreeSelectorSemantics();
-        $payload = $this->phaseThreeSemanticRegistryRows(
-            $architecture['body'],
+        $payload = $this->phaseThreeClosedSemanticRegistry(
+            $design,
+            'phase-iii-payload-integrity-contract-v1',
             '| Payload semantic key | Canonical value |',
             '| ---: | :--- |',
-            '<!-- phase-iii-semantic-registry:end id=phase-iii-payload-integrity-contract-v1 -->',
+            $payloadExpected,
             'payload-integrity',
         );
-        $selector = $this->phaseThreeSemanticRegistryRows(
-            $architecture['body'],
+        $selector = $this->phaseThreeClosedSemanticRegistry(
+            $design,
+            'phase-iii-import-job-selector-contract-v1',
             '| ImportJob selector semantic key | Canonical value |',
             '| :--- | ---: |',
-            '<!-- phase-iii-semantic-registry:end id=phase-iii-import-job-selector-contract-v1 -->',
+            $selectorExpected,
             'ImportJob-selector',
         );
         $violations = [...$violations, ...$payload['violations'], ...$selector['violations']];
@@ -4315,6 +4458,8 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
         return [
             'payload' => $payload['values'],
             'selector' => $selector['values'],
+            'payload_inventory' => $payload['inventory'],
+            'selector_inventory' => $selector['inventory'],
             'candidate_count' => $assertions['candidate_count'],
             'violations' => array_values(array_unique($violations)),
         ];
@@ -4356,42 +4501,143 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
     }
 
     /**
-     * @return array{values: array<string, string>, violations: array<int, string>}
+     * @param  array<string, string>  $expected
+     * @return array{
+     *     values: array<string, string>,
+     *     inventory: array{
+     *         raw_blocks: int,
+     *         current_blocks: int,
+     *         physical_rows: int,
+     *         parsed_rows: int,
+     *         unique_keys: int,
+     *         expected_keys: int,
+     *         unexpected_units: int
+     *     },
+     *     violations: array<int, string>
+     * }
      */
-    private function phaseThreeSemanticRegistryRows(
-        string $architecture,
+    private function phaseThreeClosedSemanticRegistry(
+        string $design,
+        string $id,
         string $header,
         string $separator,
-        string $endMarker,
+        array $expected,
         string $context,
     ): array {
-        $table = $this->structuralMarkdownTable(
-            $architecture,
-            $header,
-            $separator,
-            "Phase III {$context} semantic registry",
-            2,
-            $endMarker,
-        );
-        $violations = $table['violations'];
-        $values = [];
-        foreach ($table['rows'] as $position => $row) {
-            $parsed = $this->structuralMarkdownRowCells($row, 2, "Phase III {$context} semantic registry", $position + 1);
-            $violations = [...$violations, ...$parsed['violations']];
-            if ($parsed['cells'] === null
-                || preg_match('/^`(?<key>[a-z0-9_]+)`$/', $parsed['cells'][0], $key) !== 1
-                || preg_match('/^`(?<value>[A-Za-z0-9_>\-]+)`$/', $parsed['cells'][1], $value) !== 1) {
-                $violations[] = "Malformed Phase III {$context} semantic row ".($position + 1).'.';
-
-                continue;
+        $lines = preg_split('/\R/', $design) ?: [];
+        $startMarker = "<!-- phase-iii-semantic-registry classification=CURRENT id={$id} -->";
+        $endMarker = "<!-- phase-iii-semantic-registry:end id={$id} -->";
+        $rawBlocks = 0;
+        foreach ($lines as $line) {
+            $normalized = strtolower($line);
+            if (str_contains($normalized, 'phase-iii-semantic-registry')
+                && str_contains($normalized, strtolower($id))
+                && ! str_contains($normalized, 'semantic-registry:end')) {
+                $rawBlocks++;
             }
-            if (array_key_exists($key['key'], $values)) {
-                $violations[] = "Duplicate Phase III {$context} semantic key {$key['key']}.";
-            }
-            $values[$key['key']] = $value['value'];
         }
 
-        return ['values' => $values, 'violations' => $violations];
+        $startPositions = array_keys($lines, $startMarker, true);
+        $endPositions = array_keys($lines, $endMarker, true);
+        $violations = [];
+        $values = [];
+        $physicalRows = 0;
+        $parsedRows = 0;
+        $unexpectedUnits = 0;
+
+        if ($rawBlocks !== 1 || count($startPositions) !== 1) {
+            $violations[] = "Phase III {$context} semantic authority must contain exactly one valid CURRENT block.";
+        }
+        if (count($endPositions) !== 1) {
+            $violations[] = "Phase III {$context} semantic authority must contain exactly one valid closing marker.";
+        }
+
+        if (count($startPositions) === 1 && count($endPositions) === 1) {
+            $start = $startPositions[0];
+            $end = $endPositions[0];
+            if ($end <= $start) {
+                $violations[] = "Phase III {$context} semantic authority closing marker must follow its CURRENT marker.";
+            } else {
+                $units = array_values(array_filter(
+                    array_slice($lines, $start + 1, $end - $start - 1),
+                    static fn (string $line): bool => trim($line) !== '',
+                ));
+                if (($units[0] ?? null) !== $header) {
+                    $violations[] = "Phase III {$context} closed authority must begin with its exact header.";
+                    $unexpectedUnits++;
+                }
+                if (($units[1] ?? null) !== $separator) {
+                    $violations[] = "Phase III {$context} closed authority separator must immediately follow its header.";
+                    $unexpectedUnits++;
+                }
+
+                foreach (array_slice($units, 2) as $position => $row) {
+                    $physicalRows++;
+                    $parsed = $this->structuralMarkdownRowCells(
+                        $row,
+                        2,
+                        "Phase III {$context} closed semantic authority",
+                        $position + 1,
+                    );
+                    if ($parsed['cells'] === null
+                        || preg_match('/^`(?<key>[a-z0-9_]+)`$/', $parsed['cells'][0], $key) !== 1
+                        || preg_match('/^`(?<value>[A-Za-z0-9_>\-]+)`$/', $parsed['cells'][1], $value) !== 1) {
+                        $unexpectedUnits++;
+                        $violations[] = "Unexpected nonblank unit in Phase III {$context} closed semantic authority at position ".($position + 1).'.';
+
+                        continue;
+                    }
+
+                    $parsedRows++;
+                    $duplicate = array_key_exists($key['key'], $values);
+                    if ($duplicate) {
+                        $violations[] = "Duplicate Phase III {$context} semantic key {$key['key']}.";
+                    }
+                    if ($duplicate
+                        || ! array_key_exists($key['key'], $expected)
+                        || $expected[$key['key']] !== $value['value']) {
+                        $unexpectedUnits++;
+                    }
+                    $values[$key['key']] = $value['value'];
+                }
+            }
+        }
+
+        if ($physicalRows !== count($expected)) {
+            $violations[] = "Phase III {$context} semantic authority must contain exactly ".count($expected).' physical rows.';
+        }
+        if ($parsedRows !== count($expected)) {
+            $violations[] = "Phase III {$context} semantic authority must contain exactly ".count($expected).' parsed rows.';
+        }
+        if (count($values) !== count($expected)) {
+            $violations[] = "Phase III {$context} semantic authority must contain exactly ".count($expected).' unique keys.';
+        }
+        if ($unexpectedUnits !== 0) {
+            $violations[] = "Phase III {$context} closed semantic authority contains unexpected structural content.";
+        }
+
+        return [
+            'values' => $values,
+            'inventory' => [
+                'raw_blocks' => $rawBlocks,
+                'current_blocks' => count($startPositions),
+                'physical_rows' => $physicalRows,
+                'parsed_rows' => $parsedRows,
+                'unique_keys' => count($values),
+                'expected_keys' => count($expected),
+                'unexpected_units' => $unexpectedUnits,
+            ],
+            'violations' => array_values(array_unique($violations)),
+        ];
+    }
+
+    private function insertPhaseThreeSemanticAuthorityUnit(string $design, string $id, string $unit): string
+    {
+        $lineEnding = str_contains($design, "\r\n") ? "\r\n" : "\n";
+        $endMarker = "<!-- phase-iii-semantic-registry:end id={$id} -->";
+        $this->assertSame(1, substr_count($design, $endMarker), "Missing unique semantic authority end marker {$id}.");
+
+        return str_replace($endMarker, $unit.$lineEnding.$endMarker, $design);
     }
 
     private function phaseThreeSemanticRegistryBlock(string $design, string $id): string
