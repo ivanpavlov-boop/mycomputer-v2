@@ -4014,6 +4014,26 @@ mapping, so they are excluded from historical selector identity.
 The sole future immutable selector snapshot is
 `supplier_import_job_identity_v1`, represented by `ImportJobIdentity`.
 
+The following registry is the exclusive CURRENT machine-checkable authority for
+the selector semantics in this architecture. Prose below explains and applies
+these values but cannot redefine them.
+
+<!-- phase-iii-semantic-registry classification=CURRENT id=phase-iii-import-job-selector-contract-v1 -->
+| ImportJob selector semantic key | Canonical value |
+| :--- | ---: |
+| `identity_ordered_fields` | `schema>import_job_id>supplier_id>supplier_feed_id>xml_mapping_template_id>import_type` |
+| `required_template_selector` | `XML_REQUIRED_CSV_NULL` |
+| `lock_order` | `IMPORT_JOB>SUPPLIER_FEED>XML_MAPPING_TEMPLATE` |
+| `import_job_row_locking` | `FOR_UPDATE_REQUIRED` |
+| `supplier_feed_row_locking` | `FOR_UPDATE_REQUIRED` |
+| `template_row_locking` | `XML_FOR_UPDATE_REQUIRED` |
+| `selector_verification_boundary` | `SAME_SOURCE_RESOLUTION_TRANSACTION` |
+| `mapping_snapshot_authority` | `IMMUTABLE_CANONICAL_BYTES_AND_FINGERPRINT` |
+| `mutable_template_reread_after_commit` | `FORBIDDEN_FOR_HISTORICAL_AUTHORITY` |
+| `retry_current_selector_reread` | `FORBIDDEN_FOR_HISTORICAL_AUTHORITY` |
+| `source_execution_identity_binding` | `REQUIRED_IMMUTABLE` |
+<!-- phase-iii-semantic-registry:end id=phase-iii-import-job-selector-contract-v1 -->
+
 Canonical ImportJob identity fields (ordered):
 
 ```text
@@ -4130,6 +4150,25 @@ cannot attest A while parsing bytes obtained from B. The existing legacy
 contract and is not changed or reused as provenance authority.
 
 #### Write-once source-payload receipt and secure parser handle
+
+The following registry is the exclusive CURRENT machine-checkable authority for
+payload integrity. Explanatory prose and implementation allocation must remain
+consistent with every value and cannot create another current authority.
+
+<!-- phase-iii-semantic-registry classification=CURRENT id=phase-iii-payload-integrity-contract-v1 -->
+| Payload semantic key | Canonical value |
+| ---: | :--- |
+| `receipt_cardinality` | `EXACTLY_ONE_PER_SOURCE_EXECUTION` |
+| `receipt_execution_binding` | `REQUIRED_IMMUTABLE` |
+| `payload_digest_algorithm` | `SHA-256` |
+| `payload_digest_domain` | `EXACT_ACCEPTED_DECODED_PARSER_INPUT_BYTES` |
+| `payload_path_reopen` | `FORBIDDEN` |
+| `parser_success_before_full_eof_verification` | `FORBIDDEN` |
+| `receipt_mutability` | `APPEND_ONLY_NO_UPDATE_REPLACE_CLEAR_DELETE` |
+| `receipt_rebinding` | `FORBIDDEN` |
+| `parser_receipt_verification` | `REQUIRED` |
+| `authoritative_handle_identity` | `SAME_VERIFIED_FILE_OBJECT` |
+<!-- phase-iii-semantic-registry:end id=phase-iii-payload-integrity-contract-v1 -->
 
 `source_execution_fingerprint` remains the pre-network attestation of resolved
 job identity and source context. It never depends circularly on bytes that can

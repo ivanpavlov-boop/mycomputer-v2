@@ -1883,6 +1883,177 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
         }
     }
 
+    public function test_phase_three_p0_rollback_table_sets_are_exact_and_fail_closed(): void
+    {
+        $plan = $this->readDocument('docs/PHASE_9C6_5C3D1_RUNTIME_IMPLEMENTATION_PLAN.md');
+        $lineEnding = str_contains($plan, "\r\n") ? "\r\n" : "\n";
+        $canonical = $this->phaseThreeP0RollbackSetContract($plan);
+        $this->assertSame([], $canonical['violations'], 'RB10 canonical: '.implode(PHP_EOL, $canonical['violations']));
+        $this->assertSame($this->expectedPhaseThreeP0Tables(), $canonical['allocation_set']);
+        $this->assertSame($this->expectedPhaseThreeP0Tables(), $canonical['guard_set']);
+
+        $allocationReceipt = '| 3 | `supplier_import_source_payload_receipts` |';
+        $allocationReceiptBlock = $allocationReceipt.$lineEnding.
+            '| 4 | `supplier_product_identity_heads` |';
+        $guardProfile = '| 1 | `supplier_import_source_profiles` | table exists and contains zero rows; all dependent executions are already proven absent |';
+        $guardExecution = '| 2 | `supplier_import_source_executions` | table exists and contains zero rows; all dependent receipts and revisions are already proven absent |';
+        $guardReceipt = '| 3 | `supplier_import_source_payload_receipts` | table exists and contains zero rows; no committed payload receipt evidence may be discarded |';
+        $guardHead = '| 4 | `supplier_product_identity_heads` | table exists and contains zero rows; all staging head pointers are separately proven null |';
+        $guardRevision = '| 5 | `supplier_product_source_revisions` | table exists and contains zero rows; all staging current-revision pointers are separately proven null |';
+        $unknownGuard = '| 6 | `supplier_import_unknown_evidence` | table exists and contains zero rows |';
+
+        $rb5 = $this->removeStructuralRow($plan, $guardReceipt);
+        $rb5 = $this->insertStructuralRow($rb5, $guardProfile, $guardProfile);
+        $mutations = [
+            'RB1 payload receipt omitted from guard' => $this->removeStructuralRow($plan, $guardReceipt),
+            'RB2 source profiles omitted from guard' => $this->removeStructuralRow($plan, $guardProfile),
+            'RB3 allocation five and guard four' => $this->removeStructuralRow($plan, $guardHead),
+            'RB4 unknown sixth guard table' => $this->insertStructuralRow($plan, $guardRevision, $unknownGuard),
+            'RB5 duplicate guard table and omitted table' => $rb5,
+            'RB7 allocation changes without guard' => $this->replaceStructuralText(
+                $plan,
+                $allocationReceiptBlock,
+                '| 3 | `supplier_import_source_payload_receipt_blobs` |'.$lineEnding.
+                    '| 4 | `supplier_product_identity_heads` |',
+            ),
+            'RB8 guard changes without allocation' => $this->replaceStructuralText(
+                $plan,
+                $guardExecution,
+                '| 2 | `supplier_import_source_execution_archive` | table exists and contains zero rows |',
+            ),
+            'RB9 stale four-table prose' => $this->replaceStructuralText(
+                $plan,
+                'five structurally registered new tables',
+                'four new tables',
+            ),
+        ];
+
+        foreach ($mutations as $case => $mutatedPlan) {
+            $this->assertNotSame(
+                [],
+                $this->phaseThreeP0RollbackSetContract($mutatedPlan)['violations'],
+                $case,
+            );
+        }
+
+        $this->assertSame([], $this->phaseThreeP0RollbackSetContract($plan)['violations'], 'RB6 exact set equality');
+        $this->assertSame([], $this->phaseThreeP0RollbackSetContract($plan.$lineEnding)['violations'], 'RB10 canonical document');
+    }
+
+    public function test_phase_three_semantic_registries_reject_current_coexistence_contradictions(): void
+    {
+        $design = $this->readDocument('docs/IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md');
+        $lineEnding = str_contains($design, "\r\n") ? "\r\n" : "\n";
+        $canonical = $this->phaseThreeExclusiveSemanticContract($design);
+        $this->assertSame([], $canonical['violations'], 'CO19 canonical: '.implode(PHP_EOL, $canonical['violations']));
+
+        $payloadRegistry = $this->phaseThreeSemanticRegistryBlock(
+            $design,
+            'phase-iii-payload-integrity-contract-v1',
+        );
+        $rejected = [
+            'CO1 contradictory receipt relation' => 'A payload receipt may belong to a different source execution.',
+            'CO2 SHA-1 payload digest' => 'The payload receipt digest uses SHA-1.',
+            'CO3 pathname reopen allowed' => 'The protected parser may reopen the temporary payload by pathname.',
+            'CO4 parser success before EOF' => 'The parser may return protected success before complete EOF digest verification.',
+            'CO5 template selector omitted' => 'The xml_mapping_template_id is optional in ImportJobIdentity.',
+            'CO6 reversed lock order' => 'Current lock authority: SupplierFeed -> ImportJob -> XML mapping template.',
+            'CO7 mutable template reread' => 'Execution A may reread the current mutable mapping template after source-resolution commit.',
+            'CO8 receipt replacement allowed' => 'A committed payload receipt may be replaced by a later byte-valid receipt.',
+            'CO9 MD5 payload digest' => 'The payload receipt digest algorithm is MD5.',
+            'CO10 receipt binding optional' => 'Payload receipt execution binding is optional.',
+            'CO11 retry pathname reopen' => 'The protected parser may reopen the payload path only on retry.',
+            'CO12 EOF verification advisory' => 'Parser EOF receipt verification is advisory rather than mandatory.',
+            'CO13 ImportJob row lock optional' => 'The ImportJob row lock is optional during source resolution.',
+            'CO14 selector outside transaction' => 'The template selector may be verified outside the source-resolution transaction.',
+            'CO15 retry current ImportJob reread' => 'Retry may reread the current ImportJob when source_identity matches.',
+            'CO16 duplicate canonical semantic registry' => $payloadRegistry,
+        ];
+        foreach ($rejected as $case => $fragment) {
+            $mutated = $design.$lineEnding.$fragment;
+            $this->assertNotSame(
+                [],
+                $this->phaseThreeExclusiveSemanticContract($mutated)['violations'],
+                $case,
+            );
+        }
+
+        $historical = $design.$lineEnding.
+            '<!-- phase-iii-architecture-authority classification=HISTORICAL id=phase-iii-semantic-history-v1 -->'.$lineEnding.
+            'An earlier rejected draft considered SHA-1 for the payload receipt digest.';
+        $historicalRegistry = $design.$lineEnding.str_replace(
+            [
+                'classification=CURRENT id=phase-iii-payload-integrity-contract-v1',
+                'id=phase-iii-payload-integrity-contract-v1',
+            ],
+            [
+                'classification=HISTORICAL id=phase-iii-payload-integrity-contract-v0',
+                'id=phase-iii-payload-integrity-contract-v0',
+            ],
+            $payloadRegistry,
+        );
+        $literal = $design.$lineEnding.
+            '<!-- phase-iii-architecture-example:start -->'.$lineEnding.
+            'Mutation example only: the protected parser may reopen the payload path.'.$lineEnding.
+            '<!-- phase-iii-architecture-example:end -->';
+        $this->assertSame([], $this->phaseThreeExclusiveSemanticContract($historical)['violations'], 'CO17 classified historical alternative');
+        $this->assertSame([], $this->phaseThreeExclusiveSemanticContract($historicalRegistry)['violations'], 'CO17B classified historical registry');
+        $this->assertSame([], $this->phaseThreeExclusiveSemanticContract($literal)['violations'], 'CO18 classified literal example');
+        $this->assertSame([], $this->phaseThreeExclusiveSemanticContract($design)['violations'], 'CO19 canonical document');
+    }
+
+    public function test_phase_three_semantic_registries_reject_direct_structural_mutations(): void
+    {
+        $design = $this->readDocument('docs/IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md');
+        $mutations = [
+            'SR1 SHA-1 registry value' => ['| `payload_digest_algorithm` | `SHA-256` |', '| `payload_digest_algorithm` | `SHA-1` |'],
+            'SR2 pathname reopen allowed' => ['| `payload_path_reopen` | `FORBIDDEN` |', '| `payload_path_reopen` | `ALLOWED` |'],
+            'SR3 pre-EOF success allowed' => ['| `parser_success_before_full_eof_verification` | `FORBIDDEN` |', '| `parser_success_before_full_eof_verification` | `ALLOWED` |'],
+            'SR4 receipt replacement allowed' => ['| `receipt_mutability` | `APPEND_ONLY_NO_UPDATE_REPLACE_CLEAR_DELETE` |', '| `receipt_mutability` | `REPLACEMENT_ALLOWED` |'],
+            'SR5 template selector removed from identity' => [
+                '`schema>import_job_id>supplier_id>supplier_feed_id>xml_mapping_template_id>import_type`',
+                '`schema>import_job_id>supplier_id>supplier_feed_id>import_type`',
+            ],
+            'SR6 reversed lock order' => [
+                '| `lock_order` | `IMPORT_JOB>SUPPLIER_FEED>XML_MAPPING_TEMPLATE` |',
+                '| `lock_order` | `SUPPLIER_FEED>IMPORT_JOB>XML_MAPPING_TEMPLATE` |',
+            ],
+            'SR7 mutable template reread allowed' => [
+                '| `mutable_template_reread_after_commit` | `FORBIDDEN_FOR_HISTORICAL_AUTHORITY` |',
+                '| `mutable_template_reread_after_commit` | `ALLOWED` |',
+            ],
+        ];
+        foreach ($mutations as $case => [$search, $replacement]) {
+            $mutated = $this->replaceStructuralText($design, $search, $replacement);
+            $this->assertNotSame(
+                [],
+                $this->phaseThreeExclusiveSemanticContract($mutated)['violations'],
+                $case,
+            );
+        }
+
+        $payloadRow = '| `receipt_cardinality` | `EXACTLY_ONE_PER_SOURCE_EXECUTION` |';
+        $structuralFailures = [
+            'missing required semantic key' => $this->removeStructuralRow($design, $payloadRow),
+            'duplicate identical semantic key' => $this->insertStructuralRow($design, $payloadRow, $payloadRow),
+            'unknown semantic key' => $this->insertStructuralRow(
+                $design,
+                $payloadRow,
+                '| `unknown_payload_authority` | `FORBIDDEN` |',
+            ),
+            'malformed semantic registry marker' => $this->replaceStructuralText(
+                $design,
+                '<!-- phase-iii-semantic-registry:end id=phase-iii-payload-integrity-contract-v1 -->',
+                '<!-- phase-iii-semantic-registry:end id=phase-iii-payload-integrity-contract-v1 ->',
+            ),
+        ];
+        foreach ($structuralFailures as $case => $mutated) {
+            $this->assertNotSame([], $this->phaseThreeExclusiveSemanticContract($mutated)['violations'], $case);
+        }
+
+        $this->assertSame([], $this->phaseThreeExclusiveSemanticContract($design)['violations'], 'SR8 canonical registries');
+    }
+
     public function test_phase_three_protected_redirect_policy_is_single_and_fail_closed(): void
     {
         $design = $this->readDocument('docs/IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md');
@@ -3891,6 +4062,479 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
     }
 
     /** @return array<int, string> */
+    private function expectedPhaseThreeP0Tables(): array
+    {
+        return [
+            'supplier_import_source_profiles',
+            'supplier_import_source_executions',
+            'supplier_import_source_payload_receipts',
+            'supplier_product_identity_heads',
+            'supplier_product_source_revisions',
+        ];
+    }
+
+    /**
+     * @return array{allocation_set: array<int, string>, guard_set: array<int, string>, violations: array<int, string>}
+     */
+    private function phaseThreeP0RollbackSetContract(string $plan): array
+    {
+        $expected = $this->expectedPhaseThreeP0Tables();
+        $violations = [];
+        $markerIntentCount = 0;
+        $validMarkers = [];
+
+        foreach (preg_split('/\R/', $plan) ?: [] as $lineNumber => $line) {
+            if (! str_contains(strtolower($line), 'phase-iii-p0-table-set-registry')) {
+                continue;
+            }
+
+            $markerIntentCount++;
+            if (preg_match(
+                '/^<!-- phase-iii-p0-table-set-registry classification=CURRENT id=(?<id>phase-iii-p0-(?:new-table-allocation|destructive-downgrade-table-set)-v1) -->$/',
+                $line,
+                $start,
+            ) === 1) {
+                $validMarkers[] = ['type' => 'start', 'id' => $start['id']];
+
+                continue;
+            }
+            if (preg_match(
+                '/^<!-- phase-iii-p0-table-set-registry:end id=(?<id>phase-iii-p0-(?:new-table-allocation|destructive-downgrade-table-set)-v1) -->$/',
+                $line,
+                $end,
+            ) === 1) {
+                $validMarkers[] = ['type' => 'end', 'id' => $end['id']];
+
+                continue;
+            }
+
+            $violations[] = 'Malformed Phase III-P0 table-set registry marker at line '.($lineNumber + 1).'.';
+        }
+        if ($markerIntentCount !== 4 || count($validMarkers) !== 4) {
+            $violations[] = 'Exactly two complete CURRENT Phase III-P0 table-set registries are required.';
+        }
+        foreach (['phase-iii-p0-new-table-allocation-v1', 'phase-iii-p0-destructive-downgrade-table-set-v1'] as $id) {
+            $starts = array_filter($validMarkers, static fn (array $marker): bool => $marker['type'] === 'start' && $marker['id'] === $id);
+            $ends = array_filter($validMarkers, static fn (array $marker): bool => $marker['type'] === 'end' && $marker['id'] === $id);
+            if (count($starts) !== 1 || count($ends) !== 1) {
+                $violations[] = "Phase III-P0 registry {$id} must have exactly one CURRENT start and one end marker.";
+            }
+        }
+
+        $allocation = $this->structuralMarkdownTable(
+            $plan,
+            '| Allocation position | Phase III-P0 new table |',
+            '| :---: | :--- |',
+            'Phase III-P0 new-table allocation registry',
+            2,
+            '<!-- phase-iii-p0-table-set-registry:end id=phase-iii-p0-new-table-allocation-v1 -->',
+        );
+        $guard = $this->structuralMarkdownTable(
+            $plan,
+            '| Guard position | Phase III-P0 guarded table | Required empty/pristine evidence |',
+            '| :---: | :--- | :--- |',
+            'Phase III-P0 destructive-downgrade registry',
+            3,
+            '<!-- phase-iii-p0-table-set-registry:end id=phase-iii-p0-destructive-downgrade-table-set-v1 -->',
+        );
+        $violations = [...$violations, ...$allocation['violations'], ...$guard['violations']];
+        $allocationRows = $this->phaseThreeP0TableSetRows($allocation['rows'], 2, 'allocation');
+        $guardRows = $this->phaseThreeP0TableSetRows($guard['rows'], 3, 'destructive guard');
+        $violations = [...$violations, ...$allocationRows['violations'], ...$guardRows['violations']];
+        $allocationSet = $allocationRows['tables'];
+        $guardSet = $guardRows['tables'];
+
+        if (count($allocationSet) !== 5 || count(array_unique($allocationSet)) !== 5) {
+            $violations[] = 'Phase III-P0 new-table allocation must contain exactly five unique tables.';
+        }
+        if (count($guardSet) !== 5 || count(array_unique($guardSet)) !== 5) {
+            $violations[] = 'Phase III-P0 destructive guard must contain exactly five unique tables.';
+        }
+        $sortedAllocation = $allocationSet;
+        $sortedGuard = $guardSet;
+        $sortedExpected = $expected;
+        sort($sortedAllocation);
+        sort($sortedGuard);
+        sort($sortedExpected);
+        if ($sortedAllocation !== $sortedExpected) {
+            $violations[] = 'Phase III-P0 allocation set does not match the canonical five-table registry.';
+        }
+        if ($sortedGuard !== $sortedExpected) {
+            $violations[] = 'Phase III-P0 destructive guard set does not match the canonical five-table registry.';
+        }
+        if (array_diff($sortedAllocation, $sortedGuard) !== [] || array_diff($sortedGuard, $sortedAllocation) !== []) {
+            $violations[] = 'Phase III-P0 allocation and destructive-guard table sets are not exactly equal.';
+        }
+        foreach ($guardRows['evidence'] as $table => $evidence) {
+            if (! str_contains($evidence, 'table exists and contains zero rows')) {
+                $violations[] = "Phase III-P0 destructive guard lacks exact empty/pristine evidence for {$table}.";
+            }
+        }
+        if (preg_match('/\bfour new tables\b/i', $plan) === 1) {
+            $violations[] = 'Stale four-table Phase III-P0 rollback declaration remains current.';
+        }
+        $normalizedPlan = preg_replace('/\s+/', ' ', $plan) ?? $plan;
+        foreach ([
+            'Every row must prove its predicate before the first destructive DDL statement',
+            'The two structural table sets must be exactly equal as unordered five-member',
+            'does not by itself authorize removal of evidence-bearing columns on existing',
+        ] as $authority) {
+            if (! str_contains($normalizedPlan, $authority)) {
+                $violations[] = "Missing Phase III-P0 rollback authority: {$authority}.";
+            }
+        }
+
+        return [
+            'allocation_set' => $allocationSet,
+            'guard_set' => $guardSet,
+            'violations' => array_values(array_unique($violations)),
+        ];
+    }
+
+    /**
+     * @param  array<int, string>  $rows
+     * @return array{tables: array<int, string>, evidence: array<string, string>, violations: array<int, string>}
+     */
+    private function phaseThreeP0TableSetRows(array $rows, int $columns, string $context): array
+    {
+        $tables = [];
+        $evidence = [];
+        $violations = [];
+        foreach ($rows as $position => $row) {
+            $parsed = $this->structuralMarkdownRowCells($row, $columns, "Phase III-P0 {$context}", $position + 1);
+            $violations = [...$violations, ...$parsed['violations']];
+            if ($parsed['cells'] === null) {
+                continue;
+            }
+
+            if ($parsed['cells'][0] !== (string) ($position + 1)
+                || preg_match('/^`(?<table>[a-z0-9_]+)`$/', $parsed['cells'][1], $table) !== 1) {
+                $violations[] = "Malformed Phase III-P0 {$context} row ".($position + 1).'.';
+
+                continue;
+            }
+            $tables[] = $table['table'];
+            if ($columns === 3) {
+                $evidence[$table['table']] = $parsed['cells'][2];
+            }
+        }
+
+        return ['tables' => $tables, 'evidence' => $evidence, 'violations' => $violations];
+    }
+
+    /**
+     * @return array{payload: array<string, string>, selector: array<string, string>, candidate_count: int, violations: array<int, string>}
+     */
+    private function phaseThreeExclusiveSemanticContract(string $design): array
+    {
+        $architecture = $this->phaseThreeArchitectureContract($design);
+        $violations = $architecture['violations'];
+        $markerIntentCount = 0;
+        $markers = [];
+        foreach (preg_split('/\R/', $design) ?: [] as $lineNumber => $line) {
+            if (! str_contains(strtolower($line), 'phase-iii-semantic-registry')) {
+                continue;
+            }
+
+            $markerIntentCount++;
+            if (preg_match(
+                '/^<!-- phase-iii-semantic-registry classification=(?<classification>CURRENT|HISTORICAL|SUPERSEDED) id=(?<id>phase-iii-[a-z0-9-]+) -->$/',
+                $line,
+                $start,
+            ) === 1) {
+                $markers[] = ['type' => 'start', 'classification' => $start['classification'], 'id' => $start['id']];
+
+                continue;
+            }
+            if (preg_match(
+                '/^<!-- phase-iii-semantic-registry:end id=(?<id>phase-iii-[a-z0-9-]+) -->$/',
+                $line,
+                $end,
+            ) === 1) {
+                $markers[] = ['type' => 'end', 'classification' => null, 'id' => $end['id']];
+
+                continue;
+            }
+
+            $violations[] = 'Malformed Phase III semantic-registry marker at line '.($lineNumber + 1).'.';
+        }
+        if ($markerIntentCount !== count($markers) || count($markers) < 4) {
+            $violations[] = 'Every Phase III semantic-registry marker candidate must be structurally valid.';
+        }
+        foreach (['phase-iii-payload-integrity-contract-v1', 'phase-iii-import-job-selector-contract-v1'] as $id) {
+            $starts = array_filter($markers, static fn (array $marker): bool => $marker['type'] === 'start' && $marker['classification'] === 'CURRENT' && $marker['id'] === $id);
+            $ends = array_filter($markers, static fn (array $marker): bool => $marker['type'] === 'end' && $marker['id'] === $id);
+            if (count($starts) !== 1 || count($ends) !== 1) {
+                $violations[] = "Phase III semantic registry {$id} must have exactly one CURRENT start and one end marker.";
+            }
+        }
+        $startIds = array_column(array_filter($markers, static fn (array $marker): bool => $marker['type'] === 'start'), 'id');
+        $endIds = array_column(array_filter($markers, static fn (array $marker): bool => $marker['type'] === 'end'), 'id');
+        foreach (array_unique([...$startIds, ...$endIds]) as $id) {
+            if (count(array_filter($startIds, static fn (string $candidate): bool => $candidate === $id)) !== 1
+                || count(array_filter($endIds, static fn (string $candidate): bool => $candidate === $id)) !== 1) {
+                $violations[] = "Phase III semantic registry {$id} must contain exactly one paired start/end marker.";
+            }
+        }
+        foreach (array_filter($markers, static fn (array $marker): bool => $marker['type'] === 'start' && $marker['classification'] === 'CURRENT') as $marker) {
+            if (! in_array($marker['id'], ['phase-iii-payload-integrity-contract-v1', 'phase-iii-import-job-selector-contract-v1'], true)) {
+                $violations[] = "Unexpected CURRENT Phase III semantic registry {$marker['id']}.";
+            }
+        }
+
+        $payloadExpected = $this->expectedPhaseThreePayloadSemantics();
+        $selectorExpected = $this->expectedPhaseThreeSelectorSemantics();
+        $payload = $this->phaseThreeSemanticRegistryRows(
+            $architecture['body'],
+            '| Payload semantic key | Canonical value |',
+            '| ---: | :--- |',
+            '<!-- phase-iii-semantic-registry:end id=phase-iii-payload-integrity-contract-v1 -->',
+            'payload-integrity',
+        );
+        $selector = $this->phaseThreeSemanticRegistryRows(
+            $architecture['body'],
+            '| ImportJob selector semantic key | Canonical value |',
+            '| :--- | ---: |',
+            '<!-- phase-iii-semantic-registry:end id=phase-iii-import-job-selector-contract-v1 -->',
+            'ImportJob-selector',
+        );
+        $violations = [...$violations, ...$payload['violations'], ...$selector['violations']];
+        if ($payload['values'] !== $payloadExpected) {
+            $violations[] = 'Payload-integrity semantic registry does not exactly match its canonical key/value authority.';
+        }
+        if ($selector['values'] !== $selectorExpected) {
+            $violations[] = 'ImportJob-selector semantic registry does not exactly match its canonical key/value authority.';
+        }
+
+        $assertions = $this->phaseThreeGlobalSemanticAssertions(
+            $design,
+            [...$payloadExpected, ...$selectorExpected],
+        );
+        $violations = [...$violations, ...$assertions['violations']];
+
+        return [
+            'payload' => $payload['values'],
+            'selector' => $selector['values'],
+            'candidate_count' => $assertions['candidate_count'],
+            'violations' => array_values(array_unique($violations)),
+        ];
+    }
+
+    /** @return array<string, string> */
+    private function expectedPhaseThreePayloadSemantics(): array
+    {
+        return [
+            'receipt_cardinality' => 'EXACTLY_ONE_PER_SOURCE_EXECUTION',
+            'receipt_execution_binding' => 'REQUIRED_IMMUTABLE',
+            'payload_digest_algorithm' => 'SHA-256',
+            'payload_digest_domain' => 'EXACT_ACCEPTED_DECODED_PARSER_INPUT_BYTES',
+            'payload_path_reopen' => 'FORBIDDEN',
+            'parser_success_before_full_eof_verification' => 'FORBIDDEN',
+            'receipt_mutability' => 'APPEND_ONLY_NO_UPDATE_REPLACE_CLEAR_DELETE',
+            'receipt_rebinding' => 'FORBIDDEN',
+            'parser_receipt_verification' => 'REQUIRED',
+            'authoritative_handle_identity' => 'SAME_VERIFIED_FILE_OBJECT',
+        ];
+    }
+
+    /** @return array<string, string> */
+    private function expectedPhaseThreeSelectorSemantics(): array
+    {
+        return [
+            'identity_ordered_fields' => 'schema>import_job_id>supplier_id>supplier_feed_id>xml_mapping_template_id>import_type',
+            'required_template_selector' => 'XML_REQUIRED_CSV_NULL',
+            'lock_order' => 'IMPORT_JOB>SUPPLIER_FEED>XML_MAPPING_TEMPLATE',
+            'import_job_row_locking' => 'FOR_UPDATE_REQUIRED',
+            'supplier_feed_row_locking' => 'FOR_UPDATE_REQUIRED',
+            'template_row_locking' => 'XML_FOR_UPDATE_REQUIRED',
+            'selector_verification_boundary' => 'SAME_SOURCE_RESOLUTION_TRANSACTION',
+            'mapping_snapshot_authority' => 'IMMUTABLE_CANONICAL_BYTES_AND_FINGERPRINT',
+            'mutable_template_reread_after_commit' => 'FORBIDDEN_FOR_HISTORICAL_AUTHORITY',
+            'retry_current_selector_reread' => 'FORBIDDEN_FOR_HISTORICAL_AUTHORITY',
+            'source_execution_identity_binding' => 'REQUIRED_IMMUTABLE',
+        ];
+    }
+
+    /**
+     * @return array{values: array<string, string>, violations: array<int, string>}
+     */
+    private function phaseThreeSemanticRegistryRows(
+        string $architecture,
+        string $header,
+        string $separator,
+        string $endMarker,
+        string $context,
+    ): array {
+        $table = $this->structuralMarkdownTable(
+            $architecture,
+            $header,
+            $separator,
+            "Phase III {$context} semantic registry",
+            2,
+            $endMarker,
+        );
+        $violations = $table['violations'];
+        $values = [];
+        foreach ($table['rows'] as $position => $row) {
+            $parsed = $this->structuralMarkdownRowCells($row, 2, "Phase III {$context} semantic registry", $position + 1);
+            $violations = [...$violations, ...$parsed['violations']];
+            if ($parsed['cells'] === null
+                || preg_match('/^`(?<key>[a-z0-9_]+)`$/', $parsed['cells'][0], $key) !== 1
+                || preg_match('/^`(?<value>[A-Za-z0-9_>\-]+)`$/', $parsed['cells'][1], $value) !== 1) {
+                $violations[] = "Malformed Phase III {$context} semantic row ".($position + 1).'.';
+
+                continue;
+            }
+            if (array_key_exists($key['key'], $values)) {
+                $violations[] = "Duplicate Phase III {$context} semantic key {$key['key']}.";
+            }
+            $values[$key['key']] = $value['value'];
+        }
+
+        return ['values' => $values, 'violations' => $violations];
+    }
+
+    private function phaseThreeSemanticRegistryBlock(string $design, string $id): string
+    {
+        $pattern = '/^<!-- phase-iii-semantic-registry classification=CURRENT id='.preg_quote($id, '/').' -->$.*?^<!-- phase-iii-semantic-registry:end id='.preg_quote($id, '/').' -->$/ms';
+        $this->assertSame(1, preg_match($pattern, $design, $match), "Missing semantic registry block {$id}.");
+
+        return $match[0];
+    }
+
+    /**
+     * @param  array<string, string>  $expected
+     * @return array{candidate_count: int, violations: array<int, string>}
+     */
+    private function phaseThreeGlobalSemanticAssertions(string $design, array $expected): array
+    {
+        $classification = 'REFERENCE';
+        $candidateCount = 0;
+        $violations = [];
+        foreach ($this->phaseThreeArchitectureStructuralBlocks($design) as $blockIndex => $block) {
+            if ($block['literal']) {
+                continue;
+            }
+            if (preg_match(
+                '/^<!-- phase-iii-architecture-authority classification=(?<classification>CURRENT|HISTORICAL|SUPERSEDED) id=[a-z0-9-]+ -->$/',
+                trim($block['raw']),
+                $authority,
+            ) === 1) {
+                $classification = match ($authority['classification']) {
+                    'CURRENT' => 'CURRENT_CANONICAL',
+                    'HISTORICAL' => 'HISTORICAL',
+                    'SUPERSEDED' => 'SUPERSEDED',
+                };
+
+                continue;
+            }
+            if ($block['type'] === 'table' && str_contains($block['raw'], 'semantic key')) {
+                continue;
+            }
+
+            foreach ($this->phaseThreeSemanticAssertions($block['raw']) as $key => $value) {
+                $candidateCount++;
+                if (in_array($classification, ['HISTORICAL', 'SUPERSEDED'], true)) {
+                    continue;
+                }
+                if ($classification === 'UNCLASSIFIED_CURRENT') {
+                    $violations[] = "Unclassified current Phase III semantic assertion {$key} in structural block ".($blockIndex + 1).'.';
+
+                    continue;
+                }
+                if ($classification === 'REFERENCE') {
+                    continue;
+                }
+                if (! array_key_exists($key, $expected) || $expected[$key] !== $value) {
+                    $violations[] = "Contradictory current Phase III semantic assertion {$key}={$value} in structural block ".($blockIndex + 1).'.';
+                }
+            }
+        }
+
+        return ['candidate_count' => $candidateCount, 'violations' => $violations];
+    }
+
+    /** @return array<string, string> */
+    private function phaseThreeSemanticAssertions(string $raw): array
+    {
+        $text = strtolower($this->phaseThreeArchitectureDiscoveryText($raw));
+        $compact = preg_replace('/[^a-z0-9]+/', '', $text) ?? $text;
+        $assertions = [];
+
+        if ((str_contains($text, 'payload') || str_contains($text, 'receipt'))
+            && (str_contains($text, 'digest') || str_contains($text, 'sha-') || str_contains($text, 'sha ') || str_contains($text, 'md5'))) {
+            if (preg_match('/\bsha[ -]?1\b/', $text) === 1) {
+                $assertions['payload_digest_algorithm'] = 'SHA-1';
+            } elseif (preg_match('/\bmd5\b/', $text) === 1) {
+                $assertions['payload_digest_algorithm'] = 'MD5';
+            } elseif (preg_match('/\bsha[ -]?256\b/', $text) === 1) {
+                $assertions['payload_digest_algorithm'] = 'SHA-256';
+            }
+        }
+
+        if (str_contains($text, 'parser') && str_contains($text, 'reopen') && str_contains($text, 'path')) {
+            $forbidden = preg_match('/\b(?:no|never)\b.{0,120}\b(?:may |can )?reopen\b|\b(?:must not|forbidden)\b.{0,120}\breopen\b/', $text) === 1;
+            $assertions['payload_path_reopen'] = ! $forbidden
+                && preg_match('/\b(?:may|can)\b.*\breopen\b|\breopen\b.*\ballowed\b/', $text) === 1
+                    ? 'ALLOWED'
+                    : 'FORBIDDEN';
+        }
+        if (str_contains($text, 'parser') && str_contains($text, 'eof')
+            && (str_contains($text, 'success') || str_contains($text, 'successful'))) {
+            $forbidden = preg_match('/\b(?:early )?parser success\b.{0,120}\bforbidden\b|\bno\b.{0,160}\bsuccessful\b.{0,160}\buntil eof\b/', $text) === 1;
+            $assertions['parser_success_before_full_eof_verification'] = ! $forbidden
+                && preg_match('/\bmay\b.*\b(?:return )?(?:protected )?success\b.*\bbefore\b.*\beof\b|\bsuccess\b.*\bbefore\b.*\beof\b.*\ballowed\b/', $text) === 1
+                    ? 'ALLOWED'
+                    : 'FORBIDDEN';
+        }
+        if ((str_contains($text, 'payload receipt') || str_contains($text, 'committed receipt'))
+            && (str_contains($text, 'replace') || str_contains($text, 'replacement'))) {
+            $forbidden = preg_match('/\breplacement\b.{0,160}\b(?:forbidden|reject|fails?)\b|\b(?:update and delete|update or delete)\b.{0,120}\bforbidden\b/', $text) === 1;
+            $assertions['receipt_mutability'] = ! $forbidden
+                && preg_match('/\b(?:may|can)\b.*\breplac|\breplacement\b.*\ballowed\b/', $text) === 1
+                    ? 'REPLACEMENT_ALLOWED'
+                    : 'APPEND_ONLY_NO_UPDATE_REPLACE_CLEAR_DELETE';
+        }
+        if (preg_match('/payload receipt.*(?:different|another).*source execution|receipt execution binding.*optional/', $text) === 1) {
+            $assertions['receipt_execution_binding'] = 'OPTIONAL_OR_REBINDABLE';
+        } elseif (preg_match('/binds one complete accepted parser input payload to exactly one immutable source execution/', $text) === 1) {
+            $assertions['receipt_execution_binding'] = 'REQUIRED_IMMUTABLE';
+        }
+        if (str_contains($compact, 'xmlmappingtemplateid') && preg_match('/\b(?:optional|omit|omitted)\b/', $text) === 1) {
+            $assertions['required_template_selector'] = 'OPTIONAL';
+        }
+        if (str_contains($compact, 'importjob') && str_contains($compact, 'supplierfeed')
+            && str_contains($compact, 'xmlmappingtemplate')
+            && (str_contains($text, 'lock order') || str_contains($text, 'lock authority'))) {
+            $job = strpos($compact, 'importjob');
+            $feed = strpos($compact, 'supplierfeed');
+            $template = strpos($compact, 'xmlmappingtemplate');
+            $assertions['lock_order'] = is_int($job) && is_int($feed) && is_int($template) && $job < $feed && $feed < $template
+                ? 'IMPORT_JOB>SUPPLIER_FEED>XML_MAPPING_TEMPLATE'
+                : 'NON_CANONICAL_ORDER';
+        }
+        if (str_contains($text, 'importjob row lock') && str_contains($text, 'optional')) {
+            $assertions['import_job_row_locking'] = 'OPTIONAL';
+        }
+        if (str_contains($text, 'selector') && str_contains($text, 'outside') && str_contains($text, 'transaction')) {
+            $assertions['selector_verification_boundary'] = 'OUTSIDE_TRANSACTION';
+        }
+        if ((str_contains($text, 'may reread') || str_contains($text, 'by rereading'))
+            && (str_contains($text, 'mapping template') || str_contains($text, 'current importjob'))) {
+            $key = str_contains($text, 'retry')
+                ? 'retry_current_selector_reread'
+                : 'mutable_template_reread_after_commit';
+            $assertions[$key] = 'ALLOWED';
+        }
+        if (str_contains($text, 'eof') && str_contains($text, 'verification')
+            && (str_contains($text, 'advisory') || str_contains($text, 'optional'))) {
+            $assertions['parser_receipt_verification'] = 'ADVISORY';
+        }
+
+        return $assertions;
+    }
+
+    /** @return array<int, string> */
     private function phaseThreeOrderedFields(string $architecture, string $declaration, string $context): array
     {
         $contract = $this->phaseThreeOrderedFieldContract($architecture, $declaration, $context);
@@ -4905,6 +5549,8 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
 
         $status = $this->phaseThreeArchitectureStatusContract($architecture);
         $violations = [...$violations, ...$status['violations']];
+        $exclusiveSemantics = $this->phaseThreeExclusiveSemanticContract($design);
+        $violations = [...$violations, ...$exclusiveSemantics['violations']];
 
         return [
             'full_block' => $contract['full_block'],

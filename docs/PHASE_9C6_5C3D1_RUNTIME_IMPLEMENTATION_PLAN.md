@@ -597,7 +597,8 @@ foundation; no later phase may substitute for it.
 **Rollback/readiness.** Operational rollback is forward-only and preserves all
 new provenance evidence. Destructive local/testing downgrade is allowed only
 through a separately reviewed complete empty/pristine predicate covering the
-four new tables and all pointer/source/policy columns before first DDL. Any
+five structurally registered new tables and all separately guarded
+pointer/source/policy columns before first DDL. Any
 legacy row without unambiguous immutable provenance remains ineligible; no
 backfill may infer history from current feed URL, mapping or credentials.
 
@@ -970,6 +971,45 @@ Supplier Import, Product Data Quality, QA, and Catalog Sync Safety.
 
 This future allocation is additive and dormant. It is not part of the deployed
 Phase I ten-table count and does not amend any Phase I migration.
+
+The following registry is the sole CURRENT Phase III-P0 new-table allocation
+authority. `supplier_products` is intentionally absent because Phase III-P0
+adds guarded pointer/metadata columns to that existing table rather than
+creating it.
+
+<!-- phase-iii-p0-table-set-registry classification=CURRENT id=phase-iii-p0-new-table-allocation-v1 -->
+| Allocation position | Phase III-P0 new table |
+| :---: | :--- |
+| 1 | `supplier_import_source_profiles` |
+| 2 | `supplier_import_source_executions` |
+| 3 | `supplier_import_source_payload_receipts` |
+| 4 | `supplier_product_identity_heads` |
+| 5 | `supplier_product_source_revisions` |
+<!-- phase-iii-p0-table-set-registry:end id=phase-iii-p0-new-table-allocation-v1 -->
+
+The separately parsed destructive-downgrade registry is the sole CURRENT table
+set for the future local/testing empty/pristine guard. Every row must prove its
+predicate before the first destructive DDL statement; a false, unknown,
+unreadable, incomplete or missing result rejects the whole downgrade and keeps
+all evidence intact.
+
+<!-- phase-iii-p0-table-set-registry classification=CURRENT id=phase-iii-p0-destructive-downgrade-table-set-v1 -->
+| Guard position | Phase III-P0 guarded table | Required empty/pristine evidence |
+| :---: | :--- | :--- |
+| 1 | `supplier_import_source_profiles` | table exists and contains zero rows; all dependent executions are already proven absent |
+| 2 | `supplier_import_source_executions` | table exists and contains zero rows; all dependent receipts and revisions are already proven absent |
+| 3 | `supplier_import_source_payload_receipts` | table exists and contains zero rows; no committed payload receipt evidence may be discarded |
+| 4 | `supplier_product_identity_heads` | table exists and contains zero rows; all staging head pointers are separately proven null |
+| 5 | `supplier_product_source_revisions` | table exists and contains zero rows; all staging current-revision pointers are separately proven null |
+<!-- phase-iii-p0-table-set-registry:end id=phase-iii-p0-destructive-downgrade-table-set-v1 -->
+
+The two structural table sets must be exactly equal as unordered five-member
+sets. The guard implementation must discover and validate the complete set
+before it executes any trigger, FK, index, column or table DDL. The set equality
+does not by itself authorize removal of evidence-bearing columns on existing
+`supplier_products`, claims or generations: their separately stated null,
+absence and disabled-gate predicates remain mandatory in the same complete
+preflight.
 
 | Artifact | Migration/subphase | Dependency | Model/service phase | Activation gate | Rollback/readiness prerequisite |
 | --- | --- | --- | --- | --- | --- |
