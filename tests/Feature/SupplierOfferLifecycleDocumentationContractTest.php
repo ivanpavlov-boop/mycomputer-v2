@@ -1224,6 +1224,7 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
         foreach ([
             'supplier_import_source_profiles',
             'supplier_import_source_executions',
+            'supplier_import_source_payload_receipts',
             'supplier_product_identity_heads',
             'supplier_product_source_revisions',
             'current_source_revision_id',
@@ -1231,6 +1232,8 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
             'uq_import_source_profile_descriptor',
             'uq_import_source_profile_identity',
             'uq_import_source_execution_scope',
+            'uq_import_source_payload_receipt_execution',
+            'uq_import_source_payload_receipt_fingerprint',
             'uq_supplier_product_identity_head',
             'uq_supplier_product_identity_head_revision_scope',
             'supplier_sku_bytes VARBINARY(1020)',
@@ -1310,13 +1313,28 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
         ));
         $this->assertSame([
             'schema',
+            'import_job_id',
             'supplier_id',
             'supplier_feed_id',
+            'xml_mapping_template_id',
+            'import_type',
+        ], $this->phaseThreeOrderedFields(
+            $architecture,
+            'Canonical ImportJob identity fields (ordered):',
+            'Canonical ImportJob identity fields',
+        ));
+        $this->assertSame([
+            'schema',
+            'supplier_id',
+            'supplier_feed_id',
+            'import_job_id',
             'import_history_id',
             'supplier_import_source_profile_id',
             'source_identity',
             'source_descriptor_version',
             'source_descriptor_fingerprint',
+            'import_job_identity_version',
+            'import_job_identity_fingerprint',
             'resolved_source_context_version',
             'source_locator_contract_key',
             'source_locator_contract_version',
@@ -1334,6 +1352,34 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
             'Canonical source-execution fingerprint fields',
         ));
         $this->assertSame([
+            'schema',
+            'supplier_import_source_execution_id',
+            'source_execution_fingerprint',
+            'accepted_payload_bytes',
+            'accepted_payload_sha256',
+        ], $this->phaseThreeOrderedFields(
+            $architecture,
+            'Canonical source-payload receipt fingerprint fields (ordered):',
+            'Canonical source-payload receipt fingerprint fields',
+        ));
+        $this->assertSame([
+            'supplier_import_source_execution_id',
+            'source_execution_fingerprint',
+            'source_payload_receipt_id',
+            'receipt_version',
+            'accepted_payload_bytes',
+            'accepted_payload_sha256',
+            'payload_receipt_fingerprint',
+            'payload_storage_kind',
+            'payload_file_identity',
+            'payload_lifecycle_state',
+            'authoritative_read_handle',
+        ], $this->phaseThreeOrderedFields(
+            $architecture,
+            'Bounded immutable source payload fields (ordered):',
+            'Bounded immutable source payload fields',
+        ));
+        $this->assertSame([
             'supplier_id',
             'supplier_feed_id',
             'supplier_sku_bytes',
@@ -1348,7 +1394,7 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
             '| :--- | :--- | :--- | --- |',
             'Phase III fingerprint authority',
             4,
-            'This design introduces eight future, separately versioned identities:',
+            'This design introduces ten future, separately versioned identities:',
         );
         $this->assertSame([], $fingerprints['violations'], implode(PHP_EOL, $fingerprints['violations']));
         $actualFingerprints = [];
@@ -1367,7 +1413,9 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
             '`mapping_contract_fingerprint`',
             '`source_locator_key`',
             '`source_descriptor_fingerprint`',
+            '`import_job_identity_fingerprint`',
             '`source_execution_fingerprint`',
+            '`payload_receipt_fingerprint`',
             '`source_member_identity_hash`',
             '`source_row_fingerprint`',
             '`staging_projection_fingerprint`',
@@ -1520,26 +1568,27 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
             '| --- | --- | --- | --- | --- | --- |',
             'Phase III-P0 provenance allocation',
             6,
-            'Forward order is exactly migrations 1, 2, 3, 4, 5, 6A and 6B, followed by',
+            'Forward order is exactly migrations 1, 2, 3, 4, 5, 6, 7A and 7B, followed by',
         );
         $this->assertSame([], $futureAllocation['violations'], implode(PHP_EOL, $futureAllocation['violations']));
-        $this->assertSame(8, $futureAllocation['physical_count']);
+        $this->assertSame(9, $futureAllocation['physical_count']);
         foreach ([
             '`supplier_import_source_profiles`',
             '`supplier_import_source_executions`',
+            '`supplier_import_source_payload_receipts`',
             '`supplier_product_identity_heads`',
             '`supplier_product_source_revisions`',
             '`supplier_products` identity-head/current-revision pointers, indexes, checks, triggers and composite FKs',
             'claim `cohort_source_identity` plus generation-to-claim source authority',
             'policy-v2 key/version/fingerprint authority on claim/generation',
-            '`supplier_import_resolved_source_context_v1` and bounded source-payload boundary',
+            '`supplier_import_job_identity_v1`, `supplier_import_resolved_source_context_v1` and same-handle bounded source-payload boundary',
         ] as $position => $artifact) {
             $this->assertStringStartsWith("| {$artifact} |", $futureAllocation['rows'][$position]);
         }
         foreach ([
             'The historical deployed Phase I canonical table count remains exactly ten.',
             'does not amend any Phase I migration',
-            'Forward order is exactly migrations 1, 2, 3, 4, 5, 6A and 6B',
+            'Forward order is exactly migrations 1, 2, 3, 4, 5, 6, 7A and 7B',
             'Phase III-P0 must precede Phase III.',
             'with no approved numeric policy key until all ten values are authorized',
         ] as $allocationAuthority) {
@@ -1549,6 +1598,7 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
         foreach ([
             'app/Models/SupplierImportSourceProfile.php',
             'app/Models/SupplierImportSourceExecution.php',
+            'app/Models/SupplierImportSourcePayloadReceipt.php',
             'app/Models/SupplierProductIdentityHead.php',
             'app/Models/SupplierProductSourceRevision.php',
             'config/supplier_snapshot.php',
@@ -1564,7 +1614,7 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
         $this->assertSame([], $canonical['violations'], 'AC10 canonical: '.implode(PHP_EOL, $canonical['violations']));
         $block = $canonical['full_block'];
         $lineEnding = str_contains($design, "\r\n") ? "\r\n" : "\n";
-        $statusOne = '| `PH3-RDY-001` | `CLOSED IN DESIGN` | One locking source-resolution boundary persists the complete secret-free locator/mapping authority, materializes one immutable resolved context, and makes downloader/parser/retry consume only A; protected redirects fail closed before destination contact or payload acceptance; profile/execution/revision, first-insert, admission, concurrency and legacy rules are exact; runtime remains absent. |';
+        $statusOne = '| `PH3-RDY-001` | `CLOSED IN DESIGN` | One locking source-resolution boundary locks and fingerprints exact ImportJob selector J plus feed/template A; execution retry never rereads mutable selectors; protected redirects fail closed; one append-only receipt binds accepted SHA-256/size to execution A; same-handle parser EOF verification forbids pathname reopen or undetected replacement; profile/execution/revision, first-insert, admission, concurrency and legacy rules are exact; runtime remains absent. |';
         $statusThree = '| `PH3-RDY-003` | `BLOCKED` | All ten semantics, including bounded decoded source bytes, are exact; all ten numeric values remain `NOT SPECIFIED` pending separately authorized production evidence. |';
         $conflictingBlock = str_replace(
             $statusOne,
@@ -1611,9 +1661,9 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
             ],
             'P2 source execution descriptor omitted' => [
                 'source_descriptor_version'.$lineEnding.'source_descriptor_fingerprint'.$lineEnding.
-                    'resolved_source_context_version'.$lineEnding.'source_locator_contract_key',
-                'source_descriptor_version'.$lineEnding.'resolved_source_context_version'.$lineEnding.
-                    'source_locator_contract_key',
+                    'import_job_identity_version'.$lineEnding.'import_job_identity_fingerprint',
+                'source_descriptor_version'.$lineEnding.'import_job_identity_version'.$lineEnding.
+                    'import_job_identity_fingerprint',
             ],
             'P3 execution fingerprint storage undefined' => [
                 'source_execution_fingerprint CHAR(64) CHARACTER SET ascii COLLATE ascii_bin',
@@ -1671,6 +1721,163 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
                 $this->phaseThreeArchitectureSemanticContract(
                     str_replace($search, $replacement, $design),
                 )['violations'],
+                $mutation,
+            );
+        }
+    }
+
+    public function test_phase_three_payload_receipt_contract_is_exact_and_fail_closed(): void
+    {
+        $design = $this->readDocument('docs/IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md');
+        $lineEnding = str_contains($design, "\r\n") ? "\r\n" : "\n";
+
+        $this->assertSame([], $this->phaseThreeArchitectureSemanticContract($design)['violations'], 'P0 canonical payload contract');
+
+        $receiptFields = implode($lineEnding, [
+            'schema',
+            'supplier_import_source_execution_id',
+            'source_execution_fingerprint',
+            'accepted_payload_bytes',
+            'accepted_payload_sha256',
+        ]);
+        $mutations = [
+            'P1 mode alone is treated as immutable proof' => [
+                'Mode 0600 alone is never treated as immutability proof; digest verification is',
+                'Mode 0600 alone is treated as immutability proof; digest verification is optional and',
+            ],
+            'P2 parser may reopen pathname' => [
+                'No protected parser/service may reopen payload contents by pathname.',
+                'A protected parser may reopen payload contents by pathname.',
+            ],
+            'P3 receipt byte count omitted' => [
+                $receiptFields,
+                implode($lineEnding, [
+                    'schema',
+                    'supplier_import_source_execution_id',
+                    'source_execution_fingerprint',
+                    'accepted_payload_sha256',
+                ]),
+            ],
+            'P4 receipt SHA-256 omitted' => [
+                $receiptFields,
+                implode($lineEnding, [
+                    'schema',
+                    'supplier_import_source_execution_id',
+                    'source_execution_fingerprint',
+                    'accepted_payload_bytes',
+                ]),
+            ],
+            'P5 receipt execution binding omitted' => [
+                $receiptFields,
+                implode($lineEnding, [
+                    'schema',
+                    'supplier_import_source_execution_id',
+                    'accepted_payload_bytes',
+                    'accepted_payload_sha256',
+                ]),
+            ],
+            'P6 committed receipt replacement allowed' => [
+                'partial digest/size visibility, UPDATE and DELETE are forbidden.',
+                'replacement after receipt commit is allowed.',
+            ],
+            'P7 parser consumption verification omitted' => [
+                'A verification wrapper reads from the same handle, recomputes byte count',
+                'The parser trusts receipt metadata without recomputing byte count',
+            ],
+            'P8 parser succeeds before verified EOF' => [
+                'Early parser success before verified EOF is forbidden.',
+                'Early parser success before verified EOF is allowed.',
+            ],
+            'P9 pathname is immutable identity' => [
+                'metadata, not persisted receipt identity and not a pathname.',
+                'metadata; the pathname is the persisted immutable payload identity.',
+            ],
+            'P10 retry trusts leftover pathname' => [
+                'no leftover pathname is trusted',
+                'a leftover pathname is trusted',
+            ],
+        ];
+
+        foreach ($mutations as $mutation => [$search, $replacement]) {
+            $mutated = $this->replaceStructuralText($design, $search, $replacement);
+            $this->assertNotSame(
+                [],
+                $this->phaseThreeArchitectureSemanticContract($mutated)['violations'],
+                $mutation,
+            );
+        }
+    }
+
+    public function test_phase_three_import_job_selector_contract_is_exact_and_fail_closed(): void
+    {
+        $design = $this->readDocument('docs/IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md');
+        $lineEnding = str_contains($design, "\r\n") ? "\r\n" : "\n";
+
+        $this->assertSame([], $this->phaseThreeArchitectureSemanticContract($design)['violations'], 'J0 canonical ImportJob selector contract');
+
+        $jobFields = implode($lineEnding, [
+            'schema',
+            'import_job_id',
+            'supplier_id',
+            'supplier_feed_id',
+            'xml_mapping_template_id',
+            'import_type',
+        ]);
+        $executionIdentityFields = implode($lineEnding, [
+            'source_descriptor_fingerprint',
+            'import_job_identity_version',
+            'import_job_identity_fingerprint',
+            'resolved_source_context_version',
+        ]);
+        $mutations = [
+            'J1 ImportJob row is not locked' => [
+                'locks the exact ImportJob row with `SELECT ... FOR UPDATE`',
+                'reads the ImportJob row without a locking read',
+            ],
+            'J2 template selector omitted from identity' => [
+                $jobFields,
+                implode($lineEnding, [
+                    'schema',
+                    'import_job_id',
+                    'supplier_id',
+                    'supplier_feed_id',
+                    'import_type',
+                ]),
+            ],
+            'J3 ImportJob identity fields unspecified' => [
+                'Canonical ImportJob identity fields (ordered):',
+                'ImportJob identity fields are implementation-defined:',
+            ],
+            'J4 selector relationships verified after transaction' => [
+                'performs exactly this sequence:',
+                'commits before selector relationships are verified:',
+            ],
+            'J5 retry rereads current ImportJob' => [
+                'reconstructs A without rereading current ImportJob/feed/template selectors,',
+                'reconstructs A by rereading current ImportJob/feed/template selectors,',
+            ],
+            'J6 mutable template becomes historical mapping authority' => [
+                'canonical mapping bytes contain every effective parser instruction.',
+                'current mutable template becomes historical mapping authority.',
+            ],
+            'J7 source execution omits ImportJob identity' => [
+                $executionIdentityFields,
+                implode($lineEnding, [
+                    'source_descriptor_fingerprint',
+                    'resolved_source_context_version',
+                ]),
+            ],
+            'J8 feed and template locks declared sufficient' => [
+                'then, only for XML, `xml_mapping_templates` by primary key.',
+                'then `xml_mapping_templates`; feed/template locks are sufficient without locking ImportJob.',
+            ],
+        ];
+
+        foreach ($mutations as $mutation => [$search, $replacement]) {
+            $mutated = $this->replaceStructuralText($design, $search, $replacement);
+            $this->assertNotSame(
+                [],
+                $this->phaseThreeArchitectureSemanticContract($mutated)['violations'],
                 $mutation,
             );
         }
@@ -1784,9 +1991,9 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
         $this->assertSame(0, $canonical['superseded_count']);
         $this->assertSame(0, $canonical['malformed_marker_count']);
         $this->assertSame(20, $canonical['status_lexical_occurrence_count']);
-        $this->assertSame(8, $canonical['status_candidate_count']);
+        $this->assertSame(9, $canonical['status_candidate_count']);
         $this->assertSame(4, $canonical['current_status_declaration_count']);
-        $this->assertSame(4, $canonical['historical_status_declaration_count']);
+        $this->assertSame(5, $canonical['historical_status_declaration_count']);
         $this->assertSame(0, $canonical['unclassified_status_declaration_count']);
         $this->assertSame(0, $canonical['malformed_status_candidate_count']);
         $this->assertSame(0, $canonical['heading_candidate_count']);
@@ -1954,7 +2161,7 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
         $historicalAuthority = $this->phaseThreeArchitectureAuthorityContract($historical);
         $this->assertSame([], $this->phaseThreeArchitectureSemanticContract($historical)['violations'], 'HP2 classified historical status');
         $this->assertSame(1, $historicalAuthority['superseded_count']);
-        $this->assertSame(5, $historicalAuthority['historical_status_declaration_count']);
+        $this->assertSame(6, $historicalAuthority['historical_status_declaration_count']);
         $historicalMention = $design.$lineEnding.'PH3-RDY-001 was evaluated during readiness review.';
         $historicalMentionAuthority = $this->phaseThreeArchitectureAuthorityContract($historicalMention);
         $this->assertSame([], $this->phaseThreeArchitectureSemanticContract($historicalMention)['violations'], 'HP3 identifier-only prose');
@@ -2101,6 +2308,87 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
                 $this->phaseThreeArchitectureSemanticContract($document)['violations'],
                 $case,
             );
+        }
+    }
+
+    public function test_phase_three_final_authority_root_causes_and_novel_fragmentation_are_closed(): void
+    {
+        $design = $this->readDocument('docs/IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md');
+        $lineEnding = str_contains($design, "\r\n") ? "\r\n" : "\n";
+        $rejected = [
+            'M08 emphasis-fragmented identifier' => '***PH3***-**RDY**-001 = BLOCKED',
+            'M09 comment-fragmented identifier' => 'Current PH3&#45;<!-- phase architecture -->RDY&#45;002 = BLOCKED',
+            'M12 long current heading' => '### Current PH3-RDY-001 remains after one two three four five six seven eight nine ten eleven words BLOCKED',
+            'NF01 mixed emphasis' => '**PH3**-*RDY*-001 = BLOCKED',
+            'NF02 nested emphasis' => '___PH3___-***RDY***-002 = BLOCKED',
+            'NF03 comments at both boundaries' => 'Current PH3<!-- first -->-RDY<!-- second -->-003 = CLOSED',
+            'NF04 entity and emphasis' => 'Current **PH3**&#45;__RDY__&#45;004 = BLOCKED',
+            'NF05 Unicode hyphen and emphasis' => "Current *PH3*\u{2011}**RDY**\u{2011}001 = BLOCKED",
+            'NF06 twenty-word heading' => '#### Current PH3-RDY-002 has one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen seventeen eighteen nineteen twenty status BLOCKED',
+            'NF07 long definition entry' => 'PH3-RDY-003: the current architecture after one two three four five six seven eight nine ten remains CLOSED',
+            'NF08 long table cell' => '| PH3-RDY-004 | one two three four five six seven eight nine ten eleven | BLOCKED |',
+            'NF09 status before fragmented identifier' => 'BLOCKED is the current value of ***PH3***-**RDY**-001',
+            'NF10 fragmented link label' => '[***PH3***-**RDY**-002](#status) = BLOCKED',
+            'NF11 fragmented HTML cells' => '<table><tr><td>***PH3***-**RDY**-003</td><td>CLOSED</td></tr></table>',
+            'NF12 NBSP and emphasis' => "Current **PH3**\u{00A0}-\u{00A0}**RDY**-004 = BLOCKED",
+            'NF13 comments and Unicode' => "Current PH3\u{2011}<!-- hidden -->RDY\u{2011}001 = BLOCKED",
+            'NF14 blockquote current fragmented identifier' => '> Current ***PH3***-**RDY**-002 = BLOCKED',
+            'NF15 inline wrappers and comment' => '<span>PH3</span>-<!-- join --><strong>RDY</strong>-003 = CLOSED',
+        ];
+        foreach ($rejected as $case => $fragment) {
+            $violations = $this->phaseThreeArchitectureSemanticContract(
+                $design.$lineEnding.$fragment,
+            )['violations'];
+            $this->assertNotSame([], $violations, $case);
+        }
+
+        $accepted = [
+            'FC1 fragmented literal example' => $design.$lineEnding.
+                '<!-- phase-iii-architecture-example:start -->'.$lineEnding.
+                'Example only: ***PH3***-**RDY**-001 = BLOCKED.'.$lineEnding.
+                '<!-- phase-iii-architecture-example:end -->',
+            'FC2 fragmented historical authority' => $design.$lineEnding.
+                '<!-- phase-iii-architecture-authority classification=HISTORICAL id=phase-iii-fragment-history-v1 -->'.$lineEnding.
+                'At the earlier checkpoint ***PH3***-**RDY**-002 was BLOCKED.',
+            'FC3 emphasized identifier-only reference' => $design.$lineEnding.
+                'The **PH3**-**RDY**-003 finding is referenced without a status declaration.',
+            'FC4 long identifier-only prose' => $design.$lineEnding.
+                'PH3-RDY-004 is discussed across one two three four five six seven eight nine ten words without declaring a result.',
+            'FC5 comment-adjacent identifier-only reference' => $design.$lineEnding.
+                'PH3-<!-- presentation -->RDY-001 is referenced without a result declaration.',
+            'FC6 fragmented historical blockquote' => $design.$lineEnding.
+                '<!-- phase-iii-architecture-authority classification=HISTORICAL id=phase-iii-fragment-blockquote-v1 -->'.$lineEnding.
+                '> At the earlier checkpoint ***PH3***-**RDY**-004 was BLOCKED.',
+        ];
+        foreach ($accepted as $case => $document) {
+            $this->assertSame(
+                [],
+                $this->phaseThreeArchitectureSemanticContract($document)['violations'],
+                $case,
+            );
+        }
+
+        $documents = [
+            'design' => $design,
+            'plan' => $this->readDocument('docs/PHASE_9C6_5C3D1_RUNTIME_IMPLEMENTATION_PLAN.md'),
+            'phases' => $this->readDocument('docs/PHASES.md'),
+            'roadmap' => $this->readDocument('docs/ROADMAP.md'),
+            'onboarding' => $this->readDocument('docs/SUPPLIER_ONBOARDING_FRAMEWORK.md'),
+            'apcom' => $this->readDocument('docs/APCOM_OPERATIONAL_OFFER_LIFECYCLE_PREVIEW.md'),
+        ];
+        foreach (array_diff(array_keys($documents), ['design']) as $documentKey) {
+            foreach ([
+                'C11 emphasis-fragmented contradiction' => '***PH3***-**RDY**-001 = BLOCKED',
+                'C12 comment-fragmented contradiction' => 'Current PH3&#45;<!-- phase architecture -->RDY&#45;003 = CLOSED',
+            ] as $case => $fragment) {
+                $mutated = $documents;
+                $mutated[$documentKey] .= $lineEnding.$fragment;
+                $this->assertNotSame(
+                    [],
+                    $this->phaseThreeRepositoryStatusAuthorityContract($mutated)['violations'],
+                    "{$documentKey}: {$case}",
+                );
+            }
         }
     }
 
@@ -3715,7 +4003,11 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
                 trim($block['raw']),
                 $match,
             ) === 1;
-            if ($isExactMarker || preg_match('/\bphase iii architecture(?: \w+){0,2} authority\b/', $normalized) === 1) {
+            $hasMarkerIntent = preg_match(
+                '/(?<![a-z0-9])phase[\s_-]*(?:iii|3)[\s_-]*architectur(?:e|al)(?:[\s_-]+status)?[\s_-]+authority(?![a-z0-9])/i',
+                $block['raw'],
+            ) === 1;
+            if ($isExactMarker || $hasMarkerIntent || preg_match('/\bphase iii architecture(?: \w+){0,2} authority\b/', $normalized) === 1) {
                 $markerCandidates[] = ['block' => $blockIndex, 'raw' => $block['raw']];
                 if (! $isExactMarker) {
                     $violations[] = 'Malformed Phase III architecture authority marker candidate in structural block '.($blockIndex + 1).'.';
@@ -3738,16 +4030,12 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
 
                 $unitTokens = $this->phaseThreeArchitectureNormalizedTokens($unit);
                 $unitDiscovery = $this->phaseThreeArchitectureDiscoveryText($unit);
-                $id = 'ph3 rdy 00[1-4]';
                 $status = '(?:closed in design|closed|blocked|unknown|pending)';
-                $hasBoundedStatusAssociation = preg_match(
-                    '/(?:\b'.$id.'\b(?: \w+){0,8} \b'.$status.'\b|\b'.$status.'\b(?: \w+){0,8} \b'.$id.'\b)/',
-                    $unitTokens,
-                ) === 1;
+                $hasStructuralStatusAssociation = preg_match('/\b'.$status.'\b/', $unitTokens) === 1;
                 $hasDeclarationSyntax = preg_match('/\bPH3-RDY-00[1-4]\b\s*(?:=|:|\|)/i', $unitDiscovery) === 1
                     || (stripos($unit, '<td') !== false && $statusIds !== []);
 
-                if ($hasBoundedStatusAssociation || $hasDeclarationSyntax) {
+                if ($hasStructuralStatusAssociation || $hasDeclarationSyntax) {
                     $statusCandidates[] = [
                         'block' => $blockIndex,
                         'raw' => $unit,
@@ -4110,14 +4398,7 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
         if (str_contains($value, '<!--') && ! str_contains($value, '-->')) {
             $value = str_replace('<!--', ' ', $value);
         } else {
-            $value = preg_replace_callback('/<!--(?<content>.*?)-->/s', static function (array $comment): string {
-                $content = strtolower($comment['content']);
-                $tokens = preg_replace('/[^a-z0-9]+/', ' ', $content) ?? $content;
-
-                return str_contains($tokens, 'phase') && str_contains($tokens, 'architect')
-                    ? ' '.$comment['content'].' '
-                    : '';
-            }, $value) ?? $value;
+            $value = preg_replace('/<!--.*?-->/s', '', $value) ?? $value;
         }
         $value = html_entity_decode($value, ENT_QUOTES | ENT_HTML5, 'UTF-8');
         $value = str_replace([
@@ -4126,7 +4407,7 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
         $value = str_replace(["\u{00A0}", "\u{202F}", "\t"], ' ', $value);
         $value = preg_replace('/\[([^\]]+)\]\([^)]+\)/s', '$1', $value) ?? $value;
         $value = preg_replace('/<[^>]+>/', ' ', $value) ?? strip_tags($value);
-        $value = str_replace(['`', '**', '__', '~~'], '', $value);
+        $value = preg_replace('/(?<!\\\\)[*_~`]+/u', '', $value) ?? $value;
         $value = preg_replace('/\bPH3\s*-\s*RDY\s*-\s*00([1-4])\b/iu', 'PH3-RDY-00$1', $value) ?? $value;
 
         return trim(preg_replace('/[\p{Z}\s]+/u', ' ', $value) ?? $value);
@@ -4467,9 +4748,24 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
                 ['schema', 'source_profile_id', 'source_identity', 'source_descriptor_version', 'source_descriptor_fingerprint', 'supplier_id', 'supplier_feed_id', 'source_locator_contract_key', 'source_locator_contract_version', 'source_locator_key', 'source_locator_canonical_bytes', 'source_access_scope_key', 'feed_type', 'importer_key', 'importer_version', 'mapping_contract_version', 'mapping_canonical_bytes', 'mapping_contract_fingerprint'],
             ],
             [
+                'Canonical ImportJob identity fields (ordered):',
+                'Canonical ImportJob identity fields',
+                ['schema', 'import_job_id', 'supplier_id', 'supplier_feed_id', 'xml_mapping_template_id', 'import_type'],
+            ],
+            [
                 'Canonical source-execution fingerprint fields (ordered):',
                 'Canonical source-execution fingerprint fields',
-                ['schema', 'supplier_id', 'supplier_feed_id', 'import_history_id', 'supplier_import_source_profile_id', 'source_identity', 'source_descriptor_version', 'source_descriptor_fingerprint', 'resolved_source_context_version', 'source_locator_contract_key', 'source_locator_contract_version', 'source_locator_key', 'source_access_scope_key', 'feed_type', 'importer_key', 'importer_version', 'mapping_contract_version', 'mapping_contract_fingerprint', 'captured_at'],
+                ['schema', 'supplier_id', 'supplier_feed_id', 'import_job_id', 'import_history_id', 'supplier_import_source_profile_id', 'source_identity', 'source_descriptor_version', 'source_descriptor_fingerprint', 'import_job_identity_version', 'import_job_identity_fingerprint', 'resolved_source_context_version', 'source_locator_contract_key', 'source_locator_contract_version', 'source_locator_key', 'source_access_scope_key', 'feed_type', 'importer_key', 'importer_version', 'mapping_contract_version', 'mapping_contract_fingerprint', 'captured_at'],
+            ],
+            [
+                'Canonical source-payload receipt fingerprint fields (ordered):',
+                'Canonical source-payload receipt fingerprint fields',
+                ['schema', 'supplier_import_source_execution_id', 'source_execution_fingerprint', 'accepted_payload_bytes', 'accepted_payload_sha256'],
+            ],
+            [
+                'Bounded immutable source payload fields (ordered):',
+                'Bounded immutable source payload fields',
+                ['supplier_import_source_execution_id', 'source_execution_fingerprint', 'source_payload_receipt_id', 'receipt_version', 'accepted_payload_bytes', 'accepted_payload_sha256', 'payload_receipt_fingerprint', 'payload_storage_kind', 'payload_file_identity', 'payload_lifecycle_state', 'authoritative_read_handle'],
             ],
             [
                 'Canonical supplier-product logical-head key fields (ordered):',
@@ -4497,6 +4793,15 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
             'source_locator_canonical_bytes',
             'mapping_canonical_bytes',
             'The canonical source-resolution consistency boundary is one MySQL',
+            'The sole future immutable selector snapshot is',
+            'supplier_import_job_identity_v1',
+            'locks the exact ImportJob row with `SELECT ... FOR UPDATE`',
+            'single deterministic cross-table lock order is `import_jobs` by primary key, then `supplier_feeds` by',
+            'then, only for XML, `xml_mapping_templates` by primary key.',
+            'The transaction performs exactly this sequence:',
+            'read every source-defining feed and effective mapping value from the locked rows without a later selector reread;',
+            'cannot produce job identity T1 with parser mapping T2.',
+            'The canonical mapping bytes contain every effective parser instruction.',
             'downloadSource(ResolvedSupplierImportSourceContext)',
             'MUST NOT read',
             'source_execution_fingerprint CHAR(64) CHARACTER SET ascii COLLATE ascii_bin',
@@ -4523,6 +4828,20 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
             'To move from canonical locator A to B, mutable feed configuration must be changed and a later normal locking source-resolution transaction must create or resolve profile/context/execution B under the existing A-to-B rules.',
             'Retry of execution EA reconstructs immutable context A and repeats only locator A with redirect following still disabled.',
             'because the downloader cannot consume a redirected locator, EA cannot attest A while parsing bytes obtained from B.',
+            'The persistence authority is one dedicated append-only table,',
+            '`supplier_import_source_payload_receipts`',
+            '`NO_RECEIPT -> RECEIPT_COMMITTED` once',
+            'A-to-B replacement, clearing, partial digest/size visibility, UPDATE and DELETE are forbidden.',
+            '`accepted_payload_sha256` is SHA-256 over the exact decoded bytes',
+            '`private_open_regular_file_v1`',
+            'The identity is attempt-local security metadata, not persisted receipt identity and not a pathname.',
+            'No protected parser/service may reopen payload contents by pathname.',
+            'The parser receives only the resolved context plus that already-open payload object.',
+            'A verification wrapper reads from the same handle, recomputes byte count',
+            'Early parser success before verified EOF is forbidden.',
+            'Mode 0600 alone is never treated as immutability proof; digest verification is',
+            'no leftover pathname is trusted',
+            'Retry reconstructs A without rereading current ImportJob/feed/template selectors,',
             '`K` always means records per',
             'T >= C + 6 for the policy worst case',
             'rows/transaction, never statements, bytes or time',

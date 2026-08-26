@@ -355,9 +355,11 @@ implementation candidate, but ownership is fixed as follows.
 
 **Phase III-P0**
 
-- four additive migrations creating `supplier_import_source_profiles`,
-  `supplier_import_source_executions`, `supplier_product_identity_heads`, and
-  `supplier_product_source_revisions` in dependency order;
+- five additive migrations creating `supplier_import_source_profiles`,
+  `supplier_import_source_executions`,
+  `supplier_import_source_payload_receipts`,
+  `supplier_product_identity_heads`, and `supplier_product_source_revisions` in
+  dependency order;
 - one additive migration adding the guarded identity-head/current-revision
   pointers, indexes and composite FKs to `supplier_products`;
 - one additive migration adding the five-field `cohort_source_identity`
@@ -365,22 +367,28 @@ implementation candidate, but ownership is fixed as follows.
   authority to claims/generations;
 - `app/Models/SupplierImportSourceProfile.php`;
 - `app/Models/SupplierImportSourceExecution.php`;
+- `app/Models/SupplierImportSourcePayloadReceipt.php`;
 - `app/Models/SupplierProductIdentityHead.php`;
 - `app/Models/SupplierProductSourceRevision.php`;
+- `app/Data/Suppliers/Imports/ImportJobIdentity.php`;
 - `app/Data/Suppliers/Imports/ResolvedSupplierImportSourceContext.php`;
 - `app/Data/Suppliers/Imports/BoundedImmutableSourcePayload.php`;
-- source-profile, execution, context and policy-v2 canonical contracts under
+- source-profile, ImportJob identity, execution, payload-receipt, context and
+  policy-v2 canonical contracts under
   `app/Data/Suppliers/` and `app/Services/Suppliers/`;
 - dormant allowlisted policy definitions in `config/supplier_snapshot.php`,
   with no approved numeric policy key until all ten values are authorized;
 - `app/Services/Suppliers/SupplierImportSourceContextResolver.php`;
 - one protected bounded downloader/parser adapter boundary that accepts only
-  the resolved context and immutable payload, not a mutable `SupplierFeed`, and
-  implements `protected_source_redirect_policy_v1` by disabling redirect
+  the resolved context and same-handle immutable payload, not a mutable
+  `ImportJob`, `SupplierFeed`, pathname or mapping model; persists exactly one
+  append-only payload receipt per execution and verifies receipt size/SHA-256
+  at parser EOF; and implements `protected_source_redirect_policy_v1` by disabling redirect
   following and failing every `3xx` before destination contact, payload
   acceptance or parser invocation;
-- focused MySQL schema, immutable profile/execution/revision, A-to-B TOCTOU,
-  redirect rejection, bounded source-byte, crash reconstruction and zero-
+- focused MySQL schema, locked ImportJob selector, immutable
+  profile/execution/receipt/revision, A-to-B TOCTOU, redirect rejection,
+  bounded source-byte, same-handle mutation, crash reconstruction and zero-
   Product-mutation tests.
 
 **Phase III**
@@ -966,16 +974,18 @@ Phase I ten-table count and does not amend any Phase I migration.
 | Artifact | Migration/subphase | Dependency | Model/service phase | Activation gate | Rollback/readiness prerequisite |
 | --- | --- | --- | --- | --- | --- |
 | `supplier_import_source_profiles` | III-P0 migration 1 | existing supplier/feed parents and Phase II canonical helper | III-P0 profile model, resolver and descriptor contracts | all source-profile canonical-byte and append-only tests pass; protected path remains off | empty table plus disabled protected gates for local/testing down; operational rollback preserves rows |
-| `supplier_import_source_executions` | III-P0 migration 2 | profile table, feed and ImportHistory composite authority | III-P0 execution model/context reconstruction service | exact profile/context/execution fingerprint and crash-reconstruction tests pass | empty table and profiles unreferenced for local/testing down; no mutable-feed backfill |
-| `supplier_product_identity_heads` | III-P0 migration 3 | supplier/feed composite authority | III-P0 logical-head model/repository | byte-exact first-insert and concurrent head tests pass | empty table and no staging head pointers for local/testing down |
-| `supplier_product_source_revisions` | III-P0 migration 4 | source execution, identity head and staging row | III-P0 revision model/repository | append-only revision, source/projection fingerprint and A-to-B tests pass | empty table and no current-revision pointers for local/testing down |
-| `supplier_products` identity-head/current-revision pointers, indexes, checks, triggers and composite FKs | III-P0 migration 5 | all four new provenance tables | III-P0 protected staging writer | legacy-null/ineligible, pointer CAS and no-fabricated-backfill tests pass | every pointer null and new tables empty before local/testing down; no staging content rewrite |
-| claim `cohort_source_identity` plus generation-to-claim source authority | III-P0 migration 6A | deployed claims/generations and immutable profile identity | III-P0 claim/generation model metadata and authorization repository support | exact five-field atomic tuple, trigger and composite FK tests pass | no affected claim/generation evidence; ambiguous rows fail readiness |
-| policy-v2 key/version/fingerprint authority on claim/generation | III-P0 migration 6B | migration 6A and ten-bound policy-v2 contract | III-P0 policy resolver; consumed by Phase III capture | all ten values approved later, persisted policy validates, and no v1 reinterpretation occurs | no policy-bound evidence for local/testing down; operational rollback preserves policy facts |
-| `supplier_import_resolved_source_context_v1` and bounded source-payload boundary | III-P0 code subphase after migrations 1-2 | immutable profile/execution bytes and policy-v2 contract | III-P0 resolver/downloader/parser adapters with redirects disabled | A-to-B, no-post-resolution-read, all-`3xx` fail-closed, N+1 byte overflow and cleanup tests pass; still no production activation | code/config gate remains false; missing context reconstruction fails closed |
+| `supplier_import_source_executions` | III-P0 migration 2 | profile table, locked ImportJob/feed/template authority and ImportHistory | III-P0 execution model/context reconstruction service | exact ImportJob/profile/context/execution fingerprints, selector-race and crash-reconstruction tests pass | empty table and profiles unreferenced for local/testing down; no mutable-feed/job backfill |
+| `supplier_import_source_payload_receipts` | III-P0 migration 3 | exact source-execution receipt scope | III-P0 append-only receipt model/repository | one-receipt, size/SHA-256, replacement rejection and retry byte-equality tests pass | empty receipt table and executions unreferenced for local/testing down; operational rollback preserves committed receipt evidence |
+| `supplier_product_identity_heads` | III-P0 migration 4 | supplier/feed composite authority | III-P0 logical-head model/repository | byte-exact first-insert and concurrent head tests pass | empty table and no staging head pointers for local/testing down |
+| `supplier_product_source_revisions` | III-P0 migration 5 | source execution/receipt, identity head and staging row | III-P0 revision model/repository | append-only revision, receipt/source/projection fingerprint and A-to-B tests pass | empty table and no current-revision pointers for local/testing down |
+| `supplier_products` identity-head/current-revision pointers, indexes, checks, triggers and composite FKs | III-P0 migration 6 | all five new provenance/receipt tables | III-P0 protected staging writer | legacy-null/ineligible, pointer CAS and no-fabricated-backfill tests pass | every pointer null and new tables empty before local/testing down; no staging content rewrite |
+| claim `cohort_source_identity` plus generation-to-claim source authority | III-P0 migration 7A | deployed claims/generations and immutable profile identity | III-P0 claim/generation model metadata and authorization repository support | exact five-field atomic tuple, trigger and composite FK tests pass | no affected claim/generation evidence; ambiguous rows fail readiness |
+| policy-v2 key/version/fingerprint authority on claim/generation | III-P0 migration 7B | migration 7A and ten-bound policy-v2 contract | III-P0 policy resolver; consumed by Phase III capture | all ten values approved later, persisted policy validates, and no v1 reinterpretation occurs | no policy-bound evidence for local/testing down; operational rollback preserves policy facts |
+| `supplier_import_job_identity_v1`, `supplier_import_resolved_source_context_v1` and same-handle bounded source-payload boundary | III-P0 code subphase after migrations 1-3 | locked selector identity, immutable profile/execution/receipt bytes and policy-v2 contract | III-P0 resolver/downloader/parser adapters with redirects disabled and verified receipt EOF | selector race, A-to-B, no-post-resolution-read, all-`3xx` fail-closed, N+1 byte overflow, no-path-reopen, mutation detection and cleanup tests pass; still no production activation | code/config gate remains false; missing context/receipt reconstruction fails closed |
 
-Forward order is exactly migrations 1, 2, 3, 4, 5, 6A and 6B, followed by
-models/contracts, resolved context, bounded downloader/parser adapters and only
+Forward order is exactly migrations 1, 2, 3, 4, 5, 6, 7A and 7B, followed by
+models/contracts, locked selector identity, resolved context, receipt-bound
+downloader/parser adapters and only
 then Phase III snapshot persistence integration. Reverse local/testing order is
 the exact dependency reverse after the complete empty/pristine predicate.
 
