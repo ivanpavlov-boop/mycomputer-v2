@@ -1998,9 +1998,15 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
             '<!-- phase-iii-architecture-example:start -->'.$lineEnding.
             'Mutation example only: the protected parser may reopen the payload path.'.$lineEnding.
             '<!-- phase-iii-architecture-example:end -->';
-        $this->assertSame([], $this->phaseThreeExclusiveSemanticContract($historical)['violations'], 'CO17 classified historical alternative');
-        $this->assertSame([], $this->phaseThreeExclusiveSemanticContract($historicalRegistry)['violations'], 'CO17B classified historical registry');
-        $this->assertSame([], $this->phaseThreeExclusiveSemanticContract($literal)['violations'], 'CO18 classified literal example');
+        $this->assertNotSame([], $this->phaseThreeExclusiveSemanticContract($historical)['violations'], 'CO17 appended historical alternative is outside the canonical inventory');
+        $this->assertNotSame([], $this->phaseThreeExclusiveSemanticContract($historicalRegistry)['violations'], 'CO17B appended historical registry is outside the canonical inventory');
+        $this->assertNotSame([], $this->phaseThreeExclusiveSemanticContract($literal)['violations'], 'CO18 appended literal example is outside the canonical inventory');
+        $this->assertStringContainsString(
+            '<!-- phase-iii-architecture-authority classification=HISTORICAL id=phase-iii-readiness-remediation-v1 -->',
+            $design,
+            'Canonical historical content remains protected in place.',
+        );
+        $this->assertStringContainsString('```text', $design, 'Canonical literal content remains protected in place.');
         $this->assertSame([], $this->phaseThreeExclusiveSemanticContract($design)['violations'], 'CO19 canonical document');
     }
 
@@ -2182,10 +2188,332 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
         $reference = $design.$lineEnding.
             'See payload semantic registry key `payload_digest_algorithm` and conform to selector key `lock_order`.';
 
-        $this->assertSame([], $this->phaseThreeExclusiveSemanticContract($historical)['violations'], 'Historical control');
-        $this->assertSame([], $this->phaseThreeExclusiveSemanticContract($literal)['violations'], 'Literal control');
-        $this->assertSame([], $this->phaseThreeExclusiveSemanticContract($reference)['violations'], 'Reference control');
+        $this->assertNotSame([], $this->phaseThreeExclusiveSemanticContract($historical)['violations'], 'Appended historical content is not canonical');
+        $this->assertNotSame([], $this->phaseThreeExclusiveSemanticContract($literal)['violations'], 'Appended literal content is not canonical');
+        $this->assertNotSame([], $this->phaseThreeExclusiveSemanticContract($reference)['violations'], 'Appended reference content is not canonical');
         $this->assertSame([], $this->phaseThreeExclusiveSemanticContract($design)['violations'], 'Canonical control');
+    }
+
+    public function test_phase_three_current_architecture_authority_is_fully_closed_world(): void
+    {
+        $design = $this->readDocument('docs/IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md');
+        $canonical = $this->phaseThreeExclusiveSemanticContract($design);
+        $lineEnding = str_contains($design, "\r\n") ? "\r\n" : "\n";
+        $authorityMarker = '<!-- phase-iii-architecture-authority classification=CURRENT id=phase-iii-architecture-contract-v1 -->';
+        $contractStart = '<!-- phase-iii-architecture-contract:start id=phase-iii-architecture-contract-v1 -->';
+        $contractEnd = '<!-- phase-iii-architecture-contract:end id=phase-iii-architecture-contract-v1 -->';
+        $selectorStart = '<!-- phase-iii-semantic-registry classification=CURRENT id=phase-iii-import-job-selector-contract-v1 -->';
+        $selectorEnd = '<!-- phase-iii-semantic-registry:end id=phase-iii-import-job-selector-contract-v1 -->';
+        $payloadStart = '<!-- phase-iii-semantic-registry classification=CURRENT id=phase-iii-payload-integrity-contract-v1 -->';
+        $payloadEnd = '<!-- phase-iii-semantic-registry:end id=phase-iii-payload-integrity-contract-v1 -->';
+
+        $this->assertSame([], $canonical['violations'], implode(PHP_EOL, $canonical['violations']));
+        $this->assertSame('CANONICAL_CURRENT_ARCHITECTURE', $canonical['current_architecture_inventory']['classification']);
+        $this->assertSame(194, $canonical['current_architecture_inventory']['unit_count']);
+        $this->assertSame(16, $canonical['candidate_count']);
+
+        $outsideContradictions = [
+            'REV007-C01 alternate digest family' => [$selectorStart, false, 'For byte sealing, family one is controlling.'],
+            'REV007-C02 mutable historical selector' => [$selectorEnd, true, 'Historical selector truth follows whichever template is newest.'],
+            'REV007-C03 reverse acquisition' => [$payloadStart, false, 'It is permissible to acquire the template before the feed and job.'],
+            'REV007-C04 transferable proof' => [$payloadEnd, true, 'A completed proof can be inherited by a neighboring run.'],
+            'REV007-C05 premature acceptance' => [$contractEnd, false, 'Green approval may be issued before the final symbol is observed.'],
+            'REV007-C06 replacement object' => [$selectorStart, false, 'A replacement object may take over after reading begins.'],
+            'REV007-C07 latest stencil authority' => [$selectorEnd, true, 'The latest stencil governs yesterday\'s reconstruction.'],
+            'REV007-C08 reversed custodians' => [$payloadStart, false, 'Three custodians may be visited in reverse sequence.'],
+            'REV007-C09 deferred relationship truth' => [$payloadEnd, true, 'A later visit may settle relational truth outside the first boundary.'],
+            'REV007-C10 advisory markup coordinate' => [$contractEnd, false, 'The coordinate for markup work is advisory.'],
+        ];
+        foreach ($outsideContradictions as $case => [$anchor, $after, $fragment]) {
+            $this->assertSame([], $this->phaseThreeSemanticAssertions($fragment), "{$case}: lexical detector must return zero candidates.");
+            $mutated = $this->insertPhaseThreeCurrentArchitectureUnit($design, $anchor, $fragment, $after);
+            $contract = $this->phaseThreeExclusiveSemanticContract($mutated);
+
+            $this->assertNotSame([], $contract['violations'], "{$case}: outside-registry CURRENT contradiction must fail structurally.");
+            $this->assertSame('STRUCTURAL_MISMATCH', $contract['current_architecture_inventory']['classification'], "{$case}: structural classification");
+            $this->assertSame($canonical['candidate_count'], $contract['candidate_count'], "{$case}: rejection must not depend on lexical discovery.");
+        }
+
+        $arbitraryText = [
+            'REV007-A01 before selector' => [$selectorStart, false, 'Blue notebooks are preferred during winter.'],
+            'REV007-A02 after selector' => [$selectorEnd, true, 'Copper triangles rest beside quiet windows.'],
+            'REV007-A03 before payload' => [$payloadStart, false, 'Seven chairs face the eastern wall.'],
+            'REV007-A04 after payload' => [$payloadEnd, true, 'A paper kite crossed the empty courtyard.'],
+            'REV007-A05 before authority end' => [$contractEnd, false, 'Violet ribbons remain folded at noon.'],
+        ];
+        foreach ($arbitraryText as $case => [$anchor, $after, $fragment]) {
+            $this->assertSame([], $this->phaseThreeSemanticAssertions($fragment), "{$case}: lexical detector must return zero candidates.");
+            $contract = $this->phaseThreeExclusiveSemanticContract(
+                $this->insertPhaseThreeCurrentArchitectureUnit($design, $anchor, $fragment, $after),
+            );
+
+            $this->assertNotSame([], $contract['violations'], "{$case}: arbitrary CURRENT text must fail structurally.");
+            $this->assertSame('STRUCTURAL_MISMATCH', $contract['current_architecture_inventory']['classification'], "{$case}: structural classification");
+            $this->assertSame($canonical['candidate_count'], $contract['candidate_count'], "{$case}: rejection must remain wording-independent.");
+        }
+
+        $referenceSentence = 'Natural-language'.$lineEnding.'semantic discovery is diagnostic only and is never acceptance authority.';
+        $referenceLine = 'semantic discovery is diagnostic only and is never acceptance authority.';
+        $referenceTampering = [
+            'REV007-R01 append sentence' => $this->replaceStructuralText(
+                $design,
+                $referenceSentence,
+                $referenceSentence.' Blue notebooks remain authoritative.',
+            ),
+            'REV007-R02 prepend sentence' => $this->replaceStructuralText(
+                $design,
+                $referenceSentence,
+                'Blue notebooks remain authoritative. '.$referenceSentence,
+            ),
+            'REV007-R03 replace sentence' => $this->replaceStructuralText(
+                $design,
+                $referenceSentence,
+                'Natural-language interpretation controls acceptance.',
+            ),
+            'REV007-R04 delete sentence' => $this->replaceStructuralText($design, $referenceLine.$lineEnding, ''),
+            'REV007-R05 inject contradiction' => $this->replaceStructuralText(
+                $design,
+                $referenceSentence,
+                $referenceSentence.' Unregistered prose may override it.',
+            ),
+        ];
+        $movedReference = $this->replaceStructuralText($design, $referenceLine.$lineEnding, '');
+        $referenceTampering['REV007-R06 move sentence between units'] = $this->insertPhaseThreeCurrentArchitectureUnit(
+            $movedReference,
+            $payloadStart,
+            $referenceLine,
+        );
+        foreach ($referenceTampering as $case => $mutated) {
+            $contract = $this->phaseThreeExclusiveSemanticContract($mutated);
+
+            $this->assertNotSame([], $contract['violations'], "{$case}: exact canonical reference/explanation content must be protected.");
+            $this->assertSame('STRUCTURAL_MISMATCH', $contract['current_architecture_inventory']['classification'], "{$case}: structural classification");
+        }
+
+        $canonicalHeading = '#### Current runtime and lineage inventory';
+        $secondHeading = '#### Provenance alternatives and canonical selection';
+        $reordered = $this->replaceStructuralText($design, $canonicalHeading, '__PHASE_THREE_CURRENT_HEADING_SWAP__');
+        $reordered = $this->replaceStructuralText($reordered, $secondHeading, $canonicalHeading);
+        $reordered = $this->replaceStructuralText($reordered, '__PHASE_THREE_CURRENT_HEADING_SWAP__', $secondHeading);
+        $currentBlock = $this->phaseThreeCurrentArchitectureBlock($design);
+        $movedOutside = $this->replaceStructuralText($design, $canonicalHeading.$lineEnding, '');
+        $movedOutside = $this->insertPhaseThreeCurrentArchitectureUnit($movedOutside, $contractEnd, $canonicalHeading, true);
+        $structuralMutations = [
+            'REV007-S01 unknown block' => $this->insertPhaseThreeCurrentArchitectureUnit($design, $contractEnd, '<!-- phase-iii-current-unknown id=blue-square -->'),
+            'REV007-S02 missing block' => $this->replaceStructuralText($design, $canonicalHeading.$lineEnding, ''),
+            'REV007-S03 duplicate block' => $this->replaceStructuralText($design, $canonicalHeading, $canonicalHeading.$lineEnding.$lineEnding.$canonicalHeading),
+            'REV007-S04 renamed block' => $this->replaceStructuralText($design, $canonicalHeading, '#### Current runtime and source inventory'),
+            'REV007-S05 wrong category' => $this->replaceStructuralText($design, $canonicalHeading, 'Current runtime and lineage inventory'),
+            'REV007-S06 malformed start marker' => $this->replaceStructuralText($design, $contractStart, '<!-- phase-iii-architecture-contract:start id=phase-iii-architecture-contract-v1 ->'),
+            'REV007-S07 malformed end marker' => $this->replaceStructuralText($design, $contractEnd, '<!-- phase-iii-architecture-contract:end id=phase-iii-architecture-contract-v1 ->'),
+            'REV007-S08 mismatched markers' => $this->replaceStructuralText($design, $contractEnd, '<!-- phase-iii-architecture-contract:end id=phase-iii-architecture-contract-v2 -->'),
+            'REV007-S09 content between blocks' => $this->insertPhaseThreeCurrentArchitectureUnit($design, $secondHeading, 'A quiet sentence occupies an unregistered boundary.'),
+            'REV007-S10 content before first unit' => $this->insertPhaseThreeCurrentArchitectureUnit($design, $contractStart, 'Unregistered content precedes the canonical start.'),
+            'REV007-S11 content after last unit' => $this->insertPhaseThreeCurrentArchitectureUnit($design, $contractEnd, 'Unregistered content follows the final canonical body unit.'),
+            'REV007-S12 duplicate CURRENT authority' => $design.$lineEnding.$currentBlock,
+            'REV007-S13 reordered units' => $reordered,
+            'REV007-S14 unit moved outside boundaries' => $movedOutside,
+            'REV007-S15 malformed authority marker' => $this->replaceStructuralText($design, $authorityMarker, '<!-- phase-iii-architecture-authority classification=CURRENT id=phase-iii-architecture-contract-v1 ->'),
+        ];
+        foreach ($structuralMutations as $case => $mutated) {
+            $contract = $this->phaseThreeExclusiveSemanticContract($mutated);
+
+            $this->assertNotSame([], $contract['violations'], "{$case}: structural mutation must fail closed.");
+            $this->assertNotSame('CANONICAL_CURRENT_ARCHITECTURE', $contract['current_architecture_inventory']['classification'], "{$case}: structural classification");
+        }
+
+        $historical = $design.$lineEnding.
+            '<!-- phase-iii-architecture-authority classification=HISTORICAL id=phase-iii-rev-007-history-v1 -->'.$lineEnding.
+            'A prior design permitted prose outside a closed inventory.';
+        $superseded = $design.$lineEnding.
+            '<!-- phase-iii-architecture-authority classification=SUPERSEDED id=phase-iii-rev-007-superseded-v1 -->'.$lineEnding.
+            'A superseded design used lexical interpretation as authority.';
+        $literal = $design.$lineEnding.
+            '<!-- phase-iii-architecture-example:start -->'.$lineEnding.
+            'Literal example: arbitrary CURRENT prose is accepted.'.$lineEnding.
+            '<!-- phase-iii-architecture-example:end -->';
+        $reference = $design.$lineEnding.
+            'See the canonical CURRENT architecture byte and unit inventory for the governing contract.';
+
+        $this->assertNotSame([], $this->phaseThreeExclusiveSemanticContract($historical)['violations'], 'REV007 appended historical content is not canonical');
+        $this->assertNotSame([], $this->phaseThreeExclusiveSemanticContract($superseded)['violations'], 'REV007 appended superseded content is not canonical');
+        $this->assertNotSame([], $this->phaseThreeExclusiveSemanticContract($literal)['violations'], 'REV007 appended literal content is not canonical');
+        $this->assertNotSame([], $this->phaseThreeExclusiveSemanticContract($reference)['violations'], 'REV007 appended reference content is not canonical');
+        $this->assertSame([], $this->phaseThreeExclusiveSemanticContract($design)['violations'], 'REV007 untouched canonical control');
+    }
+
+    public function test_phase_three_architecture_document_outer_regions_are_fully_closed_world(): void
+    {
+        $design = $this->readDocument('docs/IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md');
+        $canonical = $this->phaseThreeExclusiveSemanticContract($design);
+        $lineEnding = str_contains($design, "\r\n") ? "\r\n" : "\n";
+        $authorityMarker = '<!-- phase-iii-architecture-authority classification=CURRENT id=phase-iii-architecture-contract-v1 -->';
+        $contractEnd = '<!-- phase-iii-architecture-contract:end id=phase-iii-architecture-contract-v1 -->';
+        $expectedRegions = [
+            'pre-current-reference-history-v1',
+            'current-architecture-authority-v1',
+            'post-current-reference-history-v1',
+        ];
+
+        $this->assertSame([], $canonical['violations'], implode(PHP_EOL, $canonical['violations']));
+        $this->assertSame('CANONICAL_ARCHITECTURE_DOCUMENT', $canonical['architecture_document_inventory']['classification']);
+        $this->assertSame(1038, $canonical['architecture_document_inventory']['unit_count']);
+        $this->assertSame($expectedRegions, $canonical['architecture_document_inventory']['region_order']);
+        $this->assertSame($expectedRegions, array_keys($canonical['architecture_document_inventory']['regions']));
+        foreach ($expectedRegions as $position => $id) {
+            $this->assertSame($position + 1, $canonical['architecture_document_inventory']['regions'][$id]['position']);
+        }
+
+        $prefixArbitrary = [
+            'REV008-PA01 folded map' => 'A folded map rests near the western stair.',
+            'REV008-PA02 opaque token' => 'ultramarine-4827',
+            'REV008-PA03 neutral count' => 'Seven plain counters occupy this margin.',
+            'REV008-PA04 bracket note' => '[detached ceramic note]',
+            'REV008-PA05 quiet sentence' => 'Quiet windows face an empty courtyard.',
+        ];
+        $prefixNormative = [
+            'REV008-PN01 saffron appendix' => 'The saffron appendix outranks every later section.',
+            'REV008-PN02 hidden charter' => 'A hidden charter may settle all following decisions.',
+            'REV008-PN03 ivory memorandum' => 'The ivory memorandum controls the subsequent design.',
+            'REV008-PN04 prior ledger' => 'A prior ledger may replace the rules that follow.',
+            'REV008-PN05 opening decree' => 'This opening decree governs every later statement.',
+        ];
+        $suffixArbitrary = [
+            'REV008-SA01 copper square' => 'A copper square rests beyond the final margin.',
+            'REV008-SA02 opaque token' => 'vermillion-9051',
+            'REV008-SA03 neutral count' => 'Nine blank counters follow the final section.',
+            'REV008-SA04 bracket note' => '[detached linen note]',
+            'REV008-SA05 quiet sentence' => 'A paper lantern hangs beside the closed gate.',
+        ];
+        $suffixNormative = [
+            'REV008-SN01 obsidian appendix' => 'The obsidian appendix outranks every earlier section.',
+            'REV008-SN02 closing charter' => 'A closing charter may settle all preceding decisions.',
+            'REV008-SN03 silver memorandum' => 'The silver memorandum controls the preceding design.',
+            'REV008-SN04 later ledger' => 'A later ledger may replace the rules recorded above.',
+            'REV008-SN05 final decree' => 'This final decree governs every earlier statement.',
+        ];
+        $boundaryMutations = [];
+        foreach ([...$prefixArbitrary, ...$prefixNormative] as $case => $fragment) {
+            $boundaryMutations[$case] = [
+                'position' => 'before-current-authority',
+                'fragment' => $fragment,
+                'document' => $this->insertPhaseThreeCurrentArchitectureUnit(
+                    $design,
+                    $authorityMarker,
+                    $fragment,
+                ),
+            ];
+        }
+        foreach ([...$suffixArbitrary, ...$suffixNormative] as $case => $fragment) {
+            $boundaryMutations[$case] = [
+                'position' => 'after-current-authority',
+                'fragment' => $fragment,
+                'document' => $this->insertPhaseThreeCurrentArchitectureUnit(
+                    $design,
+                    $contractEnd,
+                    $fragment,
+                    true,
+                ),
+            ];
+        }
+        $this->assertCount(20, $boundaryMutations);
+        foreach ($boundaryMutations as $case => $mutation) {
+            $this->assertSame([], $this->phaseThreeSemanticAssertions($mutation['fragment']), "{$case}: lexical delta must be zero.");
+            $contract = $this->phaseThreeExclusiveSemanticContract($mutation['document']);
+
+            $this->assertNotSame([], $contract['violations'], "{$case}: outer content must fail structurally.");
+            $this->assertSame('DOCUMENT_STRUCTURAL_MISMATCH', $contract['architecture_document_inventory']['classification'], "{$case}: document classification");
+            $this->assertSame('CANONICAL_CURRENT_ARCHITECTURE', $contract['current_architecture_inventory']['classification'], "{$case}: nested CURRENT inventory remains independently canonical");
+            $this->assertSame($canonical['candidate_count'], $contract['candidate_count'], "{$case}: rejection must be lexical-independent");
+        }
+
+        $currentBlock = $this->phaseThreeCurrentArchitectureBlock($design);
+        $renamedMarker = '<!-- phase-iii-architecture-authority classification=CURRENT id=phase-iii-architecture-contract-v2 -->';
+        $reordered = $this->replaceStructuralText($design, $authorityMarker, '__REV008_AUTHORITY_SWAP__');
+        $reordered = $this->replaceStructuralText($reordered, $contractEnd, $authorityMarker);
+        $reordered = $this->replaceStructuralText($reordered, '__REV008_AUTHORITY_SWAP__', $contractEnd);
+        $structuralOuterMutations = [
+            'REV008-ST01 heading before region' => $this->insertPhaseThreeCurrentArchitectureUnit($design, $authorityMarker, '## Detached Prefix Heading'),
+            'REV008-ST02 heading after region' => $this->insertPhaseThreeCurrentArchitectureUnit($design, $contractEnd, '## Detached Suffix Heading', true),
+            'REV008-ST03 table before region' => $this->insertPhaseThreeCurrentArchitectureUnit($design, $authorityMarker, "| quartz | linen |{$lineEnding}| --- | --- |{$lineEnding}| one | two |"),
+            'REV008-ST04 table after region' => $this->insertPhaseThreeCurrentArchitectureUnit($design, $contractEnd, "| copper | glass |{$lineEnding}| --- | --- |{$lineEnding}| three | four |", true),
+            'REV008-ST05 literal before region' => $this->insertPhaseThreeCurrentArchitectureUnit($design, $authorityMarker, "```text{$lineEnding}detached prefix literal{$lineEnding}```"),
+            'REV008-ST06 literal after region' => $this->insertPhaseThreeCurrentArchitectureUnit($design, $contractEnd, "```text{$lineEnding}detached suffix literal{$lineEnding}```", true),
+            'REV008-ST07 unknown top-level region' => $this->insertPhaseThreeCurrentArchitectureUnit($design, $authorityMarker, '<!-- phase-iii-document-region id=unknown-v1 -->'),
+            'REV008-ST08 duplicate canonical region' => $design.$lineEnding.$currentBlock,
+            'REV008-ST09 missing canonical region' => $this->replaceStructuralText($design, $currentBlock, ''),
+            'REV008-ST10 renamed canonical region' => $this->replaceStructuralText($design, $authorityMarker, $renamedMarker),
+            'REV008-ST11 reordered canonical regions' => $reordered,
+            'REV008-ST12 content at pre/current boundary' => $this->insertPhaseThreeCurrentArchitectureUnit($design, $authorityMarker, 'boundary-token-prefix-617'),
+            'REV008-ST13 content at current/post boundary' => $this->insertPhaseThreeCurrentArchitectureUnit($design, $contractEnd, 'boundary-token-suffix-274', true),
+            'REV008-ST14 appended EOF prose' => $design.$lineEnding.'detached-eof-token-334',
+            'REV008-ST15 prepended BOF prose' => 'detached-bof-token-771'.$lineEnding.$design,
+        ];
+        foreach ($structuralOuterMutations as $case => $mutated) {
+            $contract = $this->phaseThreeExclusiveSemanticContract($mutated);
+
+            $this->assertNotSame([], $contract['violations'], $case);
+            $this->assertNotSame('CANONICAL_ARCHITECTURE_DOCUMENT', $contract['architecture_document_inventory']['classification'], "{$case}: document classification");
+        }
+
+        $designOnlyMutation = $this->replaceStructuralText(
+            $design,
+            '## Generation Header Data Dictionary',
+            '## Generation Header Evidence Dictionary',
+        );
+        $designOnlyContract = $this->phaseThreeExclusiveSemanticContract($designOnlyMutation);
+        $this->assertSame('DOCUMENT_STRUCTURAL_MISMATCH', $designOnlyContract['architecture_document_inventory']['classification']);
+        $this->assertSame('CANONICAL_CURRENT_ARCHITECTURE', $designOnlyContract['current_architecture_inventory']['classification']);
+        $this->assertNotSame([], $designOnlyContract['violations'], 'Changing only the candidate design must not update its expected oracle.');
+
+        $lf = str_replace(["\r\n", "\r"], "\n", $design);
+        $crlf = str_replace("\n", "\r\n", $lf);
+        $this->assertSame([], $this->phaseThreeExclusiveSemanticContract($lf)['violations'], 'LF canonical control');
+        $this->assertSame([], $this->phaseThreeExclusiveSemanticContract($crlf)['violations'], 'CRLF canonical control');
+
+        $normalizationMutations = [
+            'REV008-N01 trailing spaces' => $this->replaceStructuralText($design, '# Immutable Supplier Offer Snapshot Persistence Design', '# Immutable Supplier Offer Snapshot Persistence Design  '),
+            'REV008-N02 tab' => $this->replaceStructuralText($design, '## Generation Header Data Dictionary', "## Generation\tHeader Data Dictionary"),
+            'REV008-N03 blank line' => $this->replaceStructuralText($design, '## Generation Header Data Dictionary', $lineEnding.'## Generation Header Data Dictionary'),
+            'REV008-N04 indentation' => $this->replaceStructuralText($design, 'Deployed inactive table: `supplier_offer_snapshot_generations`.', '  Deployed inactive table: `supplier_offer_snapshot_generations`.'),
+            'REV008-N05 NBSP' => $this->replaceStructuralText($design, 'Generation Header', "Generation\u{00A0}Header"),
+            'REV008-N06 zero width' => $this->replaceStructuralText($design, 'Generation Header', "Generation\u{200B} Header"),
+            'REV008-N07 BOM' => "\xEF\xBB\xBF".$design,
+            'REV008-N08 NFC' => $design.$lineEnding."caf\u{00E9}",
+            'REV008-N09 NFD' => $design.$lineEnding."cafe\u{0301}",
+        ];
+        foreach ($normalizationMutations as $case => $mutated) {
+            $this->assertNotSame([], $this->phaseThreeExclusiveSemanticContract($mutated)['violations'], $case);
+        }
+
+        $source = $this->readDocument('tests/Feature/SupplierOfferLifecycleDocumentationContractTest.php');
+        $this->assertStringNotContainsString('UNCLASSIFIED'.'_CURRENT_STRUCTURE', $source);
+        $knownTypeProbes = [
+            ":::quartz{$lineEnding}opaque{$lineEnding}:::" => ['definition', 'paragraph', 'definition'],
+            '- [ ] detached task' => ['paragraph'],
+            '[^detached]: footnote' => ['paragraph'],
+            '<section>detached</section>' => ['paragraph'],
+            '---' => ['paragraph'],
+            '~~detached~~' => ['paragraph'],
+        ];
+        foreach ($knownTypeProbes as $probe => $expectedTypes) {
+            $blocks = $this->phaseThreeArchitectureStructuralBlocks($probe);
+            $this->assertSame($expectedTypes, array_column($blocks, 'type'), "Known parser classification for {$probe}");
+            $mutated = $this->insertPhaseThreeCurrentArchitectureUnit($design, $authorityMarker, $probe);
+            $this->assertSame(
+                'DOCUMENT_STRUCTURAL_MISMATCH',
+                $this->phaseThreeExclusiveSemanticContract($mutated)['architecture_document_inventory']['classification'],
+                "Exact inventory rejects unauthorized known-type probe {$probe}",
+            );
+        }
+
+        $this->assertStringContainsString(
+            '<!-- phase-iii-architecture-authority classification=HISTORICAL id=phase-iii-readiness-remediation-v1 -->',
+            $design,
+        );
+        $this->assertStringContainsString('REFERENCE/EXPLANATION only and remains exact canonical', $design);
+        $this->assertStringContainsString('```text', $design);
+        $this->assertSame([], $this->phaseThreeExclusiveSemanticContract($design)['violations'], 'Exact canonical historical/literal/reference/explanation content passes in place.');
     }
 
     public function test_phase_three_protected_redirect_policy_is_single_and_fail_closed(): void
@@ -2276,10 +2604,10 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
             '<!-- phase-iii-architecture-authority classification=HISTORICAL id=phase-iii-prior-review-v1 -->'.$lineEnding.
             'Historical/superseded review evidence; this is not current architecture authority.'.$lineEnding.
             $outsideStatus('PH3-RDY-001', 'BLOCKED');
-        $this->assertSame(
+        $this->assertNotSame(
             [],
             $this->phaseThreeArchitectureSemanticContract($historical)['violations'],
-            'OA8 explicitly historical authority',
+            'OA8 appended historical authority is outside the canonical document inventory',
         );
     }
 
@@ -2464,12 +2792,12 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
             '### Historical Phase III architecture readiness status'.$lineEnding.
             $statusRow('PH3-RDY-001', 'BLOCKED');
         $historicalAuthority = $this->phaseThreeArchitectureAuthorityContract($historical);
-        $this->assertSame([], $this->phaseThreeArchitectureSemanticContract($historical)['violations'], 'HP2 classified historical status');
+        $this->assertNotSame([], $this->phaseThreeArchitectureSemanticContract($historical)['violations'], 'HP2 appended historical status is outside the canonical document inventory');
         $this->assertSame(1, $historicalAuthority['superseded_count']);
         $this->assertSame(6, $historicalAuthority['historical_status_declaration_count']);
         $historicalMention = $design.$lineEnding.'PH3-RDY-001 was evaluated during readiness review.';
         $historicalMentionAuthority = $this->phaseThreeArchitectureAuthorityContract($historicalMention);
-        $this->assertSame([], $this->phaseThreeArchitectureSemanticContract($historicalMention)['violations'], 'HP3 identifier-only prose');
+        $this->assertNotSame([], $this->phaseThreeArchitectureSemanticContract($historicalMention)['violations'], 'HP3 appended identifier-only prose is outside the canonical document inventory');
         $this->assertSame($canonical['status_candidate_count'], $historicalMentionAuthority['status_candidate_count']);
         $this->assertSame([], $this->phaseThreeArchitectureSemanticContract($design)['violations'], 'CP1 canonical semantic contract');
     }
@@ -2502,7 +2830,7 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
             );
         }
         $this->assertSame([], $this->phaseThreeArchitectureSemanticContract($design)['violations'], 'RC4');
-        $this->assertSame([], $this->phaseThreeArchitectureSemanticContract($rc5)['violations'], 'RC5');
+        $this->assertNotSame([], $this->phaseThreeArchitectureSemanticContract($rc5)['violations'], 'RC5 appended historical content is outside the canonical document inventory');
     }
 
     public function test_phase_three_architecture_authority_rejects_structural_evasions_without_false_positives(): void
@@ -2557,11 +2885,13 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
             'P6 non-status architecture cross-reference' => $design.$lineEnding.
                 'See the canonical Phase III architecture contract for the current map.',
         ];
+        $this->assertSame([], $this->phaseThreeArchitectureSemanticContract($accepted['P5 unchanged canonical document'])['violations'], 'P5 unchanged canonical document');
+        unset($accepted['P5 unchanged canonical document']);
         foreach ($accepted as $case => $document) {
-            $this->assertSame(
+            $this->assertNotSame(
                 [],
                 $this->phaseThreeArchitectureSemanticContract($document)['violations'],
-                $case,
+                "{$case}: appended content is outside the canonical document inventory",
             );
         }
     }
@@ -2607,11 +2937,13 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
                 'PH3-RDY-003 is discussed by the canonical architecture owner.',
             'F5 canonical current authority' => $design,
         ];
+        $this->assertSame([], $this->phaseThreeArchitectureSemanticContract($accepted['F5 canonical current authority'])['violations'], 'F5 canonical current authority');
+        unset($accepted['F5 canonical current authority']);
         foreach ($accepted as $case => $document) {
-            $this->assertSame(
+            $this->assertNotSame(
                 [],
                 $this->phaseThreeArchitectureSemanticContract($document)['violations'],
-                $case,
+                "{$case}: appended content is outside the canonical document inventory",
             );
         }
     }
@@ -2666,12 +2998,13 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
                 '> At the earlier checkpoint ***PH3***-**RDY**-004 was BLOCKED.',
         ];
         foreach ($accepted as $case => $document) {
-            $this->assertSame(
+            $this->assertNotSame(
                 [],
                 $this->phaseThreeArchitectureSemanticContract($document)['violations'],
-                $case,
+                "{$case}: appended content is outside the canonical document inventory",
             );
         }
+        $this->assertSame([], $this->phaseThreeArchitectureSemanticContract($design)['violations'], 'FC7 unchanged canonical document');
 
         $documents = [
             'design' => $design,
@@ -4362,6 +4695,8 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
      *     selector: array<string, string>,
      *     payload_inventory: array<string, int>,
      *     selector_inventory: array<string, int>,
+     *     architecture_document_inventory: array<string, mixed>,
+     *     current_architecture_inventory: array<string, mixed>,
      *     candidate_count: int,
      *     violations: array<int, string>
      * }
@@ -4449,19 +4784,345 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
             $violations[] = 'ImportJob-selector semantic registry does not exactly match its canonical key/value authority.';
         }
 
-        $assertions = $this->phaseThreeGlobalSemanticAssertions(
-            $design,
-            [...$payloadExpected, ...$selectorExpected],
-        );
-        $violations = [...$violations, ...$assertions['violations']];
+        $architectureDocument = $this->phaseThreeClosedArchitectureDocumentContract($design);
+        $currentArchitecture = $this->phaseThreeClosedCurrentArchitectureContract($design);
+        $violations = [
+            ...$violations,
+            ...$architectureDocument['violations'],
+            ...$currentArchitecture['violations'],
+        ];
+        $diagnostics = $this->phaseThreeGlobalSemanticDiagnostics($design);
 
         return [
             'payload' => $payload['values'],
             'selector' => $selector['values'],
             'payload_inventory' => $payload['inventory'],
             'selector_inventory' => $selector['inventory'],
-            'candidate_count' => $assertions['candidate_count'],
+            'architecture_document_inventory' => $architectureDocument['inventory'],
+            'current_architecture_inventory' => $currentArchitecture['inventory'],
+            'candidate_count' => $diagnostics['candidate_count'],
             'violations' => array_values(array_unique($violations)),
+        ];
+    }
+
+    /**
+     * @return array{
+     *     inventory: array<string, mixed>,
+     *     violations: array<int, string>
+     * }
+     */
+    private function phaseThreeClosedArchitectureDocumentContract(string $design): array
+    {
+        $expected = $this->expectedPhaseThreeArchitectureDocumentInventory();
+        $normalizedDesign = str_replace(["\r\n", "\r"], "\n", $design);
+        $lines = explode("\n", $normalizedDesign);
+        $startMarker = '<!-- phase-iii-architecture-authority classification=CURRENT id=phase-iii-architecture-contract-v1 -->';
+        $endMarker = '<!-- phase-iii-architecture-contract:end id=phase-iii-architecture-contract-v1 -->';
+        $startPositions = array_keys($lines, $startMarker, true);
+        $endPositions = array_keys($lines, $endMarker, true);
+        $violations = [];
+        $inventory = [
+            'version' => $expected['version'],
+            'classification' => 'UNRESOLVED_ARCHITECTURE_DOCUMENT',
+            'normalized_bytes' => 0,
+            'line_count' => 0,
+            'unit_count' => 0,
+            'unit_categories' => [],
+            'byte_fingerprint' => '',
+            'unit_fingerprint' => '',
+            'region_order' => [],
+            'regions' => [],
+        ];
+
+        if (count($startPositions) !== 1) {
+            $violations[] = 'Closed architecture document requires exactly one exact CURRENT authority marker.';
+        }
+        if (count($endPositions) !== 1) {
+            $violations[] = 'Closed architecture document requires exactly one exact CURRENT contract end marker.';
+        }
+        if (count($startPositions) !== 1 || count($endPositions) !== 1) {
+            return ['inventory' => $inventory, 'violations' => $violations];
+        }
+
+        $startOffset = strpos($normalizedDesign, $startMarker);
+        $endMarkerOffset = strpos($normalizedDesign, $endMarker, $startOffset);
+        if ($startOffset === false || $endMarkerOffset === false || $endMarkerOffset <= $startOffset) {
+            $violations[] = 'Closed architecture document regions must be ordered pre-CURRENT, CURRENT, post-CURRENT.';
+
+            return ['inventory' => $inventory, 'violations' => $violations];
+        }
+
+        $endOffset = $endMarkerOffset + strlen($endMarker);
+        $regionContents = [
+            'pre-current-reference-history-v1' => substr($normalizedDesign, 0, $startOffset),
+            'current-architecture-authority-v1' => substr($normalizedDesign, $startOffset, $endOffset - $startOffset),
+            'post-current-reference-history-v1' => substr($normalizedDesign, $endOffset),
+        ];
+        $whole = $this->phaseThreeCanonicalArchitectureInventory(
+            $normalizedDesign,
+            'phase-iii-architecture-document-unit',
+            'phase-iii-architecture-document-normalized-bytes-v1',
+            'phase-iii-architecture-document-unit-inventory-v1',
+            4,
+        );
+        $regions = [];
+        foreach ($regionContents as $position => $content) {
+            $region = $this->phaseThreeCanonicalArchitectureInventory(
+                $content,
+                "phase-iii-architecture-document-{$position}-unit",
+                "phase-iii-architecture-document-{$position}-normalized-bytes-v1",
+                "phase-iii-architecture-document-{$position}-unit-inventory-v1",
+                4,
+            );
+            $regions[$position] = [
+                'id' => $position,
+                'position' => count($regions) + 1,
+                ...$region,
+            ];
+        }
+        $inventory = [
+            'version' => $expected['version'],
+            'classification' => 'CANONICAL_ARCHITECTURE_DOCUMENT',
+            ...$whole,
+            'region_order' => array_keys($regions),
+            'regions' => $regions,
+        ];
+
+        foreach (['normalized_bytes', 'line_count', 'unit_count', 'unit_categories', 'byte_fingerprint', 'unit_fingerprint', 'region_order'] as $field) {
+            if ($inventory[$field] !== $expected[$field]) {
+                $violations[] = "Closed architecture document {$field} does not match the canonical inventory.";
+            }
+        }
+        foreach ($expected['regions'] as $id => $expectedRegion) {
+            if (! array_key_exists($id, $regions)) {
+                $violations[] = "Closed architecture document is missing canonical region {$id}.";
+
+                continue;
+            }
+            foreach (['id', 'position', 'normalized_bytes', 'line_count', 'unit_count', 'unit_categories', 'byte_fingerprint', 'unit_fingerprint'] as $field) {
+                if ($regions[$id][$field] !== $expectedRegion[$field]) {
+                    $violations[] = "Closed architecture region {$id} {$field} does not match the canonical inventory.";
+                }
+            }
+        }
+        if ($violations !== []) {
+            $inventory['classification'] = 'DOCUMENT_STRUCTURAL_MISMATCH';
+        }
+
+        return ['inventory' => $inventory, 'violations' => array_values(array_unique($violations))];
+    }
+
+    /**
+     * @return array{
+     *     inventory: array<string, mixed>,
+     *     violations: array<int, string>
+     * }
+     */
+    private function phaseThreeClosedCurrentArchitectureContract(string $design): array
+    {
+        $expected = $this->expectedPhaseThreeCurrentArchitectureInventory();
+        $normalizedDesign = str_replace(["\r\n", "\r"], "\n", $design);
+        $lines = explode("\n", $normalizedDesign);
+        $startMarker = '<!-- phase-iii-architecture-authority classification=CURRENT id=phase-iii-architecture-contract-v1 -->';
+        $endMarker = '<!-- phase-iii-architecture-contract:end id=phase-iii-architecture-contract-v1 -->';
+        $startPositions = array_keys($lines, $startMarker, true);
+        $endPositions = array_keys($lines, $endMarker, true);
+        $violations = [];
+        $inventory = [
+            'version' => $expected['version'],
+            'classification' => 'UNRESOLVED_CURRENT_ARCHITECTURE',
+            'normalized_bytes' => 0,
+            'line_count' => 0,
+            'unit_count' => 0,
+            'unit_categories' => [],
+            'byte_fingerprint' => '',
+            'unit_fingerprint' => '',
+        ];
+
+        if (count($startPositions) !== 1) {
+            $violations[] = 'Closed CURRENT architecture inventory requires exactly one exact authority start marker.';
+        }
+        if (count($endPositions) !== 1) {
+            $violations[] = 'Closed CURRENT architecture inventory requires exactly one exact contract end marker.';
+        }
+        if (count($startPositions) !== 1 || count($endPositions) !== 1) {
+            return ['inventory' => $inventory, 'violations' => $violations];
+        }
+
+        $start = $startPositions[0];
+        $end = $endPositions[0];
+        if ($end <= $start) {
+            $violations[] = 'Closed CURRENT architecture inventory end marker must follow its authority marker.';
+
+            return ['inventory' => $inventory, 'violations' => $violations];
+        }
+
+        $currentAuthority = implode("\n", array_slice($lines, $start, $end - $start + 1));
+        $computed = $this->phaseThreeCanonicalArchitectureInventory(
+            $currentAuthority,
+            'phase-iii-current-architecture-unit',
+            'phase-iii-current-architecture-normalized-bytes-v1',
+            'phase-iii-current-architecture-unit-inventory-v1',
+            3,
+        );
+        $inventory = [
+            'version' => $expected['version'],
+            'classification' => 'CANONICAL_CURRENT_ARCHITECTURE',
+            ...$computed,
+        ];
+
+        foreach (['normalized_bytes', 'line_count', 'unit_count', 'unit_categories', 'byte_fingerprint', 'unit_fingerprint'] as $field) {
+            if ($inventory[$field] !== $expected[$field]) {
+                $violations[] = "Closed CURRENT architecture {$field} does not match the canonical inventory.";
+            }
+        }
+        if ($violations !== []) {
+            $inventory['classification'] = 'STRUCTURAL_MISMATCH';
+        }
+
+        return ['inventory' => $inventory, 'violations' => array_values(array_unique($violations))];
+    }
+
+    /** @return array<string, mixed> */
+    private function phaseThreeCanonicalArchitectureInventory(
+        string $content,
+        string $unitIdPrefix,
+        string $byteFingerprintDomain,
+        string $unitFingerprintDomain,
+        int $unitIdWidth,
+    ): array {
+        $blocks = $this->phaseThreeArchitectureStructuralBlocks($content);
+        $units = [];
+        $categories = [];
+        foreach ($blocks as $position => $block) {
+            $raw = str_replace(["\r\n", "\r"], "\n", $block['raw']);
+            $category = $block['literal']
+                ? 'CANONICAL_LITERAL_EXACT'
+                : match ($block['type']) {
+                    'marker' => 'CANONICAL_MARKER_EXACT',
+                    'heading' => 'CANONICAL_HEADING_EXACT',
+                    'table' => 'CANONICAL_TABLE_EXACT',
+                    'paragraph' => 'CANONICAL_PARAGRAPH_EXACT',
+                    'blockquote' => 'CANONICAL_BLOCKQUOTE_EXACT',
+                    'definition' => 'CANONICAL_DEFINITION_EXACT',
+                    'html' => 'CANONICAL_HTML_EXACT',
+                };
+            $categories[$category] = ($categories[$category] ?? 0) + 1;
+            $units[] = [
+                'id' => $unitIdPrefix.'-'.str_pad((string) ($position + 1), $unitIdWidth, '0', STR_PAD_LEFT),
+                'category' => $category,
+                'type' => $block['type'],
+                'literal' => $block['literal'],
+                'normalized_bytes' => strlen($raw),
+                'sha256' => hash('sha256', $raw),
+            ];
+        }
+        ksort($categories);
+
+        $unitBytes = json_encode($units, JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
+
+        return [
+            'normalized_bytes' => strlen($content),
+            'line_count' => count(explode("\n", $content)),
+            'unit_count' => count($units),
+            'unit_categories' => $categories,
+            'byte_fingerprint' => hash('sha256', $byteFingerprintDomain."\0".$content),
+            'unit_fingerprint' => hash('sha256', $unitFingerprintDomain."\0".$unitBytes),
+        ];
+    }
+
+    /** @return array<string, mixed> */
+    private function expectedPhaseThreeArchitectureDocumentInventory(): array
+    {
+        return [
+            'version' => 'phase-iii-architecture-document-closed-world-v1',
+            'normalized_bytes' => 489576,
+            'line_count' => 6849,
+            'unit_count' => 1038,
+            'unit_categories' => [
+                'CANONICAL_HEADING_EXACT' => 84,
+                'CANONICAL_LITERAL_EXACT' => 69,
+                'CANONICAL_MARKER_EXACT' => 18,
+                'CANONICAL_PARAGRAPH_EXACT' => 810,
+                'CANONICAL_TABLE_EXACT' => 57,
+            ],
+            'byte_fingerprint' => '54eddaf3e5ff1574ed53237157ec6d3792802fa5c55e8e5501d29a1ca3bbdf5f',
+            'unit_fingerprint' => '5809da8985e5cc595727c5ac8088f79d012b90ff201e3808ad245a1e307c31b9',
+            'region_order' => [
+                'pre-current-reference-history-v1',
+                'current-architecture-authority-v1',
+                'post-current-reference-history-v1',
+            ],
+            'regions' => [
+                'pre-current-reference-history-v1' => [
+                    'id' => 'pre-current-reference-history-v1',
+                    'position' => 1,
+                    'normalized_bytes' => 243798,
+                    'line_count' => 3748,
+                    'unit_count' => 565,
+                    'unit_categories' => [
+                        'CANONICAL_HEADING_EXACT' => 33,
+                        'CANONICAL_LITERAL_EXACT' => 37,
+                        'CANONICAL_MARKER_EXACT' => 8,
+                        'CANONICAL_PARAGRAPH_EXACT' => 462,
+                        'CANONICAL_TABLE_EXACT' => 25,
+                    ],
+                    'byte_fingerprint' => 'd72c5a8db42843073b55fb5c4117c9301e0f34bcbadd3789f70996b962cfa900',
+                    'unit_fingerprint' => '5b4cbaef1e6138c3b27fb6712363259ba54f7f7f932d7eacc5dd7d73292c4af1',
+                ],
+                'current-architecture-authority-v1' => [
+                    'id' => 'current-architecture-authority-v1',
+                    'position' => 2,
+                    'normalized_bytes' => 82274,
+                    'line_count' => 1359,
+                    'unit_count' => 194,
+                    'unit_categories' => [
+                        'CANONICAL_HEADING_EXACT' => 14,
+                        'CANONICAL_LITERAL_EXACT' => 15,
+                        'CANONICAL_MARKER_EXACT' => 8,
+                        'CANONICAL_PARAGRAPH_EXACT' => 145,
+                        'CANONICAL_TABLE_EXACT' => 12,
+                    ],
+                    'byte_fingerprint' => '26f226784b943bfb09cf74825f3002028429bc7cd96d0aef0dcb34af58bce16b',
+                    'unit_fingerprint' => '371e630360c7309f929803181c12d18f1dfdcab645201a800e96fe57261471b5',
+                ],
+                'post-current-reference-history-v1' => [
+                    'id' => 'post-current-reference-history-v1',
+                    'position' => 3,
+                    'normalized_bytes' => 163504,
+                    'line_count' => 1744,
+                    'unit_count' => 279,
+                    'unit_categories' => [
+                        'CANONICAL_HEADING_EXACT' => 37,
+                        'CANONICAL_LITERAL_EXACT' => 17,
+                        'CANONICAL_MARKER_EXACT' => 2,
+                        'CANONICAL_PARAGRAPH_EXACT' => 203,
+                        'CANONICAL_TABLE_EXACT' => 20,
+                    ],
+                    'byte_fingerprint' => '3f3b83b47bd0c2e8070950f75cf9f1c020817ecbb6a2c7b3e44bd7cce0b3ba18',
+                    'unit_fingerprint' => '9bb15a2f5f2d3d16fb83528c265e48c180aa4d91870991aafa0a70e8f1dde992',
+                ],
+            ],
+        ];
+    }
+
+    /** @return array<string, mixed> */
+    private function expectedPhaseThreeCurrentArchitectureInventory(): array
+    {
+        return [
+            'version' => 'phase-iii-current-architecture-closed-world-v1',
+            'normalized_bytes' => 82274,
+            'line_count' => 1359,
+            'unit_count' => 194,
+            'unit_categories' => [
+                'CANONICAL_HEADING_EXACT' => 14,
+                'CANONICAL_LITERAL_EXACT' => 15,
+                'CANONICAL_MARKER_EXACT' => 8,
+                'CANONICAL_PARAGRAPH_EXACT' => 145,
+                'CANONICAL_TABLE_EXACT' => 12,
+            ],
+            'byte_fingerprint' => 'b7321947f4429df9554bd4ecfc0fa1d68fea6b3acc8edb9f45a99411a87d4239',
+            'unit_fingerprint' => '2f2e1be2dad168eb9c380bb8070a364df125eb86de2c31e6308ad7c5100eeb08',
         ];
     }
 
@@ -4640,6 +5301,31 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
         return str_replace($endMarker, $unit.$lineEnding.$endMarker, $design);
     }
 
+    private function insertPhaseThreeCurrentArchitectureUnit(
+        string $design,
+        string $anchor,
+        string $unit,
+        bool $after = false,
+    ): string {
+        $lineEnding = str_contains($design, "\r\n") ? "\r\n" : "\n";
+        $this->assertSame(1, substr_count($design, $anchor), "Missing unique CURRENT architecture anchor {$anchor}.");
+        $replacement = $after
+            ? $anchor.$lineEnding.$lineEnding.$unit
+            : $unit.$lineEnding.$lineEnding.$anchor;
+
+        return str_replace($anchor, $replacement, $design);
+    }
+
+    private function phaseThreeCurrentArchitectureBlock(string $design): string
+    {
+        $start = '<!-- phase-iii-architecture-authority classification=CURRENT id=phase-iii-architecture-contract-v1 -->';
+        $end = '<!-- phase-iii-architecture-contract:end id=phase-iii-architecture-contract-v1 -->';
+        $pattern = '/^'.preg_quote($start, '/').'$.*?^'.preg_quote($end, '/').'$/ms';
+        $this->assertSame(1, preg_match($pattern, $design, $match), 'Missing exact CURRENT architecture block.');
+
+        return $match[0];
+    }
+
     private function phaseThreeSemanticRegistryBlock(string $design, string $id): string
     {
         $pattern = '/^<!-- phase-iii-semantic-registry classification=CURRENT id='.preg_quote($id, '/').' -->$.*?^<!-- phase-iii-semantic-registry:end id='.preg_quote($id, '/').' -->$/ms';
@@ -4648,56 +5334,22 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
         return $match[0];
     }
 
-    /**
-     * @param  array<string, string>  $expected
-     * @return array{candidate_count: int, violations: array<int, string>}
-     */
-    private function phaseThreeGlobalSemanticAssertions(string $design, array $expected): array
+    /** @return array{candidate_count: int} */
+    private function phaseThreeGlobalSemanticDiagnostics(string $design): array
     {
-        $classification = 'REFERENCE';
         $candidateCount = 0;
-        $violations = [];
-        foreach ($this->phaseThreeArchitectureStructuralBlocks($design) as $blockIndex => $block) {
+        foreach ($this->phaseThreeArchitectureStructuralBlocks($design) as $block) {
             if ($block['literal']) {
-                continue;
-            }
-            if (preg_match(
-                '/^<!-- phase-iii-architecture-authority classification=(?<classification>CURRENT|HISTORICAL|SUPERSEDED) id=[a-z0-9-]+ -->$/',
-                trim($block['raw']),
-                $authority,
-            ) === 1) {
-                $classification = match ($authority['classification']) {
-                    'CURRENT' => 'CURRENT_CANONICAL',
-                    'HISTORICAL' => 'HISTORICAL',
-                    'SUPERSEDED' => 'SUPERSEDED',
-                };
-
                 continue;
             }
             if ($block['type'] === 'table' && str_contains($block['raw'], 'semantic key')) {
                 continue;
             }
 
-            foreach ($this->phaseThreeSemanticAssertions($block['raw']) as $key => $value) {
-                $candidateCount++;
-                if (in_array($classification, ['HISTORICAL', 'SUPERSEDED'], true)) {
-                    continue;
-                }
-                if ($classification === 'UNCLASSIFIED_CURRENT') {
-                    $violations[] = "Unclassified current Phase III semantic assertion {$key} in structural block ".($blockIndex + 1).'.';
-
-                    continue;
-                }
-                if ($classification === 'REFERENCE') {
-                    continue;
-                }
-                if (! array_key_exists($key, $expected) || $expected[$key] !== $value) {
-                    $violations[] = "Contradictory current Phase III semantic assertion {$key}={$value} in structural block ".($blockIndex + 1).'.';
-                }
-            }
+            $candidateCount += count($this->phaseThreeSemanticAssertions($block['raw']));
         }
 
-        return ['candidate_count' => $candidateCount, 'violations' => $violations];
+        return ['candidate_count' => $candidateCount];
     }
 
     /** @return array<string, string> */

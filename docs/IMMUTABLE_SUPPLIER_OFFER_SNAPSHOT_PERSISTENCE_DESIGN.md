@@ -3752,6 +3752,32 @@ rule above.
 This subsection is the selected future architecture. It records design
 authority only. No table, model, importer, repository, job, configuration or
 feature gate described here exists until a later implementation phase adds it.
+The complete marker-bounded CURRENT authority is closed-world. From the exact
+CURRENT authority marker through the matching contract end marker, every
+normalized byte and every ordered structural unit is canonical. Each unit has a
+stable version-local identity, exact structural category, byte length and
+SHA-256 fingerprint; the ordered unit inventory and the complete normalized
+authority bytes have separate versioned fingerprints. A category never grants
+free-text authority: add, remove, duplicate, rename, reorder, move, reclassify
+or alter any unit, marker, paragraph, table, literal block or intervening byte
+and the structural contract fails regardless of wording. Natural-language
+semantic discovery is diagnostic only and is never acceptance authority.
+
+The enclosing design document is independently closed-world as three ordered
+canonical regions: `pre-current-reference-history-v1` from BOF up to but not
+including the CURRENT authority marker, `current-architecture-authority-v1`
+from that marker through the exact contract end marker, and
+`post-current-reference-history-v1` from immediately after that marker through
+EOF. The complete normalized document and each region have separate exact byte
+and ordered structural-unit inventories with independently fixed SHA-256
+fingerprints. Existing historical, literal, explanation, reference and external
+reference material is valid only at its exact canonical position and content.
+No arbitrary prefix, suffix, inter-region content or appended reference is
+implicitly harmless; any such byte or unit requires a deliberate canonical
+contract update. The structural parser intentionally classifies its closed set
+of Markdown units and treats remaining Markdown syntax as paragraph content;
+rejection of an unauthorized construct comes from the exact byte and unit
+inventories, not from an unreachable unknown-type fallback or lexical wording.
 
 #### Current runtime and lineage inventory
 
@@ -4019,8 +4045,10 @@ authority for the selector semantics in this architecture. Its body is
 closed-world: only the exact header, separator, eleven canonical rows, optional
 blank lines and closing marker are permitted. Any other nonblank structural unit
 inside the markers is invalid regardless of wording. For these keys, all text
-outside the registry is REFERENCE/EXPLANATION only: it may identify a key and
-describe consequences, but cannot own, restate, replace or add a CURRENT value.
+outside the registry is REFERENCE/EXPLANATION only and remains exact canonical
+content under the complete CURRENT authority byte and unit inventory. It is not
+a free-text zone: it may identify a key and describe consequences, but cannot
+own, restate, replace or add a CURRENT value.
 
 <!-- phase-iii-semantic-registry classification=CURRENT id=phase-iii-import-job-selector-contract-v1 -->
 | ImportJob selector semantic key | Canonical value |
@@ -4160,8 +4188,10 @@ authority for payload integrity. Its body is closed-world: only the exact header
 separator, ten canonical rows, optional blank lines and closing marker are
 permitted. Any other nonblank structural unit inside the markers is invalid
 regardless of wording. For these keys, all text outside the registry is
-REFERENCE/EXPLANATION only: it may identify a key and describe consequences, but
-cannot own, restate, replace or add a CURRENT value.
+REFERENCE/EXPLANATION only and remains exact canonical content under the
+complete CURRENT authority byte and unit inventory. It is not a free-text zone:
+it may identify a key and describe consequences, but cannot own, restate,
+replace or add a CURRENT value.
 
 <!-- phase-iii-semantic-registry classification=CURRENT id=phase-iii-payload-integrity-contract-v1 -->
 | Payload semantic key | Canonical value |
