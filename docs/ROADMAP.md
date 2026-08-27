@@ -350,13 +350,15 @@ disabled. `CART-025` remains open.
     Phase I tables/migrations and Phase II models/contracts now exist but remain
     inactive. No runtime queue setting, worker, command, parser change, capture
     repository/hook, producer, historical backfill or operational evidence
-    exists. Phase III is unimplemented and not authorized: immutable
-    application-candidate source provenance (`PH3-RDY-001`), durable
-    authorization source binding (`PH3-RDY-002`), and approved importer/source
-    plus derived operational bounds (`PH3-RDY-003`) remain blocked; only the
-    status-consistency finding `PH3-RDY-004` is closed. Claim source binding
-    does not close candidate provenance.
-    C3D.1 remains blocked until those prerequisites and later
+    exists. Phase III is unimplemented and not authorized.
+    <!-- phase-iii-architecture-status-reference authority=phase-iii-architecture-contract-v1 -->
+    The exact current status map is owned only by the
+    [canonical Phase III architecture contract](IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md#phase-iii-provenance-and-bounds-architecture-decision)
+    and is not mirrored here. The selected immutable profile/context/execution,
+    revision, five-field claim binding and ten-bound policy remain future-only;
+    all ten numeric production values remain `NOT SPECIFIED`. Claim source
+    binding does not replace candidate provenance. C3D.1 remains blocked until
+    the canonical remaining gate and later
     checkpoints collect one future baseline plus three qualified comparable
     snapshots in an unchanged cohort epoch over at least 48 hours from absence
     1. See

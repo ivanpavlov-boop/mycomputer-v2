@@ -24,23 +24,27 @@ The approved design entered `main` through PR #211:
 - republish resume-state fingerprint: exactly 16 ordered fields.
 
 The current implementation baseline is `origin/main` at
-`37a66f2e448ee0f8691dc0f5d4249b6ecb851b8a`:
+`096beef3e619e769ac703fa7c1ea8fa38939db0d`:
 
 - Phase I canonical schema: implemented, merged through PR #212, CI-verified,
   deployed to staging, and behaviorally dormant;
 - Phase II guarded models and canonical byte contracts: implemented, merged
   through PR #213, CI-verified, deployed to staging, and uncalled;
-- Phase III snapshot persistence/cohort authorization: readiness remediation
-  only, unimplemented, and not implementation-authorized.
+- Phase III snapshot persistence/cohort authorization: provenance and durable
+  source-binding architecture selected, still unimplemented and not
+  implementation-authorized.
 
-Phase III remains blocked by `PH3-RDY-001`, `PH3-RDY-002`, and `PH3-RDY-003`.
-The first requires a separately approved immutable application-candidate source
-provenance contract; the second requires a separately approved additive
-claim/source relational binding for durable authorization; and the third
-requires approved importer/source maxima from which every spool, sort, insert,
-and transaction bound can be derived. Claim source binding does not close
-candidate provenance. The authoritative proof, fail-closed selection matrices,
-proposed schema delta, and limit inventory are in the
+<!-- phase-iii-architecture-status-reference authority=phase-iii-architecture-contract-v1 -->
+The exact current Phase III architecture status map is owned only by the
+[canonical architecture contract](IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md#phase-iii-provenance-and-bounds-architecture-decision).
+This plan does not mirror or restate that map. The selected future authority is
+an immutable source profile, immutable resolved source context, append-only
+source execution, stable supplier/feed/SKU identity head, append-only supplier-
+product source revision, guarded current-revision pointer, exact five-field
+claim source binding, and a ten-bound operational policy whose numeric values
+lack authorized production evidence and remain `NOT SPECIFIED`.
+Claim source binding does not replace candidate provenance. The authoritative
+proof, fail-closed matrices, selected future schema and limit inventory are in the
 [Cohort Enrollment Contract](IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md#cohort-enrollment-contract).
 
 This planning phase authorizes no migration, runtime behavior, queue routing,
@@ -235,9 +239,9 @@ the artifact.
 | Future runtime component | Artifact status | Runtime status | Evidence and required direction |
 | --- | --- | --- | --- |
 | Phase III persistence repository and service API | `NOT IMPLEMENTED / MISSING` | `INACTIVE` | No `ImmutableSupplierOfferSnapshotRepository`, cohort-authorization repository/service, collector or capture service exists |
-| Immutable candidate-row source provenance | `NOT IMPLEMENTED / MISSING` | `BLOCKED` | Current application candidates cannot prove original canonical source identity; `PH3-RDY-001` remains open |
-| Durable claim authorization source binding | `NOT IMPLEMENTED / MISSING` | `BLOCKED` | Proposed `cohort_source_identity` schema/model remediation is documentation only; `PH3-RDY-002` remains open |
-| Approved production operational bounds | `NOT SPECIFIED` | `BLOCKED` | The nine Phase III limits remain unapproved; `PH3-RDY-003` remains open |
+| Immutable candidate-row source provenance | `DESIGNED / NOT IMPLEMENTED` | `INACTIVE` | Append-only source execution plus immutable staging revision is canonical; existing rows remain ineligible until recaptured; exact status is referenced from the canonical architecture contract |
+| Durable claim authorization source binding | `DESIGNED / NOT IMPLEMENTED` | `INACTIVE` | Exact five-field tuple, atomic transition, trigger/checks and generation composite FK are fixed; exact status is referenced from the canonical architecture contract |
+| Approved production operational bounds | `NOT SPECIFIED` | `BLOCKED` | The ten Phase III limits remain unapproved; exact status is referenced from the canonical architecture contract |
 | MySQL ownership CAS repository | `NOT IMPLEMENTED / MISSING` | `INACTIVE` | Deployed claim fields exist, but no one-statement MySQL-UTC acquisition service owns the 4,200-second lease |
 | Protected supplier Redis lock | `NOT IMPLEMENTED / MISSING` | `INACTIVE` | The legacy generic lock and `forceRelease()` remain outside the future protected path |
 | Durable outbox publisher/reconciler | `NOT IMPLEMENTED / MISSING` | `INACTIVE` | The outbox table/model and dispatch-payload contract exist, but direct legacy dispatch remains unwired to them |
@@ -280,7 +284,8 @@ boundary contract.
 approved design
   -> I canonical schema
   -> II models and byte contracts
-      -> III snapshot persistence core
+      -> III-P0 protected source provenance prerequisite foundation
+          -> III snapshot persistence core
       -> IV execution claim/allocation/outbox core
           -> V Redis fencing and isolated queue transport
               -> VI common coordinator and protected importer integration
@@ -290,18 +295,18 @@ approved design
                       -> IX fenced same-key republication
                   -> X monitor/observer/alert coordination
                       -> DB-backed monitor-readiness implementation
-  -> III + VIII + IX + X
+  -> III-P0 + III + VIII + IX + X
       -> XI integration, evidence producer and disabled rollout gates
 ```
 
-Phase VI owns the application-facing monitor-readiness contract and binds its
+Phase III-P0 must precede Phase III. Phase VI owns the application-facing monitor-readiness contract and binds its
 unavailable implementation. For monitor readiness, Phases VII through IX depend
 only on that existing contract and remain fail closed; their other prerequisites
 remain unchanged. Phase VII requires VI, Phase VIII requires VI plus VII, Phase
 IX requires V plus VI plus VII, and Phase X requires the schema/models,
 claim/outbox and coordinator foundations through VI. Phase X supplies the
-DB-backed implementation without changing the contract. Phase XI requires III
-through X. There is no circular dependency, and no later phase may compensate
+DB-backed implementation without changing the contract. Phase XI requires
+III-P0 and III through X. There is no circular dependency, and no later phase may compensate
 for a failed earlier invariant. Every phase follows its own local implementation,
 validation, independent review, remediation-or-not-required, fresh independent
 PASS, push authorization, push, remote verification, Draft PR, CI, PR review,
@@ -347,6 +352,44 @@ implementation candidate, but ownership is fixed as follows.
   `app/Data/Suppliers/` and `app/Services/Suppliers/`;
 - `tests/Unit/Suppliers/SupplierOfferSnapshotFingerprintTest.php` plus exact
   dispatch/recovery/alert vector tests.
+
+**Phase III-P0**
+
+- five additive migrations creating `supplier_import_source_profiles`,
+  `supplier_import_source_executions`,
+  `supplier_import_source_payload_receipts`,
+  `supplier_product_identity_heads`, and `supplier_product_source_revisions` in
+  dependency order;
+- one additive migration adding the guarded identity-head/current-revision
+  pointers, indexes and composite FKs to `supplier_products`;
+- one additive migration adding the five-field `cohort_source_identity`
+  authority, generation-to-claim source FK, and immutable ten-bound policy-v2
+  authority to claims/generations;
+- `app/Models/SupplierImportSourceProfile.php`;
+- `app/Models/SupplierImportSourceExecution.php`;
+- `app/Models/SupplierImportSourcePayloadReceipt.php`;
+- `app/Models/SupplierProductIdentityHead.php`;
+- `app/Models/SupplierProductSourceRevision.php`;
+- `app/Data/Suppliers/Imports/ImportJobIdentity.php`;
+- `app/Data/Suppliers/Imports/ResolvedSupplierImportSourceContext.php`;
+- `app/Data/Suppliers/Imports/BoundedImmutableSourcePayload.php`;
+- source-profile, ImportJob identity, execution, payload-receipt, context and
+  policy-v2 canonical contracts under
+  `app/Data/Suppliers/` and `app/Services/Suppliers/`;
+- dormant allowlisted policy definitions in `config/supplier_snapshot.php`,
+  with no approved numeric policy key until all ten values are authorized;
+- `app/Services/Suppliers/SupplierImportSourceContextResolver.php`;
+- one protected bounded downloader/parser adapter boundary that accepts only
+  the resolved context and same-handle immutable payload, not a mutable
+  `ImportJob`, `SupplierFeed`, pathname or mapping model; persists exactly one
+  append-only payload receipt per execution and verifies receipt size/SHA-256
+  at parser EOF; and implements `protected_source_redirect_policy_v1` by disabling redirect
+  following and failing every `3xx` before destination contact, payload
+  acceptance or parser invocation;
+- focused MySQL schema, locked ImportJob selector, immutable
+  profile/execution/receipt/revision, A-to-B TOCTOU, redirect rejection,
+  bounded source-byte, same-handle mutation, crash reconstruction and zero-
+  Product-mutation tests.
 
 **Phase III**
 
@@ -531,13 +574,49 @@ schedule integration.
 **PR gate.** Independent Security and Database review of exact bytes and
 immutability.
 
+### Phase III-P0 - Protected source provenance prerequisite foundation
+
+**Status.** Architecture design only. Nothing in this subphase is implemented
+or implementation-authorized. It is additive to, and does not rewrite, the
+historical deployed Phase I ten-table foundation or frozen Phase II contracts.
+
+**Goal.** Implement the dormant prerequisites that make source provenance and
+source capture mechanically enforceable before snapshot persistence can be
+activated: immutable profile/execution authority, stable logical heads,
+append-only revisions, guarded staging pointers, exact claim/generation source
+binding, the immutable resolved-source-context API, bounded source download,
+and operational policy v2 with all ten values still unapproved.
+
+**Dependency and activation.** Phase III-P0 depends on deployed Phase I and
+Phase II. Its schema and models deploy dormant. No protected downloader,
+parser, capture or import path may activate until every Phase III-P0 migration,
+model, byte contract, A-to-B test, policy-v2 test and crash reconstruction test
+passes independent review. Phase III depends on this complete inactive
+foundation; no later phase may substitute for it.
+
+**Rollback/readiness.** Operational rollback is forward-only and preserves all
+new provenance evidence. Destructive local/testing downgrade is allowed only
+through a separately reviewed complete empty/pristine predicate covering the
+five structurally registered new tables and all separately guarded
+pointer/source/policy columns before first DDL. Any
+legacy row without unambiguous immutable provenance remains ineligible; no
+backfill may infer history from current feed URL, mapping or credentials.
+
+**Exclusions.** No import activation, staging recapture, Product mutation,
+Catalog Sync, source fetch, production bound value, provider, queue, schedule or
+historical backfill.
+
+**PR gate.** Independent Database, Supplier Import, Security, QA and Catalog
+Sync Safety review with real MySQL 8.4 for schema authority.
+
 ### Phase III - Snapshot persistence and cohort authorization core
 
-**Status.** Readiness remediation only. Runtime implementation is not
-authorized. `PH3-RDY-001`, `PH3-RDY-002`, and `PH3-RDY-003` remain separate
-blockers; only the status-consistency finding `PH3-RDY-004` is closed. No class
-listed below may be implemented until all three blockers are separately
-remediated and independently reviewed.
+**Status.** Architecture design only. Runtime implementation is not authorized.
+The exact status map is referenced from the canonical architecture contract.
+No class listed below may be implemented until Phase III-P0 is implemented and
+independently accepted, all ten operational bounds are evidence-backed and
+approved, and a later explicit implementation authorization is issued after
+independent review.
 
 **Goal.** Implement deterministic, atomic snapshot persistence behind a
 service API that is not yet called by production import paths.
@@ -546,6 +625,8 @@ service API that is not yet called by production import paths.
 `SupplierImportCohortAuthorizationService`,
 `ImmutableSupplierOfferSnapshotRepository`, `SupplierOfferSnapshotCollector`,
 `SupplierOfferSnapshotCaptureService`, and `ImportHistorySnapshotSourceAdapter`.
+These consume the persisted Phase III-P0 provenance/context/policy authorities;
+they do not create those prerequisites inside Phase III.
 
 **Tests.** Atomic generation/enrollment/observation reconciliation, duplicate
 same-fingerprint acceptance, conflicting duplicate rejection, bounded
@@ -703,7 +784,9 @@ notification, Product write, Catalog Sync, or automatic activation.
 
 **Mutation boundary.** When later enabled, existing import engines may continue
 their existing `supplier_products` staging writes under the new ownership
-boundary. No new staging semantics and no `products` mutation are authorized.
+boundary only through the Phase III-P0 guarded identity-head/current-revision
+projection. Those additive provenance pointers do not authorize new catalog
+semantics, source-content overwrite or any `products` mutation.
 Protected execution never mutates `suppliers.last_import_notification_at`
 through the legacy notification flow.
 
@@ -884,10 +967,74 @@ mutation, Catalog Sync, provider selection, automatic recovery or enablement.
 **PR gate.** Full independent aggregate review by Database, Security, Release,
 Supplier Import, Product Data Quality, QA, and Catalog Sync Safety.
 
-## Ten-table migration dependency plan
+## Future Phase III-P0 provenance migration allocation
 
-The canonical table count remains exactly ten. Existing-table indexes and
-triggers are not additional proposed tables.
+This future allocation is additive and dormant. It is not part of the deployed
+Phase I ten-table count and does not amend any Phase I migration.
+
+The following registry is the sole CURRENT Phase III-P0 new-table allocation
+authority. `supplier_products` is intentionally absent because Phase III-P0
+adds guarded pointer/metadata columns to that existing table rather than
+creating it.
+
+<!-- phase-iii-p0-table-set-registry classification=CURRENT id=phase-iii-p0-new-table-allocation-v1 -->
+| Allocation position | Phase III-P0 new table |
+| :---: | :--- |
+| 1 | `supplier_import_source_profiles` |
+| 2 | `supplier_import_source_executions` |
+| 3 | `supplier_import_source_payload_receipts` |
+| 4 | `supplier_product_identity_heads` |
+| 5 | `supplier_product_source_revisions` |
+<!-- phase-iii-p0-table-set-registry:end id=phase-iii-p0-new-table-allocation-v1 -->
+
+The separately parsed destructive-downgrade registry is the sole CURRENT table
+set for the future local/testing empty/pristine guard. Every row must prove its
+predicate before the first destructive DDL statement; a false, unknown,
+unreadable, incomplete or missing result rejects the whole downgrade and keeps
+all evidence intact.
+
+<!-- phase-iii-p0-table-set-registry classification=CURRENT id=phase-iii-p0-destructive-downgrade-table-set-v1 -->
+| Guard position | Phase III-P0 guarded table | Required empty/pristine evidence |
+| :---: | :--- | :--- |
+| 1 | `supplier_import_source_profiles` | table exists and contains zero rows; all dependent executions are already proven absent |
+| 2 | `supplier_import_source_executions` | table exists and contains zero rows; all dependent receipts and revisions are already proven absent |
+| 3 | `supplier_import_source_payload_receipts` | table exists and contains zero rows; no committed payload receipt evidence may be discarded |
+| 4 | `supplier_product_identity_heads` | table exists and contains zero rows; all staging head pointers are separately proven null |
+| 5 | `supplier_product_source_revisions` | table exists and contains zero rows; all staging current-revision pointers are separately proven null |
+<!-- phase-iii-p0-table-set-registry:end id=phase-iii-p0-destructive-downgrade-table-set-v1 -->
+
+The two structural table sets must be exactly equal as unordered five-member
+sets. The guard implementation must discover and validate the complete set
+before it executes any trigger, FK, index, column or table DDL. The set equality
+does not by itself authorize removal of evidence-bearing columns on existing
+`supplier_products`, claims or generations: their separately stated null,
+absence and disabled-gate predicates remain mandatory in the same complete
+preflight.
+
+| Artifact | Migration/subphase | Dependency | Model/service phase | Activation gate | Rollback/readiness prerequisite |
+| --- | --- | --- | --- | --- | --- |
+| `supplier_import_source_profiles` | III-P0 migration 1 | existing supplier/feed parents and Phase II canonical helper | III-P0 profile model, resolver and descriptor contracts | all source-profile canonical-byte and append-only tests pass; protected path remains off | empty table plus disabled protected gates for local/testing down; operational rollback preserves rows |
+| `supplier_import_source_executions` | III-P0 migration 2 | profile table, locked ImportJob/feed/template authority and ImportHistory | III-P0 execution model/context reconstruction service | exact ImportJob/profile/context/execution fingerprints, selector-race and crash-reconstruction tests pass | empty table and profiles unreferenced for local/testing down; no mutable-feed/job backfill |
+| `supplier_import_source_payload_receipts` | III-P0 migration 3 | exact source-execution receipt scope | III-P0 append-only receipt model/repository | one-receipt, size/SHA-256, replacement rejection and retry byte-equality tests pass | empty receipt table and executions unreferenced for local/testing down; operational rollback preserves committed receipt evidence |
+| `supplier_product_identity_heads` | III-P0 migration 4 | supplier/feed composite authority | III-P0 logical-head model/repository | byte-exact first-insert and concurrent head tests pass | empty table and no staging head pointers for local/testing down |
+| `supplier_product_source_revisions` | III-P0 migration 5 | source execution/receipt, identity head and staging row | III-P0 revision model/repository | append-only revision, receipt/source/projection fingerprint and A-to-B tests pass | empty table and no current-revision pointers for local/testing down |
+| `supplier_products` identity-head/current-revision pointers, indexes, checks, triggers and composite FKs | III-P0 migration 6 | all five new provenance/receipt tables | III-P0 protected staging writer | legacy-null/ineligible, pointer CAS and no-fabricated-backfill tests pass | every pointer null and new tables empty before local/testing down; no staging content rewrite |
+| claim `cohort_source_identity` plus generation-to-claim source authority | III-P0 migration 7A | deployed claims/generations and immutable profile identity | III-P0 claim/generation model metadata and authorization repository support | exact five-field atomic tuple, trigger and composite FK tests pass | no affected claim/generation evidence; ambiguous rows fail readiness |
+| policy-v2 key/version/fingerprint authority on claim/generation | III-P0 migration 7B | migration 7A and ten-bound policy-v2 contract | III-P0 policy resolver; consumed by Phase III capture | all ten values approved later, persisted policy validates, and no v1 reinterpretation occurs | no policy-bound evidence for local/testing down; operational rollback preserves policy facts |
+| `supplier_import_job_identity_v1`, `supplier_import_resolved_source_context_v1` and same-handle bounded source-payload boundary | III-P0 code subphase after migrations 1-3 | locked selector identity, immutable profile/execution/receipt bytes and policy-v2 contract | III-P0 resolver/downloader/parser adapters with redirects disabled and verified receipt EOF | selector race, A-to-B, no-post-resolution-read, all-`3xx` fail-closed, N+1 byte overflow, no-path-reopen, mutation detection and cleanup tests pass; still no production activation | code/config gate remains false; missing context/receipt reconstruction fails closed |
+
+Forward order is exactly migrations 1, 2, 3, 4, 5, 6, 7A and 7B, followed by
+models/contracts, locked selector identity, resolved context, receipt-bound
+downloader/parser adapters and only
+then Phase III snapshot persistence integration. Reverse local/testing order is
+the exact dependency reverse after the complete empty/pristine predicate.
+
+## Historical deployed Phase I ten-table migration dependency plan
+
+The historical deployed Phase I canonical table count remains exactly ten.
+Existing-table indexes and triggers are not additional Phase I tables. The
+future Phase III-P0 provenance tables and additive staging/source/policy
+columns above are separate later prerequisites and do not rewrite this history.
 
 ### Forward order
 
@@ -1226,14 +1373,13 @@ mutation.
     existing completion notification and Supplier timestamp mutation. Phase X
     durable alert intents are the only future protected notification source.
 
-The Phase III readiness review found three implementation design conflicts that
-the deployed contracts cannot close: application candidate rows lack immutable
-original-source provenance (`PH3-RDY-001`), the capture-start authorization is
-not immutably bound to `source_identity` (`PH3-RDY-002`), and the authorized
-importer has no hard source limits from which all required operational bounds
-can be derived (`PH3-RDY-003`). Claim source binding does not repair candidate
-provenance. Phase III implementation is prohibited until all three separate
-remediations are approved and verified.
+The Phase III architecture design selects exact provenance and durable claim-
+source mechanisms without adding runtime artifacts. The authorized importer
+still has no evidence-backed hard limits from which all required operational
+bounds can be approved. Claim source binding does not repair candidate provenance;
+both selected mechanisms remain mandatory. Phase III implementation is
+prohibited while the bounds gate is blocked and until a later explicit
+implementation authorization follows independent design review.
 
 ## Review and rollout boundary
 
@@ -1249,9 +1395,10 @@ binding but cannot become active. Phase X supplies the DB-backed binding; even
 that merge does not activate recovery without canonical fresh evidence and a
 separate operational authorization.
 
-The first safe next action is a fresh independent read-only review of the Phase
-III readiness-remediation documentation. That review may authorize only the
-separate design work for immutable candidate-row source provenance, durable
-authorization source binding, and approved production operational bounds. It
-cannot authorize Phase III implementation while any of the three independent
-blockers remains open.
+The first safe next action is a fresh independent read-only review of the
+complete Phase III architecture-design checkpoint. The exact current status
+map remains exclusively in the referenced canonical architecture contract.
+The remaining numeric-evidence gate requires separately authorized production-
+evidence collection and review for all ten bounds. That review cannot
+authorize Phase III implementation, which remains unimplemented and
+unauthorized until the remaining gate is separately closed.

@@ -3280,24 +3280,29 @@ autonomous terminalization guarantee. Without operator response, a due
 
 Enrollment is privacy-safe, monotonic, and source-scoped.
 
-### Phase III readiness findings and authority
+<!-- phase-iii-architecture-authority classification=HISTORICAL id=phase-iii-readiness-remediation-v1 -->
+### Historical Phase III readiness findings (superseded)
 
-This section is the authoritative Phase III readiness-remediation contract. It
-clarifies candidate-row selection without changing any Phase II canonical byte
-contract. Three independent blockers remain and cannot be closed in
-documentation: immutable candidate-row source provenance, durable authorization
-source binding, and approved operational bounds. Each requires separately
-approved design work before Phase III implementation can be authorized.
+This section preserves the readiness-era decision record that preceded the
+completed architecture review. It is historical, superseded and non-authoritative
+for current architecture status. Its `CLOSED` terminology and abbreviated
+execution/revision boundary are retained only as review provenance. The sole
+current architecture authority is the later block marked
+`classification=CURRENT` with ID `phase-iii-architecture-contract-v1`; that
+block alone defines current statuses and the complete source-profile,
+execution, identity-head, revision and bounds architecture. Design closure is
+not runtime implementation authorization.
 
 | Finding | Verdict | Exact boundary |
 | --- | --- | --- |
-| `PH3-RDY-001` | `BLOCKED` | Existing application candidate rows do not carry immutable source provenance sufficient to prove membership in `(supplier_id, supplier_feed_id, source_identity)`. Exact supplier/feed equality alone is insufficient. |
-| `PH3-RDY-002` | `BLOCKED` | The deployed claim/authorization schema does not persist an immutable source identity before authorization. A separate additive schema and guarded-model design is required, and it does not close candidate-row provenance. |
+| `PH3-RDY-001` | `CLOSED` | The canonical future authority is an immutable source execution plus immutable supplier-product source revision selected by a guarded current-revision pointer. Existing rows remain ineligible until explicitly recaptured; exact supplier/feed equality alone remains insufficient. |
+| `PH3-RDY-002` | `CLOSED` | The exact five-field claim authorization tuple, atomic `NULL -> A` transition, DB checks/trigger, and generation-to-claim composite FK are fixed below. This binding remains separate from candidate provenance. |
 | `PH3-RDY-003` | `BLOCKED` | The authorized importer has no approved hard source-row or source-byte maximum from which all spool, sort, batch, and transaction bounds can be derived. |
 | `PH3-RDY-004` | `CLOSED` | Phase I and II are deployed/inactive; Phase III remains unimplemented and not implementation-authorized. |
 
-Phase III implementation remains prohibited while any of `PH3-RDY-001`,
-`PH3-RDY-002`, or `PH3-RDY-003` is `BLOCKED`.
+Phase III implementation remains prohibited while the historical
+`PH3-RDY-003` readiness gate remains unresolved and until a later explicit
+implementation authorization is issued for the independently reviewed design.
 
 This remediation does not change the 22 cryptographic/digest identities, the
 20-field expected state, 16-field resume state, 42-field generation header,
@@ -3351,8 +3356,9 @@ This is a required design invariant, not an explanatory example:
    cohort merely because supplier ID and feed ID still match;
 6. current candidate rows do not immutably record `A`, so their original-source
    provenance cannot currently be proven; and
-7. Phase III remains blocked until a separate immutable candidate-row/source
-   provenance contract is approved, implemented, deployed, and verified.
+7. the selected immutable candidate-revision contract below prevents that
+   admission, but Phase III remains inactive until it is separately implemented,
+   deployed, verified, and explicitly enabled.
 
 Reading the current `SupplierFeed.feed_url`, `feed_type`, `mapping`, name,
 adapter selection, credentials, or other mutable configuration at T4 is never
@@ -3372,9 +3378,9 @@ and Catalog Sync state do not determine cohort identity.
 | matching supplier with `supplier_feed_id IS NULL` | `FAIL CLOSED` | Null does not mean every feed, current feed, or legacy feed; source provenance is unavailable. |
 | exact supplier/feed but immutable original-source provenance is missing | `NOT ADMISSIBLE / FAIL CLOSED / BLOCKED BY PROVENANCE` | `supplier_products.supplier_feed_id` equality proves feed ownership only; it does not prove historical source identity. This is every current application candidate row. |
 | exact supplier/feed with immutable provenance for another or inconsistent source | `FAIL CLOSED` | A cross-source merge is forbidden even when feed ID is unchanged. |
-| exact supplier/feed, immutable provenance for the exact capture source, and one valid canonical supplier SKU | `INCLUDE`, only after a future provenance design is approved | All three semantic proofs exist; mutable commercial status remains irrelevant. |
+| exact supplier/feed, immutable provenance for the exact capture source, and one valid canonical supplier SKU | `INCLUDE`, only after the selected provenance schema/importer path is implemented and enabled | All three semantic proofs exist; mutable commercial status remains irrelevant. |
 | exact supplier/feed with null, empty, whitespace-only, malformed, conflicting, or otherwise ambiguous supplier SKU | `FAIL CLOSED` | The collector may not invent or reconcile an identity. |
-| repeated rows with exact supplier/feed, exact immutable source provenance, and the same valid canonical supplier SKU | `INCLUDE`, then deduplicate, only after a future provenance design is approved | They authorize one immutable identity only when every row carries the same proven source. |
+| repeated rows with exact supplier/feed, exact immutable source provenance, and the same valid canonical supplier SKU | `INCLUDE`, then deduplicate, only after the selected provenance schema/importer path is implemented and enabled | They authorize one immutable identity only when every row carries the same proven source. |
 
 `supplier_products.supplier_feed_id` proves feed ownership only and never proves
 historical source identity. A candidate MUST NOT enter the cohort merely because
@@ -3403,7 +3409,7 @@ problem.
 | linked SupplierProduct has another non-null feed | `EXCLUDE` | The offer is attributable to another feed. |
 | linked SupplierProduct has the exact scope supplier/feed but no immutable original-source provenance | `NOT ADMISSIBLE / FAIL CLOSED / BLOCKED BY PROVENANCE` | The link proves supplier/feed/SKU lineage only; current schema cannot prove the original canonical source. |
 | linked SupplierProduct has immutable provenance for another or inconsistent source | `FAIL CLOSED` | Cross-source merge remains prohibited even under the same feed ID. |
-| linked SupplierProduct has exact supplier/feed/source provenance and both rows resolve to the same valid canonical supplier SKU | `INCLUDE`, then deduplicate, only after a future provenance design is approved | The offer contributes the same proven source identity as its staging parent. |
+| linked SupplierProduct has exact supplier/feed/source provenance and both rows resolve to the same valid canonical supplier SKU | `INCLUDE`, then deduplicate, only after the selected provenance schema/importer path is implemented and enabled | The offer contributes the same proven source identity as its staging parent. |
 | either SKU is invalid or their canonical supplier-SKU hashes differ | `FAIL CLOSED` | A mutable or contradictory link cannot authorize membership. |
 
 The linked-row derivation is used only to select the member within the
@@ -3471,10 +3477,10 @@ originated from source `A` rather than a later source `B` under the same feed
 ID. Current answer: **NO**. Claim source binding does not solve this problem.
 Every candidate admitted to a source-scoped seed must instead carry or be
 transitively bound to immutable persisted evidence of its original canonical
-source identity. Direct source persistence, immutable import-history
-provenance, and another immutable FK chain are possible future alternatives,
-not approved solutions. Candidate provenance remediation is
-**REQUIRED / UNRESOLVED** and requires a separate design comparison.
+source identity. Direct fields on the mutable row, execution-only provenance,
+and an immutable revision chain were evaluated. The canonical selection is the
+combined append-only execution plus revision chain defined below. Candidate
+provenance is **CLOSED IN DESIGN / NOT IMPLEMENTED**.
 
 The proposed future Problem A schema contract is exact but not implemented:
 
@@ -3551,14 +3557,15 @@ relationship is unambiguous and complete. For candidate provenance, the same
 rule applies independently; a claim backfill never manufactures candidate-row
 history. No historical source may be inferred from current configuration.
 
-This is an additive Phase I schema and Phase II guarded-model remediation. It
-requires a separate design, migration/model implementation, validation,
-independent review, deployment, and post-deployment verification before Phase
-III. The proposed claim field is not one of the 22 approved canonical
+This is the selected future additive schema and guarded-model remediation. It
+still requires separately authorized migration/model implementation,
+validation, independent review, deployment, and post-deployment verification
+before Phase III. The proposed claim field is not one of the 22 approved canonical
 identities and is not part of the 20/16/42/13/5 field serializers, so a Phase II
-canonical serializer/fingerprint revision is currently **NOT REQUIRED**. That
-conclusion must be reconfirmed against the exact future schema design; it is not
-final implementation approval.
+canonical serializer/fingerprint revision is **NOT REQUIRED**. The future
+operational-policy identity described below is separate and does not mutate any
+frozen serializer or golden fixture. This conclusion is architecture authority,
+not implementation approval.
 
 ### PH3-RDY-003 authoritative-limit inventory and unresolved gate
 
@@ -3587,14 +3594,15 @@ Consequently every Phase III operational bound remains `NOT SPECIFIED`:
 | Required bound | Current value | Required derivation before closure |
 | --- | --- | --- |
 | `max_source_rows` | `NOT SPECIFIED` | approved hard importer/source row maximum `R` |
+| `max_source_bytes` | `NOT SPECIFIED` | approved maximum decoded source-payload bytes accepted into parser input for one execution |
 | `max_spool_rows` | `NOT SPECIFIED` | approved maximum prior enrollments plus both candidate-table maxima and `R` |
 | `max_spool_bytes` | `NOT SPECIFIED` | exact approved spool-row count multiplied by the approved encoded record ceiling |
 | `max_enrollments` | `NOT SPECIFIED` | maximum distinct seed union exact-source identities |
 | `max_observations` | `NOT SPECIFIED` | exact maximum final cohort size |
 | `max_canonical_children` | `NOT SPECIFIED` | new enrollments plus exhaustive observations |
-| external-sort chunk | `NOT SPECIFIED` | approved row and byte memory ceilings |
-| immutable DB insert batch | `NOT SPECIFIED` | canonical row widths plus an application-owned packet/placeholder ceiling, not mutable server defaults |
-| snapshot transaction bound | `NOT SPECIFIED` | approved canonical child-row and encoded-byte ceilings |
+| `external_sort_chunk` | `NOT SPECIFIED` | approved maximum canonical records per in-memory run; byte safety uses deterministic encoded-width constant `W` and separately measured worker-memory evidence, never a second `K` dimension |
+| `db_insert_batch_ceiling` | `NOT SPECIFIED` | approved maximum child rows per SQL insert statement from row width, packet, placeholder and lock-duration evidence |
+| `snapshot_transaction_bound` | `NOT SPECIFIED` | approved maximum inserted/updated rows per finalization transaction using the exact `C + 5 + orchestration_run_mutation` formula, never statements, bytes or time |
 
 Once those primitive bounds are separately approved, all derived values must be
 formulas, not independent magic numbers. The authorization hash spool format is
@@ -3608,8 +3616,9 @@ owned by the worker OS account, with a random capture-specific filename, mode
 filename, and no raw SKU, URL, credential, XML, name, or payload content. Normal
 and PHP-observable failure cleanup occurs in `finally`; a future startup janitor
 may delete only stale files with the exact prefix, owner, regular-file type and
-mode and must never read or log contents. The exact stale age and all row/byte
-ceilings remain part of the blocked bound design.
+mode and must never read or log contents. The exact stale age is a separate
+future janitor decision; all ten numeric Phase III policy values remain
+blocked pending the evidence specified below.
 
 Authorization-spool overflow is detected before its member/claim commit and
 rolls that transaction back. Source/observation overflow after a committed
@@ -3735,6 +3744,1366 @@ unauthorized failure freezes the generation, cannot silently create a baseline
 or absence fact, and requires separate operator investigation or authorization.
 A later explicitly authorized expansion begins another epoch under the baseline
 rule above.
+
+<!-- phase-iii-architecture-authority classification=CURRENT id=phase-iii-architecture-contract-v1 -->
+<!-- phase-iii-architecture-contract:start id=phase-iii-architecture-contract-v1 -->
+### Phase III provenance and bounds architecture decision
+
+This subsection is the selected future architecture. It records design
+authority only. No table, model, importer, repository, job, configuration or
+feature gate described here exists until a later implementation phase adds it.
+The complete marker-bounded CURRENT authority is closed-world. From the exact
+CURRENT authority marker through the matching contract end marker, every
+normalized byte and every ordered structural unit is canonical. Each unit has a
+stable version-local identity, exact structural category, byte length and
+SHA-256 fingerprint; the ordered unit inventory and the complete normalized
+authority bytes have separate versioned fingerprints. A category never grants
+free-text authority: add, remove, duplicate, rename, reorder, move, reclassify
+or alter any unit, marker, paragraph, table, literal block or intervening byte
+and the structural contract fails regardless of wording. Natural-language
+semantic discovery is diagnostic only and is never acceptance authority.
+
+The enclosing design document is independently closed-world as three ordered
+canonical regions: `pre-current-reference-history-v1` from BOF up to but not
+including the CURRENT authority marker, `current-architecture-authority-v1`
+from that marker through the exact contract end marker, and
+`post-current-reference-history-v1` from immediately after that marker through
+EOF. The complete normalized document and each region have separate exact byte
+and ordered structural-unit inventories with independently fixed SHA-256
+fingerprints. Existing historical, literal, explanation, reference and external
+reference material is valid only at its exact canonical position and content.
+No arbitrary prefix, suffix, inter-region content or appended reference is
+implicitly harmless; any such byte or unit requires a deliberate canonical
+contract update. The structural parser intentionally classifies its closed set
+of Markdown units and treats remaining Markdown syntax as paragraph content;
+rejection of an unauthorized construct comes from the exact byte and unit
+inventories, not from an unreachable unknown-type fallback or lexical wording.
+
+#### Current runtime and lineage inventory
+
+| Hop | Current identity and link | Mutability and reuse | Historical source proof |
+| --- | --- | --- | --- |
+| source/feed | `supplier_feeds.id` plus `supplier_id`; URL, type, mapping, credentials and status are fields on the same row | source-defining fields are mutable and one feed ID can represent A then B | none; current configuration is not historical evidence |
+| supplier import | `import_jobs.id` and append-restricted `import_histories.id` bind supplier/feed | an XML retry may write the same staging identity; `ImportHistory` has no source identity | supplier/feed execution lineage only |
+| staging | `supplier_products.id`; importer lookup uses supplier/feed plus first SKU, EAN, MPN or payload hash | `updateOrCreate` overwrites source-owned columns and reuses rows | current row only; no original source or revision identity |
+| catalog offer | `product_supplier_offers.id` and nullable `supplier_product_id` | offer price/quantity/link are mutable | a live staging link only; no source identity |
+| claim | `supplier_import_execution_claims.id` and its supplier/feed/history parents | guarded state machine; current authorization tuple has four fields | no authorization source binding |
+| generation | one generation per claim with immutable `source_identity` | append-only | generation source exists, but no composite claim/source authority |
+| enrollment/observation | immutable supplier/source/SKU enrollment and one observation per generation/enrollment | append-only | historical only after a valid generation exists |
+
+The implemented XML path materializes the full XPath result, calls
+`SupplierProduct::updateOrCreate`, deletes/recreates staged attributes and then
+updates ImportHistory. Therefore `supplier_id + supplier_feed_id` is **NO** as
+original-source proof. `product_supplier_offers.supplier_product_id` is also
+**NO**: it reaches the same mutable row and adds no immutable source fact. The
+feed-A-to-B failure is reproducible directly from these schemas and services.
+
+#### Provenance alternatives and canonical selection
+
+| Alternative | Immutable evidence | A to B / reused-row safety | Retry/concurrency | Decision |
+| --- | --- | --- | --- | --- |
+| A - source fields directly on `supplier_products` | no; a field changes with the mutable row | either destroys A history or detaches A provenance from B content | out-of-band writes and overlapping imports remain ambiguous | rejected |
+| B - append-only supplier-product revision | yes; each revision is immutable and the mutable row selects one exact revision | preserves A and B and prevents a B row from claiming A | supports idempotent execution/member uniqueness and deterministic snapshot reads | selected |
+| C - immutable import/source execution only | proves execution supplier/feed/source but not which revision of a reused staging row is current | execution A survives reconfiguration, but the row can later contain B | insufficient alone | selected only as B's required parent |
+| D - copy all mutable application candidates into claim members | freezes only SKU hashes after admission | cannot prove that admission itself used A | retry-safe after a potentially unsafe admission | rejected |
+
+The canonical design is **B + C**.
+
+Its immutable object is a
+`supplier_product_source_revision`, not the mutable `supplier_products` row.
+The revision is transitively bound to one immutable
+`supplier_import_source_execution`. The mutable row contains only a guarded
+pointer selecting its current immutable revision.
+
+#### Selected immutable source-profile authority
+
+The sole future registry is `supplier_import_source_profiles`. It is the only
+authority that converts mutable feed configuration into an immutable logical
+source. It is append-only and its authority columns are exactly
+`id`, `supplier_id`, `supplier_feed_id`, `source_identity`,
+`descriptor_version`, `source_locator_contract_key`,
+`source_locator_contract_version`, `source_locator_key`,
+`source_locator_canonical_bytes`, `source_access_scope_key`, `feed_type`,
+`importer_key`, `importer_version`, `mapping_contract_version`,
+`mapping_canonical_bytes`, `mapping_contract_fingerprint`,
+`source_descriptor_fingerprint`, and `created_at`.
+
+`id`, `supplier_id` and `supplier_feed_id` are unsigned bigints. `id` is the
+primary key. `source_identity`, `source_locator_key` and
+`source_access_scope_key` are `VARCHAR(128) CHARACTER SET ascii COLLATE
+ascii_bin`. `descriptor_version`, `source_locator_contract_key` and
+`importer_key` are `VARCHAR(96) CHARACTER SET ascii COLLATE ascii_bin`;
+`source_locator_contract_version` and `importer_version` are `VARCHAR(32)
+CHARACTER SET ascii COLLATE ascii_bin`; `feed_type` is `VARCHAR(16) CHARACTER
+SET ascii COLLATE ascii_bin` and lowercase. Both fingerprints are `CHAR(64)
+CHARACTER SET ascii COLLATE ascii_bin`; `created_at` is UTC `TIMESTAMP(6)`.
+`mapping_contract_version` is `VARCHAR(32) CHARACTER SET ascii COLLATE
+ascii_bin`. `source_locator_canonical_bytes` and `mapping_canonical_bytes` are
+`MEDIUMBLOB`. Every column is `NOT NULL`. The two blobs contain only the exact
+validated, secret-free canonical bytes defined below; their database type is a
+storage representation, not approval of a source-byte or mapping-size policy.
+
+Canonical source-profile descriptor fields (ordered):
+
+```text
+schema
+supplier_id
+supplier_feed_id
+source_locator_contract_key
+source_locator_contract_version
+source_locator_key
+source_access_scope_key
+feed_type
+importer_key
+importer_version
+mapping_contract_version
+mapping_contract_fingerprint
+```
+
+The descriptor version and fingerprint identity are exactly
+`supplier_import_source_profile_v1`. Canonical bytes are the ASCII domain
+`supplier_import_source_profile_v1`, one NUL byte, and
+`CanonicalOnboardingData` JSON for the ordered fields above. Integer IDs remain
+JSON integers. All string values are valid UTF-8, are stored exactly after the
+field-specific validation below, and are never trimmed, case-folded or Unicode-
+normalized by the generic serializer. Null is forbidden for every descriptor
+field. SHA-256 over those bytes is stored as lowercase hexadecimal in
+`source_descriptor_fingerprint CHAR(64) CHARACTER SET ascii COLLATE ascii_bin
+NOT NULL`.
+
+`source_locator_key` is an application-owned, non-secret logical endpoint key,
+not a URL or path. It is exactly `source-locator-v1:sha256:` followed by 64
+lowercase hexadecimal characters and therefore matches the
+`SnapshotSourceIdentity` component grammar within 128 ASCII bytes. The
+allowlisted importer identified by
+`source_locator_contract_key` and version must derive it from the current
+`SupplierFeed.feed_url` before any download or staging write. The locator
+contract lowercases scheme and IDNA ASCII host, removes the default port,
+normalizes percent-encoding of unreserved characters, sorts non-secret query
+keys, and replaces every contract-declared credential/userinfo/query/path value
+with the literal `{credential}` before producing the key. Fragment input is
+forbidden. A contract that cannot distinguish a logical endpoint/partition from
+a credential change must fail closed; the generic importer may not guess. Raw
+URL, username, password, token, credential value or secret-derived hash is never
+part of descriptor bytes or persisted profile data.
+
+Canonical non-secret source-locator fields (ordered):
+
+```text
+schema
+source_locator_contract_key
+source_locator_contract_version
+scheme
+ascii_host
+port
+path_components
+query_components
+```
+
+The locator identity is `supplier_import_source_locator_v1`: ASCII domain, one
+NUL byte, then fixed-order `CanonicalOnboardingData` JSON for the fields above.
+`scheme` and IDNA `ascii_host` are lowercase; `port` is a JSON integer or null
+after default-port removal. `path_components` is an ordered list of exact
+objects `{position, classification, value}`. `query_components` is sorted by
+normalized key and then original duplicate-key ordinal, with exact objects
+`{key, ordinal, classification, value}`. Classification is exactly `source`,
+`credential`, or `fixed`; credential value is always literal `{credential}`.
+Unreserved URI percent-encodings are decoded to their byte, all other escapes
+use uppercase hexadecimal, and invalid UTF-8/source components fail closed.
+SHA-256 over these canonical non-secret bytes becomes the locator-key suffix.
+The complete bytes are persisted byte-for-byte in
+`source_locator_canonical_bytes`; the key alone is never accepted as enough
+information to drive a later download. On every context reconstruction the
+bytes are rehashed, the key is recomputed and every parsed field is revalidated
+before any credential resolution or network operation.
+
+`source_access_scope_key` is a non-secret application-owned value of one to 128
+ASCII bytes matching `source-access-v1:` plus the lowercase component grammar.
+The allowlisted adapter manifest must map every authentication/credential
+reference to exactly one reviewed logical access scope. Rotating username,
+password or token material inside the same scope retains the key; changing the
+principal/tenant/catalog scope requires a different key and therefore a new
+profile. The key is never derived from credential bytes. Missing, unknown or
+ambiguous scope mapping fails before profile resolution.
+
+`feed_type` is the exact lowercase allowlisted transport format. `importer_key`
+and `importer_version` identify the exact allowlisted parser/adapter contract.
+`mapping_contract_version` is exactly `supplier_import_mapping_contract_v1`.
+`mapping_contract_fingerprint` uses that separate
+`supplier_import_mapping_contract_v1` identity. For XML its canonical payload
+is the exact effective `root_path`, `field_map`, `validation_rules`, and
+`defaults`; for CSV it is the exact effective `SupplierFeed.mapping`. Associative
+keys are recursively sorted by `CanonicalOnboardingData`; lists preserve order;
+strings and nulls preserve their validated values. Its bytes are the identity
+domain, one NUL byte and canonical JSON. Those exact bytes are persisted
+byte-for-byte in `mapping_canonical_bytes`; their lowercase SHA-256 digest
+enters the source-profile descriptor. The fingerprint alone is never parser
+authority. The parser reconstructs its immutable mapping snapshot only from
+the persisted canonical bytes after version, grammar and digest verification.
+
+The current `SupplierFeed` columns have one exhaustive future classification:
+
+| Current field | Source-profile treatment |
+| :--- | --- |
+| `id`, `supplier_id` | included as `supplier_feed_id`, `supplier_id` |
+| `feed_type` | normalized to the exact lowercase allowlisted format and included |
+| `feed_url` | normalized into persisted secret-free `source_locator_canonical_bytes`; its key and contract key/version enter the descriptor |
+| `mapping` | persisted as exact effective `mapping_canonical_bytes` plus contract version/fingerprint; XML includes its exact selected active mapping-template contract |
+| `username`, `password` | credential material; excluded, while their reviewed logical data scope is represented by `source_access_scope_key` |
+| `feed_name` | mutable display label; excluded |
+| `update_interval`, `status` | operational scheduling/enablement state; excluded |
+| `last_sync_at`, `last_error`, `created_at`, `updated_at` | volatile execution/audit state; excluded |
+
+Every URL component consumed by a locator adapter is classified in that
+adapter's immutable allowlisted manifest as `source`, `credential`, or fixed
+syntax. Source components are normalized and included; credential components
+become literal `{credential}`; fixed syntax must byte-match. An unclassified,
+new, ambiguous or multiply classified component fails closed before profile
+resolution. This makes the adapter key/version part of the historical meaning
+and prevents a generic URL scrubber from silently treating partition data as a
+credential or vice versa.
+
+Profile creation locks the exact `(supplier_feed_id, supplier_id)` parent,
+recomputes the complete secret-free descriptor, and inserts only when no row
+exists for it. `uq_import_source_profile_descriptor(supplier_id,
+supplier_feed_id, source_descriptor_fingerprint)` makes byte-identical
+descriptor reuse resolve to the existing profile. `source_identity` is opaque:
+on a genuinely new profile it is generated from 16 CSPRNG bytes as exactly
+`snapshot-source-v1:profile:` plus 32 lowercase hexadecimal characters.
+`uq_import_source_profile_identity(source_identity)` prevents reuse anywhere,
+and `uq_import_source_profile_scope(id, supplier_id, supplier_feed_id,
+source_identity, source_descriptor_fingerprint)` supplies composite child
+authority. The feed parent is bound through `(supplier_feed_id, supplier_id)`.
+No UPDATE or DELETE is permitted; byte-identical descriptor lookup is a read,
+not a profile mutation. A descriptor-key hit is reusable only after all stored
+descriptor fields, both persisted canonical byte strings and all recomputed
+canonical fingerprints compare byte-equal;
+otherwise it fails `source_profile_descriptor_fingerprint_collision`. A random
+identity unique-key collision generates fresh CSPRNG bytes before insert and
+never aliases the new descriptor to an existing source identity.
+
+If any source-defining descriptor field changes and therefore descriptor A and
+descriptor B have different fingerprints, B cannot match the descriptor unique
+key and cannot reuse A's globally unique `source_identity`. It creates a new
+profile and a new source identity. A credential-only endpoint change that the
+approved locator contract replaces with `{credential}` retains the same
+descriptor. Any unclassified endpoint/configuration change fails before import
+rather than being treated as A or B. This is the exact same-feed A to B rule.
+
+#### Immutable resolved source context and capture boundary
+
+The sole future source-driving runtime value is
+`supplier_import_resolved_source_context_v1`, represented by an immutable
+`ResolvedSupplierImportSourceContext`.
+
+Canonical resolved source context fields (ordered):
+
+```text
+schema
+source_profile_id
+source_identity
+source_descriptor_version
+source_descriptor_fingerprint
+supplier_id
+supplier_feed_id
+source_locator_contract_key
+source_locator_contract_version
+source_locator_key
+source_locator_canonical_bytes
+source_access_scope_key
+feed_type
+importer_key
+importer_version
+mapping_contract_version
+mapping_canonical_bytes
+mapping_contract_fingerprint
+```
+
+The value is materialized only from a persisted, fully revalidated immutable
+source profile. It never contains a `SupplierFeed` model, a mutable mapping
+model, raw credentials or secret material. The canonical locator bytes contain
+the normalized scheme, ASCII host, port, ordered path and query components and
+literal credential slots required to construct the exact request target. The
+canonical mapping bytes contain every effective parser instruction. Together
+they are sufficient to drive download and parsing without another source-
+defining database read.
+
+The current `import_jobs` selector fields used by source resolution are exactly
+`id`, `supplier_id`, `supplier_feed_id`, `xml_mapping_template_id`, and `type`.
+`type` selects the XML or CSV importer. For XML,
+`xml_mapping_template_id` selects the effective mapping template; for CSV it
+must be null because the effective mapping comes from the selected feed.
+`mode`, `status`, `preview_limit`, counters, preview/error data and all
+timestamps are operational state and do not select the source, importer or
+mapping, so they are excluded from historical selector identity.
+
+The sole future immutable selector snapshot is
+`supplier_import_job_identity_v1`, represented by `ImportJobIdentity`.
+
+The following marker-bounded registry is the exclusive CURRENT machine-checkable
+authority for the selector semantics in this architecture. Its body is
+closed-world: only the exact header, separator, eleven canonical rows, optional
+blank lines and closing marker are permitted. Any other nonblank structural unit
+inside the markers is invalid regardless of wording. For these keys, all text
+outside the registry is REFERENCE/EXPLANATION only and remains exact canonical
+content under the complete CURRENT authority byte and unit inventory. It is not
+a free-text zone: it may identify a key and describe consequences, but cannot
+own, restate, replace or add a CURRENT value.
+
+<!-- phase-iii-semantic-registry classification=CURRENT id=phase-iii-import-job-selector-contract-v1 -->
+| ImportJob selector semantic key | Canonical value |
+| :--- | ---: |
+| `identity_ordered_fields` | `schema>import_job_id>supplier_id>supplier_feed_id>xml_mapping_template_id>import_type` |
+| `required_template_selector` | `XML_REQUIRED_CSV_NULL` |
+| `lock_order` | `IMPORT_JOB>SUPPLIER_FEED>XML_MAPPING_TEMPLATE` |
+| `import_job_row_locking` | `FOR_UPDATE_REQUIRED` |
+| `supplier_feed_row_locking` | `FOR_UPDATE_REQUIRED` |
+| `template_row_locking` | `XML_FOR_UPDATE_REQUIRED` |
+| `selector_verification_boundary` | `SAME_SOURCE_RESOLUTION_TRANSACTION` |
+| `mapping_snapshot_authority` | `IMMUTABLE_CANONICAL_BYTES_AND_FINGERPRINT` |
+| `mutable_template_reread_after_commit` | `FORBIDDEN_FOR_HISTORICAL_AUTHORITY` |
+| `retry_current_selector_reread` | `FORBIDDEN_FOR_HISTORICAL_AUTHORITY` |
+| `source_execution_identity_binding` | `REQUIRED_IMMUTABLE` |
+<!-- phase-iii-semantic-registry:end id=phase-iii-import-job-selector-contract-v1 -->
+
+Canonical ImportJob identity fields (ordered):
+
+```text
+schema
+import_job_id
+supplier_id
+supplier_feed_id
+xml_mapping_template_id
+import_type
+```
+
+`schema` is literal `supplier_import_job_identity_v1`; IDs are canonical JSON
+unsigned integers, except `xml_mapping_template_id`, which is an unsigned
+integer for XML and canonical JSON null for CSV. `import_type` is the exact
+lowercase allowlisted value `xml` or `csv`. The identity bytes are the ASCII
+domain `supplier_import_job_identity_v1`, one NUL byte and fixed-order
+`CanonicalOnboardingData` JSON for those fields. Their lowercase SHA-256 is the
+`import_job_identity_fingerprint`. This future identity is separate from the
+frozen Phase II 22-identity registry.
+
+The canonical source-resolution consistency boundary is one MySQL
+`REPEATABLE READ` transaction using locking reads. Its single deterministic
+cross-table lock order is `import_jobs` by primary key, then `supplier_feeds` by
+primary key, then, only for XML, `xml_mapping_templates` by primary key. The
+resolver first locks the exact ImportJob row with `SELECT ... FOR UPDATE`; it
+never selects a template and returns later to lock the mutable selector. It then
+locks the job's exact feed and exact XML template. CSV mapping is read from the
+locked feed row. The allowlisted locator/importer manifests are selected by
+their immutable code key/version, not mutable database state. The transaction
+performs exactly this sequence:
+
+1. lock the selected ImportJob and verify its claim/run/history ownership;
+2. lock its exact SupplierFeed and verify job supplier/feed, feed supplier and
+   `ImportJob.type = SupplierFeed.feed_type` byte-for-byte;
+3. for XML, require a non-null job template ID, lock that exact template, and
+   verify its ID, active-at-capture state and supplier compatibility (exact job
+   supplier or the selected global-null template); for CSV, require a null job
+   template ID and use only mapping from the locked feed;
+4. materialize and fingerprint `ImportJobIdentity` J from the locked job, and
+   read every source-defining feed and effective mapping value from the locked
+   rows without a later selector reread;
+5. validate and canonicalize descriptor A, locator bytes A and mapping bytes A;
+6. resolve or insert immutable profile A and byte-verify any existing hit;
+7. materialize `ResolvedSupplierImportSourceContext` A from persisted profile
+   A, not from mutable model instances;
+8. insert the immutable source execution bound to J and profile/context A; and
+9. commit before network access begins.
+
+Any missing/moved ImportJob, relationship mismatch, selector mutation,
+lock/read inconsistency, missing effective mapping, profile collision,
+canonical-byte mismatch or execution conflict rolls back the whole boundary.
+There is no torn selector/descriptor and no profile/execution row without one
+complete reconstructable job identity and source context. A concurrent update
+of `xml_mapping_template_id` therefore either commits before the ImportJob lock
+and is captured coherently, or waits until source resolution has committed J;
+it cannot produce job identity T1 with parser mapping T2.
+
+After that commit the selected future API boundary is exactly:
+
+```text
+resolveSourceContext(importJobId, expectedClaimIdentity)
+  -> ResolvedSupplierImportSourceContext
+
+downloadSource(ResolvedSupplierImportSourceContext)
+  -> BoundedImmutableSourcePayload
+
+parseSource(
+  ResolvedSupplierImportSourceContext,
+  BoundedImmutableSourcePayload
+)
+  -> bounded source records
+```
+
+`resolveSourceContext` constructs `ImportJobIdentity`; callers cannot supply a
+prebuilt identity as authority. `downloadSource` constructs the request target only from the context's verified
+canonical locator bytes. `parseSource` selects the importer and mapping only
+from the context's verified importer identity and canonical mapping bytes. Once
+execution EA is bound to A, downloader, parser and mapping code MUST NOT read
+current `SupplierFeed.feed_url`, `SupplierFeed.mapping`, a newly selected
+`XmlMappingTemplate`, current `ImportJob` selector fields, or any other mutable
+source-defining value. Their future
+protected signatures do not accept a `SupplierFeed` or mapping model as source
+authority.
+
+The selected protected redirect policy is exactly
+`protected_source_redirect_policy_v1`: HTTP redirect following is disabled for
+every Phase III protected source request. Every HTTP `3xx` response fails closed
+as `source_redirect_rejected`, and no redirect target is followed. The protected
+downloader discards any redirect response body, accepts no byte from the
+`Location` destination, produces no `BoundedImmutableSourcePayload`, invokes no
+parser and permits no staging, candidate-admission or snapshot progression.
+`source_redirect_rejected` is a future pre-capture coordinator failure
+classification; it is not a generation reason and does not change the frozen
+Phase II reason allowlist.
+
+SSRF validation and source provenance answer different questions. SSRF
+validation answers whether a network destination may be contacted safely.
+Provenance answers whether that exact immutable destination is authorized as
+execution A. SSRF acceptance of a redirect target is never provenance
+equivalence and never authorizes contact on the protected path. A same-host,
+cross-host, same-scope or cross-scope redirect is rejected identically; no
+redirect target can become source B implicitly. To move from canonical locator
+A to B, mutable feed configuration must be changed and a later normal locking
+source-resolution transaction must create or resolve profile/context/execution
+B under the existing A-to-B rules.
+
+Retry of execution EA reconstructs immutable context A and repeats only locator
+A with redirect following still disabled. It neither persists nor follows a
+previous `Location` value and never consults a current redirect target. The
+initial locator, execution fingerprint and accepted payload therefore retain
+one authority: because the downloader cannot consume a redirected locator, EA
+cannot attest A while parsing bytes obtained from B. The existing legacy
+`SsrfProtectionService` redirect behavior remains outside this future protected
+contract and is not changed or reused as provenance authority.
+
+#### Write-once source-payload receipt and secure parser handle
+
+The following marker-bounded registry is the exclusive CURRENT machine-checkable
+authority for payload integrity. Its body is closed-world: only the exact header,
+separator, ten canonical rows, optional blank lines and closing marker are
+permitted. Any other nonblank structural unit inside the markers is invalid
+regardless of wording. For these keys, all text outside the registry is
+REFERENCE/EXPLANATION only and remains exact canonical content under the
+complete CURRENT authority byte and unit inventory. It is not a free-text zone:
+it may identify a key and describe consequences, but cannot own, restate,
+replace or add a CURRENT value.
+
+<!-- phase-iii-semantic-registry classification=CURRENT id=phase-iii-payload-integrity-contract-v1 -->
+| Payload semantic key | Canonical value |
+| ---: | :--- |
+| `receipt_cardinality` | `EXACTLY_ONE_PER_SOURCE_EXECUTION` |
+| `receipt_execution_binding` | `REQUIRED_IMMUTABLE` |
+| `payload_digest_algorithm` | `SHA-256` |
+| `payload_digest_domain` | `EXACT_ACCEPTED_DECODED_PARSER_INPUT_BYTES` |
+| `payload_path_reopen` | `FORBIDDEN` |
+| `parser_success_before_full_eof_verification` | `FORBIDDEN` |
+| `receipt_mutability` | `APPEND_ONLY_NO_UPDATE_REPLACE_CLEAR_DELETE` |
+| `receipt_rebinding` | `FORBIDDEN` |
+| `parser_receipt_verification` | `REQUIRED` |
+| `authoritative_handle_identity` | `SAME_VERIFIED_FILE_OBJECT` |
+<!-- phase-iii-semantic-registry:end id=phase-iii-payload-integrity-contract-v1 -->
+
+`source_execution_fingerprint` remains the pre-network attestation of resolved
+job identity and source context. It never depends circularly on bytes that can
+exist only after the execution has been inserted. The sole post-download byte
+authority is the separate `supplier_import_source_payload_receipt_v1` contract.
+It binds one complete accepted parser-input payload to exactly one immutable
+source execution.
+
+The persistence authority is one dedicated append-only table,
+`supplier_import_source_payload_receipts`. There is no alternative receipt
+storage on the execution row. Its columns are exactly `id`,
+`supplier_import_source_execution_id`, `source_execution_fingerprint`,
+`receipt_version`, `accepted_payload_bytes`, `accepted_payload_sha256`,
+`payload_receipt_fingerprint`, and `created_at`; there is no `updated_at`, path,
+credential, source content or mutable lifecycle column. IDs are non-null
+unsigned bigints and `id` is primary. `receipt_version` is non-null
+`VARCHAR(96) CHARACTER SET ascii COLLATE ascii_bin` and must equal
+`supplier_import_source_payload_receipt_v1`. `accepted_payload_bytes` is a
+non-null unsigned bigint greater than zero. Both digests are non-null
+`CHAR(64) CHARACTER SET ascii COLLATE ascii_bin` values constrained to lowercase
+hexadecimal. `created_at` is a non-null UTC `TIMESTAMP(6)` audit instant and is
+not fingerprint input.
+
+Canonical source-payload receipt fingerprint fields (ordered):
+
+```text
+schema
+supplier_import_source_execution_id
+source_execution_fingerprint
+accepted_payload_bytes
+accepted_payload_sha256
+```
+
+`schema` is literal `supplier_import_source_payload_receipt_v1`. Receipt bytes
+are the ASCII domain `supplier_import_source_payload_receipt_v1`, one NUL byte
+and fixed-order `CanonicalOnboardingData` JSON for the fields above. The
+lowercase SHA-256 is persisted as `payload_receipt_fingerprint`. It does not
+include a path, file identity, storage implementation, timestamp or secret.
+`uq_import_source_payload_receipt_execution`
+(`supplier_import_source_execution_id`) enforces one receipt per execution and
+`uq_import_source_payload_receipt_fingerprint`
+(`payload_receipt_fingerprint`) protects exact receipt identity. The receipt
+has a composite `RESTRICT` FK
+(`supplier_import_source_execution_id`, `source_execution_fingerprint`) to the
+execution's exact new composite unique receipt scope. CHECK constraints enforce
+the version, positive byte count and digest grammars. UPDATE and DELETE triggers
+reject every mutation; operational rollback preserves committed receipts.
+
+The database state machine is exactly `NO_RECEIPT -> RECEIPT_COMMITTED` once.
+An absent receipt may receive complete receipt A only after bounded download
+finalization. A duplicate insert is an idempotent no-op only after every field
+and recomputed fingerprint compare byte-equal. A-to-B replacement, clearing,
+partial digest/size visibility, UPDATE and DELETE are forbidden. The row is
+inserted in one transaction; digest and size can never become visible
+independently.
+
+`accepted_payload_sha256` is SHA-256 over the exact decoded bytes emitted by the
+protected transport after HTTP transfer/content decoding and accepted under
+`max_source_bytes`, before XML/CSV interpretation. It is 64 lowercase
+hexadecimal characters. There is no reserialization, newline normalization,
+character conversion or parser projection. `accepted_payload_bytes` is the
+exact length of those same bytes and must equal the final regular-file length;
+it is eventually constrained by the receipt's persisted policy-v2
+`max_source_bytes`, whose numeric value remains `NOT SPECIFIED`.
+
+The runtime `BoundedImmutableSourcePayload` is an immutable, non-serializable
+owner.
+
+Bounded immutable source payload fields (ordered):
+
+```text
+supplier_import_source_execution_id
+source_execution_fingerprint
+source_payload_receipt_id
+receipt_version
+accepted_payload_bytes
+accepted_payload_sha256
+payload_receipt_fingerprint
+payload_storage_kind
+payload_file_identity
+payload_lifecycle_state
+authoritative_read_handle
+```
+
+`payload_storage_kind` is exactly `private_open_regular_file_v1`.
+`payload_lifecycle_state` is exactly
+`receipt_committed_open_for_verified_read`; it replaces an unnecessary
+fingerprinted verification timestamp. `payload_file_identity` is the stable
+regular-file-object identity obtained from the authoritative open handle by
+the protected storage adapter. On the deployed Linux target this is the
+validated `fstat()` device/inode tuple; an adapter unable to provide stable
+file-object identity fails closed. The identity is attempt-local security
+metadata, not persisted receipt identity and not a pathname.
+
+The downloader creates the file exclusively inside a trusted
+application-owned private temporary directory, never follows links, and keeps
+the same authoritative handle from first write through parser consumption. It
+requires a regular file owned by the expected worker identity with permissions
+equivalent to mode 0600 and rejects unexpected type, owner, link or permission
+state. A diagnostic pathname, when one exists for cleanup, is non-authoritative.
+No protected parser/service may reopen payload contents by pathname. A securely
+duplicated handle is permitted only after its file identity byte-equals the
+original verified open object.
+
+For every accepted chunk the downloader checks the next byte count before
+write and updates the SHA-256 context over exactly the bytes written. At
+completion, using the same handle, it flushes, revalidates regular-file
+type/owner/mode and file identity, verifies file length equals the accumulated
+count, finalizes the digest, atomically inserts or byte-verifies the write-once
+receipt, rewinds the handle and returns `BoundedImmutableSourcePayload`. A
+redirect, overflow, network error, incomplete flush, metadata mismatch or
+receipt conflict produces no payload object and no parser invocation.
+
+The parser receives only the resolved context plus that already-open payload
+object. A verification wrapper reads from the same handle, recomputes byte count
+and SHA-256, and requires successful EOF. Parser-emitted records may be written
+only to the already bounded private pre-commit capture spool; no staging,
+revision, candidate admission or successful canonical parse result may become
+visible until EOF verification proves both the receipt byte count and digest.
+Early parser success before verified EOF is forbidden. File-object replacement,
+length/content mutation, owner/type/mode change where observable, receipt
+mismatch or incomplete consumption fails `source_payload_receipt_mismatch`,
+discards all uncommitted parser output and performs no protected database write.
+Mode 0600 alone is never treated as immutability proof; digest verification is
+authoritative.
+
+Every successful parser result carries the source execution ID,
+`source_execution_fingerprint`, `payload_receipt_fingerprint`,
+`accepted_payload_sha256` and `accepted_payload_bytes` through the protected
+context. A result cannot be attributed to another execution or payload receipt.
+
+Crash/retry semantics are exact. Before receipt commit, cleanup removes the
+owned temporary object and retry performs a new bounded acquisition under
+persisted execution/context A. After receipt commit, an open handle never
+survives process death as authority and no leftover pathname is trusted. Retry
+reconstructs A without rereading current ImportJob/feed/template selectors,
+creates a new exclusive temporary object, reacquires locator A, and may proceed
+only if the recomputed byte count, SHA-256 and receipt fingerprint byte-equal
+the committed receipt. It does not update or insert another receipt. Different
+bytes require a new normally authorized source execution; unchanged-execution
+retry fails closed. A safe janitor may remove only stale owned regular files by
+the exact protected prefix/type/owner/mode rules and never reads or logs bytes.
+
+Handle-owned cleanup runs in `finally` after redirect rejection, overflow,
+network or receipt failure, parser failure, digest mismatch and successful
+completion. It closes the authoritative handle and removes only the exact file
+object it owns after identity verification; it never deletes or replaces a
+different process's path target.
+
+Raw authentication material remains ephemeral. At execution start the
+allowlisted adapter resolves credentials only by the immutable
+`source_access_scope_key` and fills only locator components classified as
+credential slots. Secret bytes are neither persisted nor fingerprinted.
+Credential rotation inside the same logical scope retains provenance; changing
+principal, tenant, catalog or other source-defining scope requires another
+scope key and descriptor/profile.
+
+Crash recovery loads the immutable execution and its exact profile, revalidates
+both canonical byte strings and every fingerprint, and reconstructs context A.
+It never resolves current feed B under execution EA. If the persisted context
+cannot be reconstructed exactly, retry fails closed and no download, parse or
+staging write occurs.
+
+The adversarial A to B timeline is therefore exact:
+
+1. T1: mutable feed state is A;
+2. T2: the locking source-resolution transaction captures A;
+3. T3: profile A, context A and execution EA are established atomically;
+4. T4: after commit, the feed changes to B;
+5. T5: download for EA uses only locator A from context A;
+6. T6: parse for EA uses only mapping A from context A; and
+7. a later separately allocated execution EB may resolve B, but B cannot enter
+   EA's locator, mapping, source identity or execution fingerprint.
+
+#### Selected future execution, logical-head and revision schema
+
+`supplier_import_source_executions` is append-only and its columns are exactly:
+`id`, `supplier_id`, `supplier_feed_id`, `import_job_id`, `import_history_id`,
+`supplier_import_source_profile_id`, `source_identity`,
+`source_descriptor_fingerprint`, `importer_key`, `importer_version`,
+`import_job_identity_version`, `import_job_identity_canonical_bytes`,
+`import_job_identity_fingerprint`, `resolved_source_context_version`, `captured_at`,
+`source_execution_fingerprint`, and `created_at`.
+
+Its IDs are unsigned bigints; `id` is primary. Identity/version strings use the
+same exact types/collations as their profile parents, all three persisted
+fingerprints are ASCII `CHAR(64) ascii_bin`, and both instants are UTC
+`TIMESTAMP(6)`. Every
+column is `NOT NULL`. `resolved_source_context_version` is `VARCHAR(96)
+CHARACTER SET ascii COLLATE ascii_bin` and must equal
+`supplier_import_resolved_source_context_v1`. `import_job_identity_version` is
+the same type/collation and must equal `supplier_import_job_identity_v1`;
+`import_job_identity_canonical_bytes` stores its complete secret-free domain,
+NUL delimiter and canonical JSON byte-for-byte; and
+`import_job_identity_fingerprint` is ASCII `CHAR(64) ascii_bin`.
+
+Canonical source-execution fingerprint fields (ordered):
+
+```text
+schema
+supplier_id
+supplier_feed_id
+import_job_id
+import_history_id
+supplier_import_source_profile_id
+source_identity
+source_descriptor_version
+source_descriptor_fingerprint
+import_job_identity_version
+import_job_identity_fingerprint
+resolved_source_context_version
+source_locator_contract_key
+source_locator_contract_version
+source_locator_key
+source_access_scope_key
+feed_type
+importer_key
+importer_version
+mapping_contract_version
+mapping_contract_fingerprint
+captured_at
+```
+
+The identity is exactly `supplier_import_source_execution_v1`; bytes are its
+ASCII domain, one NUL byte and fixed-order canonical JSON. `captured_at` is the
+canonical UTC microsecond instant. Its lowercase SHA-256 is persisted in
+`source_execution_fingerprint CHAR(64) CHARACTER SET ascii COLLATE ascii_bin
+NOT NULL`, computed before the execution insert and revalidated before every
+staging write, candidate admission and retry. It is unique through
+`uq_import_source_execution_fingerprint(source_execution_fingerprint)`;
+`import_history_id` is independently unique. The execution has a composite
+`RESTRICT` FK to the exact profile tuple `(id, supplier_id, supplier_feed_id,
+source_identity, source_descriptor_fingerprint)` and composite ownership FKs to
+feed, ImportJob and ImportHistory. The ImportJob FK is
+`(import_job_id, supplier_id, supplier_feed_id)` to
+`uq_import_job_id_supplier_feed`; before insert the protected writer also proves
+that the locked ImportHistory belongs to that exact job/supplier/feed tuple.
+The persisted job-identity bytes are rehashed and all six ordered fields are
+byte-verified before download, parse, retry and every protected write. Current
+ImportJob state is never historical authority. A composite unique key
+`uq_import_source_execution_scope(id, supplier_id, supplier_feed_id,
+source_identity, source_descriptor_fingerprint,
+source_execution_fingerprint)` supplies revision authority. No execution field
+may be updated or deleted. An execution-fingerprint/import-history unique-key
+hit is idempotent only when every ordered execution field compares byte-equal;
+otherwise it fails `source_execution_fingerprint_collision` without a staging
+write. The fingerprint attests to the persisted profile/context authority; it
+does not by itself prove which request or mapping code ran. That proof is the
+enforced API rule that download and parse accept source-defining input only
+from the byte-verified `ResolvedSupplierImportSourceContext` associated with
+this execution.
+
+`uq_import_source_execution_receipt_scope(id,
+source_execution_fingerprint)` is the exact parent key for the one-to-one
+payload receipt. It adds no mutability to the execution.
+
+The sole first-insert coordination authority is the append-only
+`supplier_product_identity_heads` table. It contains `id`, `supplier_id`,
+`supplier_feed_id`, `supplier_sku_bytes VARBINARY(1020)`, and `created_at`.
+The IDs are non-null unsigned bigints, `id` is primary, the SKU bytes are
+non-null, and `created_at` is UTC `TIMESTAMP(6)`. It deliberately does not
+contain source identity: one stable supplier/feed/SKU head survives source A to
+B while revisions preserve source history.
+
+Current runtime does not have one enforceable logical key. XML
+`updateOrCreate()` uses supplier/feed plus the first nonempty value in this
+ordered fallback: `supplier_sku`, `ean`, `mpn`, `payload_hash`; CSV requires a
+supplier SKU but always inserts. The current table has indexes, not a unique
+logical-identity constraint. This is why the selected protected architecture
+does not add an unproven unique key directly to legacy `supplier_products`.
+Protected provenance requires a valid supplier SKU and uses only the stable
+supplier/feed/SKU head; fallback-only and legacy rows remain ineligible until a
+future explicitly authorized import provides that key.
+
+Canonical supplier-product logical-head key fields (ordered):
+
+```text
+supplier_id
+supplier_feed_id
+supplier_sku_bytes
+```
+
+`supplier_sku_bytes` is PHP `trim()` of the validated supplier SKU encoded as
+its unchanged valid UTF-8 bytes. Case, internal/remaining whitespace and Unicode
+code points are preserved; no case folding, collation comparison or Unicode
+normalization occurs. Empty, control-bearing, invalid UTF-8 or input over 255
+Unicode characters/1020 UTF-8 bytes fails before the transaction. Null is
+forbidden. The head unique key is exactly
+`uq_supplier_product_identity_head(supplier_id, supplier_feed_id,
+supplier_sku_bytes)`. `VARBINARY` makes uniqueness byte-exact, so there is no
+hash collision path. Composite supplier/feed FKs are `RESTRICT`; no UPDATE or
+DELETE is allowed. Composite unique
+`uq_supplier_product_identity_head_scope(id, supplier_id, supplier_feed_id)`
+supplies SupplierProduct FK authority. Composite unique
+`uq_supplier_product_identity_head_revision_scope(id, supplier_id,
+supplier_feed_id, supplier_sku_bytes)` supplies revision FK authority. The
+protected writer compares the head bytes with the SupplierProduct/revision SKU
+bytes before reuse and fails
+`supplier_product_logical_identity_conflict` on any mismatch.
+
+Protected SupplierProduct rows gain nullable
+`supplier_product_identity_head_id` and `current_source_revision_id`. The head
+ID is unique per SupplierProduct and is bound with a composite FK
+`(supplier_product_identity_head_id, supplier_id, supplier_feed_id)` to the head
+scope. Legacy rows keep both fields null and remain ineligible until an explicit
+protected re-import. Under the head lock that re-import performs a byte-exact
+`BINARY supplier_sku` lookup for unheaded rows in ascending ID order. Zero rows
+means insert; exactly one row may be bound to the head and recaptured; more than
+one fails `legacy_supplier_product_identity_ambiguous` without merge, delete or
+selection by recency. Binding a legacy row proves only its logical head. The new
+execution/revision supplies provenance and source-owned values; current mutable
+contents are never treated as historical evidence. The protected writer then
+inserts the immutable revision and sets all source-owned fields plus the
+revision pointer before commit.
+
+`supplier_product_source_revisions` is append-only and its columns are exactly:
+`id`, `supplier_product_identity_head_id`, `supplier_product_id`,
+`supplier_import_source_execution_id`, `supplier_id`, `supplier_feed_id`,
+`supplier_sku_bytes`, `source_identity`, `source_descriptor_fingerprint`,
+`source_execution_fingerprint`, `source_member_identity_hash`,
+`source_row_fingerprint`, `staging_projection_fingerprint`,
+`revision_fingerprint`, `observed_at`, and `created_at`.
+
+All six ID columns are non-null unsigned bigints and `id` is primary.
+`supplier_sku_bytes` is non-null `VARBINARY(1020)` and must be byte-equal to
+the logical head. `source_identity` is non-null `VARCHAR(128) CHARACTER SET
+ascii COLLATE ascii_bin`. The six fingerprint/hash columns are non-null
+`CHAR(64) CHARACTER SET ascii COLLATE ascii_bin`; `observed_at` and
+`created_at` are non-null UTC `TIMESTAMP(6)` values.
+
+Its revision-to-head FK is exactly `(supplier_product_identity_head_id,
+supplier_id, supplier_feed_id, supplier_sku_bytes)` to
+`uq_supplier_product_identity_head_revision_scope` with `RESTRICT`; its other
+composite FKs bind the exact execution and SupplierProduct tuples. The
+SupplierProduct parent exposes a composite unique
+`(id, supplier_product_identity_head_id, supplier_id, supplier_feed_id)`.
+`uq_supplier_product_revision_execution_head(supplier_import_source_execution_id,
+supplier_product_identity_head_id)` makes one execution/head revision
+idempotent. The pointer FK uses `(current_source_revision_id, id,
+supplier_product_identity_head_id, supplier_id, supplier_feed_id)` and targets
+the exact revision tuple with `RESTRICT`. A trigger rejects a source-owned field
+change without a pointer CAS to another exact revision, pointer clearing,
+arbitrary rebinding, head replacement, or a revision whose projection does not
+match the new source-owned values. Null head/pointer remains ineligible.
+
+The revision's staging projection is fixed-order canonical data containing the
+source-owned candidate identity and imported staging values: supplier/feed,
+canonical supplier-SKU hash, EAN, MPN, name, brand/category labels, prices,
+quantity, external and mapped availability, currency, raw-data fingerprint,
+payload fingerprint, and the deterministic staged-attribute projection.
+Catalog-owned `product_id`, `synced_at`, workflow `status`, `mapping_notes` and
+ordinary timestamps are excluded. Candidate admission uses the revision's
+canonical SKU hash and recomputes the current source-owned projection; a
+mismatch is not repaired or inferred.
+
+Fingerprint authority is exact and exhaustive:
+
+| Fingerprint | Stored authority | Canonical input/version | Comparison and failure |
+| :--- | :--- | :--- | --- |
+| `mapping_contract_fingerprint` | source profile beside exact `mapping_canonical_bytes` | effective XML/CSV mapping under `supplier_import_mapping_contract_v1` | exact lowercase SHA-256; persisted bytes are rehashed before context construction, and mismatch means no profile match and no import |
+| `source_locator_key` | source profile beside exact `source_locator_canonical_bytes` | non-secret classified endpoint components under `supplier_import_source_locator_v1` | exact `source-locator-v1:sha256:` plus lowercase SHA-256; persisted bytes are rehashed before download, and mismatch means a different profile or fail-closed unresolved source |
+| `source_descriptor_fingerprint` | source profile, execution and revision | ordered source-profile fields under `supplier_import_source_profile_v1` | execution/revision must byte-equal their immutable profile; mismatch rejects before staging/admission |
+| `import_job_identity_fingerprint` | source execution beside exact `import_job_identity_canonical_bytes` | locked selector fields under `supplier_import_job_identity_v1` | bytes are rehashed and compared before context use/retry; current ImportJob is never reread as historical authority |
+| `source_execution_fingerprint` | source execution, payload receipt and revision | ordered execution fields under `supplier_import_source_execution_v1`, including locked ImportJob identity | recompute and byte-compare before download/write/admission/retry; mismatch is an execution integrity failure |
+| `payload_receipt_fingerprint` | append-only one-to-one source payload receipt | exact execution fingerprint plus accepted byte count/SHA-256 under `supplier_import_source_payload_receipt_v1` | recompute at insert/retry and parser EOF; any replacement, partial consumption or byte mismatch fails closed |
+| `source_member_identity_hash` | revision | existing `OperationalSupplierOfferIdentityHasher::supplierSku()` contract | exact revision/candidate equality; a mismatch rejects admission and never changes the byte-exact logical head |
+| `source_row_fingerprint` | revision | parser-emitted canonical source-member projection plus exact payload-receipt identity under `supplier_import_source_row_v1` | fixed-order adapter schema, domain + NUL + canonical JSON; mismatch rejects revision reuse or attribution to different accepted bytes |
+| `staging_projection_fingerprint` | revision | fixed source-owned staging projection under `supplier_product_staging_projection_v1` | recomputed from current source-owned fields/attributes at admission; mismatch fails closed |
+| `revision_fingerprint` | revision | ordered revision authority fields under `supplier_product_source_revision_v1`, including head, execution and the five preceding persisted digests | exact lowercase SHA-256 recomputation; mismatch rejects admission/retry |
+
+This design introduces ten future, separately versioned identities:
+
+```text
+supplier_import_mapping_contract_v1
+supplier_import_source_locator_v1
+supplier_import_source_profile_v1
+supplier_import_job_identity_v1
+supplier_import_source_execution_v1
+supplier_import_source_payload_receipt_v1
+supplier_import_source_row_v1
+supplier_product_staging_projection_v1
+supplier_product_source_revision_v1
+supplier_snapshot_operational_bounds_policy_v2
+```
+
+`supplier_import_resolved_source_context_v1` and the runtime
+`BoundedImmutableSourcePayload` are separately versioned
+immutable value/data-flow contract, not an additional digest identity and not a
+change to the frozen Phase II 22-identity registry. The superseded design-only
+nine-field policy v1 never becomes execution authority.
+
+Each uses an ASCII domain, one NUL delimiter and fixed-order canonical JSON
+before SHA-256. Their exact ordered canonical fields are:
+
+```text
+supplier_import_mapping_contract_v1:
+schema, feed_type, effective_mapping
+
+supplier_import_source_locator_v1:
+schema, source_locator_contract_key, source_locator_contract_version, scheme,
+ascii_host, port, path_components, query_components
+
+supplier_import_source_profile_v1:
+schema, supplier_id, supplier_feed_id, source_locator_contract_key,
+source_locator_contract_version, source_locator_key, source_access_scope_key,
+feed_type, importer_key, importer_version, mapping_contract_version,
+mapping_contract_fingerprint
+
+supplier_import_job_identity_v1:
+schema, import_job_id, supplier_id, supplier_feed_id,
+xml_mapping_template_id, import_type
+
+supplier_import_source_execution_v1:
+schema, supplier_id, supplier_feed_id, import_job_id, import_history_id,
+supplier_import_source_profile_id, source_identity,
+source_descriptor_version, source_descriptor_fingerprint,
+import_job_identity_version, import_job_identity_fingerprint,
+resolved_source_context_version, source_locator_contract_key,
+source_locator_contract_version, source_locator_key, source_access_scope_key,
+feed_type, importer_key, importer_version, mapping_contract_version,
+mapping_contract_fingerprint, captured_at
+
+supplier_import_source_payload_receipt_v1:
+schema, supplier_import_source_execution_id, source_execution_fingerprint,
+accepted_payload_bytes, accepted_payload_sha256
+
+supplier_import_source_row_v1:
+schema, supplier_id, supplier_feed_id, source_identity,
+source_execution_fingerprint, payload_receipt_fingerprint,
+accepted_payload_sha256, accepted_payload_bytes, source_member_identity_hash,
+source_ordinal, parser_projection
+
+supplier_product_staging_projection_v1:
+schema, supplier_id, supplier_feed_id, supplier_sku_bytes,
+source_member_identity_hash, ean, mpn, name, brand_name, category_name, price,
+supplier_price_raw, recommended_price, quantity,
+external_availability_status, external_availability_label,
+availability_status_id, currency, raw_data_fingerprint, payload_hash,
+received_at, attributes
+
+supplier_product_source_revision_v1:
+schema, supplier_product_identity_head_id, supplier_product_id,
+supplier_import_source_execution_id, supplier_id, supplier_feed_id,
+supplier_sku_bytes, source_identity, source_descriptor_fingerprint,
+source_execution_fingerprint, source_member_identity_hash, source_row_fingerprint,
+staging_projection_fingerprint, observed_at
+
+supplier_snapshot_operational_bounds_policy_v2:
+schema, policy_key, policy_version, max_source_rows, max_source_bytes, max_spool_rows,
+max_spool_bytes, max_enrollments, max_observations, max_canonical_children,
+external_sort_chunk, db_insert_batch_ceiling, snapshot_transaction_bound,
+units_contract_version, algorithm_version
+```
+
+`effective_mapping`, `parser_projection` and `attributes` are canonical nested
+objects: associative keys are recursively sorted, lists preserve order, and
+every scalar uses the field's validated type. `source_ordinal` is the positive
+one-based physical record ordinal. Nullable staging fields are explicit JSON
+null; non-null strings preserve validated UTF-8 bytes. `raw_data_fingerprint`
+is lowercase SHA-256 of the canonical validated raw-data object, so raw payload
+content does not enter a parent fingerprint ambiguously. `received_at` and
+`captured_at` are UTC microsecond instants. Decimal values are canonical strings
+under the future adapter schema, integer values remain JSON integers, and no
+generic trim/case/Unicode normalization is applied beyond the explicitly named
+SKU and locator contracts.
+
+Exact independent golden fixtures are implementation prerequisites. These ten
+future identities are additions outside the frozen 22 identities; none of
+the existing expected-state, resume, generation, enrollment, observation or
+empty-seed bytes changes.
+
+#### Import, retry and concurrency rules
+
+One protected import owns one source execution. For each canonical supplier SKU
+it either reuses the byte-identical revision already identified by the unique
+execution/head key or inserts one new revision. Conflicting duplicates in the
+same execution fail before moving the current pointer.
+
+The exact first-insert algorithm is:
+
+1. compute and validate the canonical trimmed `supplier_sku_bytes` before
+   opening the row transaction;
+2. attempt an INSERT of the exact supplier/feed/SKU-bytes head; if the insert loses
+   `uq_supplier_product_identity_head`, catch only that duplicate-key result;
+3. select the resulting head by the same unique tuple `FOR UPDATE`, then compare
+   the canonical SKU bytes against the head and its bound
+   SupplierProduct/revision when one exists, and fail on any mismatch;
+4. under that head lock, select the uniquely bound SupplierProduct; the winner
+   uses it when present; otherwise lock all exact unheaded legacy SKU rows in
+   ascending ID order, bind the sole row when count is one, insert a new row when
+   count is zero, or fail closed when count exceeds one; the loser observes that
+   committed decision after its duplicate-key wait;
+5. insert or reuse the exact immutable execution/head revision; and
+6. compare-and-set all source-owned SupplierProduct fields and
+   `current_source_revision_id` from the previously observed pointer to that
+   exact revision in the same transaction.
+
+The head unique key, rather than a gap or nonexistent SupplierProduct row lock,
+is the serialization primitive. At most one SupplierProduct can bind a head,
+and its unique head FK makes duplicate logical rows impossible. A rollback
+removes every head, SupplierProduct, revision and pointer write made by that
+transaction; a concurrent loser then inserts/locks the head normally. A retry
+after commit resolves the same head and exact execution/head revision and is
+idempotent. A retry after rollback starts again at step 2. No orphan cleanup is
+needed for transactional rollback. A committed head without its uniquely bound
+SupplierProduct is an impossible/corrupt integrity state: protected writers fail
+closed and no automatic deletion, takeover or broad cleanup is permitted.
+
+For an existing row, two imports obtain identity-head locks in ascending head ID
+order. Each appends its own immutable revision. The first successful pointer CAS
+wins. The loser rereads the new pointer and either retries its own execution
+against that exact predecessor or fails `supplier_product_revision_conflict`;
+it never overwrites a winner with stale source-owned values. A later B import
+may move the pointer from revision A to revision B, but can neither update nor
+delete revision A.
+
+Legacy rows keep `current_source_revision_id = NULL` and are ineligible.
+Migration must not infer provenance from current feed URL/type/mapping,
+credentials, current offer links, timestamps or payload similarity. Only a
+future explicit re-import through the protected provenance writer can create a
+source execution/revision, bind a sole exact legacy logical row to its head, and
+move the pointer. Ambiguous legacy duplicates remain blocked. There is no
+historical backfill, silent repair or Product/supplier-offer mutation.
+
+#### Exact candidate admission contract
+
+A candidate is eligible for source A only when all of these facts are visible
+in the capture-start `REPEATABLE READ` consistent snapshot:
+
+1. the claim supplier/feed equals the candidate supplier/feed;
+2. `current_source_revision_id` is non-null and resolves through the exact
+   composite FK to that same supplier-product/supplier/feed tuple;
+3. the revision resolves through its exact composite FK to one immutable source
+   execution and source profile with the same supplier/feed/source A;
+4. profile, execution and revision descriptor fingerprints byte-equal one
+   recomputed `supplier_import_source_profile_v1` descriptor, and the persisted
+   execution fingerprint byte-equals the recomputed
+   `supplier_import_source_execution_v1` fingerprint;
+5. revision `source_identity` byte-equals claim source A;
+6. the revision's canonical SKU hash is valid and equals the candidate/offer
+   canonical SKU hash where an offer contributes;
+7. source row, current source-owned staging projection and complete revision
+   each recompute to their persisted versioned fingerprints; and
+8. every persisted digest has lowercase 64-character ASCII hexadecimal form.
+
+The collector persists only sorted distinct SKU hashes in authorization
+members. It never copies raw source identity evidence into those members.
+Failure classifications for the future implementation are fixed as
+`candidate_provenance_missing`, `candidate_source_mismatch`,
+`candidate_revision_mismatch`, `candidate_projection_mismatch` and
+`candidate_provenance_conflict`. These are future coordinator failure codes,
+not additions to the frozen generation reason allowlist. No member or claim
+authorization tuple commits after any such failure.
+
+The consistent snapshot is the deterministic admission cut. Later pointer
+movement does not rewrite the authorized member set; retries use persisted
+members and claim source only. A new logical execution is required to observe a
+later committed revision. `product_supplier_offers` may contribute only through
+the exact current revision chain and matching SKU hash; the offer never becomes
+provenance authority.
+
+#### Durable five-field claim source binding
+
+The field is exactly
+`cohort_source_identity VARCHAR(128) CHARACTER SET ascii COLLATE ascii_bin
+NULL`, hidden and guarded.
+
+Canonical proposed future authorization completeness tuple (ordered):
+
+```text
+cohort_authorization_version
+cohort_authorized_at
+cohort_seed_count
+cohort_seed_fingerprint
+cohort_source_identity
+```
+
+| Old state | Requested state | Result |
+| --- | --- | --- |
+| all five null | complete tuple for A | allowed only in the one authorization transaction |
+| complete tuple for A | byte-identical complete tuple for A | idempotent no-op |
+| complete tuple for A | any tuple for B | forbidden |
+| complete tuple for A | null/partial tuple | forbidden |
+| null/partial tuple | committed partial/non-null source | forbidden |
+
+In shorthand: `NULL -> A` is the sole establishing transition; `A -> A` is
+only a byte-identical idempotent no-op; `A -> B` and `A -> NULL` are forbidden.
+
+The authorization transaction (1) starts one consistent snapshot, (2) validates
+the immutable provenance chain and bound policy, (3) writes the bounded private
+member spool, (4) locks the claim, (5) proves the claim still has an all-null
+five-field tuple, (6) inserts the complete immutable member set, and (7) updates
+all five claim fields including `NULL -> A` in the same commit. A crash commits
+neither step 6 nor step 7, or commits both. Retry before commit rebuilds under a
+new transaction; retry after commit verifies persisted version/source/count/
+fingerprint and members without rereading SupplierFeed or candidates.
+
+DB authority is the combination of:
+
+- an all-null/all-non-null five-field CHECK and processing-owner CHECK;
+- the exact nullable SnapshotSourceIdentity grammar CHECK;
+- `trg_import_execution_claim_cohort_source_immutable`, allowing only the
+  atomic all-null to complete-A transition and byte-equal complete-A no-op;
+- parent unique
+  `uq_import_execution_claim_id_cohort_source(id, cohort_source_identity)`;
+- child index
+  `ix_snapshot_generation_claim_source(supplier_import_execution_claim_id,
+  source_identity)`; and
+- `fk_snapshot_generation_claim_source` from that child pair to the parent pair
+  with `ON UPDATE RESTRICT ON DELETE RESTRICT`.
+
+MySQL requires the referenced parent pair to be unique and both pairs to have
+compatible order, type, length, charset and collation. The nullable parent does
+not weaken the child: a generation has non-null source identity, the claim
+CHECK forbids partial authorization, and the composite FK cannot match an
+all-null parent. Migration order is claim column/check/trigger/unique first,
+generation child index/FK second. Existing rows may be bound only from exact
+immutable evidence; otherwise migration/readiness fails. No current feed
+configuration is a backfill source.
+
+Once A is committed, ordinary retry, same-key republication, expired queued
+ownership recovery and terminalization use persisted A. They neither change A
+nor reread feed configuration. The later Phase VII-IX action matrices retain
+their exact target/CAS authority; none gains permission to rebind source.
+Candidate provenance answers which source produced a revision. Claim binding
+answers which source the cohort was authorized for. Both proofs are mandatory.
+The claim's `cohort_source_identity` must byte-equal the immutable
+`source_identity` reached through the admitted revision, execution and profile.
+It is never derived independently from current `SupplierFeed` configuration.
+
+#### Operational bounds evidence and semantics
+
+Repository evidence was classified without promotion:
+
+| Evidence | Value | Classification | Phase III authority |
+| --- | ---: | --- | --- |
+| queue worker / current jobs | 1,200 / 3,600 seconds, 3 tries | deployment capacity evidence | no; no protected Phase III worker exists |
+| largest committed supplier fixture | 5,222 bytes; all fixtures total 38,337 bytes | test limit | no; too small and synthetic |
+| controlled/preview scan caps | 5,000 rows | staging/preview or diagnostic limit | no |
+| ASBIS staging batch | default 500, maximum 1,000 | staging/preview limit | no |
+| evidence reader | 8,388,608-byte file and 65,536-byte chunk | diagnostic limit | no |
+| Docker resources / PHP memory / MySQL packet or transaction timeout | not committed | deployment capacity evidence unavailable | no |
+| local aggregate database query | unavailable in this workstation environment | current dataset evidence unavailable | no |
+
+The ten bounds have exact semantics but remain numerically `NOT SPECIFIED`:
+
+| Bound | Exact semantic, unit and scope | Enforcement and failure | Value/status |
+| :--- | --- | --- | ---: |
+| `max_source_rows` | physical parser records emitted for one execution, including valid, invalid and duplicate records; rows | hard check before accepting the next record; overflow aborts source processing | `NOT SPECIFIED` |
+| `max_source_bytes` | bytes emitted by the bounded downloader into the immutable decoded source payload consumed by the parser for one execution, after HTTP transfer/content decoding performed by the importer and before parsing; bytes | hard streaming check before accepting each chunk; when byte N+1 would be accepted, abort and close the response/stream without retaining a partial payload | `NOT SPECIFIED` |
+| `max_spool_rows` | aggregate logical records admitted to all capture input spools before dedupe, counting each enrollment, candidate revision and source record once; rows | hard pre-write check; overflow rolls back authorization/finalization as applicable | `NOT SPECIFIED` |
+| `max_spool_bytes` | aggregate encoded bytes physically written across private capture spool, sort-run and merge files, not filesystem allocation blocks; bytes | hard pre-write check and `finally` cleanup | `NOT SPECIFIED` |
+| `max_enrollments` | distinct effective cohort identities after seed/source union for one supplier/source epoch; rows | checked after dedupe and before DB allocation | `NOT SPECIFIED` |
+| `max_observations` | exhaustive one-per-enrollment observations for one generation; rows | checked before finalization; no prefix may commit | `NOT SPECIFIED` |
+| `max_canonical_children` | new enrollment inserts plus exhaustive observation inserts for one generation; rows | checked before transaction; generation parent excluded | `NOT SPECIFIED` |
+| `external_sort_chunk` | maximum canonical records admitted to one in-memory external-sort run; records/run only | hard record-count check before admitting the next record; run file removed in `finally` | `NOT SPECIFIED` |
+| `db_insert_batch_ceiling` | maximum immutable child rows in one SQL insert statement; rows/statement | application-owned hard ceiling before SQL construction | `NOT SPECIFIED` |
+| `snapshot_transaction_bound` | total inserted or updated rows in one snapshot finalization transaction; rows/transaction, never statements, bytes or time | projected before BEGIN and revalidated after locks before first DML; overflow never opens or commits a partial transaction | `NOT SPECIFIED` |
+
+All are hard, application-owned, supplier-invariant limits.
+
+`max_source_bytes` and `max_spool_bytes` govern different resources.
+`max_source_bytes` counts only the decoded immutable source payload accepted
+before parsing; it does not count network wire framing, compressed wire bytes,
+filesystem allocation blocks or Phase III intermediate files.
+`max_spool_bytes` counts only the encoded Phase III capture/sort/merge temporary
+bytes generated after source acceptance. Neither bound may substitute for or
+raise the other.
+
+The future downloader consumes the response through bounded streaming into a
+private mode-0600 temporary payload. Before writing each chunk it proves that
+accepting the chunk cannot exceed `max_source_bytes`. If N+1 would be accepted,
+it cancels and closes the response/stream, marks `capture_overflow`, retains no
+partial canonical snapshot or partial source payload, and removes the temporary
+payload in `finally`. A full unbounded response may never be materialized before
+the check. Under `protected_source_redirect_policy_v1`, every `3xx` redirect is
+rejected before any redirected request or redirected payload byte. Redirect
+count is therefore neither a configurable protected-path limit nor a hidden
+eleventh operational bound.
+
+No supplier,
+request, command option or mutable database row may raise them. `capture_overflow`
+remains the canonical frozen outcome. Silent truncation, partial canonical
+children and unchanged-policy retry are forbidden. Authorization overflow
+rolls back members and claim tuple. Post-authorization capture overflow commits
+no partial children; it may record only the already approved safe frozen header
+when all header facts are complete, otherwise no generation. Every temp path is
+cleaned in `finally`.
+
+`external_sort_chunk` has one dimension only. `K` always means records per
+in-memory run. Byte memory safety is a deterministic algorithm guard, not a
+tenth operator policy bound: each canonical record encoding has a versioned
+schema maximum `W` bytes, an overlength record fails before allocation/spooling,
+and implementation golden fixtures must prove the exact encoded-width
+calculation. `max_spool_bytes` remains the aggregate physical temp-file byte
+policy; it is not an in-memory chunk limit.
+
+Canonical finalization fixed row mutations (ordered):
+
+```text
+supplier_offer_snapshot_generation_insert
+import_history_terminal_update
+import_job_terminal_update
+supplier_feed_terminal_update
+supplier_import_execution_claim_terminal_update
+supplier_import_run_terminal_update_when_orchestrated
+```
+
+The first five rows always mutate in a successful finalization. The sixth is
+present only for an orchestrated import. The outbox and authorization rows may
+be locked/read, but are not mutated by snapshot finalization and do not count.
+No other parent, header or audit mutation may be hidden in a symbolic constant.
+
+For an approved policy let `R`, `D`, `S`, `B`, `E`, `O`, `C`, `K`, `I`, and `T`
+denote the ten bounds in table order, and let deterministic schema constant `W`
+denote maximum encoded bytes per canonical sort record. Required relationships
+are:
+
+```text
+R <= S
+D is independently enforced before parse and is not derived from B
+E <= S
+O = E
+C = new_enrollments + O and C <= E + O
+K <= S
+I <= C
+projected finalization row mutations = C + 5 + orchestration_run_mutation
+orchestration_run_mutation is exactly 0 or 1
+T >= C + 6 for the policy worst case
+B >= maximum physical sort/spool bytes implied by S, K and W
+insert statements = ceil(new_enrollments / I) + ceil(O / I)
+estimated memory = fixed parser overhead + K * W + serializer overhead
+```
+
+The equal observation/enrollment count follows the unique generation/enrollment
+key and exhaustive absence contract. `new_enrollments` may be lower than E.
+An INSERT containing N enrollment or observation rows counts as N row
+mutations, not one statement; `db_insert_batch_ceiling` alone governs rows per
+statement. The exact projected count is checked before BEGIN from the final
+deduplicated spools, then recomputed after claim/policy/source locks and before
+the first DML. Any mismatch or overflow returns `capture_overflow`, performs no
+finalization DML, cleans temp files in `finally`, and requires a new execution
+under a newly authorized policy to retry. Formula outputs are estimates until
+measured; they are not production values.
+
+Future evidence required for each value is exact:
+
+| Bound | Separately authorized evidence required before numeric approval |
+| --- | --- |
+| `max_source_rows` | per supplier/feed physical parser-row maxima and percentiles, including invalid and duplicate records |
+| `max_source_bytes` | per supplier/feed/execution decoded source-payload byte distributions and maxima, largest normal payload, download duration, memory/temp-disk impact, malformed/oversized behavior and reviewed headroom |
+| `max_spool_rows` | measured aggregate pre-dedupe records across every private input/run/merge spool |
+| `max_spool_bytes` | measured encoded temp-file bytes, peak disk usage and cleanup headroom under representative largest feeds |
+| `max_enrollments` | measured effective-cohort cardinality and reviewed growth/headroom per source epoch |
+| `max_observations` | measured exhaustive generation observation cardinality and failure-recovery load |
+| `max_canonical_children` | measured new-enrollment plus observation totals at baseline expansion and steady state |
+| `external_sort_chunk` | benchmarked records/run against deterministic W, worker memory headroom and sort latency |
+| `db_insert_batch_ceiling` | MySQL 8.4 packet, placeholder, row-width, lock-time and batch-latency measurements |
+| `snapshot_transaction_bound` | MySQL 8.4 finalization row-mutation, transaction-duration, lock and rollback measurements using the exact fixed set |
+
+Each remains a hard application-owned policy with pre-allocation enforcement,
+fail-closed overflow, `finally` cleanup where files exist, no unchanged-policy
+retry, and no supplier-owned override.
+
+Future configuration belongs in one application-owned, config-cache-safe
+`config/supplier_snapshot.php` policy selected only by a closed allowlisted key.
+Environment may select an approved key but may not supply arbitrary individual
+numbers. Missing/unknown policy or any null bound fails readiness. The prior
+design-only nine-field `supplier_snapshot_operational_bounds_policy_v1` is
+superseded and can never identify an authorized execution. The sole future
+policy identity is `supplier_snapshot_operational_bounds_policy_v2`, with these
+exact ordered fields:
+
+```text
+schema
+policy_key
+policy_version
+max_source_rows
+max_source_bytes
+max_spool_rows
+max_spool_bytes
+max_enrollments
+max_observations
+max_canonical_children
+external_sort_chunk
+db_insert_batch_ceiling
+snapshot_transaction_bound
+units_contract_version
+algorithm_version
+```
+
+Its bytes are the ASCII domain
+`supplier_snapshot_operational_bounds_policy_v2`, one NUL byte and fixed-order
+canonical JSON. The exact ten values, units contract and algorithm version have
+a separate SHA-256 fingerprint. The claim
+must persist `cohort_bounds_policy_key`, `cohort_bounds_policy_version` and
+`cohort_bounds_policy_fingerprint` as a separate all-null/all-non-null immutable
+tuple in the same authorization transaction, and generation `policy_versions`
+records the same key, version and fingerprint. These fields have an exact
+shape/hex CHECK and write-once trigger independent of the source tuple.
+`chk_import_claim_cohort_policy_authority` requires the policy tuple to be null
+exactly when the five authorization fields are all null and complete exactly
+when those five fields are complete; the processing-owner CHECK also requires
+the complete policy tuple. Thus the five-field authorization tuple is not
+reordered or enlarged, but no authorized committed claim can lack policy
+authority.
+Retry/recovery always uses the persisted policy A. A later configured policy B
+requires a new logical execution; it cannot reinterpret or retry A. These
+future claim policy fields are separate from, and do not reorder, the exact
+five-field authorization completeness tuple.
+
+No numeric value is approved. Closing `PH3-RDY-003` requires, for all ten:
+production per-supplier/feed row, decoded source-payload and encoded-byte
+percentiles/maxima from a
+separately authorized read-only evidence run; parser expansion/invalid/duplicate
+ratios; effective enrollment growth; observed row widths; sort memory and temp
+disk measurements; MySQL packet/placeholder/lock/transaction measurements;
+worker memory and timeout headroom; batch latency; and overflow/recovery load
+tests. Until every value, headroom and tuning path is reviewed together, all
+ten remain `NOT SPECIFIED`; the `PH3-RDY-003` evidence gate therefore remains
+unresolved.
+
+#### Integrated source, authorization and policy flow
+
+The future flow is: resolve or create immutable source profile A from the exact
+locked descriptor and persisted locator/mapping bytes -> materialize immutable
+resolved source context A -> create immutable source execution A in the same
+source-resolution transaction -> acquire/create the stable
+supplier/feed/SKU identity head -> create/reuse its SupplierProduct -> write
+immutable supplier-product revisions and guarded current pointers ->
+enumerate only exact valid current revisions in one consistent snapshot ->
+validate policy A and spool bounds -> atomically persist members plus the
+five-field claim tuple with source A and persisted policy A -> enforce remaining
+bounds while downloading and parsing source A only through context A -> create generation whose composite FK proves
+claim source A -> insert the complete enrollment/observation set -> retry or
+recovery using persisted source A and policy A. Failures occur before candidate
+admission on missing/mismatching provenance, before authorization on member or
+spool overflow, before finalization on source/child/transaction overflow, and
+at DB write on any source or tuple mismatch.
+
+#### Concurrency decision matrix
+
+| Case | Authority and winner | Loser / retry behavior |
+| :--- | --- | ---: |
+| A. feed A changes to B after source resolution and before download/parse | locked profile/context/execution A plus immutable revision A win | EA downloads locator A with redirects disabled and parses mapping A exclusively from context A; any `3xx` fails `source_redirect_rejected`, and B is visible only to later execution EB |
+| B. staging pointer changes after enumeration | snapshot-selected revision wins current claim | later revision is deferred; retry uses members, not staging |
+| C. two imports first-insert one logical staging identity | unique identity-head insert plus `FOR UPDATE` head lock chooses one creator | loser waits on the unique key, observes the committed head/SupplierProduct, then reuses its execution/head revision or retries after rollback |
+| D. two authorizations for one claim | claim lock and all-null tuple CAS choose one | loser verifies byte-identical tuple or fails conflict |
+| E. authorization versus retry | committed complete tuple is authority | pre-commit retry restarts; post-commit retry verifies persisted facts |
+| F. claim source A versus attempted B | persisted A plus trigger wins | B rebind is rejected by trigger/check/FK |
+| G. bound overflow during spool | persisted policy and pre-write counters win | no partial member/claim or child commit; cleanup in `finally` |
+| H. policy changes during retry | persisted policy A wins | configured B requires a new logical execution |
+| I. provenance disappears or is invalidated | append-only evidence cannot disappear; broken pointer/projection fails closed | no candidate admission or silent repair |
+| J. generation source differs from claim | composite FK claim/source pair wins | generation insert fails with zero canonical children |
+| K. two imports update an existing staging identity | ascending identity-head locks and pointer CAS choose first commit | loser rereads the winner pointer and retries its own exact revision or fails ownership without stale overwrite |
+
+#### Crash/protocol integration and closure
+
+The existing 66 by 11 crash matrix keeps its row numbers. A later
+implementation PR must append, never renumber, scenarios for: source execution
+committed before the row transaction; crash after head insert, legacy binding or
+revision insert but before pointer CAS (all row-transaction work rolls back);
+head duplicate wait with winner commit and rollback; pointer CAS loss;
+ambiguous legacy identity; crash before and after the atomic five-field
+authorization commit; spool overflow/cleanup; policy change on retry; and
+generation composite-FK mismatch.
+Each added row must distinguish no commit, complete immutable provenance,
+complete authorization, and complete snapshot finalization.
+
+The existing 19 by 3 protocol matrix needs no new protocol state. It gains
+preconditions only: an immutable current revision and exact source execution,
+complete five-field claim authorization, a persisted approved bounds policy,
+and all pre-allocation checks. Existing dispatch/recovery states and reason
+allowlists remain unchanged. The future candidate failure codes above are
+coordinator admission results, not generation reasons.
+
+Architecture verdicts are therefore independent:
+
+<!-- phase-iii-architecture-contract:status id=phase-iii-architecture-contract-v1 -->
+| Finding | Architecture status | Exact boundary |
+| :--- | :--- | --- |
+| `PH3-RDY-001` | `CLOSED IN DESIGN` | One locking source-resolution boundary locks and fingerprints exact ImportJob selector J plus feed/template A; execution retry never rereads mutable selectors; protected redirects fail closed; one append-only receipt binds accepted SHA-256/size to execution A; same-handle parser EOF verification forbids pathname reopen or undetected replacement; profile/execution/revision, first-insert, admission, concurrency and legacy rules are exact; runtime remains absent. |
+| `PH3-RDY-002` | `CLOSED IN DESIGN` | Five-field source binding, DB authority and persisted-source retry remain exact and use the admitted immutable profile identity. |
+| `PH3-RDY-003` | `BLOCKED` | All ten semantics, including bounded decoded source bytes, are exact; all ten numeric values remain `NOT SPECIFIED` pending separately authorized production evidence. |
+| `PH3-RDY-004` | `CLOSED` | Phase III remains unimplemented and unauthorized. |
+
+Exactly one architecture blocker remains: `PH3-RDY-003`, solely for approved
+numeric production evidence. This design does not make Phase III implementation
+ready or authorized.
+
+Catalog safety is unchanged: supplier import continues to stage only in
+`supplier_products`; it does not directly mutate Product. Manual selected
+CREATE remains the only enabled creation path, UPDATE remains disabled by
+default, Sync All and automatic sync remain disabled, and no supplier-driven
+name, slug, SEO, description, image, category or attribute overwrite is added.
+
+<!-- phase-iii-architecture-contract:end id=phase-iii-architecture-contract-v1 -->
 
 ## Generation Header Data Dictionary
 
@@ -5292,6 +6661,14 @@ migration and Phase II model/canonical-contract entries are deployed inactive;
 its Phase III and later runtime entries remain future and subject to separate
 implementation review:
 
+The seven provenance/source-policy migration entries below belong only to the
+future dormant **Phase III-P0 protected source provenance prerequisite
+foundation**. They are not part of the deployed Phase I ten-table count. Phase
+III-P0 must deploy and verify the five provenance/receipt tables, guarded
+`supplier_products` pointers, claim/generation source authority, policy v2,
+resolved context and bounded downloader/parser boundary before Phase III
+snapshot persistence can be implemented or activated.
+
 ```text
 database/migrations/*_create_supplier_import_execution_claims_table.php
 database/migrations/*_create_supplier_import_dispatch_outbox_table.php
@@ -5305,6 +6682,13 @@ database/migrations/*_create_supplier_offer_snapshot_enrollments_table.php
 database/migrations/*_create_supplier_offer_snapshot_observations_table.php
 database/migrations/*_add_supplier_id_id_index_to_import_histories_table.php
 database/migrations/*_add_supplier_feed_allocation_constraints_to_import_jobs_table.php
+database/migrations/*_create_supplier_import_source_profiles_table.php
+database/migrations/*_create_supplier_import_source_executions_table.php
+database/migrations/*_create_supplier_import_source_payload_receipts_table.php
+database/migrations/*_create_supplier_product_identity_heads_table.php
+database/migrations/*_create_supplier_product_source_revisions_table.php
+database/migrations/*_add_source_revision_pointers_to_supplier_products_table.php
+database/migrations/*_add_source_and_policy_authority_to_snapshot_claims_and_generations.php
 .env.example
 config/queue.php
 docker-compose.yml
@@ -5320,7 +6704,15 @@ app/Models/SupplierImportCohortAuthorizationMember.php
 app/Models/SupplierOfferSnapshotGeneration.php
 app/Models/SupplierOfferSnapshotEnrollment.php
 app/Models/SupplierOfferSnapshotObservation.php
+app/Models/SupplierImportSourceProfile.php
+app/Models/SupplierImportSourceExecution.php
+app/Models/SupplierImportSourcePayloadReceipt.php
+app/Models/SupplierProductIdentityHead.php
+app/Models/SupplierProductSourceRevision.php
 app/Data/Suppliers/Onboarding/SnapshotSourceIdentity.php
+app/Data/Suppliers/Imports/ImportJobIdentity.php
+app/Data/Suppliers/Imports/ResolvedSupplierImportSourceContext.php
+app/Data/Suppliers/Imports/BoundedImmutableSourcePayload.php
 app/Repositories/Suppliers/ImmutableSupplierOfferSnapshotRepository.php
 app/Repositories/Suppliers/SupplierImportExecutionClaimRepository.php
 app/Repositories/Suppliers/SupplierImportDispatchOutboxRepository.php
@@ -5343,6 +6735,9 @@ app/Services/Suppliers/SupplierImportDispatchMonitorGate.php
 app/Services/Suppliers/SupplierImportDispatchAlertSink.php
 app/Services/Suppliers/SupplierImportTransportFailureService.php
 app/Services/Suppliers/SupplierImportQueueTimingValidator.php
+app/Services/Suppliers/SupplierImportSourceContextResolver.php
+app/Services/Suppliers/BoundedSupplierSourceDownloader.php
+app/Services/Suppliers/ResolvedContextSupplierSourceParser.php
 app/Services/Suppliers/Snapshots/SupplierImportCohortAuthorizationService.php
 app/Services/Suppliers/Snapshots/SupplierOfferSnapshotCollector.php
 app/Services/Suppliers/Snapshots/SupplierOfferSnapshotCaptureService.php
@@ -5355,6 +6750,7 @@ app/Console/Commands/ObserveSupplierImportDispatchMonitorHealth.php
 app/Console/Commands/ReconcileAbandonedSupplierImportExecutions.php
 app/Console/Commands/ResolveImportPublicationMismatch.php
 config/supplier_snapshot_capture.php
+config/supplier_snapshot.php
 tests/Feature/SupplierOfferSnapshotPersistenceTest.php
 tests/Feature/SupplierOfferSnapshotCaptureTest.php
 tests/Feature/SupplierOfferSnapshotConcurrencyTest.php

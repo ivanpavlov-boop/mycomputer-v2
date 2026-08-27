@@ -143,9 +143,10 @@ Exact `ascii`/`ascii_bin` lowercase-hexadecimal checks, byte-exact immutable
 `uq_import_execution_claim_run`, the exact
 `chk_import_execution_claim_path_parent` parent-shape check, retained one-job
 uniqueness, a separate named three-column child FK index, a common supplier
-lock and a behavior-equivalent streaming traversal are required. A future
-approved design must prove immutable original-source provenance for every
-application candidate before source work; supplier/feed equality alone cannot
+lock and a behavior-equivalent streaming traversal are required. The selected
+future append-only source-execution/revision design must prove immutable
+original-source provenance for every application candidate before source work;
+supplier/feed equality alone cannot
 authorize membership, including after one feed ID changes from source A to
 source B. Immutably proven exact-source-only additions are the only later
 expansion, and
@@ -163,10 +164,14 @@ execution is unwired, and no watchdog service, recovery repository, command,
 parser change, capture implementation, historical backfill, or evidence
 producer exists. Phase II's guarded models/canonical byte contracts are also
 implemented, merged, CI-verified, deployed to staging, and uncalled. Phase III
-snapshot persistence remains unimplemented and not implementation-authorized;
-immutable candidate-row provenance, durable authorization source binding, and
-approved operational bounds remain explicit readiness blockers. C3D.1 remains
-blocked until those prerequisites, the fine-grained checkpoints below, and
+snapshot persistence remains unimplemented and not implementation-authorized.
+<!-- phase-iii-architecture-status-reference authority=phase-iii-architecture-contract-v1 -->
+The exact current readiness map is owned only by the
+[canonical Phase III architecture contract](IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md#phase-iii-provenance-and-bounds-architecture-decision).
+This preview does not mirror that map. Its selected provenance, resolved-source
+context, claim-source and ten-bound policy contracts remain future-only, and
+all ten numeric production bounds remain `NOT SPECIFIED`. C3D.1 remains blocked
+until the canonical remaining gate, the fine-grained checkpoints below, and
 future qualified warm-up complete. Supplier #3 remains unselected and
 unstarted. No evidence candidate exists and no operational preview is
 authorized.
