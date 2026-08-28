@@ -1970,6 +1970,38 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
             $mutated = $this->replaceStructuralText($design, $search, $replacement);
             $this->assertNotSame([], $this->phaseThreeP0DesignClosureContract($mutated, $plan)['violations'], $case);
         }
+
+        $strictAuthority = $this->phaseThreeDuplicateErrnoAuthorityContract($design);
+        $this->assertSame([], $strictAuthority['violations'], implode(PHP_EOL, $strictAuthority['violations']));
+        $lineEnding = str_contains($design, "\r\n") ? "\r\n" : "\n";
+        $identityRegistry = '<!-- phase-iii-semantic-registry classification=CURRENT id=phase-iii-source-identity-retry-contract-v1 -->';
+        $currentContradictions = [
+            'cast coexistence' => 'CURRENT duplicate errno alternative: `(int) errorInfo[1] === 1062`.',
+            'intval coexistence' => 'CURRENT duplicate errno alternative: `intval(errorInfo[1]) === 1062`.',
+            'is_numeric coexistence' => 'CURRENT duplicate errno alternative: `is_numeric(errorInfo[1]) && (int) errorInfo[1] === 1062`.',
+            'loose comparison coexistence' => 'CURRENT duplicate errno alternative: `errorInfo[1] == 1062`.',
+            'string 1062 coexistence' => 'CURRENT duplicate errno alternative: `errorInfo[1] === "1062"`.',
+            'numeric representation terminology' => 'CURRENT duplicate errno rule: any numeric representation is accepted.',
+        ];
+        foreach ($currentContradictions as $case => $alternative) {
+            $mutated = $this->insertPhaseThreeCurrentArchitectureUnit($design, $identityRegistry, $alternative);
+            $this->assertNotSame(
+                [],
+                $this->phaseThreeDuplicateErrnoAuthorityContract($mutated)['violations'],
+                $case,
+            );
+        }
+
+        $historical = $design.$lineEnding.
+            '<!-- phase-iii-architecture-authority classification=HISTORICAL id=phase-iii-duplicate-errno-cast-history-v1 -->'.$lineEnding.
+            'Historical, superseded cast example: `(int) errorInfo[1] === 1062` was rejected.';
+        $literal = $this->insertPhaseThreeCurrentArchitectureUnit(
+            $design,
+            $identityRegistry,
+            "```text{$lineEnding}(int) errorInfo[1] === 1062{$lineEnding}```",
+        );
+        $this->assertSame([], $this->phaseThreeDuplicateErrnoAuthorityContract($historical)['violations'], 'Historical control');
+        $this->assertSame([], $this->phaseThreeDuplicateErrnoAuthorityContract($literal)['violations'], 'Literal control');
     }
 
     public function test_phase_three_p0_b001_database_exception_boundary_is_sanitized_and_unchained(): void
@@ -6301,8 +6333,8 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
     {
         return [
             'version' => 'phase-iii-architecture-document-closed-world-v1',
-            'normalized_bytes' => 1871176,
-            'line_count' => 7932,
+            'normalized_bytes' => 1871709,
+            'line_count' => 7940,
             'unit_count' => 1120,
             'unit_categories' => [
                 'CANONICAL_HEADING_EXACT' => 86,
@@ -6311,8 +6343,8 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
                 'CANONICAL_PARAGRAPH_EXACT' => 854,
                 'CANONICAL_TABLE_EXACT' => 68,
             ],
-            'byte_fingerprint' => '25b7e5a206f3d4fcbd33e77f75d0503932286e14c96222a3763ba0fd4da75a63',
-            'unit_fingerprint' => 'dca8fdcad1bfccd64353e886ec573d06785d93f548f82553ac136cda605dc3f3',
+            'byte_fingerprint' => 'c0471d3ee067805e8b1660e6fddd41616d19f11cb10c8a21c8ba6f098982948e',
+            'unit_fingerprint' => 'a66365467c3a9ee881388ea4e99fa99086e29af9c4deb83fdb33ae69c114fcf2',
             'region_order' => [
                 'pre-current-reference-history-v1',
                 'current-architecture-authority-v1',
@@ -6338,8 +6370,8 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
                 'current-architecture-authority-v1' => [
                     'id' => 'current-architecture-authority-v1',
                     'position' => 2,
-                    'normalized_bytes' => 1463662,
-                    'line_count' => 2439,
+                    'normalized_bytes' => 1464195,
+                    'line_count' => 2447,
                     'unit_count' => 276,
                     'unit_categories' => [
                         'CANONICAL_HEADING_EXACT' => 16,
@@ -6348,8 +6380,8 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
                         'CANONICAL_PARAGRAPH_EXACT' => 189,
                         'CANONICAL_TABLE_EXACT' => 23,
                     ],
-                    'byte_fingerprint' => 'e25d79541d0f6772a32b388950cd6fd52551d8dd14296635422fc4b98169e16f',
-                    'unit_fingerprint' => 'b16964311fa1c16a4d37cbf3465763e42f3c6ac9e47b58b5ffc457056f593021',
+                    'byte_fingerprint' => 'eb3cf28111b4bab9d5a43233c3b379681af284871e192d8007d736fe9a61454a',
+                    'unit_fingerprint' => 'a6e347dc12827fc78817d852de0e1350e2ee814205ba62a70dcab03720fa566e',
                 ],
                 'post-current-reference-history-v1' => [
                     'id' => 'post-current-reference-history-v1',
@@ -6376,8 +6408,8 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
     {
         return [
             'version' => 'phase-iii-current-architecture-closed-world-v1',
-            'normalized_bytes' => 1463662,
-            'line_count' => 2439,
+            'normalized_bytes' => 1464195,
+            'line_count' => 2447,
             'unit_count' => 276,
             'unit_categories' => [
                 'CANONICAL_HEADING_EXACT' => 16,
@@ -6386,8 +6418,8 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
                 'CANONICAL_PARAGRAPH_EXACT' => 189,
                 'CANONICAL_TABLE_EXACT' => 23,
             ],
-            'byte_fingerprint' => 'fa0d728a06b07f2dba77634571ddd5ba976ecc7460a57e2a115bfbf6156201b8',
-            'unit_fingerprint' => 'a8aa55611a31fa9bc19e6f10f05bb6cd4c9e01a8858aeea07f9e168471c403a6',
+            'byte_fingerprint' => 'e684b6950ba5d9d54d20a499c00784fe34845bc2788c54ebc893b0f82f031cba',
+            'unit_fingerprint' => 'f3305e9c4ad09a9b4d563cb3b7b321daa6f93397df494fb3cd07fd942e10cc9f',
         ];
     }
 
@@ -6500,6 +6532,50 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
         return str_starts_with($errorInfo[2], $prefix)
             && str_ends_with($errorInfo[2], $suffix)
             && strlen($errorInfo[2]) > strlen($prefix) + strlen($suffix);
+    }
+
+    /** @return array{violations: array<int, string>} */
+    private function phaseThreeDuplicateErrnoAuthorityContract(string $design): array
+    {
+        $current = $this->phaseThreeCurrentArchitectureBlock($design);
+        $normative = implode("\n", array_map(
+            static fn (array $block): string => $block['raw'],
+            array_filter(
+                $this->phaseThreeArchitectureStructuralBlocks($current),
+                static fn (array $block): bool => ! $block['literal'],
+            ),
+        ));
+        $normative = str_replace('`', '', preg_replace('/\s+/', ' ', $normative) ?? $normative);
+        $violations = [];
+
+        foreach ([
+            'is_string(errorInfo[0])' => 'Duplicate SQLSTATE authority must require the native PHP string type.',
+            "errorInfo[0] === '23000'" => 'Duplicate SQLSTATE authority must require exact value 23000.',
+            'is_int(errorInfo[1])' => 'Duplicate errno authority must require the native PHP integer type.',
+            'errorInfo[1] === 1062' => 'Duplicate errno authority must require exact integer value 1062.',
+            'accepted native errno representation set is closed to exactly { PHP integer 1062 }' => 'Duplicate errno accepted set must be closed to PHP integer 1062 only.',
+            'classification completes before any sanitized metadata is serialized' => 'Duplicate classification must precede sanitized serialization.',
+            'non-integer driver values' => 'Malformed duplicate errno terminology must reject every non-integer representation.',
+        ] as $authority => $violation) {
+            if (! str_contains($normative, $authority)) {
+                $violations[] = $violation;
+            }
+        }
+
+        foreach ([
+            '/\(int\)\s*errorInfo\[1\]\s*===\s*1062/i' => 'CURRENT duplicate errno authority permits an integer cast.',
+            '/intval\s*\(\s*errorInfo\[1\]\s*\)\s*===\s*1062/i' => 'CURRENT duplicate errno authority permits intval coercion.',
+            '/is_numeric\s*\(\s*errorInfo\[1\]\s*\)/i' => 'CURRENT duplicate errno authority permits is_numeric coercion.',
+            '/errorInfo\[1\]\s*(?<![=])==(?!=)\s*1062/i' => 'CURRENT duplicate errno authority permits loose comparison.',
+            '/errorInfo\[1\]\s*===\s*["\']1062["\']/i' => 'CURRENT duplicate errno authority permits string 1062.',
+            '/any\s+numeric\s+representation\s+is\s+accepted/i' => 'CURRENT duplicate errno authority permits arbitrary numeric representations.',
+        ] as $pattern => $violation) {
+            if (preg_match($pattern, $normative) === 1) {
+                $violations[] = $violation;
+            }
+        }
+
+        return ['violations' => array_values(array_unique($violations))];
     }
 
     /** @return array<string, string> */

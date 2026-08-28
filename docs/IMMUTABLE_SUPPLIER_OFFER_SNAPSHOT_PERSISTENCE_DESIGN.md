@@ -4003,11 +4003,19 @@ injectable identity-generator interface; no colliding value may be reused.
 
 The collision classifier consumes only
 `Illuminate\Database\QueryException::errorInfo` inside the repository catch
-scope. A failure is eligible for identity retry if and only if `errorInfo` is an
-array, `errorInfo[0]` is the exact string `23000`, `(int) errorInfo[1]` is exactly
-`1062`, and `errorInfo[2]` is a string matching the closed MySQL 8.4 diagnostic
-grammar below. Missing offsets, non-string SQLSTATE or diagnostic values,
-non-numeric driver values and every other value are ineligible.
+scope, and classification completes before any sanitized metadata is serialized.
+A failure is eligible for identity retry if and only if `errorInfo` is an array,
+`is_string(errorInfo[0]) && errorInfo[0] === '23000'`,
+`is_int(errorInfo[1]) && errorInfo[1] === 1062`, and `errorInfo[2]` is a string
+matching the closed MySQL 8.4 diagnostic grammar below. The accepted native
+errno representation set is closed to exactly `{ PHP integer 1062 }`; no string
+or second representation is accepted. Missing offsets, null `errorInfo`,
+non-string SQLSTATE or diagnostic values, non-integer driver values, wrong
+values and every other malformed shape are ineligible. Duplicate classification
+through `(int)`, `intval()`, `is_numeric()`, `trim()`, loose `==`, float
+conversion, scientific-notation parsing, leading-zero normalization, sign
+stripping, locale-aware numeric parsing or Unicode numeric normalization is
+forbidden.
 
 The accepted diagnostic is exactly the ASCII prefix `Duplicate entry '`, one
 or more opaque payload bytes, and the exact ASCII suffix
