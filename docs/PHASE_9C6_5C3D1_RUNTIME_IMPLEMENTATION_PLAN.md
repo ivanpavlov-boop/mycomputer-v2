@@ -355,6 +355,8 @@ implementation candidate, but ownership is fixed as follows.
 
 **Phase III-P0**
 
+- one additive migration adding the canonical composite supplier-feed ownership
+  parent key without editing the historical supplier-feed migration;
 - five additive migrations creating `supplier_import_source_profiles`,
   `supplier_import_source_executions`,
   `supplier_import_source_payload_receipts`,
@@ -363,8 +365,9 @@ implementation candidate, but ownership is fixed as follows.
 - one additive migration adding the guarded identity-head/current-revision
   pointers, indexes and composite FKs to `supplier_products`;
 - one additive migration adding the five-field `cohort_source_identity`
-  authority, generation-to-claim source FK, and immutable ten-bound policy-v2
-  authority to claims/generations;
+  authority and generation-to-claim source FK;
+- one later additive migration adding immutable ten-bound policy-v2 authority
+  to claims/generations, with all ten numeric values still `NOT SPECIFIED`;
 - `app/Models/SupplierImportSourceProfile.php`;
 - `app/Models/SupplierImportSourceExecution.php`;
 - `app/Models/SupplierImportSourcePayloadReceipt.php`;
@@ -595,10 +598,12 @@ passes independent review. Phase III depends on this complete inactive
 foundation; no later phase may substitute for it.
 
 **Rollback/readiness.** Operational rollback is forward-only and preserves all
-new provenance evidence. Destructive local/testing downgrade is allowed only
-through a separately reviewed complete empty/pristine predicate covering the
-five structurally registered new tables and all separately guarded
-pointer/source/policy columns before first DDL. Any
+new provenance evidence. Destructive local/testing downgrade uses the canonical
+P0-P9 exact-prefix state machine and shared invocation-scoped
+`CanonicalSupplierPhaseThreeP0Schema` coordinator. It removes only the terminal
+migration group after complete structural and empty/pristine validation before
+first DDL; arbitrary subsets and process-wide cached authorization are
+forbidden. Any
 legacy row without unambiguous immutable provenance remains ineligible; no
 backfill may infer history from current feed URL, mapping or credentials.
 
@@ -972,62 +977,233 @@ Supplier Import, Product Data Quality, QA, and Catalog Sync Safety.
 This future allocation is additive and dormant. It is not part of the deployed
 Phase I ten-table count and does not amend any Phase I migration.
 
-The following registry is the sole CURRENT Phase III-P0 new-table allocation
-authority. `supplier_products` is intentionally absent because Phase III-P0
-adds guarded pointer/metadata columns to that existing table rather than
-creating it.
+The canonical design owns the exact B001 retry protocol, B002 parent ownership
+tuple and B003 staged downgrade state machine. This subordinate plan repeats
+their implementation inputs without creating alternatives:
 
-<!-- phase-iii-p0-table-set-registry classification=CURRENT id=phase-iii-p0-new-table-allocation-v1 -->
-| Allocation position | Phase III-P0 new table |
-| :---: | :--- |
-| 1 | `supplier_import_source_profiles` |
-| 2 | `supplier_import_source_executions` |
-| 3 | `supplier_import_source_payload_receipts` |
-| 4 | `supplier_product_identity_heads` |
-| 5 | `supplier_product_source_revisions` |
-<!-- phase-iii-p0-table-set-registry:end id=phase-iii-p0-new-table-allocation-v1 -->
+- source identity uses fresh 16-byte operating-system CSPRNG output, attempt 1
+  counts, and the fixed intrinsic maximum is exactly four attempts in one
+  parent-locked repository transaction;
+- collision classification reads only `QueryException::errorInfo` and requires
+  exact string SQLSTATE `23000`, integer-normalized driver code `1062`, and the
+  anchored MySQL 8.4 diagnostic `Duplicate entry '<opaque-nonempty>' for key
+  'supplier_import_source_profiles.uq_import_source_profile_identity'`; this
+  single-quoted table-qualified key is the sole accepted token, while bare,
+  database-qualified, backtick/double-quote, wrong-table, wrong-key, malformed
+  or missing diagnostics are ineligible; the opaque duplicate payload is never
+  captured, stored, compared, logged or returned;
+- an eligible collision consumes only the boolean classifier result and reuses
+  the transaction for a fresh attempt without emitting the original exception;
+  every ineligible database error rolls back and becomes exact sanitized
+  `source_profile_persistence_failed` with only ordered metadata
+  `code>sqlstate>driver_code>operation`, operation fixed to
+  `INSERT_SUPPLIER_IMPORT_SOURCE_PROFILE`, `previous === null`, and no original
+  exception, SQL, bindings, diagnostic, identity, canonical bytes, URL,
+  credential, fingerprint, secret-derived material or deferred callback;
+- exhaustion rolls back and throws
+  `source_profile_identity_collision_exhausted` with `previous === null` and no
+  retained fourth exception; the fixed four-attempt safety
+  constant is not environment/configuration, queue tries, fixtures or one of
+  all ten still-`NOT SPECIFIED` operational-policy bounds;
+- `uq_supplier_feed_id_supplier(id, supplier_id)` is added to
+  `supplier_feeds` by a new forward migration before profile creation; profile
+  ownership uses only
+  `fk_import_source_profile_feed_owner(supplier_feed_id, supplier_id)` with
+  supporting `ix_import_source_profile_feed_owner_fk`, both actions `RESTRICT`;
+  two independent parent FKs and editing the historical feed migration are
+  forbidden;
+- destructive local/testing downgrade is coordinated only by
+  `database/migrations/support/CanonicalSupplierPhaseThreeP0Schema.php`, uses
+  normalized complete P0-P9 signatures over hardcoded baseline and cumulative
+  ownership, invocation-local one-terminal-step authorization, complete pre-DDL
+  validation and zero DDL on every malformed, same-name-wrong, non-terminal,
+  unknown or non-pristine state. Its only downgrade API is
+  `runTerminalDowngradeStep(P0MigrationStep $step): void`; it accepts no DDL
+  callback and owns each exact DDL sequence. Every P0 `up()`/`down()` uses
+  zero-wait MySQL named lock `mycomputer:phase-iii-p0-schema-ddl-v1` on one
+  dedicated connection, rejects nested/concurrent entry, and releases in
+  `finally`.
 
-The separately parsed destructive-downgrade registry is the sole CURRENT table
-set for the future local/testing empty/pristine guard. Every row must prove its
-predicate before the first destructive DDL statement; a false, unknown,
-unreadable, incomplete or missing result rejects the whole downgrade and keeps
-all evidence intact.
+The exact nine-step forward migration registry is byte-equal to the canonical
+design registry:
 
-<!-- phase-iii-p0-table-set-registry classification=CURRENT id=phase-iii-p0-destructive-downgrade-table-set-v1 -->
-| Guard position | Phase III-P0 guarded table | Required empty/pristine evidence |
-| :---: | :--- | :--- |
-| 1 | `supplier_import_source_profiles` | table exists and contains zero rows; all dependent executions are already proven absent |
-| 2 | `supplier_import_source_executions` | table exists and contains zero rows; all dependent receipts and revisions are already proven absent |
-| 3 | `supplier_import_source_payload_receipts` | table exists and contains zero rows; no committed payload receipt evidence may be discarded |
-| 4 | `supplier_product_identity_heads` | table exists and contains zero rows; all staging head pointers are separately proven null |
-| 5 | `supplier_product_source_revisions` | table exists and contains zero rows; all staging current-revision pointers are separately proven null |
-<!-- phase-iii-p0-table-set-registry:end id=phase-iii-p0-destructive-downgrade-table-set-v1 -->
+<!-- phase-iii-p0-migration-registry classification=CURRENT id=phase-iii-p0-migration-order-v1 -->
+| Ordinal/state | Exact forward migration | Responsibility and owned artifacts | Dependencies | Independent rollback | Exact predecessor/successor |
+| :---: | :--- | --- | --- | :---: | :---: |
+| P0-01 / P1 | `*_add_supplier_ownership_key_to_supplier_feeds.php` | add only UNIQUE `uq_supplier_feed_id_supplier(id, supplier_id)` to existing `supplier_feeds`; historical migration unchanged | deployed Phase I/II baseline; existing unsigned-bigint `id` and `supplier_id` | NO; terminal P1 -> P0 only | P0 / P0-02 |
+| P0-02 / P2 | `*_create_supplier_import_source_profiles_table.php` | create `supplier_import_source_profiles` with the exact canonical columns; PRIMARY `id`; `uq_import_source_profile_descriptor`; `uq_import_source_profile_identity`; `uq_import_source_profile_scope`; `ix_import_source_profile_feed_owner_fk`; `fk_import_source_profile_feed_owner`; `trg_import_source_profile_no_update`; `trg_import_source_profile_no_delete` | P0-01 parent key and Phase II canonical serializers | NO; terminal empty P2 -> P1 only | P0-01 / P0-03 |
+| P0-03 / P3 | `*_create_supplier_import_source_executions_table.php` | create `supplier_import_source_executions` with the complete canonical execution columns, unique keys, composite ownership/profile keys, checks and no-update/no-delete triggers | P0-02; locked ImportJob/feed/template and ImportHistory parents | NO; terminal empty P3 -> P2 only | P0-02 / P0-04 |
+| P0-04 / P4 | `*_create_supplier_import_source_payload_receipts_table.php` | create `supplier_import_source_payload_receipts` with the complete canonical one-receipt columns, execution-scope keys, checks and no-update/no-delete triggers | P0-03 execution receipt scope | NO; terminal empty P4 -> P3 only | P0-03 / P0-05 |
+| P0-05 / P5 | `*_create_supplier_product_identity_heads_table.php` | create `supplier_product_identity_heads` with the canonical columns, byte-exact logical key, scope keys, ownership FKs and no-update/no-delete triggers | P0-01 supplier/feed ownership authority | NO; terminal empty P5 -> P4 only | P0-04 / P0-06 |
+| P0-06 / P6 | `*_create_supplier_product_source_revisions_table.php` | create `supplier_product_source_revisions` with the complete canonical revision columns, execution/head composite FKs, temporary exact staging-ID FK, unique keys, checks and no-update/no-delete triggers; P0-07 replaces only that staging-ID FK with composite ownership | P0-03, P0-04 and P0-05 | NO; terminal empty P6 -> P5 only | P0-05 / P0-07 |
+| P0-07 / P7 | `*_add_source_revision_pointers_to_supplier_products_table.php` | add only canonical identity-head/current-revision columns, composite unique/FK/index/check authority and guarded source-projection/pointer triggers to existing `supplier_products` | P0-05 and P0-06; legacy rows remain pair-null | NO; terminal all-null P7 -> P6 only | P0-06 / P0-08 |
+| P0-08 / P8 | `*_add_source_authority_to_snapshot_claims_and_generations.php` | add only claim `cohort_source_identity`, exact five-field claim source binding, generation-to-claim composite source authority, indexes, checks, FKs and immutable transition triggers | P0-02 and deployed claim/generation tables | NO; terminal no-evidence P8 -> P7 only | P0-07 / P0-09 |
+| P0-09 / P9 | `*_add_policy_v2_authority_to_snapshot_claims_and_generations.php` | add only canonical policy-v2 key/version/fingerprint authority, composite generation binding, indexes, checks, FKs and immutable transition triggers | P0-08 and the ten-bound policy-v2 contract; numeric values remain NOT SPECIFIED | NO; terminal no-evidence P9 -> P8 only | P0-08 / FULL P0 |
+<!-- phase-iii-p0-migration-registry:end id=phase-iii-p0-migration-order-v1 -->
 
-The two structural table sets must be exactly equal as unordered five-member
-sets. The guard implementation must discover and validate the complete set
-before it executes any trigger, FK, index, column or table DDL. The set equality
-does not by itself authorize removal of evidence-bearing columns on existing
-`supplier_products`, claims or generations: their separately stated null,
-absence and disabled-gate predicates remain mandatory in the same complete
-preflight.
+The structural artifact inventory below is exhaustive for every P0-owned
+surface. Column order inside each `>` list is canonical. An index, key,
+constraint or trigger not listed for its ordinal is unknown P0 structure and
+makes prefix detection fail closed. Existing constraints named as `replace`
+are dropped and recreated under the same name in the owning migration; they
+are not additional authority. P0-06 initially binds a revision to
+`supplier_products.id`; P0-07 adds the head columns and atomically replaces
+that simple binding with the exact composite revision/product ownership FK
+before protected runtime use is permitted.
 
-| Artifact | Migration/subphase | Dependency | Model/service phase | Activation gate | Rollback/readiness prerequisite |
-| --- | --- | --- | --- | --- | --- |
-| `supplier_import_source_profiles` | III-P0 migration 1 | existing supplier/feed parents and Phase II canonical helper | III-P0 profile model, resolver and descriptor contracts | all source-profile canonical-byte and append-only tests pass; protected path remains off | empty table plus disabled protected gates for local/testing down; operational rollback preserves rows |
-| `supplier_import_source_executions` | III-P0 migration 2 | profile table, locked ImportJob/feed/template authority and ImportHistory | III-P0 execution model/context reconstruction service | exact ImportJob/profile/context/execution fingerprints, selector-race and crash-reconstruction tests pass | empty table and profiles unreferenced for local/testing down; no mutable-feed/job backfill |
-| `supplier_import_source_payload_receipts` | III-P0 migration 3 | exact source-execution receipt scope | III-P0 append-only receipt model/repository | one-receipt, size/SHA-256, replacement rejection and retry byte-equality tests pass | empty receipt table and executions unreferenced for local/testing down; operational rollback preserves committed receipt evidence |
-| `supplier_product_identity_heads` | III-P0 migration 4 | supplier/feed composite authority | III-P0 logical-head model/repository | byte-exact first-insert and concurrent head tests pass | empty table and no staging head pointers for local/testing down |
-| `supplier_product_source_revisions` | III-P0 migration 5 | source execution/receipt, identity head and staging row | III-P0 revision model/repository | append-only revision, receipt/source/projection fingerprint and A-to-B tests pass | empty table and no current-revision pointers for local/testing down |
-| `supplier_products` identity-head/current-revision pointers, indexes, checks, triggers and composite FKs | III-P0 migration 6 | all five new provenance/receipt tables | III-P0 protected staging writer | legacy-null/ineligible, pointer CAS and no-fabricated-backfill tests pass | every pointer null and new tables empty before local/testing down; no staging content rewrite |
-| claim `cohort_source_identity` plus generation-to-claim source authority | III-P0 migration 7A | deployed claims/generations and immutable profile identity | III-P0 claim/generation model metadata and authorization repository support | exact five-field atomic tuple, trigger and composite FK tests pass | no affected claim/generation evidence; ambiguous rows fail readiness |
-| policy-v2 key/version/fingerprint authority on claim/generation | III-P0 migration 7B | migration 7A and ten-bound policy-v2 contract | III-P0 policy resolver; consumed by Phase III capture | all ten values approved later, persisted policy validates, and no v1 reinterpretation occurs | no policy-bound evidence for local/testing down; operational rollback preserves policy facts |
-| `supplier_import_job_identity_v1`, `supplier_import_resolved_source_context_v1` and same-handle bounded source-payload boundary | III-P0 code subphase after migrations 1-3 | locked selector identity, immutable profile/execution/receipt bytes and policy-v2 contract | III-P0 resolver/downloader/parser adapters with redirects disabled and verified receipt EOF | selector race, A-to-B, no-post-resolution-read, all-`3xx` fail-closed, N+1 byte overflow, no-path-reopen, mutation detection and cleanup tests pass; still no production activation | code/config gate remains false; missing context/receipt reconstruction fails closed |
+<!-- phase-iii-p0-artifact-registry classification=CURRENT id=phase-iii-p0-artifact-inventory-v1 -->
+| Ordinal | Exact tables and columns owned | Exact indexes and keys owned | Exact constraints and triggers owned |
+| :---: | --- | --- | --- |
+| P0-01 | `supplier_feeds`; existing `id>supplier_id` | `uq_supplier_feed_id_supplier(id>supplier_id)` | none |
+| P0-02 | `supplier_import_source_profiles`: `id>supplier_id>supplier_feed_id>source_identity>descriptor_version>source_locator_contract_key>source_locator_contract_version>source_locator_key>source_locator_canonical_bytes>source_access_scope_key>feed_type>importer_key>importer_version>mapping_contract_version>mapping_canonical_bytes>mapping_contract_fingerprint>source_descriptor_fingerprint>created_at` | `PRIMARY(id)`; `uq_import_source_profile_descriptor(supplier_id>supplier_feed_id>source_descriptor_fingerprint)`; `uq_import_source_profile_identity(source_identity)`; `uq_import_source_profile_scope(id>supplier_id>supplier_feed_id>source_identity>source_descriptor_fingerprint)`; `ix_import_source_profile_feed_owner_fk(supplier_feed_id>supplier_id)` | `fk_import_source_profile_feed_owner(supplier_feed_id>supplier_id)`; `chk_import_source_profile_descriptor_version`; `chk_import_source_profile_source_identity`; `chk_import_source_profile_locator_key`; `chk_import_source_profile_access_scope`; `chk_import_source_profile_feed_type`; `chk_import_source_profile_fingerprints`; `trg_import_source_profile_no_update`; `trg_import_source_profile_no_delete` |
+| P0-03 | `supplier_import_source_executions`: `id>supplier_id>supplier_feed_id>import_job_id>import_history_id>supplier_import_source_profile_id>source_identity>source_descriptor_fingerprint>importer_key>importer_version>import_job_identity_version>import_job_identity_canonical_bytes>import_job_identity_fingerprint>resolved_source_context_version>captured_at>source_execution_fingerprint>created_at` | `PRIMARY(id)`; `uq_import_source_execution_fingerprint(source_execution_fingerprint)`; `uq_import_source_execution_history(import_history_id)`; `uq_import_source_execution_scope(id>supplier_id>supplier_feed_id>source_identity>source_descriptor_fingerprint>source_execution_fingerprint)`; `uq_import_source_execution_receipt_scope(id>source_execution_fingerprint)`; `ix_import_source_execution_profile_fk(supplier_import_source_profile_id>supplier_id>supplier_feed_id>source_identity>source_descriptor_fingerprint)`; `ix_import_source_execution_feed_owner_fk(supplier_feed_id>supplier_id)`; `ix_import_source_execution_job_scope_fk(import_job_id>supplier_id>supplier_feed_id)` | `fk_import_source_execution_profile`; `fk_import_source_execution_feed_owner`; `fk_import_source_execution_job_scope`; `fk_import_source_execution_history`; `chk_import_source_execution_versions`; `chk_import_source_execution_fingerprints`; `trg_import_source_execution_no_update`; `trg_import_source_execution_no_delete` |
+| P0-04 | `supplier_import_source_payload_receipts`: `id>supplier_import_source_execution_id>source_execution_fingerprint>receipt_version>accepted_payload_bytes>accepted_payload_sha256>payload_receipt_fingerprint>created_at` | `PRIMARY(id)`; `uq_import_source_payload_receipt_execution(supplier_import_source_execution_id)`; `uq_import_source_payload_receipt_fingerprint(payload_receipt_fingerprint)`; `ix_import_source_payload_receipt_execution_fk(supplier_import_source_execution_id>source_execution_fingerprint)` | `fk_import_source_payload_receipt_execution`; `chk_import_source_payload_receipt_version`; `chk_import_source_payload_receipt_bytes`; `chk_import_source_payload_receipt_fingerprints`; `trg_import_source_payload_receipt_no_update`; `trg_import_source_payload_receipt_no_delete` |
+| P0-05 | `supplier_product_identity_heads`: `id>supplier_id>supplier_feed_id>supplier_sku_bytes>created_at` | `PRIMARY(id)`; `uq_supplier_product_identity_head(supplier_id>supplier_feed_id>supplier_sku_bytes)`; `uq_supplier_product_identity_head_scope(id>supplier_id>supplier_feed_id)`; `uq_supplier_product_identity_head_revision_scope(id>supplier_id>supplier_feed_id>supplier_sku_bytes)`; `ix_supplier_product_identity_head_feed_owner_fk(supplier_feed_id>supplier_id)` | `fk_supplier_product_identity_head_feed_owner`; `chk_supplier_product_identity_head_sku_bytes`; `trg_supplier_product_identity_head_no_update`; `trg_supplier_product_identity_head_no_delete` |
+| P0-06 | `supplier_product_source_revisions`: `id>supplier_product_identity_head_id>supplier_product_id>supplier_import_source_execution_id>supplier_id>supplier_feed_id>supplier_sku_bytes>source_identity>source_descriptor_fingerprint>source_execution_fingerprint>source_member_identity_hash>source_row_fingerprint>staging_projection_fingerprint>revision_fingerprint>observed_at>created_at` | `PRIMARY(id)`; `uq_supplier_product_revision_execution_head(supplier_import_source_execution_id>supplier_product_identity_head_id)`; `uq_supplier_product_revision_pointer_scope(id>supplier_product_id>supplier_product_identity_head_id>supplier_id>supplier_feed_id)`; `ix_supplier_product_revision_head_fk(supplier_product_identity_head_id>supplier_id>supplier_feed_id>supplier_sku_bytes)`; `ix_supplier_product_revision_execution_fk(supplier_import_source_execution_id>supplier_id>supplier_feed_id>source_identity>source_descriptor_fingerprint>source_execution_fingerprint)`; `ix_supplier_product_revision_product_id_fk(supplier_product_id)` | `fk_supplier_product_revision_head`; `fk_supplier_product_revision_execution`; `fk_supplier_product_revision_product_id`; `chk_supplier_product_revision_source_identity`; `chk_supplier_product_revision_fingerprints`; `trg_supplier_product_revision_no_update`; `trg_supplier_product_revision_no_delete` |
+| P0-07 | `supplier_products`: `supplier_product_identity_head_id>current_source_revision_id`; no new revision columns | `uq_supplier_product_identity_head_assignment(supplier_product_identity_head_id)`; `uq_supplier_product_source_revision_scope(id>supplier_product_identity_head_id>supplier_id>supplier_feed_id)`; `ix_supplier_product_identity_head_fk(supplier_product_identity_head_id>supplier_id>supplier_feed_id)`; `ix_supplier_product_current_revision_fk(current_source_revision_id>id>supplier_product_identity_head_id>supplier_id>supplier_feed_id)`; `ix_supplier_product_revision_product_scope_fk(supplier_product_id>supplier_product_identity_head_id>supplier_id>supplier_feed_id)` on `supplier_product_source_revisions` | `fk_supplier_product_identity_head`; `fk_supplier_product_current_revision`; replace `fk_supplier_product_revision_product_id` with `fk_supplier_product_revision_product_scope`; `chk_supplier_product_source_revision_pointers`; `trg_supplier_product_source_projection_guard` |
+| P0-08 | `supplier_import_execution_claims`: `cohort_source_identity`; no new generation column | `uq_import_execution_claim_id_cohort_source(id>cohort_source_identity)`; `ix_snapshot_generation_claim_source(supplier_import_execution_claim_id>source_identity)` | replace `chk_import_claim_cohort_authorization_tuple`; replace `chk_import_claim_processing_owner`; `chk_import_execution_claim_cohort_source_identity`; `trg_import_execution_claim_cohort_source_immutable`; `fk_snapshot_generation_claim_source` |
+| P0-09 | `supplier_import_execution_claims`: `cohort_bounds_policy_key>cohort_bounds_policy_version>cohort_bounds_policy_fingerprint`; `supplier_offer_snapshot_generations`: `bounds_policy_key>bounds_policy_version>bounds_policy_fingerprint` | `uq_import_claim_id_bounds_policy(id>cohort_bounds_policy_key>cohort_bounds_policy_version>cohort_bounds_policy_fingerprint)`; `ix_snapshot_generation_bounds_policy(supplier_import_execution_claim_id>bounds_policy_key>bounds_policy_version>bounds_policy_fingerprint)` | `chk_import_claim_cohort_policy_authority`; `chk_import_claim_cohort_policy_identity`; replace `chk_import_claim_processing_owner`; `trg_import_execution_claim_cohort_policy_immutable`; `chk_snapshot_generation_bounds_policy_identity`; `fk_snapshot_generation_bounds_policy` |
+<!-- phase-iii-p0-artifact-registry:end id=phase-iii-p0-artifact-inventory-v1 -->
 
-Forward order is exactly migrations 1, 2, 3, 4, 5, 6, 7A and 7B, followed by
-models/contracts, locked selector identity, resolved context, receipt-bound
-downloader/parser adapters and only
-then Phase III snapshot persistence integration. Reverse local/testing order is
-the exact dependency reverse after the complete empty/pristine predicate.
+The implementation pairs every artifact name above bijectively with one
+hardcoded `P0SchemaObjectSignature`; missing, surplus and duplicate ownership
+fail tests. Signature bytes use domain
+`phase-iii-p0-schema-signature-v1`, NUL and fixed-order UTF-8 JSON with LF, JSON
+null, `true`/`false`, canonical base-10 integers and ordered arrays. Expected
+bytes and SHA-256 values are independent constants derived from canonical DDL,
+never from inspected state.
+
+The exact signature sources and field orders are: table
+`type>table>table_type>engine>row_format>table_collation>create_options>table_comment`
+from `information_schema.TABLES`; column
+`type>table>ordinal>name>column_type>nullable>default_kind>default_value>extra>charset>collation>generation_expression>comment`
+from `COLUMNS`; index `type>table>name>non_unique>index_type>parts`, with parts
+`sequence>column>expression>sub_part>collation`, from `STATISTICS`; FK
+`type>name>child_table>child_columns>parent_table>parent_columns>update_rule>delete_rule`
+from `TABLE_CONSTRAINTS`/`KEY_COLUMN_USAGE`/`REFERENTIAL_CONSTRAINTS`; CHECK
+`type>name>table>clause>enforced` from
+`TABLE_CONSTRAINTS`/`CHECK_CONSTRAINTS`; and trigger
+`type>name>table>timing>event>action_orientation>action_statement>sql_mode>character_set_client>collation_connection>database_collation`
+from `TRIGGERS`. SQL expressions receive only CRLF/CR-to-LF and edge ASCII
+whitespace normalization; case, quotes, parentheses and internal whitespace are
+exact. `DEFINER` is ignored as deployment-account metadata, while trigger SQL
+mode and character-set/collation context are authoritative.
+
+Each P0-created table has exact table comment
+`mycomputer:phase-iii-p0:v1:owner=P0-XX`; discovery uses this structural marker,
+not table-name text search, and rejects unknown owner/name pairs. Complete object
+sets reject same-name malformed or extra columns/indexes/FKs/CHECKs/triggers.
+The pre-P0 baseline for `supplier_feeds`, `supplier_products`,
+`supplier_import_execution_claims` and
+`supplier_offer_snapshot_generations` is independently hardcoded from reviewed
+commit `31de89c02f03b10a2aafd3ba58aad083c2f3e780`; candidate state cannot define or
+refresh it. P0 through P9 are exact baseline plus cumulative signatures, so a
+missing baseline object, unknown shared-table addition or later-prefix artifact
+rejects before DDL. Normative schema inventory and signature registry are tested
+in both directions.
+
+The implementation transcribes, rather than calculates, the concrete object
+records in the canonical design. The exact normal-prefix authority is:
+
+| State | Object count | Exact SHA-256 |
+| :---: | ---: | --- |
+| P0 | 207 | `77512f147ef9a2fe3889156ac617701c3de7fc7532bb4914329d0735bdfaed79` |
+| P1 | 208 | `8ed9f3d479812a2807abcc23411bad1fd60cd495566a94416352f0c4640bf447` |
+| P2 | 241 | `45bf4bc963becb79949d88df27dd6223bccf1fcd076beb310f4a2842ba260bc0` |
+| P3 | 275 | `9a424ea99f9ddbb68fd420702578fde371e162ff314740c9f856aab5e3926990` |
+| P4 | 294 | `336d0b4076cee86f8f3efc8d43a29ba020716629e6088f8ec2ec763d061af8f6` |
+| P5 | 309 | `d8ca08020090614ebb31d18d7640a1d46f5757eeacc226a1a3b3367584bda058` |
+| P6 | 339 | `3d201119551344241d222fcd3d9db9d136ace4e321cc1ae36dfc86f410fdb7a9` |
+| P7 | 349 | `9bea840553b2fd240d0b5bca8206a35e7cb1c3b2a0420a4600c081ca0e0df43d` |
+| P8 | 355 | `c2b6d719637a86dccf115e9220b9e2439a986e1da6c23ee51ddda7c5361cc322` |
+| P9 | 368 | `4269ff10ce6e8a407b2c790d7260e3f9c6db8f48fd06d456d15ae3e5ca4b579d` |
+
+The only recognized partial hashes are
+`P9_DOWN_1=bf96860e7603e774e881f2549d2dfcb9527990a8fe01d88fc417719eb3a37cc0`,
+`P9_DOWN_2=1a7b8f70593db3622c7e9477455f7be9f5eba0a8faf42d58a7b98751379f7758`,
+`P8_DOWN_1=0fc58b8ab89c138d2ab165b1e4a24e812dc582dab0cafff9526b86c2a24c1fec`,
+`P8_DOWN_2=eac8d521280d0debb3ac440247b164dea751ce640c1dc7ea320afeee56197c95`,
+`P7_DOWN_1=a8c237b9dd49577e8d6ed7ce5e4d0a46b1334d5cbd51931334b3576fbc13e6cd`
+and
+`P7_DOWN_2=953f96d7c9e087fd4e2ed29c402b1439d77da390e2a5f5911a70872a87ce380e`.
+Every other shape is `UNCLASSIFIED_P0_SCHEMA_STATE` and executes zero DDL.
+
+The coordinator acquires exact `GET_LOCK(..., 0)` on the same dedicated PDO
+connection before inspection. A non-`1` result fails
+`phase_three_p0_schema_guard_unavailable`; nested entry fails
+`phase_three_p0_nested_downgrade_forbidden`; release runs in `finally`. Its exact
+sequence is guard, enumerate, normalize, exact-prefix compare, terminal-step
+check, pristine/data/dependency checks, invocation-local authorization,
+coordinator-owned DDL, re-enumerate after every physical statement,
+exact-declared-state compare, exact-predecessor compare and release.
+Pre-DDL failure proves DDL count zero. Post-DDL mismatch is terminal
+`phase_three_p0_downgrade_postcondition_failed` and never falsely claims MySQL
+DDL rollback. Required vectors cover malformed same-name column/index/FK/CHECK/
+trigger, unknown created/shared-table object, unknown reserved Phase III table,
+missing baseline, source-profile rows, P0-03 present, nested invocation and
+concurrent guard failure. Exact reversible Slice 1 proof is
+`P0 -> P1 -> P2 -> P1 -> P0`.
+
+The physical statement inventory is fixed at 15: one atomic statement each for
+P0-01 through P0-06 and three each for P0-07, P0-08 and P0-09. Exact SQL and
+affected object hashes are copied from the canonical operation registry; callers
+cannot supply SQL. Only the six exact partial states above may resume. A fresh
+ordinary `down()` for the same originating enum reacquires the mutex, fully
+re-enumerates, obtains a new invocation-local authorization and executes only
+the remaining operation IDs. Wrong-step resume, repeated committed DDL,
+best-effort cleanup and arbitrary operator SQL are forbidden.
+
+Connection loss invalidates authorization. An in-flight DDL whose server result
+is unknown is never retried; a new session must reacquire the named lock and
+classify the full schema. Session termination releases its MySQL named lock but
+does not prove success or transfer authorization. Release result 1 is
+`RELEASED`; 0 is secondary
+`phase_three_p0_schema_guard_release_not_owned`; NULL/error/lost connection is
+secondary `phase_three_p0_schema_guard_release_unavailable`. Schema/DDL outcome
+has precedence over release outcome. Verified predecessor plus release anomaly
+remains primary success with secondary release evidence; any unverified schema
+can never report success.
+
+Every invocation emits exactly one authoritative synchronous structured event
+`phase_three_p0_downgrade_evidence_v1` with ordered safe fields
+`event_version>invocation_id>step>initial_state>target_state>completed_ddl_ids>last_verified_state>partial_state>connection_status>mutex_acquire>mutex_release>primary_outcome>secondary_codes`.
+SQL, bindings, row values, source identity, credentials and exception text are
+forbidden. Domain exceptions expose only primary code and invocation ID. P0-02
+down is one atomic `DROP TABLE`, has no partial state and reaches P1; P0-01 then
+uses one atomic index drop to reach P0.
+
+The exact cumulative prefix registry is likewise byte-equal to the canonical
+design. A valid state contains all and only the cumulative artifacts in its row.
+
+<!-- phase-iii-p0-prefix-registry classification=CURRENT id=phase-iii-p0-prefix-states-v1 -->
+| State | Exact cumulative P0-owned artifact groups | Terminal downgrade prerequisite and result |
+| :---: | --- | --- |
+| P0 | no Phase III-P0-owned artifact exists | baseline; no P0 downgrade exists |
+| P1 | P0-01 parent UNIQUE key exists exactly | profile table and every later group absent; remove parent key -> P0 |
+| P2 | P1 plus complete P0-02 source-profile table, keys, FK, index and triggers | profile table zero rows and P3-P9 absent; drop profile artifacts -> P1 |
+| P3 | P2 plus complete P0-03 source-execution table authority | execution table zero rows, no receipt/revision child and P4-P9 absent; drop execution artifacts -> P2 |
+| P4 | P3 plus complete P0-04 payload-receipt table authority | receipt table zero rows and P5-P9 absent; drop receipt artifacts -> P3 |
+| P5 | P4 plus complete P0-05 logical-head table authority | head table zero rows, no revision/pointer child and P6-P9 absent; drop head artifacts -> P4 |
+| P6 | P5 plus complete P0-06 source-revision table authority | revision table zero rows, no current pointer and P7-P9 absent; drop revision artifacts -> P5 |
+| P7 | P6 plus complete P0-07 `supplier_products` pointer authority | every new pointer null and P8-P9 absent; remove pointer triggers/FKs/checks/indexes/columns -> P6 |
+| P8 | P7 plus complete P0-08 claim/generation source authority | every new source field null, no source-bound generation evidence and P9 absent; remove source authority -> P7 |
+| P9 | P8 plus complete P0-09 policy-v2 authority | every new policy field null and no policy-v2-bound generation evidence; remove policy authority -> P8 |
+<!-- phase-iii-p0-prefix-registry:end id=phase-iii-p0-prefix-states-v1 -->
+
+Forward order is P0-01 through P0-09. Reverse local/testing order is P0-09
+through P0-01, one newly validated terminal prefix step per invocation. The
+complete profile model/contract work follows P0-01 and P0-02; locked selector
+identity, resolved context and receipt-bound downloader/parser adapters follow
+P0-03 and P0-04; Phase III snapshot persistence integration follows full P9 and
+separate approval of all ten policy values.
+
+The revised minimal Slice 1 is exactly P0-01 plus P0-02, the
+`SupplierImportSourceProfile` model, profile/locator/mapping serializers and
+immutable value objects, source-profile repository with injectable identity
+generator, shared downgrade coordinator, unit tests, and mandatory MySQL 8.4
+composite-FK/concurrency/retry/append-only/P0-P2 rollback tests. It remains
+dormant and performs no source fetch, importer activation, staging/Product
+mutation or Catalog Sync.
 
 ## Historical deployed Phase I ten-table migration dependency plan
 
