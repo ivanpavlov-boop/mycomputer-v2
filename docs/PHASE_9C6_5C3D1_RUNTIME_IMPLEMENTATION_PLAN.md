@@ -985,10 +985,13 @@ their implementation inputs without creating alternatives:
   counts, and the fixed intrinsic maximum is exactly four attempts in one
   parent-locked repository transaction;
 - collision classification reads only `QueryException::errorInfo` and requires
-  exact string SQLSTATE `23000`, integer-normalized driver code `1062`, and the
+  exact string SQLSTATE `23000`, exact PHP integer driver code `1062`, and the
   anchored MySQL 8.4 diagnostic `Duplicate entry '<opaque-nonempty>' for key
   'supplier_import_source_profiles.uq_import_source_profile_identity'`; this
-  single-quoted table-qualified key is the sole accepted token, while bare,
+  single-quoted table-qualified key is the sole accepted token; string or float
+  `1062`, scientific notation, signs, leading zeroes, surrounding whitespace,
+  Unicode digits, booleans, null, arrays and objects are rejected without trim,
+  numeric coercion or cast, while bare,
   database-qualified, backtick/double-quote, wrong-table, wrong-key, malformed
   or missing diagnostics are ineligible; the opaque duplicate payload is never
   captured, stored, compared, logged or returned;
@@ -1072,6 +1075,27 @@ fail tests. Signature bytes use domain
 null, `true`/`false`, canonical base-10 integers and ordered arrays. Expected
 bytes and SHA-256 values are independent constants derived from canonical DDL,
 never from inspected state.
+
+Treat object/state/operation metadata as closed-world authority too.
+`registry_id` is exactly `object_id@first_16_lowercase_hex(signature_sha256)`,
+matches `\A[A-Za-z0-9_:]+@[0-9a-f]{16}\z`, is at most 128 ASCII bytes and is
+globally unique. Exact owner is `BASELINE` for a `P0_BASELINE` signature and
+otherwise the first normal P1..P9 prefix that introduces that exact
+`object_id@sha256`. State classification/domain pairs are exactly the canonical
+baseline, normal-prefix and recognized-partial map. Every operation uses only
+`TRANSCRIBE_EXACT_SQL_AND_REACH_ONLY_DECLARED_RESULT`; its ordered
+`affected_objects` must equal the lexicographically sorted full-hash delta
+between the bound precondition and result state maps, including JSON null on an
+absent side. No count-only or one-way validation is sufficient.
+
+Reproduce the separate canonical metadata JSON in exact registry order with
+ordered top-level keys `version>objects>states>operations` and version
+`phase-iii-p0-oracle-metadata-v1`. Its exact length is `168474` bytes and the
+hardcoded SHA-256 over domain `phase-iii-p0-oracle-metadata-v1`, NUL and those
+bytes is
+`72e09a922c429ae861dac607d94a376e91b2f40c3ced2ba40178bef794ab0a6a`.
+This metadata constant is independent of candidate DDL/database state and does
+not alter any schema signature, state or downgrade-SQL hash.
 
 The exact signature sources and field orders are: table
 `type>table>table_type>engine>row_format>table_collation>create_options>table_comment`
