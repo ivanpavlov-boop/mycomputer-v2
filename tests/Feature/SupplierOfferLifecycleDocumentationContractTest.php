@@ -1562,33 +1562,15 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
             $this->assertStringContainsString($closureAuthority, $architecture);
         }
 
-        $futureAllocation = $this->structuralMarkdownTable(
-            $plan,
-            '| Artifact | Migration/subphase | Dependency | Model/service phase | Activation gate | Rollback/readiness prerequisite |',
-            '| --- | --- | --- | --- | --- | --- |',
-            'Phase III-P0 provenance allocation',
-            6,
-            'Forward order is exactly migrations 1, 2, 3, 4, 5, 6, 7A and 7B, followed by',
-        );
+        $futureAllocation = $this->phaseThreeP0DesignClosureContract($design, $plan);
         $this->assertSame([], $futureAllocation['violations'], implode(PHP_EOL, $futureAllocation['violations']));
-        $this->assertSame(9, $futureAllocation['physical_count']);
-        foreach ([
-            '`supplier_import_source_profiles`',
-            '`supplier_import_source_executions`',
-            '`supplier_import_source_payload_receipts`',
-            '`supplier_product_identity_heads`',
-            '`supplier_product_source_revisions`',
-            '`supplier_products` identity-head/current-revision pointers, indexes, checks, triggers and composite FKs',
-            'claim `cohort_source_identity` plus generation-to-claim source authority',
-            'policy-v2 key/version/fingerprint authority on claim/generation',
-            '`supplier_import_job_identity_v1`, `supplier_import_resolved_source_context_v1` and same-handle bounded source-payload boundary',
-        ] as $position => $artifact) {
-            $this->assertStringStartsWith("| {$artifact} |", $futureAllocation['rows'][$position]);
-        }
+        $this->assertSame($this->expectedPhaseThreeP0MigrationRows(), $futureAllocation['migration_rows']);
+        $this->assertSame($this->expectedPhaseThreeP0ArtifactRows(), $futureAllocation['artifact_rows']);
+        $this->assertSame($this->expectedPhaseThreeP0PrefixRows(), $futureAllocation['prefix_rows']);
         foreach ([
             'The historical deployed Phase I canonical table count remains exactly ten.',
             'does not amend any Phase I migration',
-            'Forward order is exactly migrations 1, 2, 3, 4, 5, 6, 7A and 7B',
+            'Forward order is P0-01 through P0-09.',
             'Phase III-P0 must precede Phase III.',
             'with no approved numeric policy key until all ten values are authorized',
         ] as $allocationAuthority) {
@@ -1883,61 +1865,641 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
         }
     }
 
-    public function test_phase_three_p0_rollback_table_sets_are_exact_and_fail_closed(): void
+    public function test_phase_three_p0_b001_identity_collision_retry_authority_is_exact_and_fail_closed(): void
     {
+        $design = $this->readDocument('docs/IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md');
         $plan = $this->readDocument('docs/PHASE_9C6_5C3D1_RUNTIME_IMPLEMENTATION_PLAN.md');
-        $lineEnding = str_contains($plan, "\r\n") ? "\r\n" : "\n";
-        $canonical = $this->phaseThreeP0RollbackSetContract($plan);
-        $this->assertSame([], $canonical['violations'], 'RB10 canonical: '.implode(PHP_EOL, $canonical['violations']));
-        $this->assertSame($this->expectedPhaseThreeP0Tables(), $canonical['allocation_set']);
-        $this->assertSame($this->expectedPhaseThreeP0Tables(), $canonical['guard_set']);
+        $canonical = $this->phaseThreeP0DesignClosureContract($design, $plan);
+        $this->assertSame([], $canonical['violations'], implode(PHP_EOL, $canonical['violations']));
+        $this->assertSame($this->expectedPhaseThreeSourceIdentityRetrySemantics(), $canonical['identity_retry']);
 
-        $allocationReceipt = '| 3 | `supplier_import_source_payload_receipts` |';
-        $allocationReceiptBlock = $allocationReceipt.$lineEnding.
-            '| 4 | `supplier_product_identity_heads` |';
-        $guardProfile = '| 1 | `supplier_import_source_profiles` | table exists and contains zero rows; all dependent executions are already proven absent |';
-        $guardExecution = '| 2 | `supplier_import_source_executions` | table exists and contains zero rows; all dependent receipts and revisions are already proven absent |';
-        $guardReceipt = '| 3 | `supplier_import_source_payload_receipts` | table exists and contains zero rows; no committed payload receipt evidence may be discarded |';
-        $guardHead = '| 4 | `supplier_product_identity_heads` | table exists and contains zero rows; all staging head pointers are separately proven null |';
-        $guardRevision = '| 5 | `supplier_product_source_revisions` | table exists and contains zero rows; all staging current-revision pointers are separately proven null |';
-        $unknownGuard = '| 6 | `supplier_import_unknown_evidence` | table exists and contains zero rows |';
-
-        $rb5 = $this->removeStructuralRow($plan, $guardReceipt);
-        $rb5 = $this->insertStructuralRow($rb5, $guardProfile, $guardProfile);
         $mutations = [
-            'RB1 payload receipt omitted from guard' => $this->removeStructuralRow($plan, $guardReceipt),
-            'RB2 source profiles omitted from guard' => $this->removeStructuralRow($plan, $guardProfile),
-            'RB3 allocation five and guard four' => $this->removeStructuralRow($plan, $guardHead),
-            'RB4 unknown sixth guard table' => $this->insertStructuralRow($plan, $guardRevision, $unknownGuard),
-            'RB5 duplicate guard table and omitted table' => $rb5,
-            'RB7 allocation changes without guard' => $this->replaceStructuralText(
-                $plan,
-                $allocationReceiptBlock,
-                '| 3 | `supplier_import_source_payload_receipt_blobs` |'.$lineEnding.
-                    '| 4 | `supplier_product_identity_heads` |',
-            ),
-            'RB8 guard changes without allocation' => $this->replaceStructuralText(
-                $plan,
-                $guardExecution,
-                '| 2 | `supplier_import_source_execution_archive` | table exists and contains zero rows |',
-            ),
-            'RB9 stale four-table prose' => $this->replaceStructuralText(
-                $plan,
-                'five structurally registered new tables',
-                'four new tables',
-            ),
+            'B001-01 unbounded retry' => ['`maximum_attempt_cardinality` | `4`', '`maximum_attempt_cardinality` | `UNBOUNDED`'],
+            'B001-02 retry until success' => ['`maximum_attempt_cardinality` | `4`', '`maximum_attempt_cardinality` | `RETRY_UNTIL_SUCCESS`'],
+            'B001-03 environment-configurable count' => ['`cardinality_authority` | `INTRINSIC_FIXED_NOT_ENV_QUEUE_FIXTURE_OR_POLICY`', '`cardinality_authority` | `ENVIRONMENT_CONFIGURABLE`'],
+            'B001-04 operational-policy-derived count' => ['`cardinality_authority` | `INTRINSIC_FIXED_NOT_ENV_QUEUE_FIXTURE_OR_POLICY`', '`cardinality_authority` | `OPERATIONAL_POLICY_DERIVED`'],
+            'B001-05 colliding identity reuse' => ['`fresh_identity_each_attempt` | `REQUIRED_NEVER_REUSE`', '`fresh_identity_each_attempt` | `REUSE_COLLIDING_IDENTITY`'],
+            'B001-06 silent exhaustion' => ['`exhaustion_result` | `ROLLBACK_COMPLETE_TRANSACTION`', '`exhaustion_result` | `SILENT_RETURN`'],
+        ];
+        foreach ($mutations as $case => [$search, $replacement]) {
+            $mutated = $this->replaceStructuralText($design, $search, $replacement);
+            $this->assertNotSame([], $this->phaseThreeP0DesignClosureContract($mutated, $plan)['violations'], $case);
+        }
+
+        $retryUntilSuccess = $this->insertPhaseThreeCurrentArchitectureUnit(
+            $design,
+            '<!-- phase-iii-semantic-registry:end id=phase-iii-source-identity-retry-contract-v1 -->',
+            'CURRENT alternative: retry until success.',
+        );
+        $this->assertNotSame([], $this->phaseThreeExclusiveSemanticContract($retryUntilSuccess)['violations']);
+    }
+
+    public function test_phase_three_p0_b001_query_exception_diagnostic_classification_is_exact(): void
+    {
+        $eligible = "Duplicate entry 'SYNTHETIC_IDENTITY_SENTINEL' for key 'supplier_import_source_profiles.uq_import_source_profile_identity'";
+        $cases = [
+            'exact supported diagnostic' => [['23000', 1062, $eligible], true],
+            'canonical decimal string is not the native integer errno' => [['23000', '1062', $eligible], false],
+            'decimal float' => [['23000', 1062.9, $eligible], false],
+            'decimal string' => [['23000', '1062.9', $eligible], false],
+            'lowercase scientific string' => [['23000', '1.062e3', $eligible], false],
+            'uppercase scientific string' => [['23000', '1.062E3', $eligible], false],
+            'leading zero string' => [['23000', '01062', $eligible], false],
+            'positive sign string' => [['23000', '+1062', $eligible], false],
+            'negative sign string' => [['23000', '-1062', $eligible], false],
+            'surrounding whitespace string' => [['23000', ' 1062 ', $eligible], false],
+            'leading whitespace string' => [['23000', ' 1062', $eligible], false],
+            'trailing whitespace string' => [['23000', '1062 ', $eligible], false],
+            'newline string' => [['23000', "1062\n", $eligible], false],
+            'tab string' => [['23000', "\t1062", $eligible], false],
+            'integral float' => [['23000', 1062.0, $eligible], false],
+            'positive infinity' => [['23000', INF, $eligible], false],
+            'not a number' => [['23000', NAN, $eligible], false],
+            'true boolean' => [['23000', true, $eligible], false],
+            'false boolean' => [['23000', false, $eligible], false],
+            'null driver code' => [['23000', null, $eligible], false],
+            'array driver code' => [['23000', [1062], $eligible], false],
+            'object driver code' => [['23000', (object) ['code' => 1062], $eligible], false],
+            'full width Unicode digits' => [['23000', "\u{FF11}\u{FF10}\u{FF16}\u{FF12}", $eligible], false],
+            'Arabic Indic digits' => [['23000', "\u{0661}\u{0660}\u{0666}\u{0662}", $eligible], false],
+            'non breaking space string' => [['23000', "\u{00A0}1062\u{00A0}", $eligible], false],
+            'SQLSTATE integer used as errno' => [['23000', 23000, $eligible], false],
+            'SQLSTATE string used as errno' => [['23000', '23000', $eligible], false],
+            'wrong key' => [['23000', 1062, str_replace('uq_import_source_profile_identity', 'uq_import_source_profile_descriptor', $eligible)], false],
+            'wrong table' => [['23000', 1062, str_replace('supplier_import_source_profiles', 'supplier_feeds', $eligible)], false],
+            'bare key' => [['23000', 1062, "Duplicate entry 'SYNTHETIC_IDENTITY_SENTINEL' for key 'uq_import_source_profile_identity'"], false],
+            'database qualified key' => [['23000', 1062, "Duplicate entry 'SYNTHETIC_IDENTITY_SENTINEL' for key 'mycomputer.supplier_import_source_profiles.uq_import_source_profile_identity'"], false],
+            'backtick key' => [['23000', 1062, "Duplicate entry 'SYNTHETIC_IDENTITY_SENTINEL' for key `supplier_import_source_profiles.uq_import_source_profile_identity`"], false],
+            'double quoted key' => [['23000', 1062, "Duplicate entry 'SYNTHETIC_IDENTITY_SENTINEL' for key \"supplier_import_source_profiles.uq_import_source_profile_identity\""], false],
+            'non 1062' => [['23000', 1061, $eligible], false],
+            'above 1062' => [['23000', 1063, $eligible], false],
+            'non 23000' => [['HY000', 1062, $eligible], false],
+            'integer sqlstate' => [[23000, 1062, $eligible], false],
+            'malformed diagnostic' => [['23000', 1062, 'Duplicate key'], false],
+            'empty opaque payload' => [['23000', 1062, "Duplicate entry '' for key 'supplier_import_source_profiles.uq_import_source_profile_identity'"], false],
+            'trailing bytes' => [['23000', 1062, $eligible.' trailing'], false],
+            'missing diagnostic' => [['23000', 1062], false],
+            'non string diagnostic' => [['23000', 1062, ['diagnostic']], false],
+            'missing error info' => [[], false],
         ];
 
-        foreach ($mutations as $case => $mutatedPlan) {
+        foreach ($cases as $case => [$errorInfo, $expected]) {
+            $this->assertSame($expected, $this->phaseThreeSourceIdentityCollisionDiagnosticIsEligible($errorInfo), $case);
+        }
+
+        $allowedDriverCodes = [1062];
+        foreach (array_column($cases, 0) as $errorInfo) {
+            $expected = in_array($errorInfo[1] ?? null, $allowedDriverCodes, true)
+                && ($errorInfo[0] ?? null) === '23000'
+                && ($errorInfo[2] ?? null) === $eligible;
+            $this->assertSame(
+                $expected,
+                $this->phaseThreeSourceIdentityCollisionDiagnosticIsEligible($errorInfo),
+                'Collision classification must be true iff every field has its exact canonical representation.',
+            );
+        }
+
+        $design = $this->readDocument('docs/IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md');
+        $plan = $this->readDocument('docs/PHASE_9C6_5C3D1_RUNTIME_IMPLEMENTATION_PLAN.md');
+        foreach ([
+            'loose driver only' => ['`sqlstate_match` | `EXACT_STRING_23000`', '`sqlstate_match` | `ANY`'],
+            'loose 1062' => ['`diagnostic_grammar` | `MYSQL84_DUPLICATE_ENTRY_TABLE_QUALIFIED_SINGLE_QUOTED_V1`', '`diagnostic_grammar` | `ANY_1062`'],
+            'alternate bare token' => ['`accepted_key_token` | `supplier_import_source_profiles.uq_import_source_profile_identity`', '`accepted_key_token` | `uq_import_source_profile_identity`'],
+            'capture payload' => ['`duplicate_payload_handling` | `OPAQUE_NONEMPTY_NEVER_CAPTURE_STORE_COMPARE_LOG_RETURN`', '`duplicate_payload_handling` | `CAPTURE_FOR_DEBUGGING`'],
+        ] as $case => [$search, $replacement]) {
+            $mutated = $this->replaceStructuralText($design, $search, $replacement);
+            $this->assertNotSame([], $this->phaseThreeP0DesignClosureContract($mutated, $plan)['violations'], $case);
+        }
+
+        $strictAuthority = $this->phaseThreeDuplicateErrnoAuthorityContract($design);
+        $this->assertSame([], $strictAuthority['violations'], implode(PHP_EOL, $strictAuthority['violations']));
+        $lineEnding = str_contains($design, "\r\n") ? "\r\n" : "\n";
+        $identityRegistry = '<!-- phase-iii-semantic-registry classification=CURRENT id=phase-iii-source-identity-retry-contract-v1 -->';
+        $currentContradictions = [
+            'cast coexistence' => 'CURRENT duplicate errno alternative: `(int) errorInfo[1] === 1062`.',
+            'intval coexistence' => 'CURRENT duplicate errno alternative: `intval(errorInfo[1]) === 1062`.',
+            'is_numeric coexistence' => 'CURRENT duplicate errno alternative: `is_numeric(errorInfo[1]) && (int) errorInfo[1] === 1062`.',
+            'loose comparison coexistence' => 'CURRENT duplicate errno alternative: `errorInfo[1] == 1062`.',
+            'string 1062 coexistence' => 'CURRENT duplicate errno alternative: `errorInfo[1] === "1062"`.',
+            'numeric representation terminology' => 'CURRENT duplicate errno rule: any numeric representation is accepted.',
+        ];
+        foreach ($currentContradictions as $case => $alternative) {
+            $mutated = $this->insertPhaseThreeCurrentArchitectureUnit($design, $identityRegistry, $alternative);
             $this->assertNotSame(
                 [],
-                $this->phaseThreeP0RollbackSetContract($mutatedPlan)['violations'],
+                $this->phaseThreeDuplicateErrnoAuthorityContract($mutated)['violations'],
                 $case,
             );
         }
 
-        $this->assertSame([], $this->phaseThreeP0RollbackSetContract($plan)['violations'], 'RB6 exact set equality');
-        $this->assertSame([], $this->phaseThreeP0RollbackSetContract($plan.$lineEnding)['violations'], 'RB10 canonical document');
+        $historical = $design.$lineEnding.
+            '<!-- phase-iii-architecture-authority classification=HISTORICAL id=phase-iii-duplicate-errno-cast-history-v1 -->'.$lineEnding.
+            'Historical, superseded cast example: `(int) errorInfo[1] === 1062` was rejected.';
+        $literal = $this->insertPhaseThreeCurrentArchitectureUnit(
+            $design,
+            $identityRegistry,
+            "```text{$lineEnding}(int) errorInfo[1] === 1062{$lineEnding}```",
+        );
+        $this->assertSame([], $this->phaseThreeDuplicateErrnoAuthorityContract($historical)['violations'], 'Historical control');
+        $this->assertSame([], $this->phaseThreeDuplicateErrnoAuthorityContract($literal)['violations'], 'Literal control');
+    }
+
+    public function test_phase_three_p0_b001_database_exception_boundary_is_sanitized_and_unchained(): void
+    {
+        $design = $this->readDocument('docs/IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md');
+        $plan = $this->readDocument('docs/PHASE_9C6_5C3D1_RUNTIME_IMPLEMENTATION_PLAN.md');
+        $canonical = $this->phaseThreeP0DesignClosureContract($design, $plan);
+        $this->assertSame([], $canonical['violations'], implode(PHP_EOL, $canonical['violations']));
+
+        foreach ([
+            'rethrow unchanged' => ['`ineligible_database_errors` | `ROLLBACK_AND_SANITIZE_NO_RETRY`', '`ineligible_database_errors` | `ROLLBACK_AND_RETHROW_UNCHANGED`'],
+            'wrong domain code' => ['`sanitized_domain_error` | `source_profile_persistence_failed`', '`sanitized_domain_error` | `generic_database_error`'],
+            'chain previous exception' => ['`original_exception_retention` | `FORBIDDEN_PREVIOUS_NULL`', '`original_exception_retention` | `CHAIN_PREVIOUS_QUERY_EXCEPTION`'],
+            'retain raw sql' => ['`sensitive_exception_material` | `SQL_BINDINGS_DIAGNOSTIC_IDENTITY_CANONICAL_BYTES_URLS_CREDENTIALS_FORBIDDEN`', '`sensitive_exception_material` | `RAW_SQL_ALLOWED`'],
+            'log original exception' => ['`logging_telemetry_boundary` | `SANITIZED_DOMAIN_EVENT_ONLY`', '`logging_telemetry_boundary` | `ORIGINAL_QUERY_EXCEPTION_ALLOWED`'],
+            'retain exhaustion cause' => ['`terminal_exception_retention` | `FORBIDDEN_PREVIOUS_NULL`', '`terminal_exception_retention` | `CHAIN_FOURTH_QUERY_EXCEPTION`'],
+        ] as $case => [$search, $replacement]) {
+            $mutated = $this->replaceStructuralText($design, $search, $replacement);
+            $this->assertNotSame([], $this->phaseThreeP0DesignClosureContract($mutated, $plan)['violations'], $case);
+        }
+
+        foreach (['rethrow unchanged', 'chain the original QueryException', 'log original SQL', 'log bindings', 'retain diagnostic for debugging'] as $forbidden) {
+            $this->assertStringNotContainsString($forbidden, $design);
+        }
+    }
+
+    public function test_phase_three_p0_b002_composite_feed_parent_authority_is_exact_and_fail_closed(): void
+    {
+        $design = $this->readDocument('docs/IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md');
+        $plan = $this->readDocument('docs/PHASE_9C6_5C3D1_RUNTIME_IMPLEMENTATION_PLAN.md');
+        $canonical = $this->phaseThreeP0DesignClosureContract($design, $plan);
+        $this->assertSame([], $canonical['violations'], implode(PHP_EOL, $canonical['violations']));
+        $this->assertSame($this->expectedPhaseThreeSourceProfileFeedOwnershipSemantics(), $canonical['feed_ownership']);
+
+        $mutations = [
+            'B002-01 reversed parent order' => ['`parent_key_columns` | `id>supplier_id`', '`parent_key_columns` | `supplier_id>id`'],
+            'B002-02 non-unique parent authority' => ['`parent_key_uniqueness` | `UNIQUE`', '`parent_key_uniqueness` | `NON_UNIQUE`'],
+            'B002-03 missing parent key' => ['`parent_key_name` | `uq_supplier_feed_id_supplier`', '`parent_key_name` | `MISSING`'],
+            'B002-04 independent parent FKs' => ['`ownership_authority` | `ONE_COMPOSITE_FK`', '`ownership_authority` | `TWO_INDEPENDENT_FKS`'],
+            'B002-05 historical migration modification' => ['`parent_key_change` | `ADDITIVE_HISTORICAL_MIGRATION_UNCHANGED`', '`parent_key_change` | `HISTORICAL_MIGRATION_MODIFIED`'],
+            'B002-06 permissive delete cascade' => ['`on_delete` | `RESTRICT`', '`on_delete` | `CASCADE`'],
+        ];
+        foreach ($mutations as $case => [$search, $replacement]) {
+            $mutated = $this->replaceStructuralText($design, $search, $replacement);
+            $this->assertNotSame([], $this->phaseThreeP0DesignClosureContract($mutated, $plan)['violations'], $case);
+        }
+
+        $reorderedPlan = $this->replaceStructuralText($plan, 'P0 / P0-02', 'P0-02 / P0');
+        $this->assertNotSame([], $this->phaseThreeP0DesignClosureContract($design, $reorderedPlan)['violations']);
+    }
+
+    public function test_phase_three_p0_b003_prefix_downgrade_authority_is_exact_and_fail_closed(): void
+    {
+        $design = $this->readDocument('docs/IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md');
+        $plan = $this->readDocument('docs/PHASE_9C6_5C3D1_RUNTIME_IMPLEMENTATION_PLAN.md');
+        $canonical = $this->phaseThreeP0DesignClosureContract($design, $plan);
+        $this->assertSame([], $canonical['violations'], implode(PHP_EOL, $canonical['violations']));
+        $this->assertSame($this->expectedPhaseThreeP0PrefixDowngradeSemantics(), $canonical['prefix_downgrade']);
+        $this->assertCount(9, $canonical['migration_rows']);
+        $this->assertCount(9, $canonical['artifact_rows']);
+        $this->assertCount(10, $canonical['prefix_rows']);
+
+        $mutations = [
+            'B003-01 arbitrary subset rollback' => ['`arbitrary_subset_rollback` | `FORBIDDEN`', '`arbitrary_subset_rollback` | `ALLOWED`'],
+            'B003-02 out-of-order rollback' => ['`downgrade_eligibility` | `TERMINAL_MIGRATION_ONLY`', '`downgrade_eligibility` | `ANY_APPLIED_MIGRATION`'],
+            'B003-03 later migration tolerated' => ['`unexpected_later_artifact` | `REJECT_BEFORE_DDL`', '`unexpected_later_artifact` | `IGNORE`'],
+            'B003-04 process-wide cache' => ['`cached_authorization` | `FORBIDDEN`', '`cached_authorization` | `PROCESS_WIDE_STATIC`'],
+            'B003-05 DDL before validation' => ['`pre_ddl_validation` | `COMPLETE_BEFORE_FIRST_DDL`', '`pre_ddl_validation` | `DDL_THEN_VALIDATE`'],
+            'B003-06 non-pristine rows accepted' => ['`append_only_table_pristine` | `ZERO_ROWS_REQUIRED`', '`append_only_table_pristine` | `ROWS_ALLOWED`'],
+        ];
+        foreach ($mutations as $case => [$search, $replacement]) {
+            $mutated = $this->replaceStructuralText($design, $search, $replacement);
+            $this->assertNotSame([], $this->phaseThreeP0DesignClosureContract($mutated, $plan)['violations'], $case);
+        }
+
+        $laterMigrationAccepted = $this->replaceStructuralText(
+            $plan,
+            'profile table zero rows and P3-P9 absent; drop profile artifacts -> P1',
+            'profile table zero rows; later migrations may remain; drop profile artifacts -> P1',
+        );
+        $this->assertNotSame([], $this->phaseThreeP0DesignClosureContract($design, $laterMigrationAccepted)['violations']);
+    }
+
+    public function test_phase_three_p0_b003_normalized_schema_signatures_are_closed_world(): void
+    {
+        $design = $this->readDocument('docs/IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md');
+        $plan = $this->readDocument('docs/PHASE_9C6_5C3D1_RUNTIME_IMPLEMENTATION_PLAN.md');
+        $canonical = $this->phaseThreeP0DesignClosureContract($design, $plan);
+        $this->assertSame([], $canonical['violations'], implode(PHP_EOL, $canonical['violations']));
+        $this->assertSame($this->expectedPhaseThreeP0SchemaSignatureSemantics(), $canonical['schema_signatures']);
+
+        $mutations = [
+            'malformed same-name column' => ['`same_name_malformed` | `REJECT_BEFORE_DDL`', '`same_name_malformed` | `ACCEPT_COLUMN_TYPE_DRIFT`'],
+            'malformed same-name index' => ['`comparison` | `EXACT_BYTES_AND_HARDCODED_SHA256`', '`comparison` | `NAME_ONLY`'],
+            'malformed FK' => ['`inventory_bijection` | `NORMATIVE_SCHEMA_EXACTLY_EQUALS_SIGNATURE_REGISTRY`', '`inventory_bijection` | `SUBSET_ALLOWED`'],
+            'malformed CHECK' => ['`expression_normalization` | `LF_AND_EDGE_ASCII_WHITESPACE_ONLY`', '`expression_normalization` | `SEMANTIC_REWRITE`'],
+            'malformed trigger' => ['`definer_authority` | `IGNORED_DEPLOYMENT_ACCOUNT_METADATA`', '`definer_authority` | `IGNORE_ALL_TRIGGER_CONTEXT`'],
+            'unknown created-table object' => ['`unknown_created_table_object` | `REJECT_BEFORE_DDL`', '`unknown_created_table_object` | `IGNORE`'],
+            'unknown shared-table object' => ['`unknown_shared_table_object` | `REJECT_BEFORE_DDL`', '`unknown_shared_table_object` | `IGNORE`'],
+            'missing baseline' => ['`missing_baseline_object` | `REJECT_BEFORE_DDL`', '`missing_baseline_object` | `INFER_FROM_CANDIDATE`'],
+            'candidate derived expected hash' => ['`expected_authority` | `INDEPENDENT_HARDCODED_NEVER_CANDIDATE_DERIVED`', '`expected_authority` | `CANDIDATE_DERIVED`'],
+            'loose namespace search' => ['`created_table_namespace` | `STRUCTURAL_EXACT_TABLE_COMMENT_OWNER`', '`created_table_namespace` | `TABLE_NAME_SUBSTRING`'],
+        ];
+        foreach ($mutations as $case => [$search, $replacement]) {
+            $mutated = $this->replaceStructuralText($design, $search, $replacement);
+            $this->assertNotSame([], $this->phaseThreeP0DesignClosureContract($mutated, $plan)['violations'], $case);
+        }
+    }
+
+    public function test_phase_three_p0_b003_coordinator_owns_ddl_and_rejects_reentrancy(): void
+    {
+        $design = $this->readDocument('docs/IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md');
+        $plan = $this->readDocument('docs/PHASE_9C6_5C3D1_RUNTIME_IMPLEMENTATION_PLAN.md');
+        $canonical = $this->phaseThreeP0DesignClosureContract($design, $plan);
+        $this->assertSame([], $canonical['violations'], implode(PHP_EOL, $canonical['violations']));
+        $this->assertSame($this->expectedPhaseThreeP0DowngradeCoordinatorSemantics(), $canonical['downgrade_coordinator']);
+
+        foreach ([
+            'caller callback' => ['`caller_supplied_ddl` | `FORBIDDEN`', '`caller_supplied_ddl` | `CLOSURE_ALLOWED`'],
+            'arbitrary step' => ['`step_universe` | `P0_01>P0_02>P0_03>P0_04>P0_05>P0_06>P0_07>P0_08>P0_09`', '`step_universe` | `ARBITRARY_STRING`'],
+            'wait for guard' => ['`guard_wait_seconds` | `0`', '`guard_wait_seconds` | `30`'],
+            'process local mutex' => ['`guard_kind` | `MYSQL_NAMED_LOCK_SAME_DEDICATED_CONNECTION`', '`guard_kind` | `PROCESS_STATIC_BOOLEAN`'],
+            'nested downgrade' => ['`nested_invocation` | `phase_three_p0_nested_downgrade_forbidden`', '`nested_invocation` | `ALLOWED`'],
+            'guard release omitted' => ['`guard_release` | `FINALLY_EXACT_RELEASE_LOCK`', '`guard_release` | `BEST_EFFORT`'],
+            'cached authorization' => ['`authorization_scope` | `INVOCATION_LOCAL_NON_SERIALIZABLE_ONE_STEP`', '`authorization_scope` | `STATIC_REUSABLE`'],
+            'DDL before prefix proof' => ['`pre_ddl_sequence` | `GUARD>ENUMERATE>NORMALIZE>EXACT_PREFIX>TERMINAL_STEP>PRISTINE_DEPENDENCIES`', '`pre_ddl_sequence` | `GUARD>DDL>VALIDATE`'],
+            'false rollback claim' => ['`post_ddl_failure` | `phase_three_p0_downgrade_postcondition_failed`', '`post_ddl_failure` | `ROLLBACK_SUCCEEDED`'],
+        ] as $case => [$search, $replacement]) {
+            $mutated = $this->replaceStructuralText($design, $search, $replacement);
+            $this->assertNotSame([], $this->phaseThreeP0DesignClosureContract($mutated, $plan)['violations'], $case);
+        }
+    }
+
+    public function test_phase_three_p0_concrete_schema_oracle_is_complete_independent_and_bidirectional(): void
+    {
+        $design = $this->readDocument('docs/IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md');
+        $plan = $this->readDocument('docs/PHASE_9C6_5C3D1_RUNTIME_IMPLEMENTATION_PLAN.md');
+        $oracle = $this->phaseThreeP0ConcreteOracleContract($design, $plan);
+
+        $this->assertSame([], $oracle['violations'], implode(PHP_EOL, $oracle['violations']));
+        $this->assertCount(375, $oracle['objects']);
+        $this->assertCount(17, $oracle['states']);
+        $this->assertCount(15, $oracle['operations']);
+        $this->assertSame($this->expectedPhaseThreeP0StateHashes(), $oracle['state_hashes']);
+        $this->assertSame([
+            'BASELINE' => 207,
+            'P0-01' => 1,
+            'P0-02' => 33,
+            'P0-03' => 34,
+            'P0-04' => 19,
+            'P0-05' => 15,
+            'P0-06' => 30,
+            'P0-07' => 12,
+            'P0-08' => 10,
+            'P0-09' => 14,
+        ], $oracle['owner_counts']);
+
+        $baseline = $oracle['states']['P0_BASELINE'];
+        $this->assertSame(207, $baseline['object_count']);
+        $this->assertSame([
+            'table' => 4,
+            'column' => 108,
+            'index' => 42,
+            'foreign_key' => 15,
+            'check' => 35,
+            'trigger' => 3,
+        ], $baseline['object_counts']);
+
+        foreach ($oracle['objects'] as $record) {
+            $this->assertNotSame('', $record['canonical_json']);
+            $this->assertMatchesRegularExpression('/\A[0-9a-f]{64}\z/', $record['sha256']);
+            if ($record['signature']['type'] === 'check') {
+                $this->assertNotSame('', $record['signature']['clause']);
+            }
+            if ($record['signature']['type'] === 'trigger') {
+                $this->assertNotSame('', $record['signature']['action_statement']);
+            }
+        }
+
+        $p1Ids = array_column($oracle['state_members']['P1'], 'id');
+        $p0Ids = array_column($oracle['state_members']['P0'], 'id');
+        $this->assertSame(['index:supplier_feeds:uq_supplier_feed_id_supplier'], array_values(array_diff($p1Ids, $p0Ids)));
+        $p001 = array_values(array_filter(
+            $oracle['objects'],
+            static fn (array $record): bool => $record['object_id'] === 'index:supplier_feeds:uq_supplier_feed_id_supplier',
+        ));
+        $this->assertCount(1, $p001);
+        $this->assertSame([
+            'type' => 'index',
+            'table' => 'supplier_feeds',
+            'name' => 'uq_supplier_feed_id_supplier',
+            'non_unique' => 0,
+            'index_type' => 'BTREE',
+            'parts' => [
+                ['sequence' => 1, 'column' => 'id', 'expression' => null, 'sub_part' => null, 'collation' => 'A'],
+                ['sequence' => 2, 'column' => 'supplier_id', 'expression' => null, 'sub_part' => null, 'collation' => 'A'],
+            ],
+        ], $p001[0]['signature']);
+
+        $p002 = array_values(array_filter(
+            $oracle['objects'],
+            static fn (array $record): bool => $record['owner'] === 'P0-02',
+        ));
+        $this->assertCount(33, $p002);
+        $p002Types = array_count_values(array_column(array_column($p002, 'signature'), 'type'));
+        ksort($p002Types);
+        $this->assertSame([
+            'check' => 6,
+            'column' => 18,
+            'foreign_key' => 1,
+            'index' => 5,
+            'table' => 1,
+            'trigger' => 2,
+        ], $p002Types);
+        $p002Fk = array_values(array_filter(
+            $p002,
+            static fn (array $record): bool => $record['object_id'] === 'foreign_key:supplier_import_source_profiles:fk_import_source_profile_feed_owner',
+        ));
+        $this->assertCount(1, $p002Fk);
+        $this->assertSame([
+            'type' => 'foreign_key',
+            'name' => 'fk_import_source_profile_feed_owner',
+            'child_table' => 'supplier_import_source_profiles',
+            'child_columns' => ['supplier_feed_id', 'supplier_id'],
+            'parent_table' => 'supplier_feeds',
+            'parent_columns' => ['id', 'supplier_id'],
+            'update_rule' => 'RESTRICT',
+            'delete_rule' => 'RESTRICT',
+        ], $p002Fk[0]['signature']);
+    }
+
+    public function test_phase_three_p0_partial_ddl_and_connection_loss_recovery_authority_is_exact(): void
+    {
+        $design = $this->readDocument('docs/IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md');
+        $plan = $this->readDocument('docs/PHASE_9C6_5C3D1_RUNTIME_IMPLEMENTATION_PLAN.md');
+        $oracle = $this->phaseThreeP0ConcreteOracleContract($design, $plan);
+
+        $this->assertSame([], $oracle['violations'], implode(PHP_EOL, $oracle['violations']));
+        $this->assertSame([
+            'P0-01-DOWN-01',
+            'P0-02-DOWN-01',
+            'P0-03-DOWN-01',
+            'P0-04-DOWN-01',
+            'P0-05-DOWN-01',
+            'P0-06-DOWN-01',
+            'P0-07-DOWN-01',
+            'P0-07-DOWN-02',
+            'P0-07-DOWN-03',
+            'P0-08-DOWN-01',
+            'P0-08-DOWN-02',
+            'P0-08-DOWN-03',
+            'P0-09-DOWN-01',
+            'P0-09-DOWN-02',
+            'P0-09-DOWN-03',
+        ], $oracle['operation_ids_sorted']);
+        $this->assertSame([
+            'P7_DOWN_1',
+            'P7_DOWN_2',
+            'P8_DOWN_1',
+            'P8_DOWN_2',
+            'P9_DOWN_1',
+            'P9_DOWN_2',
+        ], $oracle['partial_states_sorted']);
+        $this->assertSame('DROP TABLE `supplier_import_source_profiles`', $oracle['operations']['P0-02-DOWN-01']['sql']);
+        $this->assertStringContainsString('chk_snapshot_generation_qualification_tuple', $oracle['operations']['P0-08-DOWN-02']['sql']);
+        $this->assertStringContainsString('chk_import_claim_processing_time_order', $oracle['operations']['P0-08-DOWN-03']['sql']);
+
+        foreach ([
+            'never retries blindly' => 'never retries blindly',
+            'new session reacquires lock' => 'A replacement session must reacquire the lock',
+            'session lock release' => 'MySQL session termination releases its named lock',
+            'release zero' => 'phase_three_p0_schema_guard_release_not_owned',
+            'release null' => 'phase_three_p0_schema_guard_release_unavailable',
+            'unknown outcome' => 'phase_three_p0_connection_outcome_unknown',
+            'evidence event' => 'phase_three_p0_downgrade_evidence_v1',
+            'exact evidence order' => '`event_version>invocation_id>step>initial_state>target_state>completed_ddl_ids>last_verified_state>partial_state>connection_status>mutex_acquire>mutex_release>primary_outcome>secondary_codes`',
+            'unknown state' => '`UNCLASSIFIED_P0_SCHEMA_STATE`',
+            'single statement Slice 1' => 'P0-02 downgrade is deliberately one statement',
+        ] as $case => $authority) {
+            $this->assertStringContainsString($authority, $design, $case);
+        }
+    }
+
+    public function test_phase_three_p0_concrete_oracle_rejects_unseen_schema_and_recovery_mutations(): void
+    {
+        $design = $this->readDocument('docs/IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md');
+        $plan = $this->readDocument('docs/PHASE_9C6_5C3D1_RUNTIME_IMPLEMENTATION_PLAN.md');
+        $mutations = [
+            'wrong type' => ['"column_type":"bigint unsigned"', '"column_type":"bigint"'],
+            'wrong default' => ['"default_kind":"SQL_NULL"', '"default_kind":"LITERAL"'],
+            'wrong collation' => ['"collation":"utf8mb4_unicode_ci"', '"collation":"utf8mb4_general_ci"'],
+            'wrong ordinal' => ['"ordinal":1,"name":"id"', '"ordinal":2,"name":"id"'],
+            'altered uniqueness' => ['"non_unique":0', '"non_unique":1'],
+            'altered FK action' => ['"update_rule":"RESTRICT"', '"update_rule":"CASCADE"'],
+            'altered FK target' => ['"parent_table":"suppliers"', '"parent_table":"users"'],
+            'altered CHECK body' => ['"clause":"((`active_attempt_token_hash` is null)', '"clause":"((`active_attempt_token_hash_broken` is null)'],
+            'altered trigger body' => ['"action_statement":"BEGIN\\n  IF', '"action_statement":"BEGIN\\n  SET @unsafe = 1;\\n  IF'],
+            'altered trigger timing' => ['"timing":"BEFORE"', '"timing":"AFTER"'],
+            'changed prefix hash' => ['8ed9f3d479812a2807abcc23411bad1fd60cd495566a94416352f0c4640bf447', 'ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff'],
+            'wrong prefix membership' => ['"memberships":["P9","P9_DOWN_1"', '"memberships":["P0","P9","P9_DOWN_1"'],
+            'placeholder signature' => ['"sha256":"007cc9bdbbe5f585ce6a73e0dee2795d3a3923550353971642211cea48f7b2b5"', '"sha256":"TBD"'],
+            'candidate-derived expected hash' => ["It may not derive, refresh, bless or\nreplace them from migration DDL", 'It may derive expected values from candidate migration DDL'],
+            'repeat committed DDL' => ['"next_operation":"P0-09-DOWN-02"', '"next_operation":"P0-09-DOWN-01"'],
+            'arbitrary operator SQL' => ['"sql":"DROP TRIGGER', '"sql":"SET @operator_sql = 1; DROP TRIGGER'],
+            'false rollback success' => ['An invocation reports success only after all required', 'An invocation may report success before all required'],
+        ];
+        foreach ($mutations as $case => [$search, $replacement]) {
+            $this->assertStringContainsString($search, $design, "Missing mutation seed: {$case}");
+            $mutated = preg_replace('/'.preg_quote($search, '/').'/', $replacement, $design, 1);
+            $this->assertIsString($mutated);
+            $this->assertNotSame([], $this->phaseThreeP0ConcreteOracleContract($mutated, $plan)['violations'], $case);
+        }
+
+        $objectStart = '<!-- phase-iii-p0-object-signature-registry classification=CURRENT id=phase-iii-p0-object-signatures-v1 -->';
+        $this->assertNotSame([], $this->phaseThreeP0ConcreteOracleContract(
+            str_replace($objectStart, $objectStart."\n{\"registry_id\":\"unknown:index\",\"object_id\":\"index:supplier_products:unknown\",\"owner\":\"BASELINE\",\"memberships\":[\"P0\"],\"signature\":{},\"canonical_json\":\"{}\",\"sha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}", $design),
+            $plan,
+        )['violations'], 'Unknown index must reject.');
+    }
+
+    public function test_phase_three_p0_oracle_metadata_is_closed_world_and_bidirectionally_complete(): void
+    {
+        $design = $this->readDocument('docs/IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md');
+        $plan = $this->readDocument('docs/PHASE_9C6_5C3D1_RUNTIME_IMPLEMENTATION_PLAN.md');
+        $canonical = $this->phaseThreeP0ConcreteOracleContract($design, $plan);
+
+        $this->assertSame([], $canonical['violations'], implode(PHP_EOL, $canonical['violations']));
+        $this->assertSame($this->expectedPhaseThreeP0OracleMetadataSha256(), $canonical['metadata_sha256'], 'OR17 canonical metadata must pass.');
+        $this->assertCount(375, array_unique(array_column($canonical['objects'], 'registry_id')), 'OR17 registry IDs must be globally unique.');
+
+        $objectsMarker = ['phase-iii-p0-object-signature-registry', 'phase-iii-p0-object-signatures-v1'];
+        $statesMarker = ['phase-iii-p0-state-signature-registry', 'phase-iii-p0-state-signatures-v1'];
+        $operationsMarker = ['phase-iii-p0-downgrade-operation-registry', 'phase-iii-p0-downgrade-operations-v1'];
+        $mutations = [
+            'OR1 noncanonical registry_id' => [...$objectsMarker, static function (array &$records): void {
+                $records[0]['registry_id'] = 'noncanonical';
+            }],
+            'OR2 duplicate registry_id' => [...$objectsMarker, static function (array &$records): void {
+                $records[1]['registry_id'] = $records[0]['registry_id'];
+            }],
+            'OR3 swapped registry_id' => [...$objectsMarker, static function (array &$records): void {
+                [$records[0]['registry_id'], $records[1]['registry_id']] = [$records[1]['registry_id'], $records[0]['registry_id']];
+            }],
+            'OR4 swapped exact owners' => [...$objectsMarker, static function (array &$records): void {
+                $first = array_search('P0-01', array_column($records, 'owner'), true);
+                $second = array_search('P0-02', array_column($records, 'owner'), true);
+                [$records[$first]['owner'], $records[$second]['owner']] = [$records[$second]['owner'], $records[$first]['owner']];
+            }],
+            'OR5 unknown owner' => [...$objectsMarker, static function (array &$records): void {
+                $records[0]['owner'] = 'P0-UNKNOWN';
+            }],
+            'OR6 wrong known classification' => [...$statesMarker, static function (array &$records): void {
+                $index = array_search('P9', array_column($records, 'state'), true);
+                $records[$index]['classification'] = 'RECOGNIZED_PARTIAL';
+            }],
+            'OR7 unknown classification' => [...$statesMarker, static function (array &$records): void {
+                $records[0]['classification'] = 'UNKNOWN_AUTHORITY';
+            }],
+            'OR8 alternate plausible responsibility' => [...$operationsMarker, static function (array &$records): void {
+                $records[0]['responsibility'] = 'TRANSCRIBE_EXACT_SQL_AND_VERIFY_RESULT';
+            }],
+            'OR9 unknown responsibility' => [...$operationsMarker, static function (array &$records): void {
+                $records[0]['responsibility'] = 'UNKNOWN_RESPONSIBILITY';
+            }],
+            'OR10 omitted affected object' => [...$operationsMarker, static function (array &$records): void {
+                array_pop($records[1]['affected_objects']);
+            }],
+            'OR11 unknown affected object' => [...$operationsMarker, static function (array &$records): void {
+                $records[0]['affected_objects'][] = [
+                    'object_id' => 'index:supplier_products:unknown',
+                    'before_sha256' => str_repeat('a', 64),
+                    'after_sha256' => null,
+                ];
+            }],
+            'OR12 known object from another operation' => [...$operationsMarker, static function (array &$records): void {
+                $records[0]['affected_objects'][0] = $records[3]['affected_objects'][0];
+            }],
+            'OR13 swapped equal-cardinality affected sets' => [...$operationsMarker, static function (array &$records): void {
+                [$records[0]['affected_objects'], $records[3]['affected_objects']] = [$records[3]['affected_objects'], $records[0]['affected_objects']];
+            }],
+            'OR14 swapped precondition tuple' => [...$operationsMarker, static function (array &$records): void {
+                [$records[0]['precondition_state'], $records[1]['precondition_state']] = [$records[1]['precondition_state'], $records[0]['precondition_state']];
+                [$records[0]['precondition_sha256'], $records[1]['precondition_sha256']] = [$records[1]['precondition_sha256'], $records[0]['precondition_sha256']];
+            }],
+            'OR15 swapped result tuple' => [...$operationsMarker, static function (array &$records): void {
+                [$records[0]['result_state'], $records[1]['result_state']] = [$records[1]['result_state'], $records[0]['result_state']];
+                [$records[0]['result_sha256'], $records[1]['result_sha256']] = [$records[1]['result_sha256'], $records[0]['result_sha256']];
+            }],
+            'OR16 duplicate affected object' => [...$operationsMarker, static function (array &$records): void {
+                $records[1]['affected_objects'][] = $records[1]['affected_objects'][0];
+            }],
+        ];
+
+        foreach ($mutations as $case => [$marker, $id, $mutator]) {
+            $mutated = $this->mutatePhaseThreeP0JsonlRegistry($design, $marker, $id, $mutator);
+            $this->assertNotSame([], $this->phaseThreeP0ConcreteOracleContract($mutated, $plan)['violations'], $case);
+        }
+    }
+
+    public function test_phase_three_p0_migration_and_prefix_registries_are_exact_across_authorities(): void
+    {
+        $design = $this->readDocument('docs/IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md');
+        $plan = $this->readDocument('docs/PHASE_9C6_5C3D1_RUNTIME_IMPLEMENTATION_PLAN.md');
+        $canonical = $this->phaseThreeP0DesignClosureContract($design, $plan);
+
+        $this->assertSame([], $canonical['violations'], implode(PHP_EOL, $canonical['violations']));
+        $this->assertSame($this->expectedPhaseThreeP0MigrationRows(), $canonical['migration_rows']);
+        $this->assertSame($this->expectedPhaseThreeP0ArtifactRows(), $canonical['artifact_rows']);
+        $this->assertSame($this->expectedPhaseThreeP0PrefixRows(), $canonical['prefix_rows']);
+        $this->assertStringContainsString('The revised minimal Slice 1 is exactly P0-01 plus P0-02', $plan);
+        $this->assertStringContainsString(
+            'all ten still-`NOT SPECIFIED` operational-policy bounds',
+            preg_replace('/\s+/', ' ', $plan) ?? $plan,
+        );
+
+        $mutatedArtifact = $this->replaceStructuralText(
+            $design,
+            '`uq_supplier_feed_id_supplier(id>supplier_id)`',
+            '`uq_supplier_feed_id_supplier(supplier_id>id)`',
+        );
+        $this->assertNotSame([], $this->phaseThreeP0DesignClosureContract($mutatedArtifact, $plan)['violations']);
+
+        $mutatedPlanArtifact = $this->replaceStructuralText(
+            $plan,
+            '`fk_supplier_product_revision_product_scope`',
+            '`fk_supplier_product_revision_product_scope_alias`',
+        );
+        $this->assertNotSame([], $this->phaseThreeP0DesignClosureContract($design, $mutatedPlanArtifact)['violations']);
+    }
+
+    public function test_phase_three_p0_runtime_plan_has_independent_bof_to_eof_structural_authority(): void
+    {
+        $plan = $this->readDocument('docs/PHASE_9C6_5C3D1_RUNTIME_IMPLEMENTATION_PLAN.md');
+        $canonical = $this->phaseThreeClosedRuntimePlanContract($plan);
+        $this->assertSame([], $canonical['violations'], implode(PHP_EOL, $canonical['violations']));
+        $this->assertSame('CANONICAL_RUNTIME_PLAN', $canonical['inventory']['classification']);
+        $this->assertTrue($canonical['inventory']['bof_covered']);
+        $this->assertTrue($canonical['inventory']['eof_covered']);
+        $this->assertSame(0, $canonical['inventory']['byte_gaps']);
+
+        $expected = $this->expectedPhaseThreeRuntimePlanInventory();
+        $this->assertStringNotContainsString($expected['byte_fingerprint'], $plan);
+        $this->assertStringNotContainsString($expected['unit_fingerprint'], $plan);
+        foreach (['bless', 'regenerate', 'update-fixtures', 'refresh oracle'] as $selfAuthorization) {
+            $this->assertStringNotContainsString($selfAuthorization, strtolower($plan));
+        }
+
+        $inMemoryCandidate = $plan."\n\nCandidate-only sentinel outside every focused registry.";
+        $this->assertNotSame(
+            [],
+            $this->phaseThreeClosedRuntimePlanContract($inMemoryCandidate)['violations'],
+            'An in-memory candidate must be evaluated directly rather than replaced by a disk reread.',
+        );
+    }
+
+    public function test_phase_three_p0_runtime_plan_rejects_fresh_lexical_zero_and_structural_mutations(): void
+    {
+        $plan = $this->readDocument('docs/PHASE_9C6_5C3D1_RUNTIME_IMPLEMENTATION_PLAN.md');
+        $fragments = [
+            'B001 loose classifier' => 'A storage rejection may authorize another draw without naming one exact object.',
+            'B001 fifth attempt' => 'A fifth draw may follow the fourth rejected draw.',
+            'B001 chained exception' => 'A persistence failure may retain its originating throwable for diagnosis.',
+            'B001 raw diagnostic' => 'Diagnostic text may be attached to failure telemetry.',
+            'B001 generic error' => 'A generic storage failure code is sufficient at the repository boundary.',
+            'B002 independent ownership' => 'Two independent membership checks are equivalent to one ordered tuple.',
+            'B002 reverse order' => 'The ownership pair may be stored in inverse order.',
+            'B003 names only' => 'Schema comparison may rely on object names without comparing object bodies.',
+            'B003 arbitrary callback' => 'A caller may supply executable teardown behavior to the coordinator.',
+            'B003 concurrent wait' => 'Another teardown may wait for the active one and then continue.',
+            'B003 candidate baseline' => 'Observed database objects may define the expected baseline.',
+            'B003 unknown table' => 'An unknown marked table may remain during teardown.',
+            'B003 changed check' => 'A changed predicate with the expected name may be accepted.',
+            'B003 changed trigger' => 'A changed trigger body with the expected name may be accepted.',
+            'neutral free prose' => 'This neutral sentence is not part of any approved structural unit inventory.',
+        ];
+        foreach ($fragments as $case => $fragment) {
+            $this->assertSame([], $this->phaseThreeSemanticAssertions($fragment), "{$case}: lexical candidate delta must be zero.");
+            $mutated = $plan."\n\n".$fragment;
+            $this->assertNotSame([], $this->phaseThreeClosedRuntimePlanContract($mutated)['violations'], $case);
+        }
+
+        $allocationParagraph = "This future allocation is additive and dormant. It is not part of the deployed\nPhase I ten-table count and does not amend any Phase I migration.";
+        $p001 = $this->expectedPhaseThreeP0MigrationRows()[0];
+        $p002 = $this->expectedPhaseThreeP0MigrationRows()[1];
+        $structuralMutations = [
+            'arbitrary BOF prose' => "Unapproved prefix.\n\n".$plan,
+            'arbitrary EOF prose' => $plan."\n\nUnapproved suffix.",
+            'unknown section' => $plan."\n\n## Unapproved runtime section\n\nUnapproved body.",
+            'changed heading' => $this->replaceStructuralText($plan, '## Future Phase III-P0 provenance migration allocation', '## Alternative Phase III-P0 provenance allocation'),
+            'deleted paragraph' => $this->replaceStructuralText($plan, $allocationParagraph, ''),
+            'duplicated paragraph' => $this->replaceStructuralText($plan, $allocationParagraph, $allocationParagraph."\n\n".$allocationParagraph),
+            'moved paragraph' => str_replace($allocationParagraph."\n\n", '', $plan)."\n\n".$allocationParagraph,
+            'changed table cell' => $this->replaceStructuralText($plan, 'P0 / P0-02', 'P0 / P0-03'),
+            'reordered migration rows' => $this->replaceStructuralText($plan, $p001."\n".$p002, $p002."\n".$p001),
+        ];
+        foreach ($structuralMutations as $case => $mutated) {
+            $this->assertNotSame([], $this->phaseThreeClosedRuntimePlanContract($mutated)['violations'], $case);
+        }
     }
 
     public function test_phase_three_semantic_registries_reject_current_coexistence_contradictions(): void
@@ -2209,7 +2771,7 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
 
         $this->assertSame([], $canonical['violations'], implode(PHP_EOL, $canonical['violations']));
         $this->assertSame('CANONICAL_CURRENT_ARCHITECTURE', $canonical['current_architecture_inventory']['classification']);
-        $this->assertSame(194, $canonical['current_architecture_inventory']['unit_count']);
+        $this->assertSame(276, $canonical['current_architecture_inventory']['unit_count']);
         $this->assertSame(16, $canonical['candidate_count']);
 
         $outsideContradictions = [
@@ -2357,7 +2919,7 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
 
         $this->assertSame([], $canonical['violations'], implode(PHP_EOL, $canonical['violations']));
         $this->assertSame('CANONICAL_ARCHITECTURE_DOCUMENT', $canonical['architecture_document_inventory']['classification']);
-        $this->assertSame(1038, $canonical['architecture_document_inventory']['unit_count']);
+        $this->assertSame(1120, $canonical['architecture_document_inventory']['unit_count']);
         $this->assertSame($expectedRegions, $canonical['architecture_document_inventory']['region_order']);
         $this->assertSame($expectedRegions, array_keys($canonical['architecture_document_inventory']['regions']));
         foreach ($expectedRegions as $position => $id) {
@@ -4529,170 +5091,781 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
     }
 
     /** @return array<int, string> */
-    private function expectedPhaseThreeP0Tables(): array
+    private function expectedPhaseThreeP0MigrationRows(): array
     {
         return [
-            'supplier_import_source_profiles',
-            'supplier_import_source_executions',
-            'supplier_import_source_payload_receipts',
-            'supplier_product_identity_heads',
-            'supplier_product_source_revisions',
+            '| P0-01 / P1 | `*_add_supplier_ownership_key_to_supplier_feeds.php` | add only UNIQUE `uq_supplier_feed_id_supplier(id, supplier_id)` to existing `supplier_feeds`; historical migration unchanged | deployed Phase I/II baseline; existing unsigned-bigint `id` and `supplier_id` | NO; terminal P1 -> P0 only | P0 / P0-02 |',
+            '| P0-02 / P2 | `*_create_supplier_import_source_profiles_table.php` | create `supplier_import_source_profiles` with the exact canonical columns; PRIMARY `id`; `uq_import_source_profile_descriptor`; `uq_import_source_profile_identity`; `uq_import_source_profile_scope`; `ix_import_source_profile_feed_owner_fk`; `fk_import_source_profile_feed_owner`; `trg_import_source_profile_no_update`; `trg_import_source_profile_no_delete` | P0-01 parent key and Phase II canonical serializers | NO; terminal empty P2 -> P1 only | P0-01 / P0-03 |',
+            '| P0-03 / P3 | `*_create_supplier_import_source_executions_table.php` | create `supplier_import_source_executions` with the complete canonical execution columns, unique keys, composite ownership/profile keys, checks and no-update/no-delete triggers | P0-02; locked ImportJob/feed/template and ImportHistory parents | NO; terminal empty P3 -> P2 only | P0-02 / P0-04 |',
+            '| P0-04 / P4 | `*_create_supplier_import_source_payload_receipts_table.php` | create `supplier_import_source_payload_receipts` with the complete canonical one-receipt columns, execution-scope keys, checks and no-update/no-delete triggers | P0-03 execution receipt scope | NO; terminal empty P4 -> P3 only | P0-03 / P0-05 |',
+            '| P0-05 / P5 | `*_create_supplier_product_identity_heads_table.php` | create `supplier_product_identity_heads` with the canonical columns, byte-exact logical key, scope keys, ownership FKs and no-update/no-delete triggers | P0-01 supplier/feed ownership authority | NO; terminal empty P5 -> P4 only | P0-04 / P0-06 |',
+            '| P0-06 / P6 | `*_create_supplier_product_source_revisions_table.php` | create `supplier_product_source_revisions` with the complete canonical revision columns, execution/head composite FKs, temporary exact staging-ID FK, unique keys, checks and no-update/no-delete triggers; P0-07 replaces only that staging-ID FK with composite ownership | P0-03, P0-04 and P0-05 | NO; terminal empty P6 -> P5 only | P0-05 / P0-07 |',
+            '| P0-07 / P7 | `*_add_source_revision_pointers_to_supplier_products_table.php` | add only canonical identity-head/current-revision columns, composite unique/FK/index/check authority and guarded source-projection/pointer triggers to existing `supplier_products` | P0-05 and P0-06; legacy rows remain pair-null | NO; terminal all-null P7 -> P6 only | P0-06 / P0-08 |',
+            '| P0-08 / P8 | `*_add_source_authority_to_snapshot_claims_and_generations.php` | add only claim `cohort_source_identity`, exact five-field claim source binding, generation-to-claim composite source authority, indexes, checks, FKs and immutable transition triggers | P0-02 and deployed claim/generation tables | NO; terminal no-evidence P8 -> P7 only | P0-07 / P0-09 |',
+            '| P0-09 / P9 | `*_add_policy_v2_authority_to_snapshot_claims_and_generations.php` | add only canonical policy-v2 key/version/fingerprint authority, composite generation binding, indexes, checks, FKs and immutable transition triggers | P0-08 and the ten-bound policy-v2 contract; numeric values remain NOT SPECIFIED | NO; terminal no-evidence P9 -> P8 only | P0-08 / FULL P0 |',
+        ];
+    }
+
+    /** @return array<int, string> */
+    private function expectedPhaseThreeP0ArtifactRows(): array
+    {
+        return [
+            '| P0-01 | `supplier_feeds`; existing `id>supplier_id` | `uq_supplier_feed_id_supplier(id>supplier_id)` | none |',
+            '| P0-02 | `supplier_import_source_profiles`: `id>supplier_id>supplier_feed_id>source_identity>descriptor_version>source_locator_contract_key>source_locator_contract_version>source_locator_key>source_locator_canonical_bytes>source_access_scope_key>feed_type>importer_key>importer_version>mapping_contract_version>mapping_canonical_bytes>mapping_contract_fingerprint>source_descriptor_fingerprint>created_at` | `PRIMARY(id)`; `uq_import_source_profile_descriptor(supplier_id>supplier_feed_id>source_descriptor_fingerprint)`; `uq_import_source_profile_identity(source_identity)`; `uq_import_source_profile_scope(id>supplier_id>supplier_feed_id>source_identity>source_descriptor_fingerprint)`; `ix_import_source_profile_feed_owner_fk(supplier_feed_id>supplier_id)` | `fk_import_source_profile_feed_owner(supplier_feed_id>supplier_id)`; `chk_import_source_profile_descriptor_version`; `chk_import_source_profile_source_identity`; `chk_import_source_profile_locator_key`; `chk_import_source_profile_access_scope`; `chk_import_source_profile_feed_type`; `chk_import_source_profile_fingerprints`; `trg_import_source_profile_no_update`; `trg_import_source_profile_no_delete` |',
+            '| P0-03 | `supplier_import_source_executions`: `id>supplier_id>supplier_feed_id>import_job_id>import_history_id>supplier_import_source_profile_id>source_identity>source_descriptor_fingerprint>importer_key>importer_version>import_job_identity_version>import_job_identity_canonical_bytes>import_job_identity_fingerprint>resolved_source_context_version>captured_at>source_execution_fingerprint>created_at` | `PRIMARY(id)`; `uq_import_source_execution_fingerprint(source_execution_fingerprint)`; `uq_import_source_execution_history(import_history_id)`; `uq_import_source_execution_scope(id>supplier_id>supplier_feed_id>source_identity>source_descriptor_fingerprint>source_execution_fingerprint)`; `uq_import_source_execution_receipt_scope(id>source_execution_fingerprint)`; `ix_import_source_execution_profile_fk(supplier_import_source_profile_id>supplier_id>supplier_feed_id>source_identity>source_descriptor_fingerprint)`; `ix_import_source_execution_feed_owner_fk(supplier_feed_id>supplier_id)`; `ix_import_source_execution_job_scope_fk(import_job_id>supplier_id>supplier_feed_id)` | `fk_import_source_execution_profile`; `fk_import_source_execution_feed_owner`; `fk_import_source_execution_job_scope`; `fk_import_source_execution_history`; `chk_import_source_execution_versions`; `chk_import_source_execution_fingerprints`; `trg_import_source_execution_no_update`; `trg_import_source_execution_no_delete` |',
+            '| P0-04 | `supplier_import_source_payload_receipts`: `id>supplier_import_source_execution_id>source_execution_fingerprint>receipt_version>accepted_payload_bytes>accepted_payload_sha256>payload_receipt_fingerprint>created_at` | `PRIMARY(id)`; `uq_import_source_payload_receipt_execution(supplier_import_source_execution_id)`; `uq_import_source_payload_receipt_fingerprint(payload_receipt_fingerprint)`; `ix_import_source_payload_receipt_execution_fk(supplier_import_source_execution_id>source_execution_fingerprint)` | `fk_import_source_payload_receipt_execution`; `chk_import_source_payload_receipt_version`; `chk_import_source_payload_receipt_bytes`; `chk_import_source_payload_receipt_fingerprints`; `trg_import_source_payload_receipt_no_update`; `trg_import_source_payload_receipt_no_delete` |',
+            '| P0-05 | `supplier_product_identity_heads`: `id>supplier_id>supplier_feed_id>supplier_sku_bytes>created_at` | `PRIMARY(id)`; `uq_supplier_product_identity_head(supplier_id>supplier_feed_id>supplier_sku_bytes)`; `uq_supplier_product_identity_head_scope(id>supplier_id>supplier_feed_id)`; `uq_supplier_product_identity_head_revision_scope(id>supplier_id>supplier_feed_id>supplier_sku_bytes)`; `ix_supplier_product_identity_head_feed_owner_fk(supplier_feed_id>supplier_id)` | `fk_supplier_product_identity_head_feed_owner`; `chk_supplier_product_identity_head_sku_bytes`; `trg_supplier_product_identity_head_no_update`; `trg_supplier_product_identity_head_no_delete` |',
+            '| P0-06 | `supplier_product_source_revisions`: `id>supplier_product_identity_head_id>supplier_product_id>supplier_import_source_execution_id>supplier_id>supplier_feed_id>supplier_sku_bytes>source_identity>source_descriptor_fingerprint>source_execution_fingerprint>source_member_identity_hash>source_row_fingerprint>staging_projection_fingerprint>revision_fingerprint>observed_at>created_at` | `PRIMARY(id)`; `uq_supplier_product_revision_execution_head(supplier_import_source_execution_id>supplier_product_identity_head_id)`; `uq_supplier_product_revision_pointer_scope(id>supplier_product_id>supplier_product_identity_head_id>supplier_id>supplier_feed_id)`; `ix_supplier_product_revision_head_fk(supplier_product_identity_head_id>supplier_id>supplier_feed_id>supplier_sku_bytes)`; `ix_supplier_product_revision_execution_fk(supplier_import_source_execution_id>supplier_id>supplier_feed_id>source_identity>source_descriptor_fingerprint>source_execution_fingerprint)`; `ix_supplier_product_revision_product_id_fk(supplier_product_id)` | `fk_supplier_product_revision_head`; `fk_supplier_product_revision_execution`; `fk_supplier_product_revision_product_id`; `chk_supplier_product_revision_source_identity`; `chk_supplier_product_revision_fingerprints`; `trg_supplier_product_revision_no_update`; `trg_supplier_product_revision_no_delete` |',
+            '| P0-07 | `supplier_products`: `supplier_product_identity_head_id>current_source_revision_id`; no new revision columns | `uq_supplier_product_identity_head_assignment(supplier_product_identity_head_id)`; `uq_supplier_product_source_revision_scope(id>supplier_product_identity_head_id>supplier_id>supplier_feed_id)`; `ix_supplier_product_identity_head_fk(supplier_product_identity_head_id>supplier_id>supplier_feed_id)`; `ix_supplier_product_current_revision_fk(current_source_revision_id>id>supplier_product_identity_head_id>supplier_id>supplier_feed_id)`; `ix_supplier_product_revision_product_scope_fk(supplier_product_id>supplier_product_identity_head_id>supplier_id>supplier_feed_id)` on `supplier_product_source_revisions` | `fk_supplier_product_identity_head`; `fk_supplier_product_current_revision`; replace `fk_supplier_product_revision_product_id` with `fk_supplier_product_revision_product_scope`; `chk_supplier_product_source_revision_pointers`; `trg_supplier_product_source_projection_guard` |',
+            '| P0-08 | `supplier_import_execution_claims`: `cohort_source_identity`; no new generation column | `uq_import_execution_claim_id_cohort_source(id>cohort_source_identity)`; `ix_snapshot_generation_claim_source(supplier_import_execution_claim_id>source_identity)` | replace `chk_import_claim_cohort_authorization_tuple`; replace `chk_import_claim_processing_owner`; `chk_import_execution_claim_cohort_source_identity`; `trg_import_execution_claim_cohort_source_immutable`; `fk_snapshot_generation_claim_source` |',
+            '| P0-09 | `supplier_import_execution_claims`: `cohort_bounds_policy_key>cohort_bounds_policy_version>cohort_bounds_policy_fingerprint`; `supplier_offer_snapshot_generations`: `bounds_policy_key>bounds_policy_version>bounds_policy_fingerprint` | `uq_import_claim_id_bounds_policy(id>cohort_bounds_policy_key>cohort_bounds_policy_version>cohort_bounds_policy_fingerprint)`; `ix_snapshot_generation_bounds_policy(supplier_import_execution_claim_id>bounds_policy_key>bounds_policy_version>bounds_policy_fingerprint)` | `chk_import_claim_cohort_policy_authority`; `chk_import_claim_cohort_policy_identity`; replace `chk_import_claim_processing_owner`; `trg_import_execution_claim_cohort_policy_immutable`; `chk_snapshot_generation_bounds_policy_identity`; `fk_snapshot_generation_bounds_policy` |',
+        ];
+    }
+
+    /** @return array<int, string> */
+    private function expectedPhaseThreeP0PrefixRows(): array
+    {
+        return [
+            '| P0 | no Phase III-P0-owned artifact exists | baseline; no P0 downgrade exists |',
+            '| P1 | P0-01 parent UNIQUE key exists exactly | profile table and every later group absent; remove parent key -> P0 |',
+            '| P2 | P1 plus complete P0-02 source-profile table, keys, FK, index and triggers | profile table zero rows and P3-P9 absent; drop profile artifacts -> P1 |',
+            '| P3 | P2 plus complete P0-03 source-execution table authority | execution table zero rows, no receipt/revision child and P4-P9 absent; drop execution artifacts -> P2 |',
+            '| P4 | P3 plus complete P0-04 payload-receipt table authority | receipt table zero rows and P5-P9 absent; drop receipt artifacts -> P3 |',
+            '| P5 | P4 plus complete P0-05 logical-head table authority | head table zero rows, no revision/pointer child and P6-P9 absent; drop head artifacts -> P4 |',
+            '| P6 | P5 plus complete P0-06 source-revision table authority | revision table zero rows, no current pointer and P7-P9 absent; drop revision artifacts -> P5 |',
+            '| P7 | P6 plus complete P0-07 `supplier_products` pointer authority | every new pointer null and P8-P9 absent; remove pointer triggers/FKs/checks/indexes/columns -> P6 |',
+            '| P8 | P7 plus complete P0-08 claim/generation source authority | every new source field null, no source-bound generation evidence and P9 absent; remove source authority -> P7 |',
+            '| P9 | P8 plus complete P0-09 policy-v2 authority | every new policy field null and no policy-v2-bound generation evidence; remove policy authority -> P8 |',
         ];
     }
 
     /**
-     * @return array{allocation_set: array<int, string>, guard_set: array<int, string>, violations: array<int, string>}
+     * @return array{
+     *     identity_retry: array<string, string>,
+     *     feed_ownership: array<string, string>,
+     *     prefix_downgrade: array<string, string>,
+     *     schema_signatures: array<string, string>,
+     *     downgrade_coordinator: array<string, string>,
+     *     runtime_plan_inventory: array<string, mixed>,
+     *     migration_rows: array<int, string>,
+     *     artifact_rows: array<int, string>,
+     *     prefix_rows: array<int, string>,
+     *     violations: array<int, string>
+     * }
      */
-    private function phaseThreeP0RollbackSetContract(string $plan): array
+    private function phaseThreeP0DesignClosureContract(string $design, string $plan): array
     {
-        $expected = $this->expectedPhaseThreeP0Tables();
-        $violations = [];
-        $markerIntentCount = 0;
-        $validMarkers = [];
-
-        foreach (preg_split('/\R/', $plan) ?: [] as $lineNumber => $line) {
-            if (! str_contains(strtolower($line), 'phase-iii-p0-table-set-registry')) {
-                continue;
-            }
-
-            $markerIntentCount++;
-            if (preg_match(
-                '/^<!-- phase-iii-p0-table-set-registry classification=CURRENT id=(?<id>phase-iii-p0-(?:new-table-allocation|destructive-downgrade-table-set)-v1) -->$/',
-                $line,
-                $start,
-            ) === 1) {
-                $validMarkers[] = ['type' => 'start', 'id' => $start['id']];
-
-                continue;
-            }
-            if (preg_match(
-                '/^<!-- phase-iii-p0-table-set-registry:end id=(?<id>phase-iii-p0-(?:new-table-allocation|destructive-downgrade-table-set)-v1) -->$/',
-                $line,
-                $end,
-            ) === 1) {
-                $validMarkers[] = ['type' => 'end', 'id' => $end['id']];
-
-                continue;
-            }
-
-            $violations[] = 'Malformed Phase III-P0 table-set registry marker at line '.($lineNumber + 1).'.';
-        }
-        if ($markerIntentCount !== 4 || count($validMarkers) !== 4) {
-            $violations[] = 'Exactly two complete CURRENT Phase III-P0 table-set registries are required.';
-        }
-        foreach (['phase-iii-p0-new-table-allocation-v1', 'phase-iii-p0-destructive-downgrade-table-set-v1'] as $id) {
-            $starts = array_filter($validMarkers, static fn (array $marker): bool => $marker['type'] === 'start' && $marker['id'] === $id);
-            $ends = array_filter($validMarkers, static fn (array $marker): bool => $marker['type'] === 'end' && $marker['id'] === $id);
-            if (count($starts) !== 1 || count($ends) !== 1) {
-                $violations[] = "Phase III-P0 registry {$id} must have exactly one CURRENT start and one end marker.";
-            }
-        }
-
-        $allocation = $this->structuralMarkdownTable(
-            $plan,
-            '| Allocation position | Phase III-P0 new table |',
-            '| :---: | :--- |',
-            'Phase III-P0 new-table allocation registry',
-            2,
-            '<!-- phase-iii-p0-table-set-registry:end id=phase-iii-p0-new-table-allocation-v1 -->',
+        $identityExpected = $this->expectedPhaseThreeSourceIdentityRetrySemantics();
+        $identity = $this->phaseThreeClosedSemanticRegistry(
+            $design,
+            'phase-iii-source-identity-retry-contract-v1',
+            '| Source identity retry semantic key | Canonical value |',
+            '| :--- | ---: |',
+            $identityExpected,
+            'source-identity-retry',
         );
-        $guard = $this->structuralMarkdownTable(
-            $plan,
-            '| Guard position | Phase III-P0 guarded table | Required empty/pristine evidence |',
-            '| :---: | :--- | :--- |',
-            'Phase III-P0 destructive-downgrade registry',
-            3,
-            '<!-- phase-iii-p0-table-set-registry:end id=phase-iii-p0-destructive-downgrade-table-set-v1 -->',
+        $ownershipExpected = $this->expectedPhaseThreeSourceProfileFeedOwnershipSemantics();
+        $ownership = $this->phaseThreeClosedSemanticRegistry(
+            $design,
+            'phase-iii-source-profile-feed-ownership-contract-v1',
+            '| Source profile feed ownership semantic key | Canonical value |',
+            '| :--- | ---: |',
+            $ownershipExpected,
+            'source-profile-feed-ownership',
         );
-        $violations = [...$violations, ...$allocation['violations'], ...$guard['violations']];
-        $allocationRows = $this->phaseThreeP0TableSetRows($allocation['rows'], 2, 'allocation');
-        $guardRows = $this->phaseThreeP0TableSetRows($guard['rows'], 3, 'destructive guard');
-        $violations = [...$violations, ...$allocationRows['violations'], ...$guardRows['violations']];
-        $allocationSet = $allocationRows['tables'];
-        $guardSet = $guardRows['tables'];
+        $prefixExpected = $this->expectedPhaseThreeP0PrefixDowngradeSemantics();
+        $prefix = $this->phaseThreeClosedSemanticRegistry(
+            $design,
+            'phase-iii-p0-prefix-downgrade-contract-v1',
+            '| Phase III-P0 prefix downgrade semantic key | Canonical value |',
+            '| :--- | ---: |',
+            $prefixExpected,
+            'P0-prefix-downgrade',
+        );
+        $signatureExpected = $this->expectedPhaseThreeP0SchemaSignatureSemantics();
+        $signatures = $this->phaseThreeClosedSemanticRegistry(
+            $design,
+            'phase-iii-p0-schema-signature-contract-v1',
+            '| Phase III-P0 schema signature semantic key | Canonical value |',
+            '| :--- | ---: |',
+            $signatureExpected,
+            'P0-schema-signature',
+        );
+        $coordinatorExpected = $this->expectedPhaseThreeP0DowngradeCoordinatorSemantics();
+        $coordinator = $this->phaseThreeClosedSemanticRegistry(
+            $design,
+            'phase-iii-p0-downgrade-coordinator-contract-v1',
+            '| Phase III-P0 downgrade coordinator semantic key | Canonical value |',
+            '| :--- | ---: |',
+            $coordinatorExpected,
+            'P0-downgrade-coordinator',
+        );
+        $runtimePlan = $this->phaseThreeClosedRuntimePlanContract($plan);
 
-        if (count($allocationSet) !== 5 || count(array_unique($allocationSet)) !== 5) {
-            $violations[] = 'Phase III-P0 new-table allocation must contain exactly five unique tables.';
-        }
-        if (count($guardSet) !== 5 || count(array_unique($guardSet)) !== 5) {
-            $violations[] = 'Phase III-P0 destructive guard must contain exactly five unique tables.';
-        }
-        $sortedAllocation = $allocationSet;
-        $sortedGuard = $guardSet;
-        $sortedExpected = $expected;
-        sort($sortedAllocation);
-        sort($sortedGuard);
-        sort($sortedExpected);
-        if ($sortedAllocation !== $sortedExpected) {
-            $violations[] = 'Phase III-P0 allocation set does not match the canonical five-table registry.';
-        }
-        if ($sortedGuard !== $sortedExpected) {
-            $violations[] = 'Phase III-P0 destructive guard set does not match the canonical five-table registry.';
-        }
-        if (array_diff($sortedAllocation, $sortedGuard) !== [] || array_diff($sortedGuard, $sortedAllocation) !== []) {
-            $violations[] = 'Phase III-P0 allocation and destructive-guard table sets are not exactly equal.';
-        }
-        foreach ($guardRows['evidence'] as $table => $evidence) {
-            if (! str_contains($evidence, 'table exists and contains zero rows')) {
-                $violations[] = "Phase III-P0 destructive guard lacks exact empty/pristine evidence for {$table}.";
+        $designMigration = $this->phaseThreeP0StructuralRegistryRows($design, 'migration');
+        $planMigration = $this->phaseThreeP0StructuralRegistryRows($plan, 'migration');
+        $designArtifact = $this->phaseThreeP0StructuralRegistryRows($design, 'artifact');
+        $planArtifact = $this->phaseThreeP0StructuralRegistryRows($plan, 'artifact');
+        $designPrefix = $this->phaseThreeP0StructuralRegistryRows($design, 'prefix');
+        $planPrefix = $this->phaseThreeP0StructuralRegistryRows($plan, 'prefix');
+        $concreteOracle = $this->phaseThreeP0ConcreteOracleContract($design, $plan);
+        $violations = [
+            ...$identity['violations'],
+            ...$ownership['violations'],
+            ...$prefix['violations'],
+            ...$signatures['violations'],
+            ...$coordinator['violations'],
+            ...$runtimePlan['violations'],
+            ...$designMigration['violations'],
+            ...$planMigration['violations'],
+            ...$designArtifact['violations'],
+            ...$planArtifact['violations'],
+            ...$designPrefix['violations'],
+            ...$planPrefix['violations'],
+            ...$concreteOracle['violations'],
+        ];
+
+        foreach ([
+            'identity retry' => [$identity['values'], $identityExpected],
+            'feed ownership' => [$ownership['values'], $ownershipExpected],
+            'prefix downgrade' => [$prefix['values'], $prefixExpected],
+            'schema signatures' => [$signatures['values'], $signatureExpected],
+            'downgrade coordinator' => [$coordinator['values'], $coordinatorExpected],
+            'design migration registry' => [$designMigration['rows'], $this->expectedPhaseThreeP0MigrationRows()],
+            'plan migration registry' => [$planMigration['rows'], $this->expectedPhaseThreeP0MigrationRows()],
+            'design artifact registry' => [$designArtifact['rows'], $this->expectedPhaseThreeP0ArtifactRows()],
+            'plan artifact registry' => [$planArtifact['rows'], $this->expectedPhaseThreeP0ArtifactRows()],
+            'design prefix registry' => [$designPrefix['rows'], $this->expectedPhaseThreeP0PrefixRows()],
+            'plan prefix registry' => [$planPrefix['rows'], $this->expectedPhaseThreeP0PrefixRows()],
+        ] as $context => [$actual, $expected]) {
+            if ($actual !== $expected) {
+                $violations[] = "Phase III-P0 {$context} does not match exact canonical authority.";
             }
         }
-        if (preg_match('/\bfour new tables\b/i', $plan) === 1) {
-            $violations[] = 'Stale four-table Phase III-P0 rollback declaration remains current.';
+        if (
+            $designMigration['rows'] !== $planMigration['rows']
+            || $designArtifact['rows'] !== $planArtifact['rows']
+            || $designPrefix['rows'] !== $planPrefix['rows']
+        ) {
+            $violations[] = 'Canonical design and subordinate runtime plan Phase III-P0 registries differ.';
         }
+
         $normalizedPlan = preg_replace('/\s+/', ' ', $plan) ?? $plan;
         foreach ([
-            'Every row must prove its predicate before the first destructive DDL statement',
-            'The two structural table sets must be exactly equal as unordered five-member',
-            'does not by itself authorize removal of evidence-bearing columns on existing',
+            'source identity uses fresh 16-byte operating-system CSPRNG output, attempt 1 counts, and the fixed intrinsic maximum is exactly four attempts in one parent-locked repository transaction',
+            'collision classification reads only `QueryException::errorInfo` and requires exact string SQLSTATE `23000`, exact PHP integer driver code `1062`',
+            '`source_profile_persistence_failed` with only ordered metadata `code>sqlstate>driver_code>operation`',
+            '`source_profile_identity_collision_exhausted`',
+            '`uq_supplier_feed_id_supplier(id, supplier_id)` is added to `supplier_feeds` by a new forward migration before profile creation',
+            '`fk_import_source_profile_feed_owner(supplier_feed_id, supplier_id)` with supporting `ix_import_source_profile_feed_owner_fk`, both actions `RESTRICT`',
+            '`database/migrations/support/CanonicalSupplierPhaseThreeP0Schema.php`',
+            'normalized complete P0-P9 signatures over hardcoded baseline and cumulative ownership',
+            '`runTerminalDowngradeStep(P0MigrationStep $step): void`; it accepts no DDL callback',
+            'The revised minimal Slice 1 is exactly P0-01 plus P0-02',
         ] as $authority) {
             if (! str_contains($normalizedPlan, $authority)) {
-                $violations[] = "Missing Phase III-P0 rollback authority: {$authority}.";
+                $violations[] = "Subordinate Phase III-P0 plan is missing exact authority: {$authority}.";
+            }
+        }
+        foreach (['migration 7A', 'migration 7B', 'five structurally registered new tables', 'one migration for Slice 1'] as $stale) {
+            if (str_contains($plan, $stale)) {
+                $violations[] = "Stale Phase III-P0 plan authority remains: {$stale}.";
             }
         }
 
         return [
-            'allocation_set' => $allocationSet,
-            'guard_set' => $guardSet,
+            'identity_retry' => $identity['values'],
+            'feed_ownership' => $ownership['values'],
+            'prefix_downgrade' => $prefix['values'],
+            'schema_signatures' => $signatures['values'],
+            'downgrade_coordinator' => $coordinator['values'],
+            'runtime_plan_inventory' => $runtimePlan['inventory'],
+            'migration_rows' => $designMigration['rows'],
+            'artifact_rows' => $designArtifact['rows'],
+            'prefix_rows' => $designPrefix['rows'],
+            'concrete_oracle' => $concreteOracle,
             'violations' => array_values(array_unique($violations)),
         ];
     }
 
     /**
-     * @param  array<int, string>  $rows
-     * @return array{tables: array<int, string>, evidence: array<string, string>, violations: array<int, string>}
+     * @return array{
+     *     objects: array<int, array<string, mixed>>,
+     *     states: array<string, array<string, mixed>>,
+     *     operations: array<string, array<string, mixed>>,
+     *     state_members: array<string, array<int, array{id: string, sha256: string}>>,
+     *     state_hashes: array<string, string>,
+     *     owner_counts: array<string, int>,
+     *     metadata_sha256: string,
+     *     operation_ids_sorted: array<int, string>,
+     *     partial_states_sorted: array<int, string>,
+     *     violations: array<int, string>
+     * }
      */
-    private function phaseThreeP0TableSetRows(array $rows, int $columns, string $context): array
+    private function phaseThreeP0ConcreteOracleContract(string $design, string $plan): array
     {
-        $tables = [];
-        $evidence = [];
-        $violations = [];
-        foreach ($rows as $position => $row) {
-            $parsed = $this->structuralMarkdownRowCells($row, $columns, "Phase III-P0 {$context}", $position + 1);
-            $violations = [...$violations, ...$parsed['violations']];
-            if ($parsed['cells'] === null) {
+        $objectsBlock = $this->phaseThreeP0JsonlRegistry(
+            $design,
+            'phase-iii-p0-object-signature-registry',
+            'phase-iii-p0-object-signatures-v1',
+        );
+        $statesBlock = $this->phaseThreeP0JsonlRegistry(
+            $design,
+            'phase-iii-p0-state-signature-registry',
+            'phase-iii-p0-state-signatures-v1',
+        );
+        $operationsBlock = $this->phaseThreeP0JsonlRegistry(
+            $design,
+            'phase-iii-p0-downgrade-operation-registry',
+            'phase-iii-p0-downgrade-operations-v1',
+        );
+        $violations = [
+            ...$objectsBlock['violations'],
+            ...$statesBlock['violations'],
+            ...$operationsBlock['violations'],
+        ];
+        $objects = $objectsBlock['records'];
+        $stateRows = $statesBlock['records'];
+        $operationRows = $operationsBlock['records'];
+        if (count($objects) !== 375) {
+            $violations[] = 'Concrete P0 object-signature registry must contain exactly 375 records.';
+        }
+        if (count($stateRows) !== 17) {
+            $violations[] = 'Concrete P0 state registry must contain baseline, ten prefixes and six partial states.';
+        }
+        if (count($operationRows) !== 15) {
+            $violations[] = 'Concrete P0 downgrade registry must contain exactly 15 physical statements.';
+        }
+
+        $signatureKeys = [
+            'table' => ['type', 'table', 'table_type', 'engine', 'row_format', 'table_collation', 'create_options', 'table_comment'],
+            'column' => ['type', 'table', 'ordinal', 'name', 'column_type', 'nullable', 'default_kind', 'default_value', 'extra', 'charset', 'collation', 'generation_expression', 'comment'],
+            'index' => ['type', 'table', 'name', 'non_unique', 'index_type', 'parts'],
+            'foreign_key' => ['type', 'name', 'child_table', 'child_columns', 'parent_table', 'parent_columns', 'update_rule', 'delete_rule'],
+            'check' => ['type', 'name', 'table', 'clause', 'enforced'],
+            'trigger' => ['type', 'name', 'table', 'timing', 'event', 'action_orientation', 'action_statement', 'sql_mode', 'character_set_client', 'collation_connection', 'database_collation'],
+        ];
+        $stateNames = array_keys($this->expectedPhaseThreeP0StateHashes());
+        $objectByKey = [];
+        $registryIds = [];
+        $ownerCounts = [];
+        $membershipClaims = [];
+        foreach ($objects as $index => $record) {
+            $context = "Concrete P0 object record {$index}";
+            if (array_keys($record) !== ['registry_id', 'object_id', 'owner', 'memberships', 'signature', 'canonical_json', 'sha256']) {
+                $violations[] = "{$context} has wrong field order or field set.";
+
                 continue;
             }
-
-            if ($parsed['cells'][0] !== (string) ($position + 1)
-                || preg_match('/^`(?<table>[a-z0-9_]+)`$/', $parsed['cells'][1], $table) !== 1) {
-                $violations[] = "Malformed Phase III-P0 {$context} row ".($position + 1).'.';
+            $objectId = $record['object_id'] ?? null;
+            $registryId = $record['registry_id'] ?? null;
+            $recordHash = $record['sha256'] ?? null;
+            if (! is_string($objectId) || preg_match('/\A[A-Za-z0-9_:]+\z/', $objectId) !== 1) {
+                $violations[] = "{$context} has a non-canonical object_id.";
+            }
+            if (! is_string($registryId)
+                || strlen($registryId) > 128
+                || preg_match('/\A[A-Za-z0-9_:]+@[0-9a-f]{16}\z/', $registryId) !== 1
+                || ! is_string($objectId)
+                || ! is_string($recordHash)
+                || $registryId !== $objectId.'@'.substr($recordHash, 0, 16)) {
+                $violations[] = "{$context} has a non-canonical registry_id.";
+            }
+            if (is_string($registryId) && isset($registryIds[$registryId])) {
+                $violations[] = "Concrete P0 registry_id {$registryId} is duplicated.";
+            }
+            if (is_string($registryId)) {
+                $registryIds[$registryId] = true;
+            }
+            $type = $record['signature']['type'] ?? null;
+            if (! is_string($type) || ! isset($signatureKeys[$type]) || array_keys($record['signature']) !== $signatureKeys[$type]) {
+                $violations[] = "{$context} has wrong normalized signature fields.";
 
                 continue;
             }
-            $tables[] = $table['table'];
-            if ($columns === 3) {
-                $evidence[$table['table']] = $parsed['cells'][2];
+            $canonical = json_encode($record['signature'], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
+            if ($canonical !== $record['canonical_json']) {
+                $violations[] = "{$context} canonical JSON is not a bijective serialization of its signature.";
+            }
+            $hash = hash('sha256', "phase-iii-p0-schema-signature-v1\0".$record['canonical_json']);
+            if ($hash !== $record['sha256']) {
+                $violations[] = "{$context} signature hash is not independently reproducible.";
+            }
+            if (! is_string($record['sha256']) || preg_match('/\A[0-9a-f]{64}\z/', $record['sha256']) !== 1) {
+                $violations[] = "{$context} has a placeholder or malformed SHA-256.";
+            }
+            if ($type === 'check' && ($record['signature']['clause'] ?? '') === '') {
+                $violations[] = "{$context} has an empty CHECK body.";
+            }
+            if ($type === 'trigger' && ($record['signature']['action_statement'] ?? '') === '') {
+                $violations[] = "{$context} has an empty trigger body.";
+            }
+            $key = ($record['object_id'] ?? '').'@'.($record['sha256'] ?? '');
+            if (isset($objectByKey[$key])) {
+                $violations[] = "Concrete P0 object signature {$key} is duplicated.";
+            }
+            $objectByKey[$key] = $record;
+            $owner = $record['owner'] ?? '';
+            $ownerCounts[$owner] = ($ownerCounts[$owner] ?? 0) + 1;
+            if (! is_array($record['memberships']) || $record['memberships'] === [] || count($record['memberships']) !== count(array_unique($record['memberships']))) {
+                $violations[] = "{$context} has empty or duplicate state membership.";
+
+                continue;
+            }
+            foreach ($record['memberships'] as $stateName) {
+                if (! in_array($stateName, $stateNames, true)) {
+                    $violations[] = "{$context} references unknown state {$stateName}.";
+                }
+                $membershipClaims[$stateName][$key] = true;
+            }
+        }
+        ksort($ownerCounts);
+        $expectedOwnerCounts = [
+            'BASELINE' => 207, 'P0-01' => 1, 'P0-02' => 33, 'P0-03' => 34,
+            'P0-04' => 19, 'P0-05' => 15, 'P0-06' => 30, 'P0-07' => 12,
+            'P0-08' => 10, 'P0-09' => 14,
+        ];
+        if ($ownerCounts !== $expectedOwnerCounts) {
+            $violations[] = 'Concrete P0 object ownership is not the exact normative owner inventory.';
+        }
+
+        $states = [];
+        $stateMembers = [];
+        $stateHashes = [];
+        $expectedStateMetadata = $this->expectedPhaseThreeP0StateMetadata();
+        foreach ($stateRows as $index => $record) {
+            $context = "Concrete P0 state record {$index}";
+            if (array_keys($record) !== ['state', 'classification', 'domain', 'object_counts', 'object_count', 'canonical_json', 'sha256']) {
+                $violations[] = "{$context} has wrong field order or field set.";
+
+                continue;
+            }
+            $name = $record['state'] ?? '';
+            if (isset($states[$name])) {
+                $violations[] = "Concrete P0 state {$name} is duplicated.";
+
+                continue;
+            }
+            if (! isset($expectedStateMetadata[$name])) {
+                $violations[] = "{$context} has an unknown state metadata identity.";
+            } elseif (($record['classification'] ?? null) !== $expectedStateMetadata[$name]['classification']
+                || ($record['domain'] ?? null) !== $expectedStateMetadata[$name]['domain']) {
+                $violations[] = "{$context} has wrong classification or hash domain.";
+            }
+            $decoded = json_decode($record['canonical_json'] ?? '', true);
+            if (! is_array($decoded) || array_keys($decoded) !== ['state', 'objects'] || ! is_array($decoded['objects'])) {
+                $violations[] = "{$context} canonical state bytes are malformed.";
+
+                continue;
+            }
+            $canonical = json_encode($decoded, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
+            if ($canonical !== $record['canonical_json']) {
+                $violations[] = "{$context} canonical JSON bytes are not exact.";
+            }
+            $hash = hash('sha256', ($record['domain'] ?? '')."\0".($record['canonical_json'] ?? ''));
+            if ($hash !== ($record['sha256'] ?? null)) {
+                $violations[] = "{$context} state hash is not independently reproducible.";
+            }
+            if (($record['object_count'] ?? null) !== count($decoded['objects'])) {
+                $violations[] = "{$context} object count does not match membership bytes.";
+            }
+            $seenIds = [];
+            $typeCounts = array_fill_keys(['table', 'column', 'index', 'foreign_key', 'check', 'trigger'], 0);
+            $actualClaims = [];
+            foreach ($decoded['objects'] as $member) {
+                if (array_keys($member) !== ['id', 'sha256'] || isset($seenIds[$member['id']])) {
+                    $violations[] = "{$context} has malformed or duplicate ordered membership.";
+
+                    continue;
+                }
+                $seenIds[$member['id']] = true;
+                $key = $member['id'].'@'.$member['sha256'];
+                if (! isset($objectByKey[$key])) {
+                    $violations[] = "{$context} references an absent object signature {$key}.";
+
+                    continue;
+                }
+                if (! in_array($name, $objectByKey[$key]['memberships'], true)) {
+                    $violations[] = "{$context} membership is not bidirectional for {$key}.";
+                }
+                $actualClaims[$key] = true;
+                $typeCounts[$objectByKey[$key]['signature']['type']]++;
+            }
+            $expectedClaims = $membershipClaims[$name] ?? [];
+            ksort($expectedClaims);
+            ksort($actualClaims);
+            if ($expectedClaims !== $actualClaims) {
+                $violations[] = "{$context} registry-to-state membership is not bijective.";
+            }
+            if (($record['object_counts'] ?? null) !== $typeCounts) {
+                $violations[] = "{$context} object-type counts are not exact.";
+            }
+            $expectedInnerName = $name === 'P0_BASELINE' ? 'P0' : $name;
+            if ($decoded['state'] !== $expectedInnerName) {
+                $violations[] = "{$context} canonical state name is wrong.";
+            }
+            $states[$name] = $record;
+            $stateMembers[$name] = $decoded['objects'];
+            $stateHashes[$name] = $record['sha256'];
+        }
+        if ($stateHashes !== $this->expectedPhaseThreeP0StateHashes()) {
+            $violations[] = 'Concrete P0 normal/partial state hashes differ from independent constants.';
+        }
+
+        $normalStateClaims = [];
+        foreach (['P0', 'P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7', 'P8', 'P9'] as $stateName) {
+            foreach ($stateMembers[$stateName] ?? [] as $member) {
+                $normalStateClaims[$stateName][$member['id'].'@'.$member['sha256']] = true;
+            }
+        }
+        $baselineClaims = [];
+        foreach ($stateMembers['P0_BASELINE'] ?? [] as $member) {
+            $baselineClaims[$member['id'].'@'.$member['sha256']] = true;
+        }
+        foreach ($objectByKey as $key => $record) {
+            $expectedOwner = isset($baselineClaims[$key]) ? 'BASELINE' : null;
+            if ($expectedOwner === null) {
+                for ($ordinal = 1; $ordinal <= 9; $ordinal++) {
+                    $previous = 'P'.($ordinal - 1);
+                    $current = 'P'.$ordinal;
+                    if (isset($normalStateClaims[$current][$key]) && ! isset($normalStateClaims[$previous][$key])) {
+                        $expectedOwner = sprintf('P0-%02d', $ordinal);
+
+                        break;
+                    }
+                }
+            }
+            if ($expectedOwner === null || ($record['owner'] ?? null) !== $expectedOwner) {
+                $violations[] = "Concrete P0 object signature {$key} has wrong exact owner attribution.";
             }
         }
 
-        return ['tables' => $tables, 'evidence' => $evidence, 'violations' => $violations];
+        $operations = [];
+        $expectedOperations = $this->expectedPhaseThreeP0DowngradeTransitions();
+        foreach ($operationRows as $index => $record) {
+            $context = "Concrete P0 operation record {$index}";
+            if (array_keys($record) !== ['operation_id', 'precondition_state', 'precondition_sha256', 'responsibility', 'sql', 'statement_atomicity', 'affected_objects', 'result_state', 'result_sha256', 'next_operation']) {
+                $violations[] = "{$context} has wrong field order or field set.";
+
+                continue;
+            }
+            $id = $record['operation_id'] ?? '';
+            if (isset($operations[$id])) {
+                $violations[] = "Concrete P0 operation {$id} is duplicated.";
+
+                continue;
+            }
+            if (! isset($expectedOperations[$id])) {
+                $violations[] = "Concrete P0 operation {$id} is not canonical.";
+
+                continue;
+            }
+            $expected = $expectedOperations[$id];
+            foreach (['precondition_state', 'result_state', 'next_operation'] as $field) {
+                if (($record[$field] ?? null) !== $expected[$field]) {
+                    $violations[] = "{$context} has wrong {$field}.";
+                }
+            }
+            if (($record['precondition_sha256'] ?? null) !== ($stateHashes[$record['precondition_state']] ?? null)
+                || ($record['result_sha256'] ?? null) !== ($stateHashes[$record['result_state']] ?? null)) {
+                $violations[] = "{$context} state hash binding is wrong.";
+            }
+            if (($record['statement_atomicity'] ?? null) !== 'MYSQL_8_4_ATOMIC_DDL' || trim((string) ($record['sql'] ?? '')) === '') {
+                $violations[] = "{$context} lacks exact atomic SQL authority.";
+            }
+            if (($record['responsibility'] ?? null) !== 'TRANSCRIBE_EXACT_SQL_AND_REACH_ONLY_DECLARED_RESULT') {
+                $violations[] = "{$context} has wrong operation responsibility.";
+            }
+            $expectedAffectedObjects = $this->phaseThreeP0AffectedObjectDelta(
+                $stateMembers[$record['precondition_state']] ?? [],
+                $stateMembers[$record['result_state']] ?? [],
+            );
+            if (($record['affected_objects'] ?? null) !== $expectedAffectedObjects) {
+                $violations[] = "{$context} affected_objects is not the exact ordered pre/result state delta.";
+            }
+            $sqlHash = hash('sha256', "phase-iii-p0-downgrade-sql-v1\0".($record['sql'] ?? ''));
+            if ($sqlHash !== ($this->expectedPhaseThreeP0DowngradeSqlHashes()[$id] ?? null)) {
+                $violations[] = "{$context} SQL bytes differ from the independent exact statement hash.";
+            }
+            foreach (['TBD', 'TODO', 'PLACEHOLDER', '...'] as $placeholder) {
+                if (str_contains(strtoupper((string) ($record['sql'] ?? '')), $placeholder)) {
+                    $violations[] = "{$context} contains deferred SQL authority.";
+                }
+            }
+            $operations[$id] = $record;
+        }
+        if (array_keys($operations) !== array_keys($expectedOperations)) {
+            $violations[] = 'Concrete P0 physical DDL ordering differs from the exact 15-operation authority.';
+        }
+
+        $metadataCanonicalJson = $this->phaseThreeP0OracleMetadataCanonicalJson($objects, $stateRows, $operationRows);
+        $metadataSha256 = hash('sha256', "phase-iii-p0-oracle-metadata-v1\0".$metadataCanonicalJson);
+        if (strlen($metadataCanonicalJson) !== 168474) {
+            $violations[] = 'Concrete P0 oracle metadata canonical JSON length is not exact.';
+        }
+        if ($metadataSha256 !== $this->expectedPhaseThreeP0OracleMetadataSha256()) {
+            $violations[] = 'Concrete P0 oracle metadata differs from the independent closed-world aggregate fingerprint.';
+        }
+
+        $normalizedDesign = preg_replace('/\s+/', ' ', $design) ?? $design;
+        foreach ([
+            'It may not derive, refresh, bless or replace them from migration DDL, `information_schema`, `SHOW CREATE`, a candidate database or test output.',
+            'A fresh normal `down()` invocation is the only recovery entry point.',
+            'it never retries blindly',
+            'MySQL session termination releases its named lock',
+            '`phase_three_p0_downgrade_evidence_v1`',
+            'P0-02 downgrade is deliberately one statement',
+            'An invocation reports success only after all required statements are known committed',
+            '`registry_id` is structural authority, not a label.',
+            '`affected_objects` is not descriptive metadata',
+            '72e09a922c429ae861dac607d94a376e91b2f40c3ced2ba40178bef794ab0a6a',
+        ] as $authority) {
+            if (! str_contains($normalizedDesign, $authority)) {
+                $violations[] = "Concrete P0 design is missing exact authority: {$authority}";
+            }
+        }
+        $normalizedPlan = preg_replace('/\s+/', ' ', $plan) ?? $plan;
+        foreach ([
+            'The physical statement inventory is fixed at 15',
+            'Every invocation emits exactly one authoritative synchronous structured event',
+            'P0-02 down is one atomic `DROP TABLE`',
+            'UNCLASSIFIED_P0_SCHEMA_STATE',
+            'No count-only or one-way validation is sufficient.',
+            '72e09a922c429ae861dac607d94a376e91b2f40c3ced2ba40178bef794ab0a6a',
+        ] as $authority) {
+            if (! str_contains($normalizedPlan, $authority)) {
+                $violations[] = "P0 runtime plan is missing exact concrete-oracle authority: {$authority}";
+            }
+        }
+        foreach ($this->expectedPhaseThreeP0StateHashes() as $name => $hash) {
+            if ($name !== 'P0_BASELINE' && ! str_contains($plan, $hash)) {
+                $violations[] = "P0 runtime plan is missing exact {$name} hash.";
+            }
+        }
+
+        $operationIds = array_keys($operations);
+        sort($operationIds);
+        $partialStates = array_values(array_filter(
+            array_keys($states),
+            static fn (string $name): bool => str_contains($name, '_DOWN_'),
+        ));
+        sort($partialStates);
+
+        return [
+            'objects' => $objects,
+            'states' => $states,
+            'operations' => $operations,
+            'state_members' => $stateMembers,
+            'state_hashes' => $stateHashes,
+            'owner_counts' => $ownerCounts,
+            'metadata_sha256' => $metadataSha256,
+            'operation_ids_sorted' => $operationIds,
+            'partial_states_sorted' => $partialStates,
+            'violations' => array_values(array_unique($violations)),
+        ];
+    }
+
+    /**
+     * @param  array<int, array{id: string, sha256: string}>  $before
+     * @param  array<int, array{id: string, sha256: string}>  $after
+     * @return array<int, array{object_id: string, before_sha256: ?string, after_sha256: ?string}>
+     */
+    private function phaseThreeP0AffectedObjectDelta(array $before, array $after): array
+    {
+        $beforeById = [];
+        foreach ($before as $member) {
+            $beforeById[$member['id']] = $member['sha256'];
+        }
+        $afterById = [];
+        foreach ($after as $member) {
+            $afterById[$member['id']] = $member['sha256'];
+        }
+        $objectIds = array_values(array_unique([...array_keys($beforeById), ...array_keys($afterById)]));
+        sort($objectIds, SORT_STRING);
+
+        $delta = [];
+        foreach ($objectIds as $objectId) {
+            $beforeHash = $beforeById[$objectId] ?? null;
+            $afterHash = $afterById[$objectId] ?? null;
+            if ($beforeHash === $afterHash) {
+                continue;
+            }
+            $delta[] = [
+                'object_id' => $objectId,
+                'before_sha256' => $beforeHash,
+                'after_sha256' => $afterHash,
+            ];
+        }
+
+        return $delta;
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $objects
+     * @param  array<int, array<string, mixed>>  $states
+     * @param  array<int, array<string, mixed>>  $operations
+     */
+    private function phaseThreeP0OracleMetadataCanonicalJson(array $objects, array $states, array $operations): string
+    {
+        $metadata = [
+            'version' => 'phase-iii-p0-oracle-metadata-v1',
+            'objects' => array_map(static fn (array $record): array => [
+                'registry_id' => $record['registry_id'] ?? null,
+                'object_id' => $record['object_id'] ?? null,
+                'owner' => $record['owner'] ?? null,
+                'memberships' => $record['memberships'] ?? null,
+            ], $objects),
+            'states' => array_map(static fn (array $record): array => [
+                'state' => $record['state'] ?? null,
+                'classification' => $record['classification'] ?? null,
+                'domain' => $record['domain'] ?? null,
+                'object_counts' => $record['object_counts'] ?? null,
+                'object_count' => $record['object_count'] ?? null,
+                'sha256' => $record['sha256'] ?? null,
+            ], $states),
+            'operations' => array_map(static fn (array $record): array => [
+                'operation_id' => $record['operation_id'] ?? null,
+                'precondition_state' => $record['precondition_state'] ?? null,
+                'precondition_sha256' => $record['precondition_sha256'] ?? null,
+                'responsibility' => $record['responsibility'] ?? null,
+                'statement_atomicity' => $record['statement_atomicity'] ?? null,
+                'affected_objects' => $record['affected_objects'] ?? null,
+                'result_state' => $record['result_state'] ?? null,
+                'result_sha256' => $record['result_sha256'] ?? null,
+                'next_operation' => $record['next_operation'] ?? null,
+            ], $operations),
+        ];
+
+        return json_encode($metadata, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
+    }
+
+    /**
+     * @param  callable(array<int, array<string, mixed>>): void  $mutator
+     */
+    private function mutatePhaseThreeP0JsonlRegistry(
+        string $document,
+        string $marker,
+        string $id,
+        callable $mutator,
+    ): string {
+        $start = "<!-- {$marker} classification=CURRENT id={$id} -->";
+        $end = "<!-- {$marker}:end id={$id} -->";
+        $pattern = '/'.preg_quote($start, '/').'\R```jsonl\R(?<body>.*?)\R```\R'.preg_quote($end, '/').'/s';
+        $this->assertSame(1, preg_match($pattern, $document, $match), "Missing mutation registry {$id}.");
+        $records = array_map(
+            static fn (string $line): array => json_decode($line, true, 512, JSON_THROW_ON_ERROR),
+            preg_split('/\R/', $match['body']) ?: [],
+        );
+        $mutator($records);
+        $body = implode("\n", array_map(
+            static fn (array $record): string => json_encode($record, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR),
+            $records,
+        ));
+        $replacement = $start."\n```jsonl\n".$body."\n```\n".$end;
+        $mutated = preg_replace($pattern, $replacement, $document, 1);
+        $this->assertIsString($mutated);
+
+        return $mutated;
+    }
+
+    /** @return array{records: array<int, array<string, mixed>>, violations: array<int, string>} */
+    private function phaseThreeP0JsonlRegistry(string $document, string $marker, string $id): array
+    {
+        $start = "<!-- {$marker} classification=CURRENT id={$id} -->";
+        $end = "<!-- {$marker}:end id={$id} -->";
+        $violations = [];
+        if (substr_count($document, $start) !== 1 || substr_count($document, $end) !== 1) {
+            return ['records' => [], 'violations' => ["{$marker} requires exactly one exact marker pair."]];
+        }
+        $pattern = '/'.preg_quote($start, '/').'\R```jsonl\R(?<body>.*?)\R```\R'.preg_quote($end, '/').'/s';
+        if (preg_match($pattern, $document, $match) !== 1) {
+            return ['records' => [], 'violations' => ["{$marker} JSONL block is malformed."]];
+        }
+        $records = [];
+        foreach (preg_split('/\R/', $match['body']) ?: [] as $lineNumber => $line) {
+            if ($line === '') {
+                $violations[] = "{$marker} contains an empty JSONL record at line {$lineNumber}.";
+
+                continue;
+            }
+            try {
+                $record = json_decode($line, true, 512, JSON_THROW_ON_ERROR);
+            } catch (\JsonException) {
+                $violations[] = "{$marker} contains invalid JSONL at line {$lineNumber}.";
+
+                continue;
+            }
+            if (! is_array($record)) {
+                $violations[] = "{$marker} contains a non-object record at line {$lineNumber}.";
+
+                continue;
+            }
+            $records[] = $record;
+        }
+
+        return ['records' => $records, 'violations' => $violations];
+    }
+
+    /** @return array{rows: array<int, string>, violations: array<int, string>} */
+    private function phaseThreeP0StructuralRegistryRows(string $document, string $type): array
+    {
+        $definition = match ($type) {
+            'migration' => [
+                'marker' => 'phase-iii-p0-migration-registry',
+                'id' => 'phase-iii-p0-migration-order-v1',
+                'header' => '| Ordinal/state | Exact forward migration | Responsibility and owned artifacts | Dependencies | Independent rollback | Exact predecessor/successor |',
+                'separator' => '| :---: | :--- | --- | --- | :---: | :---: |',
+                'columns' => 6,
+            ],
+            'artifact' => [
+                'marker' => 'phase-iii-p0-artifact-registry',
+                'id' => 'phase-iii-p0-artifact-inventory-v1',
+                'header' => '| Ordinal | Exact tables and columns owned | Exact indexes and keys owned | Exact constraints and triggers owned |',
+                'separator' => '| :---: | --- | --- | --- |',
+                'columns' => 4,
+            ],
+            'prefix' => [
+                'marker' => 'phase-iii-p0-prefix-registry',
+                'id' => 'phase-iii-p0-prefix-states-v1',
+                'header' => '| State | Exact cumulative P0-owned artifact groups | Terminal downgrade prerequisite and result |',
+                'separator' => '| :---: | --- | --- |',
+                'columns' => 3,
+            ],
+            default => throw new \InvalidArgumentException("Unknown Phase III-P0 registry type {$type}."),
+        };
+        $start = "<!-- {$definition['marker']} classification=CURRENT id={$definition['id']} -->";
+        $end = "<!-- {$definition['marker']}:end id={$definition['id']} -->";
+        $candidateCount = 0;
+        foreach (preg_split('/\R/', $document) ?: [] as $line) {
+            if (str_contains(strtolower($line), $definition['marker'])) {
+                $candidateCount++;
+            }
+        }
+        $violations = [];
+        if ($candidateCount !== 2 || substr_count($document, $start) !== 1 || substr_count($document, $end) !== 1) {
+            $violations[] = "Phase III-P0 {$type} registry requires exactly one exact CURRENT marker pair.";
+        }
+        $table = $this->structuralMarkdownTable(
+            $document,
+            $definition['header'],
+            $definition['separator'],
+            "Phase III-P0 {$type} registry",
+            $definition['columns'],
+            $end,
+        );
+
+        return [
+            'rows' => $table['rows'],
+            'violations' => array_values(array_unique([...$violations, ...$table['violations']])),
+        ];
     }
 
     /**
      * @return array{
      *     payload: array<string, string>,
      *     selector: array<string, string>,
+     *     schema_signatures: array<string, string>,
+     *     downgrade_coordinator: array<string, string>,
      *     payload_inventory: array<string, int>,
      *     selector_inventory: array<string, int>,
      *     architecture_document_inventory: array<string, mixed>,
@@ -4734,10 +5907,19 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
 
             $violations[] = 'Malformed Phase III semantic-registry marker at line '.($lineNumber + 1).'.';
         }
-        if ($markerIntentCount !== count($markers) || count($markers) < 4) {
+        $currentSemanticRegistryIds = [
+            'phase-iii-payload-integrity-contract-v1',
+            'phase-iii-import-job-selector-contract-v1',
+            'phase-iii-source-identity-retry-contract-v1',
+            'phase-iii-source-profile-feed-ownership-contract-v1',
+            'phase-iii-p0-prefix-downgrade-contract-v1',
+            'phase-iii-p0-schema-signature-contract-v1',
+            'phase-iii-p0-downgrade-coordinator-contract-v1',
+        ];
+        if ($markerIntentCount !== count($markers) || count($markers) !== count($currentSemanticRegistryIds) * 2) {
             $violations[] = 'Every Phase III semantic-registry marker candidate must be structurally valid.';
         }
-        foreach (['phase-iii-payload-integrity-contract-v1', 'phase-iii-import-job-selector-contract-v1'] as $id) {
+        foreach ($currentSemanticRegistryIds as $id) {
             $starts = array_filter($markers, static fn (array $marker): bool => $marker['type'] === 'start' && $marker['classification'] === 'CURRENT' && $marker['id'] === $id);
             $ends = array_filter($markers, static fn (array $marker): bool => $marker['type'] === 'end' && $marker['id'] === $id);
             if (count($starts) !== 1 || count($ends) !== 1) {
@@ -4753,7 +5935,7 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
             }
         }
         foreach (array_filter($markers, static fn (array $marker): bool => $marker['type'] === 'start' && $marker['classification'] === 'CURRENT') as $marker) {
-            if (! in_array($marker['id'], ['phase-iii-payload-integrity-contract-v1', 'phase-iii-import-job-selector-contract-v1'], true)) {
+            if (! in_array($marker['id'], $currentSemanticRegistryIds, true)) {
                 $violations[] = "Unexpected CURRENT Phase III semantic registry {$marker['id']}.";
             }
         }
@@ -4776,12 +5958,81 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
             $selectorExpected,
             'ImportJob-selector',
         );
-        $violations = [...$violations, ...$payload['violations'], ...$selector['violations']];
+        $identityRetryExpected = $this->expectedPhaseThreeSourceIdentityRetrySemantics();
+        $identityRetry = $this->phaseThreeClosedSemanticRegistry(
+            $design,
+            'phase-iii-source-identity-retry-contract-v1',
+            '| Source identity retry semantic key | Canonical value |',
+            '| :--- | ---: |',
+            $identityRetryExpected,
+            'source-identity-retry',
+        );
+        $feedOwnershipExpected = $this->expectedPhaseThreeSourceProfileFeedOwnershipSemantics();
+        $feedOwnership = $this->phaseThreeClosedSemanticRegistry(
+            $design,
+            'phase-iii-source-profile-feed-ownership-contract-v1',
+            '| Source profile feed ownership semantic key | Canonical value |',
+            '| :--- | ---: |',
+            $feedOwnershipExpected,
+            'source-profile-feed-ownership',
+        );
+        $prefixDowngradeExpected = $this->expectedPhaseThreeP0PrefixDowngradeSemantics();
+        $prefixDowngrade = $this->phaseThreeClosedSemanticRegistry(
+            $design,
+            'phase-iii-p0-prefix-downgrade-contract-v1',
+            '| Phase III-P0 prefix downgrade semantic key | Canonical value |',
+            '| :--- | ---: |',
+            $prefixDowngradeExpected,
+            'P0-prefix-downgrade',
+        );
+        $schemaSignaturesExpected = $this->expectedPhaseThreeP0SchemaSignatureSemantics();
+        $schemaSignatures = $this->phaseThreeClosedSemanticRegistry(
+            $design,
+            'phase-iii-p0-schema-signature-contract-v1',
+            '| Phase III-P0 schema signature semantic key | Canonical value |',
+            '| :--- | ---: |',
+            $schemaSignaturesExpected,
+            'P0-schema-signature',
+        );
+        $downgradeCoordinatorExpected = $this->expectedPhaseThreeP0DowngradeCoordinatorSemantics();
+        $downgradeCoordinator = $this->phaseThreeClosedSemanticRegistry(
+            $design,
+            'phase-iii-p0-downgrade-coordinator-contract-v1',
+            '| Phase III-P0 downgrade coordinator semantic key | Canonical value |',
+            '| :--- | ---: |',
+            $downgradeCoordinatorExpected,
+            'P0-downgrade-coordinator',
+        );
+        $violations = [
+            ...$violations,
+            ...$payload['violations'],
+            ...$selector['violations'],
+            ...$identityRetry['violations'],
+            ...$feedOwnership['violations'],
+            ...$prefixDowngrade['violations'],
+            ...$schemaSignatures['violations'],
+            ...$downgradeCoordinator['violations'],
+        ];
         if ($payload['values'] !== $payloadExpected) {
             $violations[] = 'Payload-integrity semantic registry does not exactly match its canonical key/value authority.';
         }
         if ($selector['values'] !== $selectorExpected) {
             $violations[] = 'ImportJob-selector semantic registry does not exactly match its canonical key/value authority.';
+        }
+        if ($identityRetry['values'] !== $identityRetryExpected) {
+            $violations[] = 'Source-identity-retry semantic registry does not exactly match its canonical key/value authority.';
+        }
+        if ($feedOwnership['values'] !== $feedOwnershipExpected) {
+            $violations[] = 'Source-profile-feed-ownership semantic registry does not exactly match its canonical key/value authority.';
+        }
+        if ($prefixDowngrade['values'] !== $prefixDowngradeExpected) {
+            $violations[] = 'P0-prefix-downgrade semantic registry does not exactly match its canonical key/value authority.';
+        }
+        if ($schemaSignatures['values'] !== $schemaSignaturesExpected) {
+            $violations[] = 'P0-schema-signature semantic registry does not exactly match its canonical key/value authority.';
+        }
+        if ($downgradeCoordinator['values'] !== $downgradeCoordinatorExpected) {
+            $violations[] = 'P0-downgrade-coordinator semantic registry does not exactly match its canonical key/value authority.';
         }
 
         $architectureDocument = $this->phaseThreeClosedArchitectureDocumentContract($design);
@@ -4796,6 +6047,11 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
         return [
             'payload' => $payload['values'],
             'selector' => $selector['values'],
+            'identity_retry' => $identityRetry['values'],
+            'feed_ownership' => $feedOwnership['values'],
+            'prefix_downgrade' => $prefixDowngrade['values'],
+            'schema_signatures' => $schemaSignatures['values'],
+            'downgrade_coordinator' => $downgradeCoordinator['values'],
             'payload_inventory' => $payload['inventory'],
             'selector_inventory' => $selector['inventory'],
             'architecture_document_inventory' => $architectureDocument['inventory'],
@@ -4803,6 +6059,47 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
             'candidate_count' => $diagnostics['candidate_count'],
             'violations' => array_values(array_unique($violations)),
         ];
+    }
+
+    /**
+     * @return array{
+     *     inventory: array<string, mixed>,
+     *     violations: array<int, string>
+     * }
+     */
+    private function phaseThreeClosedRuntimePlanContract(string $plan): array
+    {
+        $expected = $this->expectedPhaseThreeRuntimePlanInventory();
+        $normalizedPlan = str_replace(["\r\n", "\r"], "\n", $plan);
+        $computed = $this->phaseThreeCanonicalArchitectureInventory(
+            $normalizedPlan,
+            'phase-iii-runtime-plan-unit',
+            'phase-iii-runtime-plan-normalized-bytes-v1',
+            'phase-iii-runtime-plan-unit-inventory-v1',
+            4,
+        );
+        $inventory = [
+            'version' => $expected['version'],
+            'classification' => 'CANONICAL_RUNTIME_PLAN',
+            'bof_covered' => true,
+            'eof_covered' => true,
+            'byte_gaps' => 0,
+            ...$computed,
+        ];
+        $violations = [];
+        foreach (['normalized_bytes', 'line_count', 'unit_count', 'unit_categories', 'byte_fingerprint', 'unit_fingerprint'] as $field) {
+            if ($inventory[$field] !== $expected[$field]) {
+                $violations[] = "Closed runtime plan {$field} does not match the independent canonical inventory.";
+            }
+        }
+        if ($normalizedPlan === '' || ! str_starts_with($normalizedPlan, '# ') || str_ends_with($normalizedPlan, "\n\n")) {
+            $violations[] = 'Closed runtime plan must cover exact BOF and EOF without an arbitrary prefix or suffix.';
+        }
+        if ($violations !== []) {
+            $inventory['classification'] = 'RUNTIME_PLAN_STRUCTURAL_MISMATCH';
+        }
+
+        return ['inventory' => $inventory, 'violations' => array_values(array_unique($violations))];
     }
 
     /**
@@ -5036,18 +6333,18 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
     {
         return [
             'version' => 'phase-iii-architecture-document-closed-world-v1',
-            'normalized_bytes' => 489576,
-            'line_count' => 6849,
-            'unit_count' => 1038,
+            'normalized_bytes' => 1871709,
+            'line_count' => 7940,
+            'unit_count' => 1120,
             'unit_categories' => [
-                'CANONICAL_HEADING_EXACT' => 84,
-                'CANONICAL_LITERAL_EXACT' => 69,
-                'CANONICAL_MARKER_EXACT' => 18,
-                'CANONICAL_PARAGRAPH_EXACT' => 810,
-                'CANONICAL_TABLE_EXACT' => 57,
+                'CANONICAL_HEADING_EXACT' => 86,
+                'CANONICAL_LITERAL_EXACT' => 72,
+                'CANONICAL_MARKER_EXACT' => 40,
+                'CANONICAL_PARAGRAPH_EXACT' => 854,
+                'CANONICAL_TABLE_EXACT' => 68,
             ],
-            'byte_fingerprint' => '54eddaf3e5ff1574ed53237157ec6d3792802fa5c55e8e5501d29a1ca3bbdf5f',
-            'unit_fingerprint' => '5809da8985e5cc595727c5ac8088f79d012b90ff201e3808ad245a1e307c31b9',
+            'byte_fingerprint' => 'c0471d3ee067805e8b1660e6fddd41616d19f11cb10c8a21c8ba6f098982948e',
+            'unit_fingerprint' => 'a66365467c3a9ee881388ea4e99fa99086e29af9c4deb83fdb33ae69c114fcf2',
             'region_order' => [
                 'pre-current-reference-history-v1',
                 'current-architecture-authority-v1',
@@ -5073,24 +6370,24 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
                 'current-architecture-authority-v1' => [
                     'id' => 'current-architecture-authority-v1',
                     'position' => 2,
-                    'normalized_bytes' => 82274,
-                    'line_count' => 1359,
-                    'unit_count' => 194,
+                    'normalized_bytes' => 1464195,
+                    'line_count' => 2447,
+                    'unit_count' => 276,
                     'unit_categories' => [
-                        'CANONICAL_HEADING_EXACT' => 14,
-                        'CANONICAL_LITERAL_EXACT' => 15,
-                        'CANONICAL_MARKER_EXACT' => 8,
-                        'CANONICAL_PARAGRAPH_EXACT' => 145,
-                        'CANONICAL_TABLE_EXACT' => 12,
+                        'CANONICAL_HEADING_EXACT' => 16,
+                        'CANONICAL_LITERAL_EXACT' => 18,
+                        'CANONICAL_MARKER_EXACT' => 30,
+                        'CANONICAL_PARAGRAPH_EXACT' => 189,
+                        'CANONICAL_TABLE_EXACT' => 23,
                     ],
-                    'byte_fingerprint' => '26f226784b943bfb09cf74825f3002028429bc7cd96d0aef0dcb34af58bce16b',
-                    'unit_fingerprint' => '371e630360c7309f929803181c12d18f1dfdcab645201a800e96fe57261471b5',
+                    'byte_fingerprint' => 'eb3cf28111b4bab9d5a43233c3b379681af284871e192d8007d736fe9a61454a',
+                    'unit_fingerprint' => 'a6e347dc12827fc78817d852de0e1350e2ee814205ba62a70dcab03720fa566e',
                 ],
                 'post-current-reference-history-v1' => [
                     'id' => 'post-current-reference-history-v1',
                     'position' => 3,
-                    'normalized_bytes' => 163504,
-                    'line_count' => 1744,
+                    'normalized_bytes' => 163716,
+                    'line_count' => 1747,
                     'unit_count' => 279,
                     'unit_categories' => [
                         'CANONICAL_HEADING_EXACT' => 37,
@@ -5099,8 +6396,8 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
                         'CANONICAL_PARAGRAPH_EXACT' => 203,
                         'CANONICAL_TABLE_EXACT' => 20,
                     ],
-                    'byte_fingerprint' => '3f3b83b47bd0c2e8070950f75cf9f1c020817ecbb6a2c7b3e44bd7cce0b3ba18',
-                    'unit_fingerprint' => '9bb15a2f5f2d3d16fb83528c265e48c180aa4d91870991aafa0a70e8f1dde992',
+                    'byte_fingerprint' => 'cb9c1413424bdf9c2eaca71ebd569a971537cb5ee4ead36ce89168f97ade6a17',
+                    'unit_fingerprint' => 'aa9e71c9be4f9154cc2b23dc45e1edc1ea6b339a4fde98dc9b7b86121989ae17',
                 ],
             ],
         ];
@@ -5111,18 +6408,38 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
     {
         return [
             'version' => 'phase-iii-current-architecture-closed-world-v1',
-            'normalized_bytes' => 82274,
-            'line_count' => 1359,
-            'unit_count' => 194,
+            'normalized_bytes' => 1464195,
+            'line_count' => 2447,
+            'unit_count' => 276,
             'unit_categories' => [
-                'CANONICAL_HEADING_EXACT' => 14,
-                'CANONICAL_LITERAL_EXACT' => 15,
-                'CANONICAL_MARKER_EXACT' => 8,
-                'CANONICAL_PARAGRAPH_EXACT' => 145,
-                'CANONICAL_TABLE_EXACT' => 12,
+                'CANONICAL_HEADING_EXACT' => 16,
+                'CANONICAL_LITERAL_EXACT' => 18,
+                'CANONICAL_MARKER_EXACT' => 30,
+                'CANONICAL_PARAGRAPH_EXACT' => 189,
+                'CANONICAL_TABLE_EXACT' => 23,
             ],
-            'byte_fingerprint' => 'b7321947f4429df9554bd4ecfc0fa1d68fea6b3acc8edb9f45a99411a87d4239',
-            'unit_fingerprint' => '2f2e1be2dad168eb9c380bb8070a364df125eb86de2c31e6308ad7c5100eeb08',
+            'byte_fingerprint' => 'e684b6950ba5d9d54d20a499c00784fe34845bc2788c54ebc893b0f82f031cba',
+            'unit_fingerprint' => 'f3305e9c4ad09a9b4d563cb3b7b321daa6f93397df494fb3cd07fd942e10cc9f',
+        ];
+    }
+
+    /** @return array<string, mixed> */
+    private function expectedPhaseThreeRuntimePlanInventory(): array
+    {
+        return [
+            'version' => 'phase-iii-runtime-plan-closed-world-v1',
+            'normalized_bytes' => 109548,
+            'line_count' => 1605,
+            'unit_count' => 488,
+            'unit_categories' => [
+                'CANONICAL_HEADING_EXACT' => 48,
+                'CANONICAL_LITERAL_EXACT' => 2,
+                'CANONICAL_MARKER_EXACT' => 7,
+                'CANONICAL_PARAGRAPH_EXACT' => 415,
+                'CANONICAL_TABLE_EXACT' => 16,
+            ],
+            'byte_fingerprint' => 'd51f82ad74611c195f18bd6eadf66e13252a40982d1ab0633218e7b8e1ad7b07',
+            'unit_fingerprint' => 'ba256ee85656879482edfc64a489c5f83bfeefa194cd6bb05c35f277c5a0f31b',
         ];
     }
 
@@ -5158,6 +6475,311 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
             'mutable_template_reread_after_commit' => 'FORBIDDEN_FOR_HISTORICAL_AUTHORITY',
             'retry_current_selector_reread' => 'FORBIDDEN_FOR_HISTORICAL_AUTHORITY',
             'source_execution_identity_binding' => 'REQUIRED_IMMUTABLE',
+        ];
+    }
+
+    /** @return array<string, string> */
+    private function expectedPhaseThreeSourceIdentityRetrySemantics(): array
+    {
+        return [
+            'identity_byte_width' => '16',
+            'identity_random_source' => 'OPERATING_SYSTEM_CSPRNG_REQUIRED',
+            'initial_generation_attempt' => 'ATTEMPT_1',
+            'maximum_attempt_cardinality' => '4',
+            'eligible_collision' => 'SQLSTATE_23000_MYSQL_1062_UQ_IMPORT_SOURCE_PROFILE_IDENTITY',
+            'classification_source' => 'QUERY_EXCEPTION_ERROR_INFO_ONLY',
+            'sqlstate_match' => 'EXACT_STRING_23000',
+            'driver_code_match' => 'EXACT_PHP_INTEGER_1062',
+            'diagnostic_grammar' => 'MYSQL84_DUPLICATE_ENTRY_TABLE_QUALIFIED_SINGLE_QUOTED_V1',
+            'accepted_key_token' => 'supplier_import_source_profiles.uq_import_source_profile_identity',
+            'rejected_key_token_forms' => 'BARE>DATABASE_QUALIFIED>BACKTICKED>DOUBLE_QUOTED>OTHER_TABLE>OTHER_KEY',
+            'duplicate_payload_handling' => 'OPAQUE_NONEMPTY_NEVER_CAPTURE_STORE_COMPARE_LOG_RETURN',
+            'ineligible_database_errors' => 'ROLLBACK_AND_SANITIZE_NO_RETRY',
+            'sanitized_domain_error' => 'source_profile_persistence_failed',
+            'sanitized_metadata' => 'code>sqlstate>driver_code>operation',
+            'sanitized_operation' => 'INSERT_SUPPLIER_IMPORT_SOURCE_PROFILE',
+            'original_exception_retention' => 'FORBIDDEN_PREVIOUS_NULL',
+            'sensitive_exception_material' => 'SQL_BINDINGS_DIAGNOSTIC_IDENTITY_CANONICAL_BYTES_URLS_CREDENTIALS_FORBIDDEN',
+            'logging_telemetry_boundary' => 'SANITIZED_DOMAIN_EVENT_ONLY',
+            'retry_operation_boundary' => 'SAME_REPOSITORY_OPERATION',
+            'transaction_boundary' => 'ONE_PARENT_LOCKED_TRANSACTION',
+            'eligible_collision_transaction' => 'REUSE_TRANSACTION_AFTER_STATEMENT_ROLLBACK',
+            'fresh_identity_each_attempt' => 'REQUIRED_NEVER_REUSE',
+            'exhaustion_result' => 'ROLLBACK_COMPLETE_TRANSACTION',
+            'terminal_domain_error' => 'source_profile_identity_collision_exhausted',
+            'terminal_exception_retention' => 'FORBIDDEN_PREVIOUS_NULL',
+            'evidence_policy' => 'SAFE_CODE_OPERATION_ORDINAL_MAX_CONSTRAINT_ONLY',
+            'identity_generator_testability' => 'INJECTABLE_DETERMINISTIC_TEST_DOUBLE',
+            'cardinality_authority' => 'INTRINSIC_FIXED_NOT_ENV_QUEUE_FIXTURE_OR_POLICY',
+        ];
+    }
+
+    /** @param array<int, mixed> $errorInfo */
+    private function phaseThreeSourceIdentityCollisionDiagnosticIsEligible(array $errorInfo): bool
+    {
+        if (! isset($errorInfo[0], $errorInfo[1], $errorInfo[2])
+            || ! is_string($errorInfo[0])
+            || $errorInfo[0] !== '23000'
+            || ! is_int($errorInfo[1])
+            || $errorInfo[1] !== 1062
+            || ! is_string($errorInfo[2])) {
+            return false;
+        }
+
+        $prefix = "Duplicate entry '";
+        $suffix = "' for key 'supplier_import_source_profiles.uq_import_source_profile_identity'";
+
+        return str_starts_with($errorInfo[2], $prefix)
+            && str_ends_with($errorInfo[2], $suffix)
+            && strlen($errorInfo[2]) > strlen($prefix) + strlen($suffix);
+    }
+
+    /** @return array{violations: array<int, string>} */
+    private function phaseThreeDuplicateErrnoAuthorityContract(string $design): array
+    {
+        $current = $this->phaseThreeCurrentArchitectureBlock($design);
+        $normative = implode("\n", array_map(
+            static fn (array $block): string => $block['raw'],
+            array_filter(
+                $this->phaseThreeArchitectureStructuralBlocks($current),
+                static fn (array $block): bool => ! $block['literal'],
+            ),
+        ));
+        $normative = str_replace('`', '', preg_replace('/\s+/', ' ', $normative) ?? $normative);
+        $violations = [];
+
+        foreach ([
+            'is_string(errorInfo[0])' => 'Duplicate SQLSTATE authority must require the native PHP string type.',
+            "errorInfo[0] === '23000'" => 'Duplicate SQLSTATE authority must require exact value 23000.',
+            'is_int(errorInfo[1])' => 'Duplicate errno authority must require the native PHP integer type.',
+            'errorInfo[1] === 1062' => 'Duplicate errno authority must require exact integer value 1062.',
+            'accepted native errno representation set is closed to exactly { PHP integer 1062 }' => 'Duplicate errno accepted set must be closed to PHP integer 1062 only.',
+            'classification completes before any sanitized metadata is serialized' => 'Duplicate classification must precede sanitized serialization.',
+            'non-integer driver values' => 'Malformed duplicate errno terminology must reject every non-integer representation.',
+        ] as $authority => $violation) {
+            if (! str_contains($normative, $authority)) {
+                $violations[] = $violation;
+            }
+        }
+
+        foreach ([
+            '/\(int\)\s*errorInfo\[1\]\s*===\s*1062/i' => 'CURRENT duplicate errno authority permits an integer cast.',
+            '/intval\s*\(\s*errorInfo\[1\]\s*\)\s*===\s*1062/i' => 'CURRENT duplicate errno authority permits intval coercion.',
+            '/is_numeric\s*\(\s*errorInfo\[1\]\s*\)/i' => 'CURRENT duplicate errno authority permits is_numeric coercion.',
+            '/errorInfo\[1\]\s*(?<![=])==(?!=)\s*1062/i' => 'CURRENT duplicate errno authority permits loose comparison.',
+            '/errorInfo\[1\]\s*===\s*["\']1062["\']/i' => 'CURRENT duplicate errno authority permits string 1062.',
+            '/any\s+numeric\s+representation\s+is\s+accepted/i' => 'CURRENT duplicate errno authority permits arbitrary numeric representations.',
+        ] as $pattern => $violation) {
+            if (preg_match($pattern, $normative) === 1) {
+                $violations[] = $violation;
+            }
+        }
+
+        return ['violations' => array_values(array_unique($violations))];
+    }
+
+    /** @return array<string, string> */
+    private function expectedPhaseThreeSourceProfileFeedOwnershipSemantics(): array
+    {
+        return [
+            'parent_table' => 'supplier_feeds',
+            'parent_key_columns' => 'id>supplier_id',
+            'parent_key_uniqueness' => 'UNIQUE',
+            'parent_key_name' => 'uq_supplier_feed_id_supplier',
+            'parent_key_migration' => 'P0_01_ADD_SUPPLIER_OWNERSHIP_KEY',
+            'parent_key_change' => 'ADDITIVE_HISTORICAL_MIGRATION_UNCHANGED',
+            'profile_table' => 'supplier_import_source_profiles',
+            'child_columns' => 'supplier_feed_id>supplier_id',
+            'child_index_name' => 'ix_import_source_profile_feed_owner_fk',
+            'child_fk_name' => 'fk_import_source_profile_feed_owner',
+            'on_update' => 'RESTRICT',
+            'on_delete' => 'RESTRICT',
+            'ownership_authority' => 'ONE_COMPOSITE_FK',
+            'independent_fk_fallback' => 'FORBIDDEN',
+            'charset_collation' => 'UNSIGNED_BIGINT_NO_TEXT_COLLATION',
+            'migration_order' => 'P0_01>P0_02',
+        ];
+    }
+
+    /** @return array<string, string> */
+    private function expectedPhaseThreeP0StateHashes(): array
+    {
+        return [
+            'P0_BASELINE' => '77512f147ef9a2fe3889156ac617701c3de7fc7532bb4914329d0735bdfaed79',
+            'P9' => '4269ff10ce6e8a407b2c790d7260e3f9c6db8f48fd06d456d15ae3e5ca4b579d',
+            'P9_DOWN_1' => 'bf96860e7603e774e881f2549d2dfcb9527990a8fe01d88fc417719eb3a37cc0',
+            'P9_DOWN_2' => '1a7b8f70593db3622c7e9477455f7be9f5eba0a8faf42d58a7b98751379f7758',
+            'P8' => 'c2b6d719637a86dccf115e9220b9e2439a986e1da6c23ee51ddda7c5361cc322',
+            'P8_DOWN_1' => '0fc58b8ab89c138d2ab165b1e4a24e812dc582dab0cafff9526b86c2a24c1fec',
+            'P8_DOWN_2' => 'eac8d521280d0debb3ac440247b164dea751ce640c1dc7ea320afeee56197c95',
+            'P7' => '9bea840553b2fd240d0b5bca8206a35e7cb1c3b2a0420a4600c081ca0e0df43d',
+            'P7_DOWN_1' => 'a8c237b9dd49577e8d6ed7ce5e4d0a46b1334d5cbd51931334b3576fbc13e6cd',
+            'P7_DOWN_2' => '953f96d7c9e087fd4e2ed29c402b1439d77da390e2a5f5911a70872a87ce380e',
+            'P6' => '3d201119551344241d222fcd3d9db9d136ace4e321cc1ae36dfc86f410fdb7a9',
+            'P5' => 'd8ca08020090614ebb31d18d7640a1d46f5757eeacc226a1a3b3367584bda058',
+            'P4' => '336d0b4076cee86f8f3efc8d43a29ba020716629e6088f8ec2ec763d061af8f6',
+            'P3' => '9a424ea99f9ddbb68fd420702578fde371e162ff314740c9f856aab5e3926990',
+            'P2' => '45bf4bc963becb79949d88df27dd6223bccf1fcd076beb310f4a2842ba260bc0',
+            'P1' => '8ed9f3d479812a2807abcc23411bad1fd60cd495566a94416352f0c4640bf447',
+            'P0' => '77512f147ef9a2fe3889156ac617701c3de7fc7532bb4914329d0735bdfaed79',
+        ];
+    }
+
+    /** @return array<string, array{classification: string, domain: string}> */
+    private function expectedPhaseThreeP0StateMetadata(): array
+    {
+        return [
+            'P0_BASELINE' => ['classification' => 'BASELINE_AUTHORITY', 'domain' => 'phase-iii-p0-prefix-v1'],
+            'P9' => ['classification' => 'NORMAL_PREFIX', 'domain' => 'phase-iii-p0-prefix-v1'],
+            'P9_DOWN_1' => ['classification' => 'RECOGNIZED_PARTIAL', 'domain' => 'phase-iii-p0-partial-state-v1'],
+            'P9_DOWN_2' => ['classification' => 'RECOGNIZED_PARTIAL', 'domain' => 'phase-iii-p0-partial-state-v1'],
+            'P8' => ['classification' => 'NORMAL_PREFIX', 'domain' => 'phase-iii-p0-prefix-v1'],
+            'P8_DOWN_1' => ['classification' => 'RECOGNIZED_PARTIAL', 'domain' => 'phase-iii-p0-partial-state-v1'],
+            'P8_DOWN_2' => ['classification' => 'RECOGNIZED_PARTIAL', 'domain' => 'phase-iii-p0-partial-state-v1'],
+            'P7' => ['classification' => 'NORMAL_PREFIX', 'domain' => 'phase-iii-p0-prefix-v1'],
+            'P7_DOWN_1' => ['classification' => 'RECOGNIZED_PARTIAL', 'domain' => 'phase-iii-p0-partial-state-v1'],
+            'P7_DOWN_2' => ['classification' => 'RECOGNIZED_PARTIAL', 'domain' => 'phase-iii-p0-partial-state-v1'],
+            'P6' => ['classification' => 'NORMAL_PREFIX', 'domain' => 'phase-iii-p0-prefix-v1'],
+            'P5' => ['classification' => 'NORMAL_PREFIX', 'domain' => 'phase-iii-p0-prefix-v1'],
+            'P4' => ['classification' => 'NORMAL_PREFIX', 'domain' => 'phase-iii-p0-prefix-v1'],
+            'P3' => ['classification' => 'NORMAL_PREFIX', 'domain' => 'phase-iii-p0-prefix-v1'],
+            'P2' => ['classification' => 'NORMAL_PREFIX', 'domain' => 'phase-iii-p0-prefix-v1'],
+            'P1' => ['classification' => 'NORMAL_PREFIX', 'domain' => 'phase-iii-p0-prefix-v1'],
+            'P0' => ['classification' => 'NORMAL_PREFIX', 'domain' => 'phase-iii-p0-prefix-v1'],
+        ];
+    }
+
+    private function expectedPhaseThreeP0OracleMetadataSha256(): string
+    {
+        return '72e09a922c429ae861dac607d94a376e91b2f40c3ced2ba40178bef794ab0a6a';
+    }
+
+    /** @return array<string, array{precondition_state: string, result_state: string, next_operation: string}> */
+    private function expectedPhaseThreeP0DowngradeTransitions(): array
+    {
+        return [
+            'P0-09-DOWN-01' => ['precondition_state' => 'P9', 'result_state' => 'P9_DOWN_1', 'next_operation' => 'P0-09-DOWN-02'],
+            'P0-09-DOWN-02' => ['precondition_state' => 'P9_DOWN_1', 'result_state' => 'P9_DOWN_2', 'next_operation' => 'P0-09-DOWN-03'],
+            'P0-09-DOWN-03' => ['precondition_state' => 'P9_DOWN_2', 'result_state' => 'P8', 'next_operation' => 'NONE_TARGET_PREFIX_VERIFICATION'],
+            'P0-08-DOWN-01' => ['precondition_state' => 'P8', 'result_state' => 'P8_DOWN_1', 'next_operation' => 'P0-08-DOWN-02'],
+            'P0-08-DOWN-02' => ['precondition_state' => 'P8_DOWN_1', 'result_state' => 'P8_DOWN_2', 'next_operation' => 'P0-08-DOWN-03'],
+            'P0-08-DOWN-03' => ['precondition_state' => 'P8_DOWN_2', 'result_state' => 'P7', 'next_operation' => 'NONE_TARGET_PREFIX_VERIFICATION'],
+            'P0-07-DOWN-01' => ['precondition_state' => 'P7', 'result_state' => 'P7_DOWN_1', 'next_operation' => 'P0-07-DOWN-02'],
+            'P0-07-DOWN-02' => ['precondition_state' => 'P7_DOWN_1', 'result_state' => 'P7_DOWN_2', 'next_operation' => 'P0-07-DOWN-03'],
+            'P0-07-DOWN-03' => ['precondition_state' => 'P7_DOWN_2', 'result_state' => 'P6', 'next_operation' => 'NONE_TARGET_PREFIX_VERIFICATION'],
+            'P0-06-DOWN-01' => ['precondition_state' => 'P6', 'result_state' => 'P5', 'next_operation' => 'NONE_TARGET_PREFIX_VERIFICATION'],
+            'P0-05-DOWN-01' => ['precondition_state' => 'P5', 'result_state' => 'P4', 'next_operation' => 'NONE_TARGET_PREFIX_VERIFICATION'],
+            'P0-04-DOWN-01' => ['precondition_state' => 'P4', 'result_state' => 'P3', 'next_operation' => 'NONE_TARGET_PREFIX_VERIFICATION'],
+            'P0-03-DOWN-01' => ['precondition_state' => 'P3', 'result_state' => 'P2', 'next_operation' => 'NONE_TARGET_PREFIX_VERIFICATION'],
+            'P0-02-DOWN-01' => ['precondition_state' => 'P2', 'result_state' => 'P1', 'next_operation' => 'NONE_TARGET_PREFIX_VERIFICATION'],
+            'P0-01-DOWN-01' => ['precondition_state' => 'P1', 'result_state' => 'P0', 'next_operation' => 'NONE_TARGET_PREFIX_VERIFICATION'],
+        ];
+    }
+
+    /** @return array<string, string> */
+    private function expectedPhaseThreeP0DowngradeSqlHashes(): array
+    {
+        return [
+            'P0-09-DOWN-01' => 'd185d32efd235d764912ca8e9c86ed93f05c9c1eba2b42a17667ba0a238801f3',
+            'P0-09-DOWN-02' => 'f331f7256769eeb73dc803376625c972f45d7e65621e6ec4e0e291e20a0063b3',
+            'P0-09-DOWN-03' => '6b09c977c0099a16a2fb185cfae80fa90771962db486ce4022747b7e17653c70',
+            'P0-08-DOWN-01' => '9a86e2fef9e52dc202d45fd1cc16be9ed932ed952dd88293e550d22eb8534363',
+            'P0-08-DOWN-02' => '7a82e1dc5ef358acc751de2e277b7f52b809e3bd7943f797f5ca33189fa7015a',
+            'P0-08-DOWN-03' => '54dd4062b9bfdb72edd6673918021dc1af9d8ead46ce3aeb8024f9b5e4641981',
+            'P0-07-DOWN-01' => '28d5d6f9a81299fe2c9d1e6515eadaa9a39be4aae142bab5910a2eebd5228983',
+            'P0-07-DOWN-02' => 'd2603aa14ecedc2b3cc33461a9b6bd2ebfc50864cb790e6d05d1f0f32e918e9a',
+            'P0-07-DOWN-03' => '09dab898d7998022683aedfadce79825d449623de2d136bd2c3106b70c86723c',
+            'P0-06-DOWN-01' => 'e0682e16ec3133c75efd5a482f92a8ddaf92c9e656aa0eb5f59639268bbf8ce4',
+            'P0-05-DOWN-01' => '82c47afa019ced270a87e1ddf3c30d4fadd38042a5cd6f370fdf2822a28dfd6f',
+            'P0-04-DOWN-01' => '0c765888b90e978f2ff88a6b3957a2f723021e1f55e8d59189abd65ff1871632',
+            'P0-03-DOWN-01' => '1373d2562363712af67de604809fe0b06eb65dd3d51e6392c30652a50bba52d0',
+            'P0-02-DOWN-01' => 'f6f3b1b3fe52e4659f3e68b81eb6e8704a1c2e9e30d740aa65a25952263ef28f',
+            'P0-01-DOWN-01' => 'e0612fe938cec39195a62cb67f217a0dd57a80200ac6c26d61fb53d645693781',
+        ];
+    }
+
+    /** @return array<string, string> */
+    private function expectedPhaseThreeP0PrefixDowngradeSemantics(): array
+    {
+        return [
+            'state_range' => 'P0>P1>P2>P3>P4>P5>P6>P7>P8>P9',
+            'valid_state' => 'EXACT_CANONICAL_PREFIX_ONLY',
+            'prefix_detection' => 'NORMALIZED_COMPLETE_SIGNATURE_AND_BASELINE_INVENTORY',
+            'malformed_state' => 'REJECT_BEFORE_DDL',
+            'same_name_malformed_object' => 'REJECT_BEFORE_DDL',
+            'unknown_p0_object' => 'REJECT_BEFORE_DDL',
+            'unknown_shared_table_addition' => 'REJECT_BEFORE_DDL',
+            'missing_middle_artifact' => 'REJECT_BEFORE_DDL',
+            'unexpected_later_artifact' => 'REJECT_BEFORE_DDL',
+            'downgrade_eligibility' => 'TERMINAL_MIGRATION_ONLY',
+            'reverse_order' => 'P9>P8>P7>P6>P5>P4>P3>P2>P1>P0',
+            'pre_ddl_validation' => 'COMPLETE_BEFORE_FIRST_DDL',
+            'coordinator_class' => 'CanonicalSupplierPhaseThreeP0Schema',
+            'coordinator_location' => 'database_migrations_support',
+            'allowed_callers' => 'P0_MIGRATION_DOWN_ONLY',
+            'authorization_scope' => 'ONE_INVOCATION_ONE_TERMINAL_STEP',
+            'cached_authorization' => 'FORBIDDEN',
+            'arbitrary_ddl_callback' => 'FORBIDDEN',
+            'execution_guard' => 'MYSQL_NAMED_LOCK_ZERO_WAIT',
+            'nested_downgrade' => 'REJECT_BEFORE_DDL',
+            'concurrent_downgrade' => 'REJECT_BEFORE_DDL',
+            'append_only_table_pristine' => 'ZERO_ROWS_REQUIRED',
+            'dependent_children' => 'ABSENT_REQUIRED',
+            'parent_key_removal' => 'LAST_P1_TO_P0',
+            'arbitrary_subset_rollback' => 'FORBIDDEN',
+            'rejected_evidence' => 'PRESERVED_WITH_ZERO_DDL',
+            'post_ddl_failure' => 'TERMINAL_POSTCONDITION_FAILURE_NO_FALSE_ROLLBACK_CLAIM',
+        ];
+    }
+
+    /** @return array<string, string> */
+    private function expectedPhaseThreeP0SchemaSignatureSemantics(): array
+    {
+        return [
+            'signature_domain' => 'phase-iii-p0-schema-signature-v1',
+            'encoding' => 'UTF8_JSON_FIXED_FIELD_ORDER_LF_NO_TERMINAL_LF',
+            'null_boolean_integer' => 'JSON_NULL_TRUE_FALSE_BASE10_CANONICAL',
+            'object_types' => 'TABLE>COLUMN>INDEX>FOREIGN_KEY>CHECK>TRIGGER',
+            'comparison' => 'EXACT_BYTES_AND_HARDCODED_SHA256',
+            'expected_authority' => 'INDEPENDENT_HARDCODED_NEVER_CANDIDATE_DERIVED',
+            'inventory_bijection' => 'NORMATIVE_SCHEMA_EXACTLY_EQUALS_SIGNATURE_REGISTRY',
+            'shared_baseline' => 'FOUR_TABLE_PRE_P0_HARDCODED_COMPLETE',
+            'created_table_namespace' => 'STRUCTURAL_EXACT_TABLE_COMMENT_OWNER',
+            'same_name_malformed' => 'REJECT_BEFORE_DDL',
+            'unknown_created_table_object' => 'REJECT_BEFORE_DDL',
+            'unknown_shared_table_object' => 'REJECT_BEFORE_DDL',
+            'missing_baseline_object' => 'REJECT_BEFORE_DDL',
+            'expression_normalization' => 'LF_AND_EDGE_ASCII_WHITESPACE_ONLY',
+            'definer_authority' => 'IGNORED_DEPLOYMENT_ACCOUNT_METADATA',
+        ];
+    }
+
+    /** @return array<string, string> */
+    private function expectedPhaseThreeP0DowngradeCoordinatorSemantics(): array
+    {
+        return [
+            'entry_point' => 'runTerminalDowngradeStep(P0MigrationStep):void',
+            'step_universe' => 'P0_01>P0_02>P0_03>P0_04>P0_05>P0_06>P0_07>P0_08>P0_09',
+            'caller_supplied_ddl' => 'FORBIDDEN',
+            'ddl_owner' => 'COORDINATOR_EXACT_STEP_SEQUENCE',
+            'guard_kind' => 'MYSQL_NAMED_LOCK_SAME_DEDICATED_CONNECTION',
+            'guard_name' => 'mycomputer:phase-iii-p0-schema-ddl-v1',
+            'guard_wait_seconds' => '0',
+            'guard_failure' => 'phase_three_p0_schema_guard_unavailable',
+            'nested_invocation' => 'phase_three_p0_nested_downgrade_forbidden',
+            'guard_release' => 'FINALLY_EXACT_RELEASE_LOCK',
+            'normal_prefix_count' => '10',
+            'recognized_partial_state_count' => '6',
+            'physical_ddl_statement_count' => '15',
+            'multi_statement_steps' => 'P0_07>P0_08>P0_09',
+            'partial_recovery_entry' => 'FRESH_NORMAL_DOWN_SAME_ORIGIN_STEP_ONLY',
+            'unknown_state' => 'UNCLASSIFIED_P0_SCHEMA_STATE_ZERO_DDL',
+            'authorization_scope' => 'INVOCATION_LOCAL_NON_SERIALIZABLE_ONE_STEP',
+            'pre_ddl_sequence' => 'GUARD>ENUMERATE>NORMALIZE>EXACT_PREFIX>TERMINAL_STEP>PRISTINE_DEPENDENCIES',
+            'post_ddl_sequence' => 'ENUMERATE_AFTER_EACH_DDL>EXACT_DECLARED_STATE>EXACT_PREDECESSOR>RELEASE_GUARD',
+            'pre_ddl_failure' => 'ZERO_DDL_PRESERVE_EVIDENCE',
+            'post_ddl_failure' => 'phase_three_p0_downgrade_postcondition_failed',
+            'authoritative_evidence' => 'ONE_SYNCHRONOUS_STRUCTURED_LOG_EVENT_V1_PER_INVOCATION',
         ];
     }
 
@@ -5242,7 +6864,7 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
                     );
                     if ($parsed['cells'] === null
                         || preg_match('/^`(?<key>[a-z0-9_]+)`$/', $parsed['cells'][0], $key) !== 1
-                        || preg_match('/^`(?<value>[A-Za-z0-9_>\-]+)`$/', $parsed['cells'][1], $value) !== 1) {
+                        || preg_match('/^`(?<value>[A-Za-z0-9_>.\-:()]+)`$/', $parsed['cells'][1], $value) !== 1) {
                         $unexpectedUnits++;
                         $violations[] = "Unexpected nonblank unit in Phase III {$context} closed semantic authority at position ".($position + 1).'.';
 
@@ -5320,10 +6942,16 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
     {
         $start = '<!-- phase-iii-architecture-authority classification=CURRENT id=phase-iii-architecture-contract-v1 -->';
         $end = '<!-- phase-iii-architecture-contract:end id=phase-iii-architecture-contract-v1 -->';
-        $pattern = '/^'.preg_quote($start, '/').'$.*?^'.preg_quote($end, '/').'$/ms';
-        $this->assertSame(1, preg_match($pattern, $design, $match), 'Missing exact CURRENT architecture block.');
+        $this->assertSame(1, substr_count($design, $start), 'Missing or duplicate exact CURRENT architecture start marker.');
+        $this->assertSame(1, substr_count($design, $end), 'Missing or duplicate exact CURRENT architecture end marker.');
 
-        return $match[0];
+        $startOffset = strpos($design, $start);
+        $endOffset = strpos($design, $end);
+        $this->assertIsInt($startOffset, 'Missing exact CURRENT architecture start marker.');
+        $this->assertIsInt($endOffset, 'Missing exact CURRENT architecture end marker.');
+        $this->assertGreaterThan($startOffset, $endOffset, 'CURRENT architecture markers are out of order.');
+
+        return substr($design, $startOffset, $endOffset - $startOffset + strlen($end));
     }
 
     private function phaseThreeSemanticRegistryBlock(string $design, string $id): string
