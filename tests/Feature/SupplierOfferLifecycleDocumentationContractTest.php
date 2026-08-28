@@ -1577,8 +1577,25 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
             $this->assertStringContainsString($allocationAuthority, $plan);
         }
 
-        foreach ([
+        $runtimeArtifacts = array_values(array_filter([
             'app/Models/SupplierImportSourceProfile.php',
+            'app/Models/SupplierImportSourceExecution.php',
+            'app/Models/SupplierImportSourcePayloadReceipt.php',
+            'app/Models/SupplierProductIdentityHead.php',
+            'app/Models/SupplierProductSourceRevision.php',
+            'config/supplier_snapshot.php',
+        ], static fn (string $artifact): bool => is_file(base_path($artifact))));
+        $transition = $this->phaseThreeP0SliceOneTransitionContract($design, $plan, $runtimeArtifacts);
+        $this->assertSame([], $transition['violations'], implode(PHP_EOL, $transition['violations']));
+        $futureProfile = $this->phaseThreeP0SliceOneTransitionContract(
+            $design,
+            $plan,
+            [...$runtimeArtifacts, 'app/Models/SupplierImportSourceProfile.php'],
+        );
+        $this->assertSame([], $futureProfile['violations'], implode(PHP_EOL, $futureProfile['violations']));
+        $this->assertTrue($futureProfile['profile_present']);
+
+        foreach ([
             'app/Models/SupplierImportSourceExecution.php',
             'app/Models/SupplierImportSourcePayloadReceipt.php',
             'app/Models/SupplierProductIdentityHead.php',
@@ -1586,6 +1603,78 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
             'config/supplier_snapshot.php',
         ] as $futureRuntimeArtifact) {
             $this->assertFileDoesNotExist(base_path($futureRuntimeArtifact));
+        }
+    }
+
+    public function test_phase_three_p0_slice_one_profile_presence_is_transition_safe_and_dormant(): void
+    {
+        $design = $this->readDocument('docs/IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md');
+        $plan = $this->readDocument('docs/PHASE_9C6_5C3D1_RUNTIME_IMPLEMENTATION_PLAN.md');
+        $profile = 'app/Models/SupplierImportSourceProfile.php';
+
+        foreach ([
+            'pre-implementation absence' => [],
+            'authorized dormant implementation presence' => [$profile],
+        ] as $case => $presentArtifacts) {
+            $contract = $this->phaseThreeP0SliceOneTransitionContract($design, $plan, $presentArtifacts);
+            $this->assertSame([], $contract['violations'], "{$case}: ".implode(PHP_EOL, $contract['violations']));
+        }
+
+        $mutations = [
+            'T1 profile removed from Slice 1' => [
+                $design,
+                $this->replaceStructuralText(
+                    $plan,
+                    '`SupplierImportSourceProfile` model, ',
+                    '',
+                ),
+                [$profile],
+            ],
+            'T2 profile presence activates Phase III' => [
+                $design.PHP_EOL.PHP_EOL.'SupplierImportSourceProfile presence activates Phase III.',
+                $plan,
+                [$profile],
+            ],
+            'T3 Slice 1 authorizes full Phase III runtime' => [
+                $design,
+                $plan.PHP_EOL.PHP_EOL.'Slice 1 authorizes full Phase III runtime execution.',
+                [$profile],
+            ],
+            'T4 Phase III activation becomes authorized' => [
+                $design,
+                $this->replaceStructuralText(
+                    $plan,
+                    '**Status.** Architecture design only. Runtime implementation is not authorized.',
+                    '**Status.** Architecture design only. Phase III activation is authorized.',
+                ),
+                [$profile],
+            ],
+            'T5 later execution model enters Slice 1' => [
+                $design,
+                $this->replaceStructuralText(
+                    $plan,
+                    '`SupplierImportSourceProfile` model, profile/locator/mapping serializers',
+                    '`SupplierImportSourceProfile` model, `SupplierImportSourceExecution` model, profile/locator/mapping serializers',
+                ),
+                [$profile],
+            ],
+            'T6 absolute profile absence is reintroduced' => [
+                $design,
+                $plan.PHP_EOL.PHP_EOL.'SupplierImportSourceProfile must not exist.',
+                [$profile],
+            ],
+        ];
+
+        foreach ($mutations as $case => [$mutatedDesign, $mutatedPlan, $presentArtifacts]) {
+            $this->assertNotSame(
+                [],
+                $this->phaseThreeP0SliceOneTransitionContract(
+                    $mutatedDesign,
+                    $mutatedPlan,
+                    $presentArtifacts,
+                )['violations'],
+                "Mutation must fail closed: {$case}",
+            );
         }
     }
 
@@ -5136,6 +5225,104 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
             '| P7 | P6 plus complete P0-07 `supplier_products` pointer authority | every new pointer null and P8-P9 absent; remove pointer triggers/FKs/checks/indexes/columns -> P6 |',
             '| P8 | P7 plus complete P0-08 claim/generation source authority | every new source field null, no source-bound generation evidence and P9 absent; remove source authority -> P7 |',
             '| P9 | P8 plus complete P0-09 policy-v2 authority | every new policy field null and no policy-v2-bound generation evidence; remove policy authority -> P8 |',
+        ];
+    }
+
+    /**
+     * @param  list<string>  $presentRuntimeArtifacts
+     * @return array{profile_present: bool, violations: list<string>}
+     */
+    private function phaseThreeP0SliceOneTransitionContract(
+        string $design,
+        string $plan,
+        array $presentRuntimeArtifacts,
+    ): array {
+        $violations = [];
+        $normalizedDesign = preg_replace('/\s+/', ' ', $design) ?? $design;
+        $normalizedPlan = preg_replace('/\s+/', ' ', $plan) ?? $plan;
+        $profile = 'app/Models/SupplierImportSourceProfile.php';
+
+        foreach ([
+            'canonical design Slice 1 profile scope' => [
+                $normalizedDesign,
+                'The revised minimal Slice 1 schema scope is therefore exactly P0-01 and P0-02, not one migration. Its code scope is the `SupplierImportSourceProfile` model;',
+            ],
+            'canonical design dormant boundary' => [
+                $normalizedDesign,
+                'No source fetch, importer activation, staging write, Product mutation, Catalog Sync or operational bound value belongs to Slice 1.',
+            ],
+            'runtime plan Slice 1 profile scope' => [
+                $normalizedPlan,
+                'The revised minimal Slice 1 is exactly P0-01 plus P0-02, the `SupplierImportSourceProfile` model',
+            ],
+            'runtime plan Slice 1 dormant boundary' => [
+                $normalizedPlan,
+                'It remains dormant and performs no source fetch, importer activation, staging/Product mutation or Catalog Sync.',
+            ],
+            'runtime plan presence activation separation' => [
+                $normalizedPlan,
+                'Its schema and models deploy dormant. No protected downloader, parser, capture or import path may activate until every Phase III-P0 migration',
+            ],
+            'Phase III separate authorization boundary' => [
+                $normalizedPlan,
+                'Runtime implementation is not authorized.',
+            ],
+        ] as $authority => [$document, $required]) {
+            if (! str_contains($document, $required)) {
+                $violations[] = "Missing Phase III-P0 transition authority: {$authority}.";
+            }
+        }
+
+        $semanticAuthority = strtolower(str_replace(
+            ['`', 'app/models/', '.php'],
+            '',
+            $normalizedDesign.' '.$normalizedPlan,
+        ));
+        foreach ([
+            'supplierimportsourceprofile must not exist',
+            'supplierimportsourceprofile must remain absent',
+            'supplierimportsourceprofile presence activates phase iii',
+            'supplierimportsourceprofile existence activates phase iii',
+            'supplierimportsourceprofile presence authorizes phase iii',
+            'supplierimportsourceprofile existence authorizes phase iii',
+            'slice 1 authorizes full phase iii runtime execution',
+            'phase iii activation is authorized',
+        ] as $forbiddenAuthority) {
+            if (str_contains($semanticAuthority, $forbiddenAuthority)) {
+                $violations[] = "Forbidden Phase III-P0 transition authority: {$forbiddenAuthority}.";
+            }
+        }
+
+        if (preg_match(
+            '/The revised minimal Slice 1 is exactly P0-01 plus P0-02,.*?Catalog Sync\./',
+            $normalizedPlan,
+            $sliceOneParagraph,
+        ) !== 1) {
+            $violations[] = 'The exact runtime-plan Slice 1 paragraph is unavailable.';
+        } else {
+            foreach ([
+                'SupplierImportSourceExecution',
+                'SupplierImportSourcePayloadReceipt',
+                'SupplierProductIdentityHead',
+                'SupplierProductSourceRevision',
+                'supplier_snapshot.php',
+            ] as $laterArtifact) {
+                if (str_contains($sliceOneParagraph[0], $laterArtifact)) {
+                    $violations[] = "Later artifact entered Slice 1 authority: {$laterArtifact}.";
+                }
+            }
+        }
+
+        $presentRuntimeArtifacts = array_values(array_unique($presentRuntimeArtifacts));
+        foreach ($presentRuntimeArtifacts as $presentRuntimeArtifact) {
+            if ($presentRuntimeArtifact !== $profile) {
+                $violations[] = "Runtime artifact is not authorized by Slice 1: {$presentRuntimeArtifact}.";
+            }
+        }
+
+        return [
+            'profile_present' => in_array($profile, $presentRuntimeArtifacts, true),
+            'violations' => $violations,
         ];
     }
 
