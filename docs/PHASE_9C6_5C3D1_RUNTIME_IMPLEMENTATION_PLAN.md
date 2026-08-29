@@ -1044,6 +1044,26 @@ design registry:
 | P0-09 / P9 | `*_add_policy_v2_authority_to_snapshot_claims_and_generations.php` | add only canonical policy-v2 key/version/fingerprint authority, composite generation binding, indexes, checks, FKs and immutable transition triggers | P0-08 and the ten-bound policy-v2 contract; numeric values remain NOT SPECIFIED | NO; terminal no-evidence P9 -> P8 only | P0-08 / FULL P0 |
 <!-- phase-iii-p0-migration-registry:end id=phase-iii-p0-migration-order-v1 -->
 
+Within P0-02, `mapping_contract_version` is exactly `VARCHAR(35) CHARACTER SET
+ascii COLLATE ascii_bin` and its sole canonical value remains
+`supplier_import_mapping_contract_v1`, exactly 35 ASCII characters and 35
+bytes. This is the minimum lossless storage authority: `VARCHAR(32)`, token
+truncation/shortening, and widening beyond 35 without new semantic authority
+are forbidden. MySQL 8.4 must persist the exact token without SQLSTATE `22001`;
+the invalid immutable-transition regression must then reach the canonical
+trigger and return SQLSTATE `45000`.
+
+Within the same P0-02 authority, `source_locator_key` remains exactly
+`VARCHAR(128) CHARACTER SET ascii COLLATE ascii_bin`; its storage is already
+sufficient and is not widened. The canonical `source-locator-v1:sha256:`
+prefix is 25 ASCII characters and bytes, and the exact lowercase SHA-256 suffix
+is 64, so the canonical locator is exactly 89 characters and 89 bytes. Keep
+`LENGTH(source_locator_key) = 89` and the exact versioned regex together.
+`LENGTH = 88`, format shortening, regex weakening, `CHAR_LENGTH` substitution
+and arbitrary column widening are forbidden. MySQL 8.4 must accept the exact
+89-byte canonical locator and reject malformed/truncated forms through the
+CHECK before source-profile use.
+
 The structural artifact inventory below is exhaustive for every P0-owned
 surface. Column order inside each `>` list is canonical. An index, key,
 constraint or trigger not listed for its ordinal is unknown P0 structure and
@@ -1093,7 +1113,7 @@ ordered top-level keys `version>objects>states>operations` and version
 `phase-iii-p0-oracle-metadata-v1`. Its exact length is `168474` bytes and the
 hardcoded SHA-256 over domain `phase-iii-p0-oracle-metadata-v1`, NUL and those
 bytes is
-`72e09a922c429ae861dac607d94a376e91b2f40c3ced2ba40178bef794ab0a6a`.
+`c318217781f620b5cdc4cd96a6a483906e99a909a232eb18362b46248436ff37`.
 This metadata constant is independent of candidate DDL/database state and does
 not alter any schema signature, state or downgrade-SQL hash.
 
@@ -1133,23 +1153,23 @@ records in the canonical design. The exact normal-prefix authority is:
 | :---: | ---: | --- |
 | P0 | 207 | `77512f147ef9a2fe3889156ac617701c3de7fc7532bb4914329d0735bdfaed79` |
 | P1 | 208 | `8ed9f3d479812a2807abcc23411bad1fd60cd495566a94416352f0c4640bf447` |
-| P2 | 241 | `45bf4bc963becb79949d88df27dd6223bccf1fcd076beb310f4a2842ba260bc0` |
-| P3 | 275 | `9a424ea99f9ddbb68fd420702578fde371e162ff314740c9f856aab5e3926990` |
-| P4 | 294 | `336d0b4076cee86f8f3efc8d43a29ba020716629e6088f8ec2ec763d061af8f6` |
-| P5 | 309 | `d8ca08020090614ebb31d18d7640a1d46f5757eeacc226a1a3b3367584bda058` |
-| P6 | 339 | `3d201119551344241d222fcd3d9db9d136ace4e321cc1ae36dfc86f410fdb7a9` |
-| P7 | 349 | `9bea840553b2fd240d0b5bca8206a35e7cb1c3b2a0420a4600c081ca0e0df43d` |
-| P8 | 355 | `c2b6d719637a86dccf115e9220b9e2439a986e1da6c23ee51ddda7c5361cc322` |
-| P9 | 368 | `4269ff10ce6e8a407b2c790d7260e3f9c6db8f48fd06d456d15ae3e5ca4b579d` |
+| P2 | 241 | `e48e93be9175fe25534f11b8d2ce8783704f6aae9aa0049a187899ac7dfb8d1b` |
+| P3 | 275 | `14d9f5e09f67adfcc5478df16c4b18c212c4ec419a55b55f2ea029c87487ae9c` |
+| P4 | 294 | `71fd2b7ba45fee082c50484d2917e907add490852a9805ecd1b58dbf5adc57e3` |
+| P5 | 309 | `3d2706a0248ae32245c4687e780b2ff90c94a62d674b999f91d00a07f5d1d1df` |
+| P6 | 339 | `7c3a1a27e837f615dd454b5bd502457cba97bff86232d8a03a3b26782c203afc` |
+| P7 | 349 | `08fdbbd004cacdc4dbad903d37473e5cb9eaa3b73975c02ba2a380e15881f72c` |
+| P8 | 355 | `5b1bea0f3bde4743d1abff7b034c4ab67fe32c4d41ba9a3be49f43cafe47c460` |
+| P9 | 368 | `8bb39c337b88785e8713add993c98ef533a51bb6603b9811d17984b7f411b40b` |
 
 The only recognized partial hashes are
-`P9_DOWN_1=bf96860e7603e774e881f2549d2dfcb9527990a8fe01d88fc417719eb3a37cc0`,
-`P9_DOWN_2=1a7b8f70593db3622c7e9477455f7be9f5eba0a8faf42d58a7b98751379f7758`,
-`P8_DOWN_1=0fc58b8ab89c138d2ab165b1e4a24e812dc582dab0cafff9526b86c2a24c1fec`,
-`P8_DOWN_2=eac8d521280d0debb3ac440247b164dea751ce640c1dc7ea320afeee56197c95`,
-`P7_DOWN_1=a8c237b9dd49577e8d6ed7ce5e4d0a46b1334d5cbd51931334b3576fbc13e6cd`
+`P9_DOWN_1=f257be822963cb68f25512f2b33c5016c4045bfb9383832ecfb5d9c3f91efa78`,
+`P9_DOWN_2=ac69d315ac8c20a4f4d1636771b28b0c40cb145fa3620a8129d7b206ef439530`,
+`P8_DOWN_1=fa8faae1d7b713dbebf28c96b82ddc2d8ef0277c93bbd386dcd9f960f23b40df`,
+`P8_DOWN_2=f9fe6e35cf6685d095d577700c696b8c3a35b6474118ff135262a34d8e148062`,
+`P7_DOWN_1=ed4a66e13b332fde7d4715abbd5c8152b0bc257585e65ec34ced59c20b4c2fb8`
 and
-`P7_DOWN_2=953f96d7c9e087fd4e2ed29c402b1439d77da390e2a5f5911a70872a87ce380e`.
+`P7_DOWN_2=d81758384e083c7252abc0861d33674f7b2d6d9e4bdbb1783b9bab21fe02c6f0`.
 Every other shape is `UNCLASSIFIED_P0_SCHEMA_STATE` and executes zero DDL.
 
 The coordinator acquires exact `GET_LOCK(..., 0)` on the same dedicated PDO
