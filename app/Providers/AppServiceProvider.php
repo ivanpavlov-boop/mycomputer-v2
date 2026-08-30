@@ -3,6 +3,7 @@
 namespace App\Providers;
 
 use App\Auth\ActiveUserProvider;
+use App\Contracts\Suppliers\SupplierSourceIdentityGenerator;
 use App\Events\OrderCancelled;
 use App\Events\OrderCreated;
 use App\Events\OrderPaymentStatusChanged;
@@ -90,6 +91,7 @@ use App\Services\Erp\Contracts\ErpProviderInterface;
 use App\Services\Erp\ErpService;
 use App\Services\Search\Contracts\SearchServiceInterface;
 use App\Services\Search\MeilisearchSearchService;
+use App\Services\Suppliers\SourceProfiles\OperatingSystemSupplierSourceIdentityGenerator;
 use App\Support\Api\ApiCache;
 use App\Support\Api\CartRecoveryResponse;
 use App\Support\Api\ErrorResponse;
@@ -118,6 +120,10 @@ class AppServiceProvider extends ServiceProvider
         );
 
         $this->app->bind(SearchServiceInterface::class, MeilisearchSearchService::class);
+        $this->app->bind(
+            SupplierSourceIdentityGenerator::class,
+            OperatingSystemSupplierSourceIdentityGenerator::class,
+        );
         $this->app->bind(AiProviderInterface::class, MockAiProvider::class);
         $this->app->bind(EmailProviderInterface::class, fn () => match (config('email-marketing.provider')) {
             'brevo' => new BrevoProvider,
