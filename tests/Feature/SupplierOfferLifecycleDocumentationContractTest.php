@@ -2322,6 +2322,222 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
         ], $p002Fk[0]['signature']);
     }
 
+    public function test_phase_three_p0_mapping_contract_storage_authority_is_exact_and_fail_closed(): void
+    {
+        $design = $this->readDocument('docs/IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md');
+        $plan = $this->readDocument('docs/PHASE_9C6_5C3D1_RUNTIME_IMPLEMENTATION_PLAN.md');
+        $oracle = $this->phaseThreeP0ConcreteOracleContract($design, $plan);
+        $targetId = 'column:supplier_import_source_profiles:014:mapping_contract_version';
+        $token = 'supplier_import_mapping_contract_v1';
+
+        $this->assertSame([], $oracle['violations'], implode(PHP_EOL, $oracle['violations']));
+        $this->assertSame(35, strlen($token));
+        $this->assertSame(1, preg_match('/\A[\x00-\x7F]+\z/', $token));
+        $target = array_values(array_filter(
+            $oracle['objects'],
+            static fn (array $record): bool => $record['object_id'] === $targetId,
+        ));
+        $this->assertCount(1, $target);
+        $this->assertSame('varchar(35)', $target[0]['signature']['column_type']);
+        $this->assertSame(
+            'b16121ecdf5c60bc9161a08a208591be71ffe28aab30207458af335488538f14',
+            $target[0]['sha256'],
+        );
+        $this->assertSame(
+            $targetId.'@b16121ecdf5c60bc',
+            $target[0]['registry_id'],
+        );
+
+        $objectsMarker = ['phase-iii-p0-object-signature-registry', 'phase-iii-p0-object-signatures-v1'];
+        foreach ([
+            'M1 width reverts to varchar(32)' => static function (array &$records) use ($targetId): void {
+                $index = array_search($targetId, array_column($records, 'object_id'), true);
+                $records[$index]['signature']['column_type'] = 'varchar(32)';
+                $signature = json_decode($records[$index]['canonical_json'], true, 512, JSON_THROW_ON_ERROR);
+                $signature['column_type'] = 'varchar(32)';
+                $records[$index]['canonical_json'] = json_encode($signature, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
+            },
+            'M4 unapproved wider capacity' => static function (array &$records) use ($targetId): void {
+                $index = array_search($targetId, array_column($records, 'object_id'), true);
+                $records[$index]['signature']['column_type'] = 'varchar(64)';
+                $signature = json_decode($records[$index]['canonical_json'], true, 512, JSON_THROW_ON_ERROR);
+                $signature['column_type'] = 'varchar(64)';
+                $records[$index]['canonical_json'] = json_encode($signature, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
+            },
+            'M5 unrelated oracle object changes' => static function (array &$records) use ($targetId): void {
+                $index = array_search($targetId, array_column($records, 'object_id'), true);
+                $other = $index === 0 ? 1 : 0;
+                $records[$other]['sha256'] = str_repeat('f', 64);
+            },
+            'M8 stale registry id survives' => static function (array &$records) use ($targetId): void {
+                $index = array_search($targetId, array_column($records, 'object_id'), true);
+                $records[$index]['registry_id'] = $targetId.'@194798672e750ef8';
+            },
+        ] as $case => $mutator) {
+            $mutated = $this->mutatePhaseThreeP0JsonlRegistry(
+                $design,
+                $objectsMarker[0],
+                $objectsMarker[1],
+                $mutator,
+            );
+            $this->assertNotSame([], $this->phaseThreeP0ConcreteOracleContract($mutated, $plan)['violations'], $case);
+        }
+
+        $statesMarker = ['phase-iii-p0-state-signature-registry', 'phase-iii-p0-state-signatures-v1'];
+        foreach ([
+            'M6 unaffected state hash changes' => static function (array &$records): void {
+                $index = array_search('P1', array_column($records, 'state'), true);
+                $records[$index]['sha256'] = str_repeat('f', 64);
+            },
+            'M7 affected state hash remains stale' => static function (array &$records): void {
+                $index = array_search('P2', array_column($records, 'state'), true);
+                $records[$index]['sha256'] = '45bf4bc963becb79949d88df27dd6223bccf1fcd076beb310f4a2842ba260bc0';
+            },
+        ] as $case => $mutator) {
+            $mutated = $this->mutatePhaseThreeP0JsonlRegistry(
+                $design,
+                $statesMarker[0],
+                $statesMarker[1],
+                $mutator,
+            );
+            $this->assertNotSame([], $this->phaseThreeP0ConcreteOracleContract($mutated, $plan)['violations'], $case);
+        }
+
+        $truncated = substr($token, 0, 32);
+        foreach ([
+            'M2 canonical value is silently truncated' => [
+                'Its sole approved value, `supplier_import_mapping_contract_v1`, is ASCII',
+                "Its sole approved value, `{$truncated}`, is ASCII",
+            ],
+            'M3 canonical value is shortened without authority' => [
+                '`mapping_contract_version` is exactly `supplier_import_mapping_contract_v1`.',
+                '`mapping_contract_version` is exactly `supplier_import_mapping_v1`.',
+            ],
+            'M9 trigger regression accepts width failure' => [
+                'must reach the trigger and return SQLSTATE `45000`, never `22001`.',
+                'must return SQLSTATE `22001` before reaching the trigger.',
+            ],
+            'M10 candidate schema is blessed as authority' => [
+                "It may not derive, refresh, bless or\nreplace them from migration DDL",
+                'It may derive and bless them from candidate migration DDL',
+            ],
+        ] as $case => [$search, $replacement]) {
+            $mutated = $this->replaceStructuralText($design, $search, $replacement);
+            $this->assertNotSame([], $this->phaseThreeP0ConcreteOracleContract($mutated, $plan)['violations'], $case);
+        }
+    }
+
+    public function test_phase_three_p0_source_locator_storage_authority_is_exact_and_fail_closed(): void
+    {
+        $design = $this->readDocument('docs/IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md');
+        $plan = $this->readDocument('docs/PHASE_9C6_5C3D1_RUNTIME_IMPLEMENTATION_PLAN.md');
+        $oracle = $this->phaseThreeP0ConcreteOracleContract($design, $plan);
+        $columnId = 'column:supplier_import_source_profiles:008:source_locator_key';
+        $checkId = 'check:supplier_import_source_profiles:chk_import_source_profile_locator_key';
+        $prefix = 'source-locator-v1:sha256:';
+        $digest = str_repeat('a', 64);
+        $canonical = $prefix.$digest;
+        $regex = '/\Asource-locator-v1:sha256:[0-9a-f]{64}\z/D';
+        $expectedClause = "((length(`source_locator_key`) = 89) and regexp_like(`source_locator_key`,_ascii\\'^source-locator-v1:sha256:[0-9a-f]{64}$\\',_cp866\\'c\\'))";
+
+        $this->assertSame([], $oracle['violations'], implode(PHP_EOL, $oracle['violations']));
+        $this->assertSame(25, strlen($prefix), 'L1 canonical prefix length is exact.');
+        $this->assertSame(64, strlen($digest), 'L5 digest length is exact.');
+        $this->assertSame(89, strlen($canonical), 'L1 canonical locator length is exact.');
+        $this->assertSame(1, preg_match('/\A[\x00-\x7F]+\z/', $canonical));
+        $this->assertSame(1, preg_match($regex, $canonical), 'L4/L5 versioned lowercase-hex grammar is exact.');
+        $this->assertSame(0, preg_match($regex, substr($canonical, 0, 88)), 'L6 truncated locator is impossible authority.');
+
+        $column = array_values(array_filter(
+            $oracle['objects'],
+            static fn (array $record): bool => $record['object_id'] === $columnId,
+        ));
+        $check = array_values(array_filter(
+            $oracle['objects'],
+            static fn (array $record): bool => $record['object_id'] === $checkId,
+        ));
+        $this->assertCount(1, $column);
+        $this->assertCount(1, $check);
+        $this->assertSame('varchar(128)', $column[0]['signature']['column_type']);
+        $this->assertMatchesRegularExpression('/\Avarchar\((?<capacity>[0-9]+)\)\z/', $column[0]['signature']['column_type']);
+        preg_match('/\Avarchar\((?<capacity>[0-9]+)\)\z/', $column[0]['signature']['column_type'], $capacity);
+        $this->assertGreaterThanOrEqual(strlen($canonical), (int) $capacity['capacity'], 'L3 column capacity must hold the canonical locator.');
+        $this->assertSame($expectedClause, $check[0]['signature']['clause'], 'L2 CHECK length cannot diverge from format authority.');
+        $this->assertSame('62fcdbd59bdab32927f71096bb6c72ee1e5e7e6e5afd78cec4daa3af7314cd8b', $check[0]['sha256']);
+        $this->assertSame($checkId.'@62fcdbd59bdab329', $check[0]['registry_id']);
+
+        $rewriteObject = static function (array &$records, string $objectId, callable $mutator, bool $rehash = true): void {
+            $index = array_search($objectId, array_column($records, 'object_id'), true);
+            if ($index === false) {
+                throw new \RuntimeException("Missing mutation target {$objectId}.");
+            }
+            $mutator($records[$index]['signature']);
+            $records[$index]['canonical_json'] = json_encode(
+                $records[$index]['signature'],
+                JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR,
+            );
+            if ($rehash) {
+                $records[$index]['sha256'] = hash(
+                    'sha256',
+                    "phase-iii-p0-schema-signature-v1\0".$records[$index]['canonical_json'],
+                );
+                $records[$index]['registry_id'] = $objectId.'@'.substr($records[$index]['sha256'], 0, 16);
+            }
+        };
+
+        foreach ([
+            'L6 length-88 contradiction' => static function (array &$records) use ($rewriteObject, $checkId): void {
+                $rewriteObject($records, $checkId, static function (array &$signature): void {
+                    $signature['clause'] = str_replace(' = 89)', ' = 88)', $signature['clause']);
+                });
+            },
+            'L7 arbitrary widening' => static function (array &$records) use ($rewriteObject, $columnId): void {
+                $rewriteObject($records, $columnId, static function (array &$signature): void {
+                    $signature['column_type'] = 'varchar(255)';
+                });
+            },
+            'L8 canonical format shortening' => static function (array &$records) use ($rewriteObject, $checkId): void {
+                $rewriteObject($records, $checkId, static function (array &$signature): void {
+                    $signature['clause'] = str_replace('source-locator-v1:sha256:', 'source-locator:sha256:', $signature['clause']);
+                });
+            },
+            'L9 unrelated CHECK mutation' => static function (array &$records) use ($rewriteObject): void {
+                $rewriteObject($records, 'check:supplier_import_source_profiles:chk_import_source_profile_access_scope', static function (array &$signature): void {
+                    $signature['clause'] .= ' and (1 = 1)';
+                });
+            },
+            'L10 stale object hash' => static function (array &$records) use ($rewriteObject, $checkId): void {
+                $rewriteObject($records, $checkId, static function (array &$signature): void {
+                    $signature['clause'] = str_replace(' = 89)', ' = 90)', $signature['clause']);
+                }, false);
+            },
+        ] as $case => $mutator) {
+            $mutated = $this->mutatePhaseThreeP0JsonlRegistry(
+                $design,
+                'phase-iii-p0-object-signature-registry',
+                'phase-iii-p0-object-signatures-v1',
+                $mutator,
+            );
+            $this->assertNotSame([], $this->phaseThreeP0ConcreteOracleContract($mutated, $plan)['violations'], $case);
+        }
+
+        foreach ([
+            'L10 stale state hash' => ['phase-iii-p0-state-signature-registry', 'phase-iii-p0-state-signatures-v1', 'state', 'P2'],
+            'L10 stale operation hash' => ['phase-iii-p0-downgrade-operation-registry', 'phase-iii-p0-downgrade-operations-v1', 'operation_id', 'P0-02-DOWN-01'],
+        ] as $case => [$marker, $id, $key, $value]) {
+            $mutated = $this->mutatePhaseThreeP0JsonlRegistry(
+                $design,
+                $marker,
+                $id,
+                static function (array &$records) use ($key, $value): void {
+                    $index = array_search($value, array_column($records, $key), true);
+                    $records[$index][$key === 'state' ? 'sha256' : 'precondition_sha256'] = str_repeat('f', 64);
+                },
+            );
+            $this->assertNotSame([], $this->phaseThreeP0ConcreteOracleContract($mutated, $plan)['violations'], $case);
+        }
+    }
+
     public function test_phase_three_p0_partial_ddl_and_connection_loss_recovery_authority_is_exact(): void
     {
         $design = $this->readDocument('docs/IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md');
@@ -2860,7 +3076,7 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
 
         $this->assertSame([], $canonical['violations'], implode(PHP_EOL, $canonical['violations']));
         $this->assertSame('CANONICAL_CURRENT_ARCHITECTURE', $canonical['current_architecture_inventory']['classification']);
-        $this->assertSame(276, $canonical['current_architecture_inventory']['unit_count']);
+        $this->assertSame(278, $canonical['current_architecture_inventory']['unit_count']);
         $this->assertSame(16, $canonical['candidate_count']);
 
         $outsideContradictions = [
@@ -3008,7 +3224,7 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
 
         $this->assertSame([], $canonical['violations'], implode(PHP_EOL, $canonical['violations']));
         $this->assertSame('CANONICAL_ARCHITECTURE_DOCUMENT', $canonical['architecture_document_inventory']['classification']);
-        $this->assertSame(1120, $canonical['architecture_document_inventory']['unit_count']);
+        $this->assertSame(1122, $canonical['architecture_document_inventory']['unit_count']);
         $this->assertSame($expectedRegions, $canonical['architecture_document_inventory']['region_order']);
         $this->assertSame($expectedRegions, array_keys($canonical['architecture_document_inventory']['regions']));
         foreach ($expectedRegions as $position => $id) {
@@ -5805,7 +6021,14 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
             'An invocation reports success only after all required statements are known committed',
             '`registry_id` is structural authority, not a label.',
             '`affected_objects` is not descriptive metadata',
-            '72e09a922c429ae861dac607d94a376e91b2f40c3ced2ba40178bef794ab0a6a',
+            'The `mapping_contract_version` width is exact frozen authority, not a capacity hint.',
+            'Its sole approved value, `supplier_import_mapping_contract_v1`, is ASCII by the field contract and is exactly 35 characters and 35 bytes.',
+            '`mapping_contract_version` is exactly `supplier_import_mapping_contract_v1`.',
+            'must reach the trigger and return SQLSTATE `45000`, never `22001`.',
+            'The `source_locator_key` length CHECK is exact frozen byte authority, while its physical column remains `VARCHAR(128) CHARACTER SET ascii COLLATE ascii_bin`.',
+            'The complete canonical locator is therefore exactly 89 characters and 89 bytes.',
+            'The CHECK keeps `LENGTH(source_locator_key) = 89` alongside the exact versioned regex',
+            'c318217781f620b5cdc4cd96a6a483906e99a909a232eb18362b46248436ff37',
         ] as $authority) {
             if (! str_contains($normalizedDesign, $authority)) {
                 $violations[] = "Concrete P0 design is missing exact authority: {$authority}";
@@ -5818,7 +6041,13 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
             'P0-02 down is one atomic `DROP TABLE`',
             'UNCLASSIFIED_P0_SCHEMA_STATE',
             'No count-only or one-way validation is sufficient.',
-            '72e09a922c429ae861dac607d94a376e91b2f40c3ced2ba40178bef794ab0a6a',
+            'Within P0-02, `mapping_contract_version` is exactly `VARCHAR(35) CHARACTER SET ascii COLLATE ascii_bin`',
+            '`supplier_import_mapping_contract_v1`, exactly 35 ASCII characters and 35 bytes.',
+            'the invalid immutable-transition regression must then reach the canonical trigger and return SQLSTATE `45000`.',
+            'Within the same P0-02 authority, `source_locator_key` remains exactly `VARCHAR(128) CHARACTER SET ascii COLLATE ascii_bin`',
+            'the canonical locator is exactly 89 characters and 89 bytes.',
+            'Keep `LENGTH(source_locator_key) = 89` and the exact versioned regex together.',
+            'c318217781f620b5cdc4cd96a6a483906e99a909a232eb18362b46248436ff37',
         ] as $authority) {
             if (! str_contains($normalizedPlan, $authority)) {
                 $violations[] = "P0 runtime plan is missing exact concrete-oracle authority: {$authority}";
@@ -6520,18 +6749,18 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
     {
         return [
             'version' => 'phase-iii-architecture-document-closed-world-v1',
-            'normalized_bytes' => 1871709,
-            'line_count' => 7940,
-            'unit_count' => 1120,
+            'normalized_bytes' => 1873134,
+            'line_count' => 7961,
+            'unit_count' => 1122,
             'unit_categories' => [
                 'CANONICAL_HEADING_EXACT' => 86,
                 'CANONICAL_LITERAL_EXACT' => 72,
                 'CANONICAL_MARKER_EXACT' => 40,
-                'CANONICAL_PARAGRAPH_EXACT' => 854,
+                'CANONICAL_PARAGRAPH_EXACT' => 856,
                 'CANONICAL_TABLE_EXACT' => 68,
             ],
-            'byte_fingerprint' => 'c0471d3ee067805e8b1660e6fddd41616d19f11cb10c8a21c8ba6f098982948e',
-            'unit_fingerprint' => 'a66365467c3a9ee881388ea4e99fa99086e29af9c4deb83fdb33ae69c114fcf2',
+            'byte_fingerprint' => 'b0fb8cc5a3d8760a72c793db86f463c0e6f1c3494fe76063517590c4dc00d780',
+            'unit_fingerprint' => '7d91396818bad1d6e2e6a683c76fe98b2375c14ef22f26fd4a690d2ad259efa2',
             'region_order' => [
                 'pre-current-reference-history-v1',
                 'current-architecture-authority-v1',
@@ -6557,18 +6786,18 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
                 'current-architecture-authority-v1' => [
                     'id' => 'current-architecture-authority-v1',
                     'position' => 2,
-                    'normalized_bytes' => 1464195,
-                    'line_count' => 2447,
-                    'unit_count' => 276,
+                    'normalized_bytes' => 1465620,
+                    'line_count' => 2468,
+                    'unit_count' => 278,
                     'unit_categories' => [
                         'CANONICAL_HEADING_EXACT' => 16,
                         'CANONICAL_LITERAL_EXACT' => 18,
                         'CANONICAL_MARKER_EXACT' => 30,
-                        'CANONICAL_PARAGRAPH_EXACT' => 189,
+                        'CANONICAL_PARAGRAPH_EXACT' => 191,
                         'CANONICAL_TABLE_EXACT' => 23,
                     ],
-                    'byte_fingerprint' => 'eb3cf28111b4bab9d5a43233c3b379681af284871e192d8007d736fe9a61454a',
-                    'unit_fingerprint' => 'a6e347dc12827fc78817d852de0e1350e2ee814205ba62a70dcab03720fa566e',
+                    'byte_fingerprint' => '8d250707b6c9dcf3d54e1477040dab2d799e4d4183862a52c12a8e0eaf015ab8',
+                    'unit_fingerprint' => 'c0d06120767f596c99734087546dc413b1cae028ec663c876d0342e54987fe85',
                 ],
                 'post-current-reference-history-v1' => [
                     'id' => 'post-current-reference-history-v1',
@@ -6595,18 +6824,18 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
     {
         return [
             'version' => 'phase-iii-current-architecture-closed-world-v1',
-            'normalized_bytes' => 1464195,
-            'line_count' => 2447,
-            'unit_count' => 276,
+            'normalized_bytes' => 1465620,
+            'line_count' => 2468,
+            'unit_count' => 278,
             'unit_categories' => [
                 'CANONICAL_HEADING_EXACT' => 16,
                 'CANONICAL_LITERAL_EXACT' => 18,
                 'CANONICAL_MARKER_EXACT' => 30,
-                'CANONICAL_PARAGRAPH_EXACT' => 189,
+                'CANONICAL_PARAGRAPH_EXACT' => 191,
                 'CANONICAL_TABLE_EXACT' => 23,
             ],
-            'byte_fingerprint' => 'e684b6950ba5d9d54d20a499c00784fe34845bc2788c54ebc893b0f82f031cba',
-            'unit_fingerprint' => 'f3305e9c4ad09a9b4d563cb3b7b321daa6f93397df494fb3cd07fd942e10cc9f',
+            'byte_fingerprint' => 'dad145dbfdaa3b9e812a4201aa22070b059350627800c19c83009707df3faf7e',
+            'unit_fingerprint' => '429c7d0eb45158cca934617ce79cfecea05c1b456d1ab5ce71cb7cb573ef15d0',
         ];
     }
 
@@ -6615,18 +6844,18 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
     {
         return [
             'version' => 'phase-iii-runtime-plan-closed-world-v1',
-            'normalized_bytes' => 109548,
-            'line_count' => 1605,
-            'unit_count' => 488,
+            'normalized_bytes' => 110822,
+            'line_count' => 1625,
+            'unit_count' => 490,
             'unit_categories' => [
                 'CANONICAL_HEADING_EXACT' => 48,
                 'CANONICAL_LITERAL_EXACT' => 2,
                 'CANONICAL_MARKER_EXACT' => 7,
-                'CANONICAL_PARAGRAPH_EXACT' => 415,
+                'CANONICAL_PARAGRAPH_EXACT' => 417,
                 'CANONICAL_TABLE_EXACT' => 16,
             ],
-            'byte_fingerprint' => 'd51f82ad74611c195f18bd6eadf66e13252a40982d1ab0633218e7b8e1ad7b07',
-            'unit_fingerprint' => 'ba256ee85656879482edfc64a489c5f83bfeefa194cd6bb05c35f277c5a0f31b',
+            'byte_fingerprint' => '433988641a38ae230b8a11a091e946af2364f7f5ff9c1a5bef00fe76f3612e1c',
+            'unit_fingerprint' => 'a2443f719116d1e11c2cf26961c877e82e250c21b472e401227b13ab6e1d724b',
         ];
     }
 
@@ -6793,20 +7022,20 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
     {
         return [
             'P0_BASELINE' => '77512f147ef9a2fe3889156ac617701c3de7fc7532bb4914329d0735bdfaed79',
-            'P9' => '4269ff10ce6e8a407b2c790d7260e3f9c6db8f48fd06d456d15ae3e5ca4b579d',
-            'P9_DOWN_1' => 'bf96860e7603e774e881f2549d2dfcb9527990a8fe01d88fc417719eb3a37cc0',
-            'P9_DOWN_2' => '1a7b8f70593db3622c7e9477455f7be9f5eba0a8faf42d58a7b98751379f7758',
-            'P8' => 'c2b6d719637a86dccf115e9220b9e2439a986e1da6c23ee51ddda7c5361cc322',
-            'P8_DOWN_1' => '0fc58b8ab89c138d2ab165b1e4a24e812dc582dab0cafff9526b86c2a24c1fec',
-            'P8_DOWN_2' => 'eac8d521280d0debb3ac440247b164dea751ce640c1dc7ea320afeee56197c95',
-            'P7' => '9bea840553b2fd240d0b5bca8206a35e7cb1c3b2a0420a4600c081ca0e0df43d',
-            'P7_DOWN_1' => 'a8c237b9dd49577e8d6ed7ce5e4d0a46b1334d5cbd51931334b3576fbc13e6cd',
-            'P7_DOWN_2' => '953f96d7c9e087fd4e2ed29c402b1439d77da390e2a5f5911a70872a87ce380e',
-            'P6' => '3d201119551344241d222fcd3d9db9d136ace4e321cc1ae36dfc86f410fdb7a9',
-            'P5' => 'd8ca08020090614ebb31d18d7640a1d46f5757eeacc226a1a3b3367584bda058',
-            'P4' => '336d0b4076cee86f8f3efc8d43a29ba020716629e6088f8ec2ec763d061af8f6',
-            'P3' => '9a424ea99f9ddbb68fd420702578fde371e162ff314740c9f856aab5e3926990',
-            'P2' => '45bf4bc963becb79949d88df27dd6223bccf1fcd076beb310f4a2842ba260bc0',
+            'P9' => '8bb39c337b88785e8713add993c98ef533a51bb6603b9811d17984b7f411b40b',
+            'P9_DOWN_1' => 'f257be822963cb68f25512f2b33c5016c4045bfb9383832ecfb5d9c3f91efa78',
+            'P9_DOWN_2' => 'ac69d315ac8c20a4f4d1636771b28b0c40cb145fa3620a8129d7b206ef439530',
+            'P8' => '5b1bea0f3bde4743d1abff7b034c4ab67fe32c4d41ba9a3be49f43cafe47c460',
+            'P8_DOWN_1' => 'fa8faae1d7b713dbebf28c96b82ddc2d8ef0277c93bbd386dcd9f960f23b40df',
+            'P8_DOWN_2' => 'f9fe6e35cf6685d095d577700c696b8c3a35b6474118ff135262a34d8e148062',
+            'P7' => '08fdbbd004cacdc4dbad903d37473e5cb9eaa3b73975c02ba2a380e15881f72c',
+            'P7_DOWN_1' => 'ed4a66e13b332fde7d4715abbd5c8152b0bc257585e65ec34ced59c20b4c2fb8',
+            'P7_DOWN_2' => 'd81758384e083c7252abc0861d33674f7b2d6d9e4bdbb1783b9bab21fe02c6f0',
+            'P6' => '7c3a1a27e837f615dd454b5bd502457cba97bff86232d8a03a3b26782c203afc',
+            'P5' => '3d2706a0248ae32245c4687e780b2ff90c94a62d674b999f91d00a07f5d1d1df',
+            'P4' => '71fd2b7ba45fee082c50484d2917e907add490852a9805ecd1b58dbf5adc57e3',
+            'P3' => '14d9f5e09f67adfcc5478df16c4b18c212c4ec419a55b55f2ea029c87487ae9c',
+            'P2' => 'e48e93be9175fe25534f11b8d2ce8783704f6aae9aa0049a187899ac7dfb8d1b',
             'P1' => '8ed9f3d479812a2807abcc23411bad1fd60cd495566a94416352f0c4640bf447',
             'P0' => '77512f147ef9a2fe3889156ac617701c3de7fc7532bb4914329d0735bdfaed79',
         ];
@@ -6838,7 +7067,7 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
 
     private function expectedPhaseThreeP0OracleMetadataSha256(): string
     {
-        return '72e09a922c429ae861dac607d94a376e91b2f40c3ced2ba40178bef794ab0a6a';
+        return 'c318217781f620b5cdc4cd96a6a483906e99a909a232eb18362b46248436ff37';
     }
 
     /** @return array<string, array{precondition_state: string, result_state: string, next_operation: string}> */
