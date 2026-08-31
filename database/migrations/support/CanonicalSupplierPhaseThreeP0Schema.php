@@ -170,9 +170,12 @@ final class CanonicalSupplierPhaseThreeP0Schema
     public static function classify(PDO $pdo): array
     {
         CanonicalSupplierPhaseThreeP0Oracle::assertIntegrity();
+        $inspection = (new CanonicalSupplierPhaseThreeP0SchemaInspector($pdo))->inspect();
 
-        return (new CanonicalSupplierPhaseThreeP0SchemaComparator)->classify(
-            (new CanonicalSupplierPhaseThreeP0SchemaInspector($pdo))->enumerate(),
+        return (new CanonicalSupplierPhaseThreeP0SchemaComparator)->classifyObserved(
+            $inspection['raw_signatures'],
+            $inspection['schema_charset'],
+            $inspection['schema_default_collation'],
         );
     }
 

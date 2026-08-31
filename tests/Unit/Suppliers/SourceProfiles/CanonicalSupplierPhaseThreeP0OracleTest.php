@@ -25,13 +25,119 @@ final class CanonicalSupplierPhaseThreeP0OracleTest extends TestCase
         $this->assertCount(15, CanonicalSupplierPhaseThreeP0Oracle::operations());
         $this->assertSame(168474, strlen(CanonicalSupplierPhaseThreeP0Oracle::metadataBytes()));
         $this->assertSame(
-            'c318217781f620b5cdc4cd96a6a483906e99a909a232eb18362b46248436ff37',
+            '0ca5b057d4733cb791d791bbf6113e8e7f3a678ffdd61a7c11ca36306023def6',
             hash(
                 'sha256',
                 CanonicalSupplierPhaseThreeP0Oracle::METADATA_VERSION
                     ."\0"
                     .CanonicalSupplierPhaseThreeP0Oracle::metadataBytes(),
             ),
+        );
+    }
+
+    public function test_matching_utf8mb4_schema_defaults_normalize_to_one_canonical_trigger_identity(): void
+    {
+        $comparator = new CanonicalSupplierPhaseThreeP0SchemaComparator;
+        $canonical = $comparator->expectedSignatures('P2');
+
+        foreach (['utf8mb4_unicode_ci', 'utf8mb4_0900_ai_ci', 'utf8mb4_general_ci'] as $collation) {
+            $raw = $this->observedSignatures('P2', $collation);
+            $preservedRaw = $raw;
+            $normalized = $comparator->normalizeObservedSignatures($raw, 'utf8mb4', $collation);
+
+            $this->assertSame($preservedRaw, $raw, "Raw {$collation} inspection evidence was mutated.");
+            $this->assertSame($canonical, $normalized, "{$collation} did not converge to canonical identity.");
+            $this->assertSame('P2', $comparator->classifyObserved($raw, 'utf8mb4', $collation)['state']);
+        }
+    }
+
+    public function test_trigger_database_collation_attestation_rejects_missing_null_empty_mismatched_or_non_utf8mb4_evidence(): void
+    {
+        $comparator = new CanonicalSupplierPhaseThreeP0SchemaComparator;
+        $exact = $this->observedSignatures('P2', 'utf8mb4_unicode_ci');
+        $triggerIndex = $this->firstTriggerIndex($exact);
+        $missing = $exact;
+        unset($missing[$triggerIndex]['database_collation']);
+        $null = $exact;
+        $null[$triggerIndex]['database_collation'] = null;
+        $empty = $exact;
+        $empty[$triggerIndex]['database_collation'] = '';
+        $mismatch = $exact;
+        $mismatch[$triggerIndex]['database_collation'] = 'utf8mb4_general_ci';
+        $canonicalTokenIsNotRawEvidence = $comparator->expectedSignatures('P2');
+        $latin1 = $this->observedSignatures('P2', 'latin1_swedish_ci');
+
+        foreach ([
+            'missing field' => [$missing, 'utf8mb4', 'utf8mb4_unicode_ci'],
+            'null field' => [$null, 'utf8mb4', 'utf8mb4_unicode_ci'],
+            'empty field' => [$empty, 'utf8mb4', 'utf8mb4_unicode_ci'],
+            'mismatched default' => [$mismatch, 'utf8mb4', 'utf8mb4_unicode_ci'],
+            'canonical token supplied as raw evidence' => [$canonicalTokenIsNotRawEvidence, 'utf8mb4', 'utf8mb4_unicode_ci'],
+            'non-utf8mb4 schema' => [$latin1, 'latin1', 'latin1_swedish_ci'],
+            'null schema default' => [$exact, 'utf8mb4', null],
+            'empty schema default' => [$exact, 'utf8mb4', ''],
+        ] as $case => [$raw, $charset, $defaultCollation]) {
+            $this->assertUnclassified(
+                $comparator->classifyObserved($raw, $charset, $defaultCollation),
+                $case,
+            );
+        }
+    }
+
+    public function test_observed_normalization_cannot_hide_trigger_context_or_closed_world_mutations(): void
+    {
+        $comparator = new CanonicalSupplierPhaseThreeP0SchemaComparator;
+        $exact = $this->observedSignatures('P2', 'utf8mb4_unicode_ci');
+        $triggerIndex = $this->firstTriggerIndex($exact);
+
+        foreach ([
+            'action_statement' => ' ',
+            'sql_mode' => ',ANSI',
+            'character_set_client' => '_mutated',
+            'collation_connection' => '_mutated',
+        ] as $field => $suffix) {
+            $mutated = $exact;
+            $mutated[$triggerIndex][$field] .= $suffix;
+            $this->assertUnclassified(
+                $comparator->classifyObserved($mutated, 'utf8mb4', 'utf8mb4_unicode_ci'),
+                $field,
+            );
+        }
+
+        $missing = $exact;
+        array_pop($missing);
+        $this->assertUnclassified(
+            $comparator->classifyObserved($missing, 'utf8mb4', 'utf8mb4_unicode_ci'),
+            'missing object',
+        );
+
+        $extra = $exact;
+        $extra[] = [
+            'type' => 'table',
+            'table' => 'unexpected_table',
+            'table_type' => 'BASE TABLE',
+            'engine' => 'InnoDB',
+            'row_format' => 'Dynamic',
+            'table_collation' => 'utf8mb4_unicode_ci',
+            'create_options' => '',
+            'table_comment' => '',
+        ];
+        $this->assertUnclassified(
+            $comparator->classifyObserved($extra, 'utf8mb4', 'utf8mb4_unicode_ci'),
+            'extra object',
+        );
+
+        $structural = $exact;
+        foreach ($structural as &$signature) {
+            if ($signature['type'] === 'table') {
+                $signature['engine'] = 'MEMORY';
+                break;
+            }
+        }
+        unset($signature);
+        $this->assertUnclassified(
+            $comparator->classifyObserved($structural, 'utf8mb4', 'utf8mb4_unicode_ci'),
+            'structural mutation',
         );
     }
 
@@ -196,10 +302,41 @@ final class CanonicalSupplierPhaseThreeP0OracleTest extends TestCase
     }
 
     /** @param array{state: string, classification: string, sha256: ?string, object_count: int} $result */
-    private function assertUnclassified(array $result): void
+    private function assertUnclassified(array $result, string $case = ''): void
     {
-        $this->assertSame(CanonicalSupplierPhaseThreeP0SchemaComparator::UNCLASSIFIED_STATE, $result['state']);
-        $this->assertNull($result['sha256']);
+        $this->assertSame(
+            CanonicalSupplierPhaseThreeP0SchemaComparator::UNCLASSIFIED_STATE,
+            $result['state'],
+            $case,
+        );
+        $this->assertNull($result['sha256'], $case);
+    }
+
+    /** @return list<array<string, mixed>> */
+    private function observedSignatures(string $state, string $databaseCollation): array
+    {
+        $signatures = (new CanonicalSupplierPhaseThreeP0SchemaComparator)->expectedSignatures($state);
+
+        foreach ($signatures as &$signature) {
+            if ($signature['type'] === 'trigger') {
+                $signature['database_collation'] = $databaseCollation;
+            }
+        }
+        unset($signature);
+
+        return $signatures;
+    }
+
+    /** @param list<array<string, mixed>> $signatures */
+    private function firstTriggerIndex(array $signatures): int
+    {
+        foreach ($signatures as $index => $signature) {
+            if (($signature['type'] ?? null) === 'trigger') {
+                return $index;
+            }
+        }
+
+        $this->fail('No trigger signature was available.');
     }
 
     /** @param callable(array<string, mixed>): array<string, mixed> $mutation */

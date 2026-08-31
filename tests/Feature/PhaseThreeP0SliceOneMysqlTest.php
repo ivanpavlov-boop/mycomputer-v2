@@ -13,7 +13,9 @@ use App\Repositories\Suppliers\SupplierImportSourceProfileRepository;
 use App\Services\Suppliers\SourceProfiles\SupplierSourceIdentityCollisionClassifier;
 use Database\Migrations\Support\CanonicalSupplierPhaseThreeP0NamedLockResult;
 use Database\Migrations\Support\CanonicalSupplierPhaseThreeP0Schema;
+use Database\Migrations\Support\CanonicalSupplierPhaseThreeP0SchemaComparator;
 use Database\Migrations\Support\CanonicalSupplierPhaseThreeP0SchemaException;
+use Database\Migrations\Support\CanonicalSupplierPhaseThreeP0SchemaInspector;
 use Illuminate\Database\Connection;
 use Illuminate\Database\DatabaseManager;
 use Illuminate\Support\Facades\DB;
@@ -76,6 +78,96 @@ final class PhaseThreeP0SliceOneMysqlTest extends TestCase
         $this->assertSame('P1', CanonicalSupplierPhaseThreeP0Schema::classify(DB::connection()->getPdo())['state']);
         $p02->up();
         $this->assertSame('P2', CanonicalSupplierPhaseThreeP0Schema::classify(DB::connection()->getPdo())['state']);
+    }
+
+    public function test_schema_inspection_preserves_raw_trigger_collation_before_canonical_attestation(): void
+    {
+        $inspection = (new CanonicalSupplierPhaseThreeP0SchemaInspector(
+            DB::connection()->getPdo(),
+        ))->inspect();
+        $rawTriggerCollations = [];
+
+        foreach ($inspection['raw_signatures'] as $signature) {
+            if ($signature['type'] === 'trigger') {
+                $rawTriggerCollations[] = $signature['database_collation'];
+            }
+        }
+
+        $this->assertSame('utf8mb4', $inspection['schema_charset']);
+        $this->assertIsString($inspection['schema_default_collation']);
+        $this->assertNotSame('', $inspection['schema_default_collation']);
+        $this->assertNotSame([], $rawTriggerCollations);
+        $this->assertSame(
+            [$inspection['schema_default_collation']],
+            array_values(array_unique($rawTriggerCollations, SORT_REGULAR)),
+        );
+        $this->assertNotContains(
+            CanonicalSupplierPhaseThreeP0SchemaComparator::ENVIRONMENT_DERIVED_DATABASE_COLLATION,
+            $rawTriggerCollations,
+        );
+        $this->assertSame('P2', CanonicalSupplierPhaseThreeP0Schema::classify(DB::connection()->getPdo())['state']);
+    }
+
+    public function test_schema_default_drift_rejects_before_destructive_p0_ddl(): void
+    {
+        $pdo = DB::connection()->getPdo();
+        $before = (new CanonicalSupplierPhaseThreeP0SchemaInspector($pdo))->inspect();
+        $database = $before['database'];
+        $originalCollation = $before['schema_default_collation'];
+
+        $this->assertMatchesRegularExpression('/\A[A-Za-z0-9_]+\z/', $database);
+        $this->assertIsString($originalCollation);
+        $this->assertMatchesRegularExpression('/\Autf8mb4_[A-Za-z0-9_]+\z/', $originalCollation);
+
+        $statement = $pdo->prepare(<<<'SQL'
+            SELECT COLLATION_NAME
+            FROM information_schema.COLLATIONS
+            WHERE CHARACTER_SET_NAME = 'utf8mb4'
+              AND COLLATION_NAME <> ?
+            ORDER BY COLLATION_NAME
+            LIMIT 1
+            SQL);
+        $statement->execute([$originalCollation]);
+        $driftCollation = $statement->fetchColumn();
+        $this->assertIsString($driftCollation);
+        $this->assertMatchesRegularExpression('/\Autf8mb4_[A-Za-z0-9_]+\z/', $driftCollation);
+
+        try {
+            DB::unprepared(
+                "ALTER DATABASE `{$database}` CHARACTER SET utf8mb4 COLLATE {$driftCollation}",
+            );
+            $drifted = (new CanonicalSupplierPhaseThreeP0SchemaInspector($pdo))->inspect();
+            $rawTriggerCollations = [];
+            foreach ($drifted['raw_signatures'] as $signature) {
+                if ($signature['type'] === 'trigger') {
+                    $rawTriggerCollations[] = $signature['database_collation'];
+                }
+            }
+
+            $this->assertSame($driftCollation, $drifted['schema_default_collation']);
+            $this->assertSame([$originalCollation], array_values(array_unique($rawTriggerCollations, SORT_REGULAR)));
+            $this->assertSame(
+                CanonicalSupplierPhaseThreeP0SchemaComparator::UNCLASSIFIED_STATE,
+                CanonicalSupplierPhaseThreeP0Schema::classify($pdo)['state'],
+            );
+
+            putenv('SUPPLIER_PHASE_THREE_P0_EMPTY_SCHEMA_DOWN_CONFIRMED=true');
+            $migration = require database_path('migrations/2026_08_28_090001_create_supplier_import_source_profiles_table.php');
+            try {
+                $migration->down();
+                $this->fail('Collation drift authorized destructive P0 DDL.');
+            } catch (CanonicalSupplierPhaseThreeP0SchemaException $exception) {
+                $this->assertSame('UNCLASSIFIED_P0_SCHEMA_STATE', $exception->primaryCode);
+            }
+
+            $this->assertTrue(Schema::hasTable('supplier_import_source_profiles'));
+        } finally {
+            DB::unprepared(
+                "ALTER DATABASE `{$database}` CHARACTER SET utf8mb4 COLLATE {$originalCollation}",
+            );
+        }
+
+        $this->assertSame('P2', CanonicalSupplierPhaseThreeP0Schema::classify($pdo)['state']);
     }
 
     public function test_downgrade_requires_authorization_mutex_and_exact_known_state_before_any_ddl(): void

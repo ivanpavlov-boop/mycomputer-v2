@@ -8,6 +8,8 @@ final class CanonicalSupplierPhaseThreeP0SchemaComparator
 {
     public const UNCLASSIFIED_STATE = 'UNCLASSIFIED_P0_SCHEMA_STATE';
 
+    public const ENVIRONMENT_DERIVED_DATABASE_COLLATION = 'ENVIRONMENT_DERIVED_DATABASE_COLLATION';
+
     private const SIGNATURE_DOMAIN = 'phase-iii-p0-schema-signature-v1';
 
     /** @var array<string, list<string>> */
@@ -75,6 +77,72 @@ final class CanonicalSupplierPhaseThreeP0SchemaComparator
         }
 
         return $this->unclassified(count($candidate));
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $rawSignatures
+     * @return array{state: string, classification: string, sha256: ?string, object_count: int}
+     */
+    public function classifyObserved(
+        array $rawSignatures,
+        mixed $schemaCharset,
+        mixed $schemaDefaultCollation,
+    ): array {
+        $canonicalSignatures = $this->normalizeObservedSignatures(
+            $rawSignatures,
+            $schemaCharset,
+            $schemaDefaultCollation,
+        );
+
+        if ($canonicalSignatures === null) {
+            return $this->unclassified(count($rawSignatures));
+        }
+
+        return $this->classify($canonicalSignatures);
+    }
+
+    /**
+     * Raw inspection evidence is never modified. Only an attested copy receives
+     * the canonical environment-derived trigger token.
+     *
+     * @param  list<array<string, mixed>>  $rawSignatures
+     * @return list<array<string, mixed>>|null
+     */
+    public function normalizeObservedSignatures(
+        array $rawSignatures,
+        mixed $schemaCharset,
+        mixed $schemaDefaultCollation,
+    ): ?array {
+        if (! array_is_list($rawSignatures)
+            || $schemaCharset !== 'utf8mb4'
+            || ! is_string($schemaDefaultCollation)
+            || $schemaDefaultCollation === '') {
+            return null;
+        }
+
+        $canonicalSignatures = [];
+        foreach ($rawSignatures as $rawSignature) {
+            if (! is_array($rawSignature)) {
+                return null;
+            }
+
+            $canonicalSignature = $rawSignature;
+            if (($rawSignature['type'] ?? null) === 'trigger') {
+                $rawDatabaseCollation = $rawSignature['database_collation'] ?? null;
+                if (! array_key_exists('database_collation', $rawSignature)
+                    || ! is_string($rawDatabaseCollation)
+                    || $rawDatabaseCollation === ''
+                    || ! hash_equals($schemaDefaultCollation, $rawDatabaseCollation)) {
+                    return null;
+                }
+
+                $canonicalSignature['database_collation'] = self::ENVIRONMENT_DERIVED_DATABASE_COLLATION;
+            }
+
+            $canonicalSignatures[] = $canonicalSignature;
+        }
+
+        return $canonicalSignatures;
     }
 
     /** @return list<array<string, mixed>> */

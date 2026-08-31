@@ -19,10 +19,18 @@ final readonly class CanonicalSupplierPhaseThreeP0SchemaInspector
 
     public function __construct(private PDO $pdo) {}
 
-    /** @return list<array<string, mixed>> */
-    public function enumerate(): array
+    /**
+     * @return array{
+     *     database: string,
+     *     schema_charset: mixed,
+     *     schema_default_collation: mixed,
+     *     raw_signatures: list<array<string, mixed>>
+     * }
+     */
+    public function inspect(): array
     {
         $database = $this->databaseName();
+        $environment = $this->schemaEnvironment($database);
         $tables = $this->tableSignatures($database);
         $tableNames = array_map(
             static fn (array $signature): string => $signature['table'],
@@ -30,17 +38,31 @@ final readonly class CanonicalSupplierPhaseThreeP0SchemaInspector
         );
 
         if ($tableNames === []) {
-            return [];
+            return [
+                'database' => $database,
+                ...$environment,
+                'raw_signatures' => [],
+            ];
         }
 
         return [
-            ...$tables,
-            ...$this->columnSignatures($database, $tableNames),
-            ...$this->indexSignatures($database, $tableNames),
-            ...$this->foreignKeySignatures($database, $tableNames),
-            ...$this->checkSignatures($database, $tableNames),
-            ...$this->triggerSignatures($database, $tableNames),
+            'database' => $database,
+            ...$environment,
+            'raw_signatures' => [
+                ...$tables,
+                ...$this->columnSignatures($database, $tableNames),
+                ...$this->indexSignatures($database, $tableNames),
+                ...$this->foreignKeySignatures($database, $tableNames),
+                ...$this->checkSignatures($database, $tableNames),
+                ...$this->triggerSignatures($database, $tableNames),
+            ],
         ];
+    }
+
+    /** @return list<array<string, mixed>> */
+    public function enumerate(): array
+    {
+        return $this->inspect()['raw_signatures'];
     }
 
     private function databaseName(): string
@@ -52,6 +74,32 @@ final readonly class CanonicalSupplierPhaseThreeP0SchemaInspector
         }
 
         return $value;
+    }
+
+    /** @return array{schema_charset: mixed, schema_default_collation: mixed} */
+    private function schemaEnvironment(string $database): array
+    {
+        $statement = $this->pdo->prepare(<<<'SQL'
+            SELECT DEFAULT_CHARACTER_SET_NAME, DEFAULT_COLLATION_NAME
+            FROM information_schema.SCHEMATA
+            WHERE SCHEMA_NAME = ?
+            SQL);
+
+        if ($statement === false || ! $statement->execute([$database])) {
+            throw new RuntimeException('phase_three_p0_schema_inspection_unavailable');
+        }
+
+        $row = $statement->fetch(PDO::FETCH_ASSOC);
+        if (! is_array($row)
+            || ! array_key_exists('DEFAULT_CHARACTER_SET_NAME', $row)
+            || ! array_key_exists('DEFAULT_COLLATION_NAME', $row)) {
+            throw new RuntimeException('phase_three_p0_schema_inspection_unavailable');
+        }
+
+        return [
+            'schema_charset' => $row['DEFAULT_CHARACTER_SET_NAME'],
+            'schema_default_collation' => $row['DEFAULT_COLLATION_NAME'],
+        ];
     }
 
     /** @return list<array<string, mixed>> */
@@ -255,7 +303,9 @@ final readonly class CanonicalSupplierPhaseThreeP0SchemaInspector
             'sql_mode' => (string) $row['SQL_MODE'],
             'character_set_client' => (string) $row['CHARACTER_SET_CLIENT'],
             'collation_connection' => (string) $row['COLLATION_CONNECTION'],
-            'database_collation' => (string) $row['DATABASE_COLLATION'],
+            'database_collation' => $row['DATABASE_COLLATION'] === null
+                ? null
+                : (string) $row['DATABASE_COLLATION'],
         ], $statement->fetchAll(PDO::FETCH_ASSOC));
     }
 
