@@ -1096,6 +1096,16 @@ null, `true`/`false`, canonical base-10 integers and ordered arrays. Expected
 bytes and SHA-256 values are independent constants derived from canonical DDL,
 never from inspected state.
 
+The sole environment-derived exception is the required trigger
+`database_collation` field. Inspection retains its raw non-empty value as audit
+evidence, attests that the current schema uses charset `utf8mb4` and that the
+raw value exactly equals that schema's `DEFAULT_COLLATION_NAME`, and only then
+places `ENVIRONMENT_DERIVED_DATABASE_COLLATION` in the canonical trigger
+signature. Missing, null, empty, non-`utf8mb4` or mismatched evidence rejects
+before DDL. This is independent of any literal collation allowlist and applies
+to no other field. Trigger body, SQL mode, client charset, connection
+collation, table/column collations and all other object metadata stay exact.
+
 Treat object/state/operation metadata as closed-world authority too.
 `registry_id` is exactly `object_id@first_16_lowercase_hex(signature_sha256)`,
 matches `\A[A-Za-z0-9_:]+@[0-9a-f]{16}\z`, is at most 128 ASCII bytes and is
@@ -1113,9 +1123,13 @@ ordered top-level keys `version>objects>states>operations` and version
 `phase-iii-p0-oracle-metadata-v1`. Its exact length is `168474` bytes and the
 hardcoded SHA-256 over domain `phase-iii-p0-oracle-metadata-v1`, NUL and those
 bytes is
-`c318217781f620b5cdc4cd96a6a483906e99a909a232eb18362b46248436ff37`.
+`0ca5b057d4733cb791d791bbf6113e8e7f3a678ffdd61a7c11ca36306023def6`.
 This metadata constant is independent of candidate DDL/database state and does
-not alter any schema signature, state or downgrade-SQL hash.
+not alter any downgrade-SQL hash. The collation-authority refreeze changes the
+16 trigger signature hashes, their registry IDs, all 17 state hashes and the
+operation bindings that carry those hashes; the canonical design contains the
+complete old/new ledger. Object, state and operation counts remain 375, 17 and
+15, and P0 remains 207 records.
 
 The exact signature sources and field orders are: table
 `type>table>table_type>engine>row_format>table_collation>create_options>table_comment`
@@ -1131,7 +1145,10 @@ from `TABLE_CONSTRAINTS`/`KEY_COLUMN_USAGE`/`REFERENTIAL_CONSTRAINTS`; CHECK
 from `TRIGGERS`. SQL expressions receive only CRLF/CR-to-LF and edge ASCII
 whitespace normalization; case, quotes, parentheses and internal whitespace are
 exact. `DEFINER` is ignored as deployment-account metadata, while trigger SQL
-mode and character-set/collation context are authoritative.
+mode and character-set/collation context are authoritative. Raw trigger
+`DATABASE_COLLATION` remains observable but, after exact current-schema-default
+`utf8mb4` attestation, only its fixed environment-derived token is
+signature-bearing.
 
 Each P0-created table has exact table comment
 `mycomputer:phase-iii-p0:v1:owner=P0-XX`; discovery uses this structural marker,
@@ -1151,26 +1168,35 @@ records in the canonical design. The exact normal-prefix authority is:
 
 | State | Object count | Exact SHA-256 |
 | :---: | ---: | --- |
-| P0 | 207 | `77512f147ef9a2fe3889156ac617701c3de7fc7532bb4914329d0735bdfaed79` |
-| P1 | 208 | `8ed9f3d479812a2807abcc23411bad1fd60cd495566a94416352f0c4640bf447` |
-| P2 | 241 | `e48e93be9175fe25534f11b8d2ce8783704f6aae9aa0049a187899ac7dfb8d1b` |
-| P3 | 275 | `14d9f5e09f67adfcc5478df16c4b18c212c4ec419a55b55f2ea029c87487ae9c` |
-| P4 | 294 | `71fd2b7ba45fee082c50484d2917e907add490852a9805ecd1b58dbf5adc57e3` |
-| P5 | 309 | `3d2706a0248ae32245c4687e780b2ff90c94a62d674b999f91d00a07f5d1d1df` |
-| P6 | 339 | `7c3a1a27e837f615dd454b5bd502457cba97bff86232d8a03a3b26782c203afc` |
-| P7 | 349 | `08fdbbd004cacdc4dbad903d37473e5cb9eaa3b73975c02ba2a380e15881f72c` |
-| P8 | 355 | `5b1bea0f3bde4743d1abff7b034c4ab67fe32c4d41ba9a3be49f43cafe47c460` |
-| P9 | 368 | `8bb39c337b88785e8713add993c98ef533a51bb6603b9811d17984b7f411b40b` |
+| P0 | 207 | `dd03ca3b3610207ea12afbd14373a62275e74c8cda50f72b9e129006192bc812` |
+| P1 | 208 | `0b857430da7679fd6692c1693ba1140e9826b68e497d23fc36abc81a7699e3bc` |
+| P2 | 241 | `af7261209342b681f587e145190ab217c67a14af4334f0c0e99241cfe8ad0169` |
+| P3 | 275 | `88e8c410ea052d66c6d8a920143f11fdf3ecca47f4c6c570afcecb16fce1cf2b` |
+| P4 | 294 | `1fc28641da815cd4737b50b5b8ed065918b3f416f970ba2cccef82e5342e8d57` |
+| P5 | 309 | `8cc5afed3a68c4152bf1456a10741c5e23bd077bf4dae39cae639208872ca56f` |
+| P6 | 339 | `ea265e4717c2f61abba6731f08be576ff6fcd01fe6b673d61d41011a888056aa` |
+| P7 | 349 | `87a549668d891206e5bd29e75514616916d71b87708f2d964a8824c8b3c0bebe` |
+| P8 | 355 | `3d9ebf157c1374e2fd8271d0ce5c5b3ead0e85dcc2061914297ee5af65c7f495` |
+| P9 | 368 | `48138998d6168fab3275475ba09ee8af261116a7cf0bed8ff8be33dfa97ff406` |
 
 The only recognized partial hashes are
-`P9_DOWN_1=f257be822963cb68f25512f2b33c5016c4045bfb9383832ecfb5d9c3f91efa78`,
-`P9_DOWN_2=ac69d315ac8c20a4f4d1636771b28b0c40cb145fa3620a8129d7b206ef439530`,
-`P8_DOWN_1=fa8faae1d7b713dbebf28c96b82ddc2d8ef0277c93bbd386dcd9f960f23b40df`,
-`P8_DOWN_2=f9fe6e35cf6685d095d577700c696b8c3a35b6474118ff135262a34d8e148062`,
-`P7_DOWN_1=ed4a66e13b332fde7d4715abbd5c8152b0bc257585e65ec34ced59c20b4c2fb8`
+`P9_DOWN_1=084cbc4d6992621b283a45be6f5ff0c412cbb4936f173f26d5e45116ea951ed4`,
+`P9_DOWN_2=57ff5af1375648c6753665531fdc949531a401af85bd75fcc6fe16e0867b3431`,
+`P8_DOWN_1=21c2c27a8d9357766bb4183b5a205305e115c155b616cbb67c92ec8a0976948e`,
+`P8_DOWN_2=11edaac97962d7e6ac316ebda46b3f171723ed7d919b1242049f2bf3a09ad9a2`,
+`P7_DOWN_1=680a78d1b5c54488255b39da92e4995c3bcaa5d900f7b8f0baf40846c1f2c7be`
 and
-`P7_DOWN_2=d81758384e083c7252abc0861d33674f7b2d6d9e4bdbb1783b9bab21fe02c6f0`.
+`P7_DOWN_2=65dbb7dd13d42731577f66a58fd6b7bf02d6fe44988b7eaaad747a8a517702ea`.
 Every other shape is `UNCLASSIFIED_P0_SCHEMA_STATE` and executes zero DDL.
+
+Fresh MySQL 8.4 integration must create one disposable schema with
+`utf8mb4_0900_ai_ci` and one with `utf8mb4_unicode_ci`, run the same historical
+migration chain through the immediate P0-01 predecessor, and prove both reach
+the exact P0 hash above when the only raw delta is trigger
+`DATABASE_COLLATION`. P0-01 must then produce the same exact P1 hash in both.
+Laravel connection collation does not establish the database/schema default;
+no database-level `utf8mb4_unicode_ci` prerequisite, `ALTER DATABASE`, alternate
+migration route or hidden bootstrap DDL is authorized by this remediation.
 
 The coordinator acquires exact `GET_LOCK(..., 0)` on the same dedicated PDO
 connection before inspection. A non-`1` result fails
