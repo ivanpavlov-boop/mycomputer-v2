@@ -2193,11 +2193,100 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
             'missing baseline' => ['`missing_baseline_object` | `REJECT_BEFORE_DDL`', '`missing_baseline_object` | `INFER_FROM_CANDIDATE`'],
             'candidate derived expected hash' => ['`expected_authority` | `INDEPENDENT_HARDCODED_NEVER_CANDIDATE_DERIVED`', '`expected_authority` | `CANDIDATE_DERIVED`'],
             'loose namespace search' => ['`created_table_namespace` | `STRUCTURAL_EXACT_TABLE_COMMENT_OWNER`', '`created_table_namespace` | `TABLE_NAME_SUBSTRING`'],
+            'missing raw collation evidence' => ['`trigger_database_collation_raw` | `REQUIRED_NONEMPTY_INSPECTION_EVIDENCE`', '`trigger_database_collation_raw` | `OPTIONAL`'],
+            'literal allowlist' => ['`trigger_database_collation_attestation` | `EXACT_CURRENT_SCHEMA_DEFAULT_UTF8MB4`', '`trigger_database_collation_attestation` | `LITERAL_ALLOWLIST`'],
+            'wildcard canonical value' => ['`trigger_database_collation_canonical` | `ENVIRONMENT_DERIVED_DATABASE_COLLATION`', '`trigger_database_collation_canonical` | `ANY`'],
+            'broadened collation exemption' => ['`trigger_database_collation_literal` | `NON_SIGNATURE_BEARING_AFTER_ATTESTATION`', '`trigger_database_collation_literal` | `ALL_COLLATIONS_IGNORED`'],
         ];
         foreach ($mutations as $case => [$search, $replacement]) {
             $mutated = $this->replaceStructuralText($design, $search, $replacement);
             $this->assertNotSame([], $this->phaseThreeP0DesignClosureContract($mutated, $plan)['violations'], $case);
         }
+    }
+
+    public function test_phase_three_p0_b003_trigger_database_collation_is_attested_environment_evidence(): void
+    {
+        $signature = [
+            'type' => 'trigger',
+            'name' => 'trg_import_execution_claim_path_immutable',
+            'table' => 'supplier_import_execution_claims',
+            'timing' => 'BEFORE',
+            'event' => 'UPDATE',
+            'action_orientation' => 'ROW',
+            'action_statement' => "BEGIN\n  SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Execution claim path is immutable';\nEND",
+            'sql_mode' => 'STRICT_TRANS_TABLES,NO_ENGINE_SUBSTITUTION',
+            'character_set_client' => 'utf8mb4',
+            'collation_connection' => 'utf8mb4_unicode_ci',
+            'database_collation' => 'utf8mb4_unicode_ci',
+        ];
+
+        $unicode = $this->normalizePhaseThreeP0TriggerDatabaseCollation(
+            $signature,
+            'utf8mb4',
+            'utf8mb4_unicode_ci',
+        );
+        $mysqlDefault = $this->normalizePhaseThreeP0TriggerDatabaseCollation(
+            [...$signature, 'database_collation' => 'utf8mb4_0900_ai_ci'],
+            'utf8mb4',
+            'utf8mb4_0900_ai_ci',
+        );
+        $attestedThirdCollation = $this->normalizePhaseThreeP0TriggerDatabaseCollation(
+            [...$signature, 'database_collation' => 'utf8mb4_general_ci'],
+            'utf8mb4',
+            'utf8mb4_general_ci',
+        );
+
+        $this->assertSame('ENVIRONMENT_DERIVED_DATABASE_COLLATION', $unicode['database_collation']);
+        $this->assertSame($unicode, $mysqlDefault);
+        $this->assertSame($unicode, $attestedThirdCollation, 'Normalization is attestation-based, not a literal allowlist.');
+
+        $missing = $signature;
+        unset($missing['database_collation']);
+        foreach ([
+            'missing field' => [$missing, 'utf8mb4', 'utf8mb4_unicode_ci'],
+            'null field' => [[...$signature, 'database_collation' => null], 'utf8mb4', 'utf8mb4_unicode_ci'],
+            'empty field' => [[...$signature, 'database_collation' => ''], 'utf8mb4', 'utf8mb4_unicode_ci'],
+            'mismatched schema default' => [[...$signature, 'database_collation' => 'utf8mb4_general_ci'], 'utf8mb4', 'utf8mb4_unicode_ci'],
+            'non-utf8mb4 schema' => [$signature, 'latin1', 'utf8mb4_unicode_ci'],
+        ] as $case => [$candidate, $schemaCharset, $schemaCollation]) {
+            $this->assertThrows(
+                fn () => $this->normalizePhaseThreeP0TriggerDatabaseCollation($candidate, $schemaCharset, $schemaCollation),
+                \InvalidArgumentException::class,
+                'Trigger database collation evidence is not attested.',
+            );
+        }
+
+        foreach ([
+            'trigger body' => ['action_statement', 'BEGIN SIGNAL SQLSTATE \'45000\'; END'],
+            'SQL_MODE' => ['sql_mode', 'ANSI_QUOTES'],
+            'CHARACTER_SET_CLIENT' => ['character_set_client', 'latin1'],
+            'COLLATION_CONNECTION' => ['collation_connection', 'utf8mb4_0900_ai_ci'],
+        ] as $case => [$field, $value]) {
+            $mutated = $this->normalizePhaseThreeP0TriggerDatabaseCollation(
+                [...$signature, $field => $value],
+                'utf8mb4',
+                'utf8mb4_unicode_ci',
+            );
+            $this->assertNotSame($unicode, $mutated, "{$case} must remain signature-bearing.");
+        }
+
+        $design = $this->readDocument('docs/IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md');
+        $plan = $this->readDocument('docs/PHASE_9C6_5C3D1_RUNTIME_IMPLEMENTATION_PLAN.md');
+        $needle = '"object_id":"trigger:supplier_import_execution_claims:trg_import_execution_claim_path_immutable"';
+        $triggerLines = array_values(array_filter(
+            preg_split('/\R/', $design) ?: [],
+            static fn (string $line): bool => str_contains($line, $needle),
+        ));
+        $this->assertCount(1, $triggerLines);
+        $this->assertNotSame([], $this->phaseThreeP0ConcreteOracleContract(
+            str_replace($triggerLines[0], '', $design),
+            $plan,
+        )['violations'], 'Missing trigger must reject.');
+        $objectMarker = '<!-- phase-iii-p0-object-signature-registry classification=CURRENT id=phase-iii-p0-object-signatures-v1 -->';
+        $this->assertNotSame([], $this->phaseThreeP0ConcreteOracleContract(
+            str_replace($objectMarker, $objectMarker."\n".$triggerLines[0], $design),
+            $plan,
+        )['violations'], 'Extra trigger must reject.');
     }
 
     public function test_phase_three_p0_b003_coordinator_owns_ddl_and_rejects_reentrancy(): void
@@ -2605,7 +2694,7 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
             'altered CHECK body' => ['"clause":"((`active_attempt_token_hash` is null)', '"clause":"((`active_attempt_token_hash_broken` is null)'],
             'altered trigger body' => ['"action_statement":"BEGIN\\n  IF', '"action_statement":"BEGIN\\n  SET @unsafe = 1;\\n  IF'],
             'altered trigger timing' => ['"timing":"BEFORE"', '"timing":"AFTER"'],
-            'changed prefix hash' => ['8ed9f3d479812a2807abcc23411bad1fd60cd495566a94416352f0c4640bf447', 'ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff'],
+            'changed prefix hash' => ['0b857430da7679fd6692c1693ba1140e9826b68e497d23fc36abc81a7699e3bc', 'ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff'],
             'wrong prefix membership' => ['"memberships":["P9","P9_DOWN_1"', '"memberships":["P0","P9","P9_DOWN_1"'],
             'placeholder signature' => ['"sha256":"007cc9bdbbe5f585ce6a73e0dee2795d3a3923550353971642211cea48f7b2b5"', '"sha256":"TBD"'],
             'candidate-derived expected hash' => ["It may not derive, refresh, bless or\nreplace them from migration DDL", 'It may derive expected values from candidate migration DDL'],
@@ -3076,8 +3165,8 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
 
         $this->assertSame([], $canonical['violations'], implode(PHP_EOL, $canonical['violations']));
         $this->assertSame('CANONICAL_CURRENT_ARCHITECTURE', $canonical['current_architecture_inventory']['classification']);
-        $this->assertSame(278, $canonical['current_architecture_inventory']['unit_count']);
-        $this->assertSame(16, $canonical['candidate_count']);
+        $this->assertSame(286, $canonical['current_architecture_inventory']['unit_count']);
+        $this->assertSame(17, $canonical['candidate_count']);
 
         $outsideContradictions = [
             'REV007-C01 alternate digest family' => [$selectorStart, false, 'For byte sealing, family one is controlling.'],
@@ -3224,7 +3313,7 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
 
         $this->assertSame([], $canonical['violations'], implode(PHP_EOL, $canonical['violations']));
         $this->assertSame('CANONICAL_ARCHITECTURE_DOCUMENT', $canonical['architecture_document_inventory']['classification']);
-        $this->assertSame(1122, $canonical['architecture_document_inventory']['unit_count']);
+        $this->assertSame(1130, $canonical['architecture_document_inventory']['unit_count']);
         $this->assertSame($expectedRegions, $canonical['architecture_document_inventory']['region_order']);
         $this->assertSame($expectedRegions, array_keys($canonical['architecture_document_inventory']['regions']));
         foreach ($expectedRegions as $position => $id) {
@@ -5692,6 +5781,32 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
     }
 
     /**
+     * @param  array<string, mixed>  $signature
+     * @return array<string, mixed>
+     */
+    private function normalizePhaseThreeP0TriggerDatabaseCollation(
+        array $signature,
+        string $schemaCharset,
+        mixed $schemaDefaultCollation,
+    ): array {
+        $raw = $signature['database_collation'] ?? null;
+        if (($signature['type'] ?? null) !== 'trigger'
+            || ! array_key_exists('database_collation', $signature)
+            || ! is_string($raw)
+            || $raw === ''
+            || $schemaCharset !== 'utf8mb4'
+            || ! is_string($schemaDefaultCollation)
+            || $schemaDefaultCollation === ''
+            || ! hash_equals($schemaDefaultCollation, $raw)) {
+            throw new \InvalidArgumentException('Trigger database collation evidence is not attested.');
+        }
+
+        $signature['database_collation'] = 'ENVIRONMENT_DERIVED_DATABASE_COLLATION';
+
+        return $signature;
+    }
+
+    /**
      * @return array{
      *     objects: array<int, array<string, mixed>>,
      *     states: array<string, array<string, mixed>>,
@@ -6028,7 +6143,10 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
             'The `source_locator_key` length CHECK is exact frozen byte authority, while its physical column remains `VARCHAR(128) CHARACTER SET ascii COLLATE ascii_bin`.',
             'The complete canonical locator is therefore exactly 89 characters and 89 bytes.',
             'The CHECK keeps `LENGTH(source_locator_key) = 89` alongside the exact versioned regex',
-            'c318217781f620b5cdc4cd96a6a483906e99a909a232eb18362b46248436ff37',
+            '0ca5b057d4733cb791d791bbf6113e8e7f3a678ffdd61a7c11ca36306023def6',
+            'Trigger `DATABASE_COLLATION` is the only environment-derived literal in this signature contract.',
+            'Fresh-install integration must therefore prove A and B both classify as the same P0 before P0-01 and the same P1 after P0-01',
+            'No unrelated object, SQL or downgrade-SQL golden changes.',
         ] as $authority) {
             if (! str_contains($normalizedDesign, $authority)) {
                 $violations[] = "Concrete P0 design is missing exact authority: {$authority}";
@@ -6047,7 +6165,10 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
             'Within the same P0-02 authority, `source_locator_key` remains exactly `VARCHAR(128) CHARACTER SET ascii COLLATE ascii_bin`',
             'the canonical locator is exactly 89 characters and 89 bytes.',
             'Keep `LENGTH(source_locator_key) = 89` and the exact versioned regex together.',
-            'c318217781f620b5cdc4cd96a6a483906e99a909a232eb18362b46248436ff37',
+            '0ca5b057d4733cb791d791bbf6113e8e7f3a678ffdd61a7c11ca36306023def6',
+            'The sole environment-derived exception is the required trigger `database_collation` field.',
+            'Fresh MySQL 8.4 integration must create one disposable schema with `utf8mb4_0900_ai_ci` and one with `utf8mb4_unicode_ci`',
+            'no database-level `utf8mb4_unicode_ci` prerequisite, `ALTER DATABASE`, alternate migration route or hidden bootstrap DDL is authorized',
         ] as $authority) {
             if (! str_contains($normalizedPlan, $authority)) {
                 $violations[] = "P0 runtime plan is missing exact concrete-oracle authority: {$authority}";
@@ -6747,20 +6868,21 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
     /** @return array<string, mixed> */
     private function expectedPhaseThreeArchitectureDocumentInventory(): array
     {
+        // Refrozen only for the trigger DATABASE_COLLATION authority text and canonical hash ledger.
         return [
             'version' => 'phase-iii-architecture-document-closed-world-v1',
-            'normalized_bytes' => 1873134,
-            'line_count' => 7961,
-            'unit_count' => 1122,
+            'normalized_bytes' => 1883829,
+            'line_count' => 8057,
+            'unit_count' => 1130,
             'unit_categories' => [
                 'CANONICAL_HEADING_EXACT' => 86,
                 'CANONICAL_LITERAL_EXACT' => 72,
                 'CANONICAL_MARKER_EXACT' => 40,
-                'CANONICAL_PARAGRAPH_EXACT' => 856,
-                'CANONICAL_TABLE_EXACT' => 68,
+                'CANONICAL_PARAGRAPH_EXACT' => 862,
+                'CANONICAL_TABLE_EXACT' => 70,
             ],
-            'byte_fingerprint' => 'b0fb8cc5a3d8760a72c793db86f463c0e6f1c3494fe76063517590c4dc00d780',
-            'unit_fingerprint' => '7d91396818bad1d6e2e6a683c76fe98b2375c14ef22f26fd4a690d2ad259efa2',
+            'byte_fingerprint' => '1ae6cf7965292e47137196148fc95b89981b324af3f5c05c44646c16d2003728',
+            'unit_fingerprint' => 'fda13dc41d6bd3e65f1f448a277c838c362d1a66e3ed53f43730db75ceea3404',
             'region_order' => [
                 'pre-current-reference-history-v1',
                 'current-architecture-authority-v1',
@@ -6786,18 +6908,18 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
                 'current-architecture-authority-v1' => [
                     'id' => 'current-architecture-authority-v1',
                     'position' => 2,
-                    'normalized_bytes' => 1465620,
-                    'line_count' => 2468,
-                    'unit_count' => 278,
+                    'normalized_bytes' => 1476315,
+                    'line_count' => 2564,
+                    'unit_count' => 286,
                     'unit_categories' => [
                         'CANONICAL_HEADING_EXACT' => 16,
                         'CANONICAL_LITERAL_EXACT' => 18,
                         'CANONICAL_MARKER_EXACT' => 30,
-                        'CANONICAL_PARAGRAPH_EXACT' => 191,
-                        'CANONICAL_TABLE_EXACT' => 23,
+                        'CANONICAL_PARAGRAPH_EXACT' => 197,
+                        'CANONICAL_TABLE_EXACT' => 25,
                     ],
-                    'byte_fingerprint' => '8d250707b6c9dcf3d54e1477040dab2d799e4d4183862a52c12a8e0eaf015ab8',
-                    'unit_fingerprint' => 'c0d06120767f596c99734087546dc413b1cae028ec663c876d0342e54987fe85',
+                    'byte_fingerprint' => 'ca15be984950aeddb76fc2518d9693f0a1dc0d33c6d9e1ddff17fa53d7b047ae',
+                    'unit_fingerprint' => '7fc077532b192361ad9ca1856e6ab963e5dc5e285f75ebfdd5aa1146d5249de5',
                 ],
                 'post-current-reference-history-v1' => [
                     'id' => 'post-current-reference-history-v1',
@@ -6822,40 +6944,42 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
     /** @return array<string, mixed> */
     private function expectedPhaseThreeCurrentArchitectureInventory(): array
     {
+        // Refrozen only for the current-region collation authority and exact golden ledger.
         return [
             'version' => 'phase-iii-current-architecture-closed-world-v1',
-            'normalized_bytes' => 1465620,
-            'line_count' => 2468,
-            'unit_count' => 278,
+            'normalized_bytes' => 1476315,
+            'line_count' => 2564,
+            'unit_count' => 286,
             'unit_categories' => [
                 'CANONICAL_HEADING_EXACT' => 16,
                 'CANONICAL_LITERAL_EXACT' => 18,
                 'CANONICAL_MARKER_EXACT' => 30,
-                'CANONICAL_PARAGRAPH_EXACT' => 191,
-                'CANONICAL_TABLE_EXACT' => 23,
+                'CANONICAL_PARAGRAPH_EXACT' => 197,
+                'CANONICAL_TABLE_EXACT' => 25,
             ],
-            'byte_fingerprint' => 'dad145dbfdaa3b9e812a4201aa22070b059350627800c19c83009707df3faf7e',
-            'unit_fingerprint' => '429c7d0eb45158cca934617ce79cfecea05c1b456d1ab5ce71cb7cb573ef15d0',
+            'byte_fingerprint' => 'b5f072a5927a2731678e5314be61536f262148916e8283883b6c4473934c876b',
+            'unit_fingerprint' => '42f69728e0e591b58e8c09151fe99a767ff9fe65e76da1f2e8d1ca81d1a5f897',
         ];
     }
 
     /** @return array<string, mixed> */
     private function expectedPhaseThreeRuntimePlanInventory(): array
     {
+        // Refrozen only for the corresponding implementation guidance and A/B integration gate.
         return [
             'version' => 'phase-iii-runtime-plan-closed-world-v1',
-            'normalized_bytes' => 110822,
-            'line_count' => 1625,
-            'unit_count' => 490,
+            'normalized_bytes' => 112558,
+            'line_count' => 1651,
+            'unit_count' => 492,
             'unit_categories' => [
                 'CANONICAL_HEADING_EXACT' => 48,
                 'CANONICAL_LITERAL_EXACT' => 2,
                 'CANONICAL_MARKER_EXACT' => 7,
-                'CANONICAL_PARAGRAPH_EXACT' => 417,
+                'CANONICAL_PARAGRAPH_EXACT' => 419,
                 'CANONICAL_TABLE_EXACT' => 16,
             ],
-            'byte_fingerprint' => '433988641a38ae230b8a11a091e946af2364f7f5ff9c1a5bef00fe76f3612e1c',
-            'unit_fingerprint' => 'a2443f719116d1e11c2cf26961c877e82e250c21b472e401227b13ab6e1d724b',
+            'byte_fingerprint' => '2763c96c9951a1f2d8fc9512fc7cade807e77909132928df2b4e300e0eba1eaf',
+            'unit_fingerprint' => 'f6df631b6c921973ad9936337cbef0bbffeb6d0e9caf96e9bf2dc0d2a515cff5',
         ];
     }
 
@@ -7021,23 +7145,23 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
     private function expectedPhaseThreeP0StateHashes(): array
     {
         return [
-            'P0_BASELINE' => '77512f147ef9a2fe3889156ac617701c3de7fc7532bb4914329d0735bdfaed79',
-            'P9' => '8bb39c337b88785e8713add993c98ef533a51bb6603b9811d17984b7f411b40b',
-            'P9_DOWN_1' => 'f257be822963cb68f25512f2b33c5016c4045bfb9383832ecfb5d9c3f91efa78',
-            'P9_DOWN_2' => 'ac69d315ac8c20a4f4d1636771b28b0c40cb145fa3620a8129d7b206ef439530',
-            'P8' => '5b1bea0f3bde4743d1abff7b034c4ab67fe32c4d41ba9a3be49f43cafe47c460',
-            'P8_DOWN_1' => 'fa8faae1d7b713dbebf28c96b82ddc2d8ef0277c93bbd386dcd9f960f23b40df',
-            'P8_DOWN_2' => 'f9fe6e35cf6685d095d577700c696b8c3a35b6474118ff135262a34d8e148062',
-            'P7' => '08fdbbd004cacdc4dbad903d37473e5cb9eaa3b73975c02ba2a380e15881f72c',
-            'P7_DOWN_1' => 'ed4a66e13b332fde7d4715abbd5c8152b0bc257585e65ec34ced59c20b4c2fb8',
-            'P7_DOWN_2' => 'd81758384e083c7252abc0861d33674f7b2d6d9e4bdbb1783b9bab21fe02c6f0',
-            'P6' => '7c3a1a27e837f615dd454b5bd502457cba97bff86232d8a03a3b26782c203afc',
-            'P5' => '3d2706a0248ae32245c4687e780b2ff90c94a62d674b999f91d00a07f5d1d1df',
-            'P4' => '71fd2b7ba45fee082c50484d2917e907add490852a9805ecd1b58dbf5adc57e3',
-            'P3' => '14d9f5e09f67adfcc5478df16c4b18c212c4ec419a55b55f2ea029c87487ae9c',
-            'P2' => 'e48e93be9175fe25534f11b8d2ce8783704f6aae9aa0049a187899ac7dfb8d1b',
-            'P1' => '8ed9f3d479812a2807abcc23411bad1fd60cd495566a94416352f0c4640bf447',
-            'P0' => '77512f147ef9a2fe3889156ac617701c3de7fc7532bb4914329d0735bdfaed79',
+            'P0_BASELINE' => 'dd03ca3b3610207ea12afbd14373a62275e74c8cda50f72b9e129006192bc812',
+            'P9' => '48138998d6168fab3275475ba09ee8af261116a7cf0bed8ff8be33dfa97ff406',
+            'P9_DOWN_1' => '084cbc4d6992621b283a45be6f5ff0c412cbb4936f173f26d5e45116ea951ed4',
+            'P9_DOWN_2' => '57ff5af1375648c6753665531fdc949531a401af85bd75fcc6fe16e0867b3431',
+            'P8' => '3d9ebf157c1374e2fd8271d0ce5c5b3ead0e85dcc2061914297ee5af65c7f495',
+            'P8_DOWN_1' => '21c2c27a8d9357766bb4183b5a205305e115c155b616cbb67c92ec8a0976948e',
+            'P8_DOWN_2' => '11edaac97962d7e6ac316ebda46b3f171723ed7d919b1242049f2bf3a09ad9a2',
+            'P7' => '87a549668d891206e5bd29e75514616916d71b87708f2d964a8824c8b3c0bebe',
+            'P7_DOWN_1' => '680a78d1b5c54488255b39da92e4995c3bcaa5d900f7b8f0baf40846c1f2c7be',
+            'P7_DOWN_2' => '65dbb7dd13d42731577f66a58fd6b7bf02d6fe44988b7eaaad747a8a517702ea',
+            'P6' => 'ea265e4717c2f61abba6731f08be576ff6fcd01fe6b673d61d41011a888056aa',
+            'P5' => '8cc5afed3a68c4152bf1456a10741c5e23bd077bf4dae39cae639208872ca56f',
+            'P4' => '1fc28641da815cd4737b50b5b8ed065918b3f416f970ba2cccef82e5342e8d57',
+            'P3' => '88e8c410ea052d66c6d8a920143f11fdf3ecca47f4c6c570afcecb16fce1cf2b',
+            'P2' => 'af7261209342b681f587e145190ab217c67a14af4334f0c0e99241cfe8ad0169',
+            'P1' => '0b857430da7679fd6692c1693ba1140e9826b68e497d23fc36abc81a7699e3bc',
+            'P0' => 'dd03ca3b3610207ea12afbd14373a62275e74c8cda50f72b9e129006192bc812',
         ];
     }
 
@@ -7067,7 +7191,7 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
 
     private function expectedPhaseThreeP0OracleMetadataSha256(): string
     {
-        return 'c318217781f620b5cdc4cd96a6a483906e99a909a232eb18362b46248436ff37';
+        return '0ca5b057d4733cb791d791bbf6113e8e7f3a678ffdd61a7c11ca36306023def6';
     }
 
     /** @return array<string, array{precondition_state: string, result_state: string, next_operation: string}> */
@@ -7167,6 +7291,11 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
             'missing_baseline_object' => 'REJECT_BEFORE_DDL',
             'expression_normalization' => 'LF_AND_EDGE_ASCII_WHITESPACE_ONLY',
             'definer_authority' => 'IGNORED_DEPLOYMENT_ACCOUNT_METADATA',
+            'trigger_database_collation_raw' => 'REQUIRED_NONEMPTY_INSPECTION_EVIDENCE',
+            'trigger_database_collation_attestation' => 'EXACT_CURRENT_SCHEMA_DEFAULT_UTF8MB4',
+            'trigger_database_collation_canonical' => 'ENVIRONMENT_DERIVED_DATABASE_COLLATION',
+            'trigger_database_collation_literal' => 'NON_SIGNATURE_BEARING_AFTER_ATTESTATION',
+            'trigger_database_collation_missing' => 'REJECT_BEFORE_DDL',
         ];
     }
 
