@@ -6,6 +6,7 @@ use Database\Migrations\Support\CanonicalSupplierSnapshotSchema;
 use Illuminate\Console\Events\CommandFinished;
 use Illuminate\Console\Events\CommandStarting;
 use Illuminate\Contracts\Console\Kernel as ConsoleKernel;
+use Illuminate\Database\Migrations\Migrator;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Artisan;
@@ -541,6 +542,117 @@ final class CanonicalSupplierSnapshotSchemaMigrationTest extends TestCase
         }
     }
 
+    public function test_phase_i_fixture_uses_the_exact_historical_boundary_and_phase_batch(): void
+    {
+        $database = 'phase_i_boundary_'.getmypid().'_'.strtolower(bin2hex(random_bytes(4)));
+        $historicalPath = sys_get_temp_dir().DIRECTORY_SEPARATOR.$database.'_migrations';
+        $originalDefaultConnection = DB::getDefaultConnection();
+
+        try {
+            $orderedMigrations = $this->orderedMigrationFiles();
+            $phaseIMigrations = $this->phaseIMigrationFiles();
+            $historicalMigrations = $this->historicalMigrationFiles();
+            $postPhaseIMigrations = array_slice(
+                $orderedMigrations,
+                count($historicalMigrations) + count($phaseIMigrations),
+                null,
+                true,
+            );
+
+            $this->assertCount(94, $historicalMigrations);
+            $this->assertSame(
+                '0001_01_01_000000_create_users_table.php',
+                basename((string) reset($historicalMigrations)),
+            );
+            $this->assertSame(
+                '2026_08_13_090000_restrict_import_history_parent_foreign_keys.php',
+                basename((string) end($historicalMigrations)),
+            );
+            $this->assertSame(self::PHASE_I_MIGRATIONS, array_keys($phaseIMigrations));
+            $this->assertNotEmpty($postPhaseIMigrations);
+
+            $this->createTemporaryDatabase($database);
+            $this->configureTemporaryConnection($database);
+            $this->copyHistoricalMigrations($historicalPath);
+
+            $copiedMigrations = app(Migrator::class)->getMigrationFiles($historicalPath);
+            $this->assertSame(array_keys($historicalMigrations), array_keys($copiedMigrations));
+            $this->assertSame([], array_intersect_key($copiedMigrations, $phaseIMigrations));
+            $this->assertSame([], array_intersect_key($copiedMigrations, $postPhaseIMigrations));
+            foreach ($historicalMigrations as $migration => $sourcePath) {
+                $this->assertArrayHasKey($migration, $copiedMigrations);
+                $this->assertSame(
+                    hash_file('sha256', $sourcePath),
+                    hash_file('sha256', $copiedMigrations[$migration]),
+                    "Historical migration {$migration} must retain its original bytes.",
+                );
+            }
+
+            $this->assertArrayNotHasKey(
+                '2026_08_28_090000_add_supplier_ownership_key_to_supplier_feeds',
+                $copiedMigrations,
+            );
+            $this->assertArrayNotHasKey(
+                '2026_08_28_090001_create_supplier_import_source_profiles_table',
+                $copiedMigrations,
+            );
+
+            $this->migrateHistoricalBaseline($historicalPath);
+            DB::setDefaultConnection('snapshot_schema_phase_i');
+
+            $this->assertSame(94, DB::table('migrations')->count());
+            $this->assertTrue(Schema::hasTable('suppliers'));
+            $this->assertTrue(Schema::hasTable('supplier_feeds'));
+            $this->assertTrue(Schema::hasTable('import_jobs'));
+            $this->assertTrue(Schema::hasTable('import_histories'));
+            $this->assertFalse($this->indexExists('import_jobs', 'uq_import_job_id_supplier_feed'));
+            $this->assertFalse($this->indexExists('import_histories', 'ix_import_history_supplier_id'));
+            $this->assertFalse($this->indexExists('supplier_feeds', 'uq_supplier_feed_id_supplier'));
+            foreach (self::CANONICAL_TABLES as $table) {
+                $this->assertFalse(Schema::hasTable($table), "Phase I table {$table} exists in the historical baseline.");
+            }
+            $this->assertFalse(Schema::hasTable('supplier_import_source_profiles'));
+            $this->assertSame(
+                0,
+                DB::table('migrations')->whereIn('migration', array_keys($phaseIMigrations))->count(),
+            );
+            $this->assertSame(
+                0,
+                DB::table('migrations')->whereIn('migration', array_keys($postPhaseIMigrations))->count(),
+            );
+
+            DB::setDefaultConnection($originalDefaultConnection);
+            $this->migratePhaseI();
+            DB::setDefaultConnection('snapshot_schema_phase_i');
+
+            $latestBatch = (int) DB::table('migrations')->max('batch');
+            $latestMigrations = DB::table('migrations')
+                ->where('batch', $latestBatch)
+                ->orderBy('id')
+                ->pluck('migration')
+                ->all();
+
+            $this->assertCount(12, $latestMigrations);
+            $this->assertSame(self::PHASE_I_MIGRATIONS, $latestMigrations);
+            $this->assertSame(
+                0,
+                DB::table('migrations')->whereIn('migration', array_keys($postPhaseIMigrations))->count(),
+            );
+            $this->assertDatabaseMissing('migrations', [
+                'migration' => '2026_08_28_090000_add_supplier_ownership_key_to_supplier_feeds',
+            ]);
+            $this->assertDatabaseMissing('migrations', [
+                'migration' => '2026_08_28_090001_create_supplier_import_source_profiles_table',
+            ]);
+        } finally {
+            DB::setDefaultConnection($originalDefaultConnection);
+            DB::disconnect('snapshot_schema_phase_i');
+            DB::purge('snapshot_schema_phase_i');
+            $this->dropTemporaryDatabase($database);
+            File::deleteDirectory($historicalPath);
+        }
+    }
+
     public function test_guarded_down_fails_closed_and_empty_schema_round_trips(): void
     {
         $database = 'phase_i_schema_'.getmypid().'_'.strtolower(bin2hex(random_bytes(4)));
@@ -651,12 +763,7 @@ final class CanonicalSupplierSnapshotSchemaMigrationTest extends TestCase
             $this->assertFalse($this->indexExists('import_histories', 'ix_import_history_supplier_id'));
 
             DB::setDefaultConnection($originalDefaultConnection);
-            $this->assertSame(0, Artisan::call('migrate', [
-                '--database' => 'snapshot_schema_phase_i',
-                '--path' => database_path('migrations'),
-                '--realpath' => true,
-                '--force' => true,
-            ]), Artisan::output());
+            $this->migratePhaseI();
             DB::setDefaultConnection('snapshot_schema_phase_i');
             $this->assertSame($before, $this->canonicalCreateStatements());
             $this->assertPristineMonitor();
@@ -2452,15 +2559,75 @@ final class CanonicalSupplierSnapshotSchemaMigrationTest extends TestCase
         File::deleteDirectory($path);
         File::ensureDirectoryExists($path, 0700);
 
-        foreach (File::files(database_path('migrations')) as $migration) {
-            if (str_starts_with($migration->getFilename(), '2026_08_20_12')) {
-                continue;
-            }
-            File::copy($migration->getPathname(), $path.DIRECTORY_SEPARATOR.$migration->getFilename());
+        foreach ($this->historicalMigrationFiles() as $migration) {
+            File::copy($migration, $path.DIRECTORY_SEPARATOR.basename($migration));
         }
     }
 
-    private function migrateHistoricalThenPhase(
+    /** @return array<string, string> */
+    private function orderedMigrationFiles(): array
+    {
+        return app(Migrator::class)->getMigrationFiles(database_path('migrations'));
+    }
+
+    /** @return array<string, string> */
+    private function phaseIMigrationFiles(): array
+    {
+        $orderedMigrations = $this->orderedMigrationFiles();
+        $orderedNames = array_keys($orderedMigrations);
+
+        $this->assertNotEmpty(self::PHASE_I_MIGRATIONS);
+        $this->assertCount(12, self::PHASE_I_MIGRATIONS);
+        $this->assertSame(
+            self::PHASE_I_MIGRATIONS,
+            array_values(array_unique(self::PHASE_I_MIGRATIONS)),
+            'The canonical Phase I migration registry must contain unique entries.',
+        );
+
+        $positions = [];
+        $phaseIMigrations = [];
+        $positionByMigration = array_flip($orderedNames);
+        foreach (self::PHASE_I_MIGRATIONS as $migration) {
+            $this->assertArrayHasKey(
+                $migration,
+                $orderedMigrations,
+                "Canonical Phase I migration {$migration} is missing.",
+            );
+            $this->assertFileExists($orderedMigrations[$migration]);
+            $positions[] = $positionByMigration[$migration];
+            $phaseIMigrations[$migration] = $orderedMigrations[$migration];
+        }
+
+        $firstPosition = $positions[0];
+        $this->assertGreaterThan(0, $firstPosition, 'Phase I must have an exclusive historical baseline.');
+        $this->assertSame(
+            range($firstPosition, $firstPosition + count(self::PHASE_I_MIGRATIONS) - 1),
+            $positions,
+            'The canonical Phase I migration registry must be contiguous in Laravel migration order.',
+        );
+        $this->assertSame(
+            self::PHASE_I_MIGRATIONS,
+            array_slice($orderedNames, $firstPosition, count(self::PHASE_I_MIGRATIONS)),
+            'The canonical Phase I registry order must match Laravel migration order.',
+        );
+
+        return $phaseIMigrations;
+    }
+
+    /** @return array<string, string> */
+    private function historicalMigrationFiles(): array
+    {
+        $orderedMigrations = $this->orderedMigrationFiles();
+        $phaseIMigrations = $this->phaseIMigrationFiles();
+        $firstPhaseIMigration = array_key_first($phaseIMigrations);
+        $firstPhaseIPosition = array_search($firstPhaseIMigration, array_keys($orderedMigrations), true);
+
+        $this->assertIsInt($firstPhaseIPosition);
+
+        return array_slice($orderedMigrations, 0, $firstPhaseIPosition, true);
+    }
+
+    private function migrateHistoricalBaseline(
         string $historicalPath,
         string $connection = 'snapshot_schema_phase_i',
     ): void {
@@ -2470,12 +2637,24 @@ final class CanonicalSupplierSnapshotSchemaMigrationTest extends TestCase
             '--realpath' => true,
             '--force' => true,
         ]), Artisan::output());
+    }
+
+    private function migratePhaseI(string $connection = 'snapshot_schema_phase_i'): void
+    {
         $this->assertSame(0, Artisan::call('migrate', [
             '--database' => $connection,
-            '--path' => database_path('migrations'),
+            '--path' => array_values($this->phaseIMigrationFiles()),
             '--realpath' => true,
             '--force' => true,
         ]), Artisan::output());
+    }
+
+    private function migrateHistoricalThenPhase(
+        string $historicalPath,
+        string $connection = 'snapshot_schema_phase_i',
+    ): void {
+        $this->migrateHistoricalBaseline($historicalPath, $connection);
+        $this->migratePhaseI($connection);
     }
 
     private function assertGuardRejectedContaining(string $fragment): void
