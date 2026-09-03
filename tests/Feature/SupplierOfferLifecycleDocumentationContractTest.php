@@ -1032,8 +1032,9 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
         $this->assertStringNotContainsString('`PH3-RDY-002`', $plan);
         $this->assertStringNotContainsString('`PH3-RDY-003`', $plan);
         $this->assertStringNotContainsString('`PH3-RDY-004`', $plan);
-        $this->assertStringContainsString('remaining numeric-evidence gate requires separately authorized production-', $plan);
-        $this->assertStringContainsString('Phase III implementation, which remains unimplemented and', $plan);
+        $normalizedPlan = preg_replace('/\s+/', ' ', $plan) ?? $plan;
+        $this->assertStringContainsString('remaining numeric-evidence gate requires separately authorized production-', $normalizedPlan);
+        $this->assertStringContainsString('Phase III runtime implementation, which remains unimplemented and', $normalizedPlan);
         $this->assertStringNotContainsString(
             'separate design work for immutable candidate-row source provenance, durable',
             $plan,
