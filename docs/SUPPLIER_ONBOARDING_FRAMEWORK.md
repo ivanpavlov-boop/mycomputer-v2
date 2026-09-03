@@ -525,14 +525,18 @@ Sync behavior.
 Phase I's canonical schema is implemented, merged through PR #212, CI-verified,
 deployed to staging and inactive. Phase II's guarded models and canonical byte
 contracts are implemented, merged through PR #213, CI-verified, deployed to
-staging and uncalled. Phase III persistence remains unimplemented and is not
-implementation-authorized.
+staging and uncalled. Phase III-P0 Slice 1's P0-01/P0-02 source-profile
+foundation is implemented through PR #219, CI #478 verified, deployed at
+`30b05f4aaacad38f3c6f4b782a5d90004c8740ff`, and dormant. Phase III persistence
+remains unimplemented and is not implementation-authorized.
 <!-- phase-iii-architecture-status-reference authority=phase-iii-architecture-contract-v1 -->
 The exact current status map is owned only by the
 [canonical Phase III architecture contract](IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md#phase-iii-provenance-and-bounds-architecture-decision)
-and is not mirrored here. Its selected immutable profile/context/execution,
-revision, claim-source and ten-bound policy remain future design only; all ten
-numeric production bounds remain `NOT SPECIFIED`. Claim source binding does not
+and is not mirrored here. The exact next item is Phase III-P0 Slice 2, limited
+to P0-03 and the immutable source-execution/resolved-context foundation. It is
+defined but not implementation-authorized; P0-04 through P0-09 remain unsliced
+and unauthorized. All ten numeric production bounds remain `NOT SPECIFIED`.
+Claim source binding does not
 replace candidate provenance. No
 evidence candidate exists and no operational preview is authorized.
 
