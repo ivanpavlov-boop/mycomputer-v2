@@ -1745,7 +1745,7 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
                 'may reuse A\'s globally unique `source_identity`',
             ],
             'P5 source profile registry omitted' => [
-                'The sole future registry is `supplier_import_source_profiles`.',
+                'The sole registry is `supplier_import_source_profiles`.',
                 'No source profile registry is selected.',
             ],
             'P6 first insert authority omitted' => [
@@ -8559,7 +8559,7 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
 
         $semanticArchitecture = preg_replace('/\s+/', ' ', $architecture) ?? $architecture;
         foreach ([
-            'The sole future registry is `supplier_import_source_profiles`.',
+            'The sole registry is `supplier_import_source_profiles`.',
             'supplier_import_resolved_source_context_v1',
             'source_locator_canonical_bytes',
             'mapping_canonical_bytes',
