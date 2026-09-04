@@ -8,22 +8,25 @@ Phase 9C.6.5C.3D.1-PRE.A began as a documentation-only prerequisite. Phase I's
 canonical MySQL schema was implemented, merged through PR #212, CI-verified,
 deployed to staging, and remains dormant. Phase II's guarded models and
 canonical byte contracts were implemented, merged through PR #213, CI-verified,
-deployed to staging, and have no runtime caller. Phase III snapshot persistence
-and cohort authorization remain unimplemented and are not authorized while the
-readiness findings recorded below remain open. No existing data is qualified by
-this design. No evidence candidate exists and no operational preview is
-authorized.
+deployed to staging, and have no runtime caller. Phase III-P0 Slice 1's P0-01
+parent ownership key and P0-02 immutable source-profile foundation were merged
+through PR #219 at merge commit
+`30b05f4aaacad38f3c6f4b782a5d90004c8740ff`, CI-verified, deployed to staging,
+and remain dormant. Phase III snapshot persistence and cohort authorization
+remain unimplemented and are not authorized while the readiness findings
+recorded below remain open. No existing data is qualified by this design. No
+evidence candidate exists and no operational preview is authorized.
 
 The design is supplier-generic where the existing importer already provides a
 supplier and feed boundary. APCOM is the first bounded consumer. V1 through V3
 remain historical contracts. V4 remains the current semantic authority.
 
 The read-only C3D preview implementation was merged through PR #210 and
-deployed at `c22fc9a8dddf3c6778ab0b88e5a50cbc02fe3f21`. The Phase I schema and
-Phase II model/byte-contract layers are deployed but inactive. Phase III's
-repository, collector, capture service, source adapter, integration, evidence
-preparation, operational execution, and closeout are not approved or
-implemented.
+deployed at `c22fc9a8dddf3c6778ab0b88e5a50cbc02fe3f21`. The Phase I schema,
+Phase II model/byte-contract layers and Phase III-P0 Slice 1 source-profile
+foundation are deployed but inactive. Phase III's snapshot repository,
+collector, capture service, source adapter, integration, evidence preparation,
+operational execution, and closeout are not approved or implemented.
 C3D.1 remains blocked and Supplier #3 remains unselected and unstarted.
 
 Read this design with [APCOM Missing Offer Decisions V4](APCOM_MISSING_OFFER_DECISIONS_V4.md),
@@ -3749,9 +3752,11 @@ rule above.
 <!-- phase-iii-architecture-contract:start id=phase-iii-architecture-contract-v1 -->
 ### Phase III provenance and bounds architecture decision
 
-This subsection is the selected future architecture. It records design
-authority only. No table, model, importer, repository, job, configuration or
-feature gate described here exists until a later implementation phase adds it.
+This subsection is the selected architecture. Phase III-P0 Slice 1 implements
+only the P0-01/P0-02 source-profile foundation identified below; it is deployed
+and dormant. Every remaining table, model, importer, repository, job,
+configuration and feature gate described here remains design authority only
+until a later explicitly authorized implementation phase adds it.
 The complete marker-bounded CURRENT authority is closed-world. From the exact
 CURRENT authority marker through the matching contract end marker, every
 normalized byte and every ordered structural unit is canonical. Each unit has a
@@ -3784,6 +3789,7 @@ inventories, not from an unreachable unknown-type fallback or lexical wording.
 | Hop | Current identity and link | Mutability and reuse | Historical source proof |
 | --- | --- | --- | --- |
 | source/feed | `supplier_feeds.id` plus `supplier_id`; URL, type, mapping, credentials and status are fields on the same row | source-defining fields are mutable and one feed ID can represent A then B | none; current configuration is not historical evidence |
+| source profile | `supplier_import_source_profiles.id` plus immutable supplier/feed ownership and secret-free descriptor bytes | append-only P0-02 foundation is deployed and dormant; no importer runtime calls it | immutable descriptor identity exists only for future explicitly authorized resolution; current imports do not capture it |
 | supplier import | `import_jobs.id` and append-restricted `import_histories.id` bind supplier/feed | an XML retry may write the same staging identity; `ImportHistory` has no source identity | supplier/feed execution lineage only |
 | staging | `supplier_products.id`; importer lookup uses supplier/feed plus first SKU, EAN, MPN or payload hash | `updateOrCreate` overwrites source-owned columns and reuses rows | current row only; no original source or revision identity |
 | catalog offer | `product_supplier_offers.id` and nullable `supplier_product_id` | offer price/quantity/link are mutable | a live staging link only; no source identity |
@@ -3817,7 +3823,9 @@ pointer selecting its current immutable revision.
 
 #### Selected immutable source-profile authority
 
-The sole future registry is `supplier_import_source_profiles`. It is the only
+The sole registry is `supplier_import_source_profiles`. Its P0-02 schema,
+guarded model, canonical serializers and source-profile repository are deployed
+but have no runtime caller. It is the only
 authority that converts mutable feed configuration into an immutable logical
 source. It is append-only and its authority columns are exactly
 `id`, `supplier_id`, `supplier_feed_id`, `source_identity`,
@@ -5141,14 +5149,73 @@ not one migration. Its code scope is the `SupplierImportSourceProfile` model;
 the profile/locator/mapping serializers and immutable value objects; one
 source-profile repository with the injectable 16-byte identity generator; and
 the shared `CanonicalSupplierPhaseThreeP0Schema` downgrade coordinator. Unit
-tests must freeze canonical bytes, descriptor reuse/collision, the four-attempt
-identity protocol and zero secret evidence. Mandatory MySQL 8.4 tests must prove
+tests freeze canonical bytes, descriptor reuse/collision, the four-attempt
+identity protocol and zero secret evidence. Mandatory MySQL 8.4 tests prove
 the composite parent FK and actions, parent-lock concurrency, exact eligible
 1062 retry, ineligible-error rollback, four-collision exhaustion, append-only
 guards, exact P0/P1/P2 detection, successful P2 -> P1 -> P0 rollback and every
 rejected zero-DDL case above. No source fetch, importer activation, staging
 write, Product mutation, Catalog Sync or operational bound value belongs to
-Slice 1.
+Slice 1. PR #219 merged the reviewed feature head
+`b000338f632777a1e439a5ac5dd613d7ea8528f4` as
+`30b05f4aaacad38f3c6f4b782a5d90004c8740ff`; CI #478 passed and the dormant
+P0-01/P0-02 migrations deployed successfully.
+
+<!-- phase-iii-p0-slice-sequence classification=CURRENT id=phase-iii-p0-slice-sequence-v1 -->
+| Canonical slice | Exact scope | Authority status |
+| --- | --- | --- |
+| `Phase 9C.6.5C.3D - Phase III-P0 Slice 1` | P0-01 plus P0-02 and the immutable source-profile foundation above | `IMPLEMENTED_MERGED_DEPLOYED_DORMANT`; complete and closed unless a concrete regression is found |
+| `Phase 9C.6.5C.3D - Phase III-P0 Slice 2` | P0-03 plus the immutable source-execution and resolved-source-context foundation below | `DEFINED_NOT_IMPLEMENTATION_AUTHORIZED`; requires a separate explicit implementation authorization after this authority change is merged |
+| later Phase III-P0 slices | P0-04 through P0-09 and every downloader, parser, staging-pointer, claim-source and policy integration | `NOT_SLICED_NOT_AUTHORIZED`; no ordering or grouping beyond the existing migration dependency registry may be inferred |
+
+The exact next canonical implementation item is therefore **Phase
+9C.6.5C.3D - Phase III-P0 Slice 2: Immutable Source Execution and Resolved
+Context Foundation**. Its exact scope is P0-03 only and its dormant application
+contracts: the additive `supplier_import_source_executions` migration and
+canonical P3 oracle; append-only `SupplierImportSourceExecution` model;
+immutable `ImportJobIdentity` and `ResolvedSupplierImportSourceContext` values;
+their canonical serializers and fingerprints; and
+`SupplierImportSourceContextResolver`. The resolver acquires and retains
+the canonical `ImportJob -> SupplierFeed -> XmlMappingTemplate` locks, validates
+the complete ownership and selector tuple, resolves or creates the immutable
+P0-02 profile, then resolves or inserts one immutable execution in the same
+transaction. CSV keeps a null template; XML requires the exact locked template.
+Identical canonical execution identity is idempotent, while a conflicting
+identity or mutable-selector drift fails closed.
+
+Slice 2 prerequisites are current `main` containing the deployed inactive Phase
+I and Phase II authorities and completed Slice 1/P2 state; an exact clean P2 ->
+P3 migration boundary; the already frozen P0 schema oracle and downgrade
+coordinator; and a separate repository-owner implementation authorization.
+The first three are satisfied by
+`30b05f4aaacad38f3c6f4b782a5d90004c8740ff`; the separate implementation
+authorization is intentionally not granted by this design-alignment change.
+
+When separately authorized, Slice 2 may mutate schema only by adding the exact
+P0-03 table. Its dormant resolver may insert or reuse source profiles and insert
+immutable source executions only when called directly by isolated tests or a
+later separately authorized runtime integration. It may not fetch a
+source, create a payload receipt, parse supplier data, dispatch or run an
+import, write `supplier_products` or `products`, execute Catalog Sync, dispatch
+a queue job, register a schedule, add a command, listener or route, capture a
+snapshot, wire an existing importer, change authentication, or assign any
+operational bound. P0-04 and `BoundedImmutableSourcePayload`, downloader/parser
+adapters and receipt-bound bytes are explicitly outside Slice 2. Runtime
+activation remains zero.
+
+Slice 2 acceptance requires focused unit tests for every new immutable value,
+canonical byte/fingerprint vector, append-only guard, resolver reuse and
+conflict path;
+focused feature tests for ownership, XML/CSV selector validation, transaction
+rollback, lock order, idempotency and A-to-B/TOCTOU rejection; real MySQL 8.4
+tests for the exact P3 signature, all P0-03 keys/FKs/checks/triggers, concurrent
+resolution, successful empty P3 -> P2 downgrade and zero-DDL rejection for
+nonempty, malformed, unknown or nonterminal states; all Slice 1, Phase I, Phase
+II and documentation contracts; Catalog Sync safety regressions; PHP syntax,
+Pint, `git diff --check` and the full Laravel suite. The zero-effect assertions
+are source fetch 0, payload receipt 0, import dispatch 0, catalog sync execution
+0, queue dispatch 0, scheduler registration 0, snapshot capture 0,
+`supplier_products` mutation 0 and `products` mutation 0.
 
 The subordinate runtime plan is accepted only through an independent
 closed-world BOF-to-EOF oracle in

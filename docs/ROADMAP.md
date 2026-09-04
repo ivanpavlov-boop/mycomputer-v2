@@ -262,8 +262,9 @@ disabled. `CART-025` remains open.
 10. **APCOM Authoritative Human Decision Evidence and Profile Approval Gate -
    documentation decisions complete.** V4 is the semantic authority, while
    implementation approval remains closed.
-11. **Immutable supplier-offer snapshot persistence prerequisite - Phase I and
-    Phase II deployed inactive; Phase III readiness remediation blocked.**
+11. **Immutable supplier-offer snapshot persistence prerequisite - Phase I,
+    Phase II and Phase III-P0 Slice 1 deployed inactive; Phase III readiness
+    remediation blocked.**
     Phase I's canonical schema was merged through PR #212, CI-verified and
     deployed to staging. Phase II's guarded models and canonical byte contracts
     were merged through PR #213, CI-verified and deployed to staging. Neither
@@ -348,15 +349,22 @@ disabled. `CART-025` remains open.
     verification, Draft PR creation, PR base/head verification, CI and review,
     merge, disabled deployment and monitor/sink/observer enablement gates. The
     Phase I tables/migrations and Phase II models/contracts now exist but remain
-    inactive. No runtime queue setting, worker, command, parser change, capture
-    repository/hook, producer, historical backfill or operational evidence
-    exists. Phase III is unimplemented and not authorized.
+    inactive. Phase III-P0 Slice 1's P0-01/P0-02 source-profile foundation was
+    merged through PR #219, CI #478 verified, deployed at
+    `30b05f4aaacad38f3c6f4b782a5d90004c8740ff`, and remains dormant. The exact
+    next item is the P0-03-only Phase III-P0 Slice 2 immutable source-execution
+    and resolved-context foundation. It is defined but not
+    implementation-authorized; P0-04 through P0-09 remain unsliced and
+    unauthorized. No runtime queue setting, worker, command, parser change,
+    capture repository/hook, producer, historical backfill or operational
+    evidence exists. Phase III runtime is unimplemented and not authorized.
     <!-- phase-iii-architecture-status-reference authority=phase-iii-architecture-contract-v1 -->
     The exact current status map is owned only by the
     [canonical Phase III architecture contract](IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md#phase-iii-provenance-and-bounds-architecture-decision)
-    and is not mirrored here. The selected immutable profile/context/execution,
-    revision, five-field claim binding and ten-bound policy remain future-only;
-    all ten numeric production values remain `NOT SPECIFIED`. Claim source
+    and is not mirrored here. The immutable profile foundation is deployed but
+    inactive; execution/context, revision, five-field claim binding and the
+    ten-bound policy remain unimplemented. All ten numeric production values
+    remain `NOT SPECIFIED`. Claim source
     binding does not replace candidate provenance. C3D.1 remains blocked until
     the canonical remaining gate and later
     checkpoints collect one future baseline plus three qualified comparable

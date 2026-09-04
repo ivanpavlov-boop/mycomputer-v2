@@ -1032,8 +1032,9 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
         $this->assertStringNotContainsString('`PH3-RDY-002`', $plan);
         $this->assertStringNotContainsString('`PH3-RDY-003`', $plan);
         $this->assertStringNotContainsString('`PH3-RDY-004`', $plan);
-        $this->assertStringContainsString('remaining numeric-evidence gate requires separately authorized production-', $plan);
-        $this->assertStringContainsString('Phase III implementation, which remains unimplemented and', $plan);
+        $normalizedPlan = preg_replace('/\s+/', ' ', $plan) ?? $plan;
+        $this->assertStringContainsString('remaining numeric-evidence gate requires separately authorized production-', $normalizedPlan);
+        $this->assertStringContainsString('Phase III runtime implementation, which remains unimplemented and', $normalizedPlan);
         $this->assertStringNotContainsString(
             'separate design work for immutable candidate-row source provenance, durable',
             $plan,
@@ -1745,7 +1746,7 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
                 'may reuse A\'s globally unique `source_identity`',
             ],
             'P5 source profile registry omitted' => [
-                'The sole future registry is `supplier_import_source_profiles`.',
+                'The sole registry is `supplier_import_source_profiles`.',
                 'No source profile registry is selected.',
             ],
             'P6 first insert authority omitted' => [
@@ -2826,6 +2827,62 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
         $this->assertNotSame([], $this->phaseThreeP0DesignClosureContract($design, $mutatedPlanArtifact)['violations']);
     }
 
+    public function test_phase_three_p0_slice_two_authority_is_exact_and_nonactivating(): void
+    {
+        $design = preg_replace('/\s+/', ' ', $this->readDocument(
+            'docs/IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md',
+        ));
+        $plan = preg_replace('/\s+/', ' ', $this->readDocument(
+            'docs/PHASE_9C6_5C3D1_RUNTIME_IMPLEMENTATION_PLAN.md',
+        ));
+
+        $this->assertIsString($design);
+        $this->assertIsString($plan);
+        foreach ([$design, $plan] as $authority) {
+            $this->assertStringContainsString(
+                'Phase 9C.6.5C.3D - Phase III-P0 Slice 2',
+                $authority,
+            );
+            $this->assertStringContainsString('P0-03 only', $authority);
+            $this->assertStringContainsString('DEFINED_NOT_IMPLEMENTATION_AUTHORIZED', $authority);
+            $this->assertStringContainsString('P0-04 through P0-09', $authority);
+            $this->assertStringContainsString('Runtime activation remains zero.', $authority);
+        }
+
+        $this->assertStringContainsString(
+            'the separate implementation authorization is intentionally not granted by this design-alignment change',
+            $design,
+        );
+        $this->assertStringContainsString(
+            'source fetch 0, payload receipt 0, import dispatch 0, catalog sync execution 0, queue dispatch 0, scheduler registration 0, snapshot capture 0, `supplier_products` mutation 0 and `products` mutation 0',
+            $design,
+        );
+        $this->assertStringContainsString(
+            'Current main satisfies the technical prerequisites but this plan grants no implementation or runtime authority.',
+            $plan,
+        );
+
+        foreach ([
+            'docs/PHASES.md',
+            'docs/ROADMAP.md',
+            'docs/SUPPLIER_ONBOARDING_FRAMEWORK.md',
+            'docs/APCOM_OPERATIONAL_OFFER_LIFECYCLE_PREVIEW.md',
+        ] as $statusDocument) {
+            $status = preg_replace('/\s+/', ' ', $this->readDocument($statusDocument));
+            $this->assertIsString($status);
+            $this->assertStringContainsString('Phase III-P0 Slice 1', $status, $statusDocument);
+            $this->assertStringContainsString(
+                '30b05f4aaacad38f3c6f4b782a5d90004c8740ff',
+                $status,
+                $statusDocument,
+            );
+            $this->assertStringContainsString('Phase III-P0 Slice 2', $status, $statusDocument);
+            $this->assertStringContainsString('not implementation-authorized', $status, $statusDocument);
+            $this->assertStringContainsString('P0-04 through P0-09', $status, $statusDocument);
+            $this->assertStringContainsString('NOT SPECIFIED', $status, $statusDocument);
+        }
+    }
+
     public function test_phase_three_p0_runtime_plan_has_independent_bof_to_eof_structural_authority(): void
     {
         $plan = $this->readDocument('docs/PHASE_9C6_5C3D1_RUNTIME_IMPLEMENTATION_PLAN.md');
@@ -3165,7 +3222,7 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
 
         $this->assertSame([], $canonical['violations'], implode(PHP_EOL, $canonical['violations']));
         $this->assertSame('CANONICAL_CURRENT_ARCHITECTURE', $canonical['current_architecture_inventory']['classification']);
-        $this->assertSame(286, $canonical['current_architecture_inventory']['unit_count']);
+        $this->assertSame(292, $canonical['current_architecture_inventory']['unit_count']);
         $this->assertSame(17, $canonical['candidate_count']);
 
         $outsideContradictions = [
@@ -3313,7 +3370,7 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
 
         $this->assertSame([], $canonical['violations'], implode(PHP_EOL, $canonical['violations']));
         $this->assertSame('CANONICAL_ARCHITECTURE_DOCUMENT', $canonical['architecture_document_inventory']['classification']);
-        $this->assertSame(1130, $canonical['architecture_document_inventory']['unit_count']);
+        $this->assertSame(1136, $canonical['architecture_document_inventory']['unit_count']);
         $this->assertSame($expectedRegions, $canonical['architecture_document_inventory']['region_order']);
         $this->assertSame($expectedRegions, array_keys($canonical['architecture_document_inventory']['regions']));
         foreach ($expectedRegions as $position => $id) {
@@ -6868,21 +6925,21 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
     /** @return array<string, mixed> */
     private function expectedPhaseThreeArchitectureDocumentInventory(): array
     {
-        // Refrozen only for the trigger DATABASE_COLLATION authority text and canonical hash ledger.
+        // Deliberately refrozen for the post-Slice-1 status and exact P0-03-only Slice 2 authority.
         return [
             'version' => 'phase-iii-architecture-document-closed-world-v1',
-            'normalized_bytes' => 1883829,
-            'line_count' => 8057,
-            'unit_count' => 1130,
+            'normalized_bytes' => 1889044,
+            'line_count' => 8124,
+            'unit_count' => 1136,
             'unit_categories' => [
                 'CANONICAL_HEADING_EXACT' => 86,
                 'CANONICAL_LITERAL_EXACT' => 72,
-                'CANONICAL_MARKER_EXACT' => 40,
-                'CANONICAL_PARAGRAPH_EXACT' => 862,
-                'CANONICAL_TABLE_EXACT' => 70,
+                'CANONICAL_MARKER_EXACT' => 41,
+                'CANONICAL_PARAGRAPH_EXACT' => 866,
+                'CANONICAL_TABLE_EXACT' => 71,
             ],
-            'byte_fingerprint' => '1ae6cf7965292e47137196148fc95b89981b324af3f5c05c44646c16d2003728',
-            'unit_fingerprint' => 'fda13dc41d6bd3e65f1f448a277c838c362d1a66e3ed53f43730db75ceea3404',
+            'byte_fingerprint' => 'fe41962aabc6b0d88714e89bc3728ba523a501469bcf5e9e2950f2fdb650dba4',
+            'unit_fingerprint' => '5f5eea2e745409145356f66aa48586f0e8f8da10ddfc2302702841d3ce8a6ae9',
             'region_order' => [
                 'pre-current-reference-history-v1',
                 'current-architecture-authority-v1',
@@ -6892,8 +6949,8 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
                 'pre-current-reference-history-v1' => [
                     'id' => 'pre-current-reference-history-v1',
                     'position' => 1,
-                    'normalized_bytes' => 243798,
-                    'line_count' => 3748,
+                    'normalized_bytes' => 244093,
+                    'line_count' => 3751,
                     'unit_count' => 565,
                     'unit_categories' => [
                         'CANONICAL_HEADING_EXACT' => 33,
@@ -6902,24 +6959,24 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
                         'CANONICAL_PARAGRAPH_EXACT' => 462,
                         'CANONICAL_TABLE_EXACT' => 25,
                     ],
-                    'byte_fingerprint' => 'd72c5a8db42843073b55fb5c4117c9301e0f34bcbadd3789f70996b962cfa900',
-                    'unit_fingerprint' => '5b4cbaef1e6138c3b27fb6712363259ba54f7f7f932d7eacc5dd7d73292c4af1',
+                    'byte_fingerprint' => '44ac26363d14a70678a56fea0ace1ca88960317404b115f82c566093cd6bfecc',
+                    'unit_fingerprint' => '9493b421b6bcb38ef1f8d58638b9d5526294873097c7acded67bf946de84aa64',
                 ],
                 'current-architecture-authority-v1' => [
                     'id' => 'current-architecture-authority-v1',
                     'position' => 2,
-                    'normalized_bytes' => 1476315,
-                    'line_count' => 2564,
-                    'unit_count' => 286,
+                    'normalized_bytes' => 1481235,
+                    'line_count' => 2628,
+                    'unit_count' => 292,
                     'unit_categories' => [
                         'CANONICAL_HEADING_EXACT' => 16,
                         'CANONICAL_LITERAL_EXACT' => 18,
-                        'CANONICAL_MARKER_EXACT' => 30,
-                        'CANONICAL_PARAGRAPH_EXACT' => 197,
-                        'CANONICAL_TABLE_EXACT' => 25,
+                        'CANONICAL_MARKER_EXACT' => 31,
+                        'CANONICAL_PARAGRAPH_EXACT' => 201,
+                        'CANONICAL_TABLE_EXACT' => 26,
                     ],
-                    'byte_fingerprint' => 'ca15be984950aeddb76fc2518d9693f0a1dc0d33c6d9e1ddff17fa53d7b047ae',
-                    'unit_fingerprint' => '7fc077532b192361ad9ca1856e6ab963e5dc5e285f75ebfdd5aa1146d5249de5',
+                    'byte_fingerprint' => 'cf619f1bde3a774166f0def50e80ae3b7e69550b966f6037b05dee553c9dd503',
+                    'unit_fingerprint' => '44075b42faeae7cb1280f9ccb3124acd8562cc3ba2d5f7d02cb21d47e4b16737',
                 ],
                 'post-current-reference-history-v1' => [
                     'id' => 'post-current-reference-history-v1',
@@ -6944,42 +7001,42 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
     /** @return array<string, mixed> */
     private function expectedPhaseThreeCurrentArchitectureInventory(): array
     {
-        // Refrozen only for the current-region collation authority and exact golden ledger.
+        // Deliberately refrozen for the post-Slice-1 status and exact P0-03-only Slice 2 authority.
         return [
             'version' => 'phase-iii-current-architecture-closed-world-v1',
-            'normalized_bytes' => 1476315,
-            'line_count' => 2564,
-            'unit_count' => 286,
+            'normalized_bytes' => 1481235,
+            'line_count' => 2628,
+            'unit_count' => 292,
             'unit_categories' => [
                 'CANONICAL_HEADING_EXACT' => 16,
                 'CANONICAL_LITERAL_EXACT' => 18,
-                'CANONICAL_MARKER_EXACT' => 30,
-                'CANONICAL_PARAGRAPH_EXACT' => 197,
-                'CANONICAL_TABLE_EXACT' => 25,
+                'CANONICAL_MARKER_EXACT' => 31,
+                'CANONICAL_PARAGRAPH_EXACT' => 201,
+                'CANONICAL_TABLE_EXACT' => 26,
             ],
-            'byte_fingerprint' => 'b5f072a5927a2731678e5314be61536f262148916e8283883b6c4473934c876b',
-            'unit_fingerprint' => '42f69728e0e591b58e8c09151fe99a767ff9fe65e76da1f2e8d1ca81d1a5f897',
+            'byte_fingerprint' => 'e03495b716dc53a75a6adf2b9bd6123ba791c9e9711f688cdeecbbf6fcf8c316',
+            'unit_fingerprint' => 'e0a5d44941e18e40d4ff00db5886532a30b665f80b4e6e2c6521f4bbb146a80c',
         ];
     }
 
     /** @return array<string, mixed> */
     private function expectedPhaseThreeRuntimePlanInventory(): array
     {
-        // Refrozen only for the corresponding implementation guidance and A/B integration gate.
+        // Deliberately refrozen for the post-Slice-1 status and exact P0-03-only Slice 2 authority.
         return [
             'version' => 'phase-iii-runtime-plan-closed-world-v1',
-            'normalized_bytes' => 112558,
-            'line_count' => 1651,
-            'unit_count' => 492,
+            'normalized_bytes' => 115648,
+            'line_count' => 1699,
+            'unit_count' => 497,
             'unit_categories' => [
                 'CANONICAL_HEADING_EXACT' => 48,
                 'CANONICAL_LITERAL_EXACT' => 2,
                 'CANONICAL_MARKER_EXACT' => 7,
-                'CANONICAL_PARAGRAPH_EXACT' => 419,
+                'CANONICAL_PARAGRAPH_EXACT' => 424,
                 'CANONICAL_TABLE_EXACT' => 16,
             ],
-            'byte_fingerprint' => '2763c96c9951a1f2d8fc9512fc7cade807e77909132928df2b4e300e0eba1eaf',
-            'unit_fingerprint' => 'f6df631b6c921973ad9936337cbef0bbffeb6d0e9caf96e9bf2dc0d2a515cff5',
+            'byte_fingerprint' => '1483056eecac79e54325589b308fc1470f76e8c68fc6e7639556a97026e62896',
+            'unit_fingerprint' => 'b55a9f0f7ca6303ca5ac08b31e48483cbbbf5499a2db299cf4e9d50a69e5fff4',
         ];
     }
 
@@ -8503,7 +8560,7 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
 
         $semanticArchitecture = preg_replace('/\s+/', ' ', $architecture) ?? $architecture;
         foreach ([
-            'The sole future registry is `supplier_import_source_profiles`.',
+            'The sole registry is `supplier_import_source_profiles`.',
             'supplier_import_resolved_source_context_v1',
             'source_locator_canonical_bytes',
             'mapping_canonical_bytes',

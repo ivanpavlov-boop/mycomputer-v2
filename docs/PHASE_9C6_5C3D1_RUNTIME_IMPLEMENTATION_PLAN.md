@@ -24,12 +24,15 @@ The approved design entered `main` through PR #211:
 - republish resume-state fingerprint: exactly 16 ordered fields.
 
 The current implementation baseline is `origin/main` at
-`096beef3e619e769ac703fa7c1ea8fa38939db0d`:
+`30b05f4aaacad38f3c6f4b782a5d90004c8740ff`:
 
 - Phase I canonical schema: implemented, merged through PR #212, CI-verified,
   deployed to staging, and behaviorally dormant;
 - Phase II guarded models and canonical byte contracts: implemented, merged
   through PR #213, CI-verified, deployed to staging, and uncalled;
+- Phase III-P0 Slice 1: P0-01/P0-02 and the immutable source-profile foundation
+  implemented through PR #219, CI #478 verified, deployed to staging, and
+  dormant;
 - Phase III snapshot persistence/cohort authorization: provenance and durable
   source-binding architecture selected, still unimplemented and not
   implementation-authorized.
@@ -579,9 +582,11 @@ immutability.
 
 ### Phase III-P0 - Protected source provenance prerequisite foundation
 
-**Status.** Architecture design only. Nothing in this subphase is implemented
-or implementation-authorized. It is additive to, and does not rewrite, the
-historical deployed Phase I ten-table foundation or frozen Phase II contracts.
+**Status.** Slice 1 is implemented, merged, deployed and dormant. Slice 2 is
+defined below but is not implementation-authorized. P0-04 through P0-09 remain
+unsliced and not implementation-authorized. This subphase is additive to, and
+does not rewrite, the historical deployed Phase I ten-table foundation or
+frozen Phase II contracts.
 
 **Goal.** Implement the dormant prerequisites that make source provenance and
 source capture mechanically enforceable before snapshot persistence can be
@@ -1273,7 +1278,48 @@ immutable value objects, source-profile repository with injectable identity
 generator, shared downgrade coordinator, unit tests, and mandatory MySQL 8.4
 composite-FK/concurrency/retry/append-only/P0-P2 rollback tests. It remains
 dormant and performs no source fetch, importer activation, staging/Product
-mutation or Catalog Sync.
+mutation or Catalog Sync. PR #219 merged feature head
+`b000338f632777a1e439a5ac5dd613d7ea8528f4` as
+`30b05f4aaacad38f3c6f4b782a5d90004c8740ff`; CI #478 passed and both migrations
+deployed successfully.
+
+The exact immediate successor is **Phase 9C.6.5C.3D - Phase III-P0 Slice 2:
+Immutable Source Execution and Resolved Context Foundation**. Its exact scope is
+P0-03 only: the additive `supplier_import_source_executions` migration and P3
+oracle; append-only source-execution model; immutable `ImportJobIdentity` and
+`ResolvedSupplierImportSourceContext`; canonical execution/context serializers
+and fingerprints; and the dormant `SupplierImportSourceContextResolver`.
+Resolution uses one transaction with the
+canonical `ImportJob -> SupplierFeed -> XmlMappingTemplate` lock order, exact
+parent/selector validation, P0-02 profile resolution and immutable execution
+insert/reuse. XML requires its exact locked template; CSV carries a null
+template. Same canonical identity is idempotent; conflict or selector drift
+fails closed.
+
+Slice 2 is `DEFINED_NOT_IMPLEMENTATION_AUTHORIZED`. After this authority update
+is merged, implementation requires a separate explicit repository-owner
+authorization. Its prerequisites are deployed inactive Phase I and Phase II,
+completed Slice 1/P2, the exact P2 -> P3 migration boundary, and the frozen P0
+schema/downgrade oracle. Current main satisfies the technical prerequisites but
+this plan grants no implementation or runtime authority.
+
+When separately authorized, Slice 2 permits only the exact P0-03 schema
+addition and isolated-test calls that insert/reuse profiles and insert immutable
+source executions. It forbids P0-04 through P0-09; source fetch; payload receipt;
+downloader/parser adapters; import or Catalog Sync execution; `supplier_products`
+or `products` mutation; queue dispatch; scheduler registration; commands,
+listeners or routes; importer wiring; snapshot capture; authentication changes;
+and operational-bound assignment. Runtime activation remains zero.
+
+Mandatory Slice 2 validation is the focused immutable-value, canonical-byte,
+fingerprint, model-guard, resolver reuse/conflict, ownership, XML/CSV selector,
+transaction rollback, lock-order, idempotency and A-to-B/TOCTOU suites; real
+MySQL 8.4 P3 schema/oracle, FK/check/trigger, concurrency and P3 -> P2
+empty/zero-DDL rejection suites; Slice 1, Phase I, Phase II, documentation and
+Catalog Sync safety regressions; PHP syntax, Pint, `git diff --check` and the
+full Laravel suite. Tests must assert zero source fetch, payload receipt, import
+dispatch, Catalog Sync, queue dispatch, scheduler registration, snapshot
+capture, `supplier_products` mutation and `products` mutation.
 
 ## Historical deployed Phase I ten-table migration dependency plan
 
@@ -1641,10 +1687,12 @@ binding but cannot become active. Phase X supplies the DB-backed binding; even
 that merge does not activate recovery without canonical fresh evidence and a
 separate operational authorization.
 
-The first safe next action is a fresh independent read-only review of the
-complete Phase III architecture-design checkpoint. The exact current status
-map remains exclusively in the referenced canonical architecture contract.
-The remaining numeric-evidence gate requires separately authorized production-
-evidence collection and review for all ten bounds. That review cannot
-authorize Phase III implementation, which remains unimplemented and
-unauthorized until the remaining gate is separately closed.
+The first safe next action is to merge the documentation-only Slice 1 authority
+alignment, then obtain a separate explicit repository-owner authorization for
+the defined P0-03-only Slice 2. No code branch for Slice 2 may infer authority
+from this plan. The exact current status map remains exclusively in the
+referenced canonical architecture contract. The remaining numeric-evidence
+gate requires separately authorized production-evidence collection and review
+for all ten bounds. Neither Slice 2 nor that evidence work authorizes Phase III
+runtime implementation, which remains unimplemented and unauthorized until the
+remaining gate is separately closed.

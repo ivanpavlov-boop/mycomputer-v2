@@ -163,14 +163,19 @@ staging. It remains behaviorally inactive: later runtime claim/outbox/recovery
 execution is unwired, and no watchdog service, recovery repository, command,
 parser change, capture implementation, historical backfill, or evidence
 producer exists. Phase II's guarded models/canonical byte contracts are also
-implemented, merged, CI-verified, deployed to staging, and uncalled. Phase III
-snapshot persistence remains unimplemented and not implementation-authorized.
+implemented, merged, CI-verified, deployed to staging, and uncalled. Phase
+III-P0 Slice 1's P0-01/P0-02 source-profile foundation is implemented through
+PR #219, CI #478 verified, deployed at
+`30b05f4aaacad38f3c6f4b782a5d90004c8740ff`, and dormant. Snapshot persistence
+remains unimplemented and not implementation-authorized.
 <!-- phase-iii-architecture-status-reference authority=phase-iii-architecture-contract-v1 -->
 The exact current readiness map is owned only by the
 [canonical Phase III architecture contract](IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md#phase-iii-provenance-and-bounds-architecture-decision).
-This preview does not mirror that map. Its selected provenance, resolved-source
-context, claim-source and ten-bound policy contracts remain future-only, and
-all ten numeric production bounds remain `NOT SPECIFIED`. C3D.1 remains blocked
+This preview does not mirror that map. The exact next item is Phase III-P0
+Slice 2, limited to P0-03 and the immutable source-execution/resolved-context
+foundation. It is defined but not implementation-authorized; P0-04 through
+P0-09 remain unsliced and unauthorized. All ten numeric production bounds
+remain `NOT SPECIFIED`. C3D.1 remains blocked
 until the canonical remaining gate, the fine-grained checkpoints below, and
 future qualified warm-up complete. Supplier #3 remains unselected and
 unstarted. No evidence candidate exists and no operational preview is
