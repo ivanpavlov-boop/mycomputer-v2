@@ -532,10 +532,12 @@ remains unimplemented and is not implementation-authorized.
 <!-- phase-iii-architecture-status-reference authority=phase-iii-architecture-contract-v1 -->
 The exact current status map is owned only by the
 [canonical Phase III architecture contract](IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md#phase-iii-provenance-and-bounds-architecture-decision)
-and is not mirrored here. The exact next item is Phase III-P0 Slice 2, limited
-to P0-03 and the immutable source-execution/resolved-context foundation. It is
-defined but not implementation-authorized; P0-04 through P0-09 remain unsliced
-and unauthorized. All ten numeric production bounds remain `NOT SPECIFIED`.
+and is not mirrored here. Phase III-P0 Slice 2 was separately
+implementation-authorized by the repository owner for P0-03 only. Its immutable
+source-execution/resolved-context foundation is implemented on this branch,
+pending independent review, CI, merge and deployment, and remains dormant.
+P0-04 through P0-09 remain unsliced and unauthorized. All ten numeric
+production bounds remain `NOT SPECIFIED`.
 Claim source binding does not
 replace candidate provenance. No
 evidence candidate exists and no operational preview is authorized.

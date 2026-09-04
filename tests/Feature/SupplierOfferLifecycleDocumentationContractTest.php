@@ -1580,7 +1580,6 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
 
         $runtimeArtifacts = array_values(array_filter([
             'app/Models/SupplierImportSourceProfile.php',
-            'app/Models/SupplierImportSourceExecution.php',
             'app/Models/SupplierImportSourcePayloadReceipt.php',
             'app/Models/SupplierProductIdentityHead.php',
             'app/Models/SupplierProductSourceRevision.php',
@@ -1595,9 +1594,9 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
         );
         $this->assertSame([], $futureProfile['violations'], implode(PHP_EOL, $futureProfile['violations']));
         $this->assertTrue($futureProfile['profile_present']);
+        $this->assertFileExists(base_path('app/Models/SupplierImportSourceExecution.php'));
 
         foreach ([
-            'app/Models/SupplierImportSourceExecution.php',
             'app/Models/SupplierImportSourcePayloadReceipt.php',
             'app/Models/SupplierProductIdentityHead.php',
             'app/Models/SupplierProductSourceRevision.php',
@@ -2877,7 +2876,9 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
                 $statusDocument,
             );
             $this->assertStringContainsString('Phase III-P0 Slice 2', $status, $statusDocument);
-            $this->assertStringContainsString('not implementation-authorized', $status, $statusDocument);
+            $this->assertStringContainsString('implementation-authorized', $status, $statusDocument);
+            $this->assertStringContainsString('implemented on this branch', $status, $statusDocument);
+            $this->assertStringContainsString('remains dormant', $status, $statusDocument);
             $this->assertStringContainsString('P0-04 through P0-09', $status, $statusDocument);
             $this->assertStringContainsString('NOT SPECIFIED', $status, $statusDocument);
         }

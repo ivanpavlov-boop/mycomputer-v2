@@ -352,10 +352,13 @@ disabled. `CART-025` remains open.
     inactive. Phase III-P0 Slice 1's P0-01/P0-02 source-profile foundation was
     merged through PR #219, CI #478 verified, deployed at
     `30b05f4aaacad38f3c6f4b782a5d90004c8740ff`, and remains dormant. The exact
-    next item is the P0-03-only Phase III-P0 Slice 2 immutable source-execution
-    and resolved-context foundation. It is defined but not
-    implementation-authorized; P0-04 through P0-09 remain unsliced and
-    unauthorized. No runtime queue setting, worker, command, parser change,
+    P0-03-only Phase III-P0 Slice 2 immutable source-execution and
+    resolved-context foundation was separately implementation-authorized by the
+    repository owner and is implemented on this branch, pending independent
+    review, CI, merge and deployment; it remains dormant. P0-04 through P0-09
+    remain unsliced and unauthorized. All ten numeric production bounds remain
+    `NOT SPECIFIED`. No runtime queue
+    setting, worker, command, parser change,
     capture repository/hook, producer, historical backfill or operational
     evidence exists. Phase III runtime is unimplemented and not authorized.
     <!-- phase-iii-architecture-status-reference authority=phase-iii-architecture-contract-v1 -->

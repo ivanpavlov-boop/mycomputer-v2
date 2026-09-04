@@ -38,6 +38,16 @@ final class PhaseThreeP0SliceOneMysqlTest extends TestCase
 
         $this->assertStringStartsWith('8.4.', (string) DB::scalar('SELECT VERSION()'));
         $this->artisan('migrate:fresh', ['--force' => true])->assertExitCode(0);
+
+        putenv('SUPPLIER_PHASE_THREE_P0_EMPTY_SCHEMA_DOWN_CONFIRMED=true');
+        try {
+            $p03 = require database_path('migrations/2026_08_28_090002_create_supplier_import_source_executions_table.php');
+            $p03->down();
+        } finally {
+            putenv('SUPPLIER_PHASE_THREE_P0_EMPTY_SCHEMA_DOWN_CONFIRMED');
+        }
+
+        $this->assertSame('P2', CanonicalSupplierPhaseThreeP0Schema::classify(DB::connection()->getPdo())['state']);
     }
 
     protected function tearDown(): void
