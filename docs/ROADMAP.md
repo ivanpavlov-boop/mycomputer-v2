@@ -365,8 +365,10 @@ disabled. `CART-025` remains open.
     The exact current status map is owned only by the
     [canonical Phase III architecture contract](IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md#phase-iii-provenance-and-bounds-architecture-decision)
     and is not mirrored here. The immutable profile foundation is deployed but
-    inactive; execution/context, revision, five-field claim binding and the
-    ten-bound policy remain unimplemented. All ten numeric production values
+    inactive; the execution/context foundation is implemented on this branch
+    and remains dormant pending merge and deployment. Payload receipt, revision,
+    five-field claim binding and the ten-bound policy remain unimplemented. All
+    ten numeric production values
     remain `NOT SPECIFIED`. Claim source
     binding does not replace candidate provenance. C3D.1 remains blocked until
     the canonical remaining gate and later

@@ -12,6 +12,7 @@ use App\Models\SupplierFeed;
 use App\Models\SupplierImportSourceExecution;
 use App\Models\SupplierImportSourceProfile;
 use App\Repositories\Suppliers\SupplierImportSourceExecutionRepository;
+use App\Repositories\Suppliers\SupplierImportSourceProfileRepository;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Connection;
 use Illuminate\Database\DatabaseManager;
@@ -25,6 +26,7 @@ final readonly class SupplierImportSourceContextResolver
     public function __construct(
         private DatabaseManager $database,
         private SupplierImportSourceDescriptorProvider $descriptorProvider,
+        private SupplierImportSourceProfileRepository $profileRepository,
         private SupplierImportSourceExecutionRepository $executionRepository,
     ) {}
 
@@ -126,23 +128,7 @@ final readonly class SupplierImportSourceContextResolver
                     throw new RuntimeException('source_context_descriptor_mismatch');
                 }
 
-                $profiles = $connection->table('supplier_import_source_profiles')
-                    ->where('supplier_id', $job->supplier_id)
-                    ->where('supplier_feed_id', $job->supplier_feed_id)
-                    ->where('source_descriptor_fingerprint', $descriptor->fingerprint())
-                    ->lockForUpdate()
-                    ->limit(2)
-                    ->get();
-
-                if ($profiles->isEmpty()) {
-                    throw new RuntimeException('source_context_profile_not_found');
-                }
-
-                if ($profiles->count() !== 1) {
-                    throw new RuntimeException('source_context_profile_ambiguous');
-                }
-
-                $profile = $this->profileFromRow($profiles->first(), $connection->getName());
+                $profile = $this->profileRepository->resolveOrCreate($descriptor);
                 $context = ResolvedSupplierImportSourceContext::fromProfile($profile);
                 if ($context->sourceDescriptorFingerprint() !== $descriptor->fingerprint()) {
                     throw new RuntimeException('source_context_profile_mismatch');

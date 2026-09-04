@@ -90,11 +90,12 @@ final class CanonicalSupplierPhaseThreeP0Schema
         $primaryFailure = null;
 
         try {
+            self::consumeDestructiveAuthorization($invocationId);
+
             if ($states === null) {
                 self::fail('phase_three_p0_downgrade_step_not_implemented', $invocationId);
             }
 
-            self::assertDestructiveEnvironment($invocationId);
             self::assertProtectedGatesDisabled($invocationId);
 
             self::withGuard(function (PDO $pdo) use ($step, $states, $invocationId, &$evidence): void {
@@ -521,12 +522,20 @@ final class CanonicalSupplierPhaseThreeP0Schema
         }
     }
 
-    private static function assertDestructiveEnvironment(string $invocationId): void
+    private static function consumeDestructiveAuthorization(string $invocationId): void
     {
-        if (! app()->environment(['local', 'testing'])
-            || getenv(self::DOWN_CONFIRMATION_ENV) !== 'true') {
+        $confirmation = getenv(self::DOWN_CONFIRMATION_ENV);
+        self::clearDestructiveAuthorizationEnvironment();
+
+        if (! app()->environment(['local', 'testing']) || $confirmation !== 'true') {
             self::fail('phase_three_p0_downgrade_not_authorized', $invocationId);
         }
+    }
+
+    private static function clearDestructiveAuthorizationEnvironment(): void
+    {
+        putenv(self::DOWN_CONFIRMATION_ENV);
+        unset($_ENV[self::DOWN_CONFIRMATION_ENV], $_SERVER[self::DOWN_CONFIRMATION_ENV]);
     }
 
     private static function assertProtectedGatesDisabled(?string $invocationId = null): void

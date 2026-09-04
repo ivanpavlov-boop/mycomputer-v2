@@ -9,6 +9,7 @@ use App\Data\Suppliers\Imports\ResolvedSupplierImportSourceContext;
 use App\Data\Suppliers\SourceProfiles\CanonicalSupplierImportMapping;
 use App\Data\Suppliers\SourceProfiles\CanonicalSupplierSourceLocator;
 use App\Data\Suppliers\SourceProfiles\CanonicalSupplierSourceProfileDescriptor;
+use App\Exceptions\SupplierImportSourceProfileDescriptorCollisionException;
 use App\Models\ImportHistory;
 use App\Models\ImportJob;
 use App\Models\Supplier;
@@ -16,6 +17,7 @@ use App\Models\SupplierFeed;
 use App\Models\SupplierImportSourceProfile;
 use App\Models\XmlMappingTemplate;
 use App\Repositories\Suppliers\SupplierImportSourceExecutionRepository;
+use App\Repositories\Suppliers\SupplierImportSourceProfileRepository;
 use App\Services\Suppliers\SupplierImportSourceContextResolver;
 use Database\Migrations\Support\CanonicalSupplierPhaseThreeP0Schema;
 use Database\Migrations\Support\CanonicalSupplierPhaseThreeP0SchemaException;
@@ -24,7 +26,6 @@ use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
-use InvalidArgumentException;
 use RuntimeException;
 use Tests\TestCase;
 use Throwable;
@@ -33,6 +34,8 @@ require_once __DIR__.'/../../database/migrations/support/CanonicalSupplierPhaseT
 
 final class PhaseThreeP0SliceTwoMysqlTest extends TestCase
 {
+    private const DOWN_CONFIRMATION_ENV = 'SUPPLIER_PHASE_THREE_P0_EMPTY_SCHEMA_DOWN_CONFIRMED';
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -48,7 +51,8 @@ final class PhaseThreeP0SliceTwoMysqlTest extends TestCase
 
     protected function tearDown(): void
     {
-        putenv('SUPPLIER_PHASE_THREE_P0_EMPTY_SCHEMA_DOWN_CONFIRMED');
+        putenv(self::DOWN_CONFIRMATION_ENV);
+        unset($_ENV[self::DOWN_CONFIRMATION_ENV], $_SERVER[self::DOWN_CONFIRMATION_ENV]);
 
         if (DB::getDriverName() === 'mysql') {
             $this->purgeConnections();
@@ -86,9 +90,9 @@ final class PhaseThreeP0SliceTwoMysqlTest extends TestCase
             && $context['completed_ddl_ids'] === []
         );
 
-        putenv('SUPPLIER_PHASE_THREE_P0_EMPTY_SCHEMA_DOWN_CONFIRMED=true');
+        $this->authorizeDowngrade();
         $migration->down();
-        putenv('SUPPLIER_PHASE_THREE_P0_EMPTY_SCHEMA_DOWN_CONFIRMED');
+        $this->assertDowngradeAuthorizationConsumed();
         $this->assertSame('P2', CanonicalSupplierPhaseThreeP0Schema::classify(DB::connection()->getPdo())['state']);
 
         $supplier = Supplier::factory()->create();
@@ -107,6 +111,13 @@ final class PhaseThreeP0SliceTwoMysqlTest extends TestCase
 
         $this->assertSame('P3', CanonicalSupplierPhaseThreeP0Schema::classify(DB::connection()->getPdo())['state']);
 
+        $this->authorizeDowngrade();
+        $migration->down();
+        $this->assertDowngradeAuthorizationConsumed();
+        $this->assertSame('P2', CanonicalSupplierPhaseThreeP0Schema::classify(DB::connection()->getPdo())['state']);
+        $migration->up();
+        $this->assertSame('P3', CanonicalSupplierPhaseThreeP0Schema::classify(DB::connection()->getPdo())['state']);
+
         try {
             $migration->up();
             $this->fail('P0-03 repeated outside its P2 predecessor was accepted.');
@@ -123,7 +134,7 @@ final class PhaseThreeP0SliceTwoMysqlTest extends TestCase
             CanonicalSupplierPhaseThreeP0Schema::classify(DB::connection()->getPdo())['state'],
         );
 
-        putenv('SUPPLIER_PHASE_THREE_P0_EMPTY_SCHEMA_DOWN_CONFIRMED=true');
+        $this->authorizeDowngrade();
         $migration = require database_path('migrations/2026_08_28_090002_create_supplier_import_source_executions_table.php');
 
         try {
@@ -131,6 +142,14 @@ final class PhaseThreeP0SliceTwoMysqlTest extends TestCase
             $this->fail('Malformed P3 authorized destructive DDL.');
         } catch (CanonicalSupplierPhaseThreeP0SchemaException $exception) {
             $this->assertSame('UNCLASSIFIED_P0_SCHEMA_STATE', $exception->primaryCode);
+        }
+
+        $this->assertDowngradeAuthorizationConsumed();
+        try {
+            $migration->down();
+            $this->fail('A failed downgrade left destructive authorization reusable.');
+        } catch (CanonicalSupplierPhaseThreeP0SchemaException $exception) {
+            $this->assertSame('phase_three_p0_downgrade_not_authorized', $exception->primaryCode);
         }
 
         $this->assertTrue(Schema::hasTable('supplier_import_source_executions'));
@@ -141,6 +160,7 @@ final class PhaseThreeP0SliceTwoMysqlTest extends TestCase
         $fixture = $this->fixture('xml');
         $productsBefore = DB::table('products')->count();
         $supplierProductsBefore = DB::table('supplier_products')->count();
+        $profileCountBefore = DB::table('supplier_import_source_profiles')->count();
         $profileBefore = (array) DB::table('supplier_import_source_profiles')->find($fixture['profile_id']);
         $resolver = $this->resolver($fixture['provider']);
         $firstResolutionQueries = [];
@@ -196,6 +216,7 @@ final class PhaseThreeP0SliceTwoMysqlTest extends TestCase
                         || str_contains($sql, '`type`'))),
         ));
         $this->assertSame(1, DB::table('supplier_import_source_executions')->count());
+        $this->assertSame($profileCountBefore, DB::table('supplier_import_source_profiles')->count());
         $this->assertSame($profileBefore, (array) DB::table('supplier_import_source_profiles')->find($fixture['profile_id']));
         $this->assertSame($productsBefore, DB::table('products')->count());
         $this->assertSame($supplierProductsBefore, DB::table('supplier_products')->count());
@@ -261,16 +282,15 @@ final class PhaseThreeP0SliceTwoMysqlTest extends TestCase
             $this->assertSame('source_execution_fingerprint_collision', $exception->getMessage());
         }
 
-        putenv('SUPPLIER_PHASE_THREE_P0_EMPTY_SCHEMA_DOWN_CONFIRMED=true');
+        $this->authorizeDowngrade();
         $migration = require database_path('migrations/2026_08_28_090002_create_supplier_import_source_executions_table.php');
         try {
             $migration->down();
             $this->fail('Non-pristine append-only P3 table was downgraded.');
         } catch (CanonicalSupplierPhaseThreeP0SchemaException $exception) {
             $this->assertSame('phase_three_p0_append_only_table_not_pristine', $exception->primaryCode);
-        } finally {
-            putenv('SUPPLIER_PHASE_THREE_P0_EMPTY_SCHEMA_DOWN_CONFIRMED');
         }
+        $this->assertDowngradeAuthorizationConsumed();
     }
 
     public function test_csv_resolution_uses_locked_feed_mapping_and_null_template_selector(): void
@@ -292,21 +312,48 @@ final class PhaseThreeP0SliceTwoMysqlTest extends TestCase
         $this->assertSame('csv', $identity->importType());
     }
 
-    public function test_resolver_fails_closed_without_creating_or_mutating_profiles(): void
+    public function test_resolver_creates_absent_profile_once_and_retries_from_persisted_context(): void
     {
         $missing = $this->fixture('xml', persistProfile: false);
         $profileCount = DB::table('supplier_import_source_profiles')->count();
+        $productsBefore = DB::table('products')->count();
+        $supplierProductsBefore = DB::table('supplier_products')->count();
+        $resolver = $this->resolver($missing['provider']);
 
-        try {
-            $this->resolver($missing['provider'])
-                ->resolveSourceContext($missing['job']->id, $missing['claim_id']);
-            $this->fail('Missing profile was created implicitly.');
-        } catch (RuntimeException $exception) {
-            $this->assertSame('source_context_profile_not_found', $exception->getMessage());
+        $first = $resolver->resolveSourceContext($missing['job']->id, $missing['claim_id']);
+        $profile = DB::table('supplier_import_source_profiles')
+            ->where('supplier_id', $missing['supplier']->id)
+            ->where('supplier_feed_id', $missing['feed']->id)
+            ->where('source_descriptor_fingerprint', $missing['descriptor']->fingerprint())
+            ->first();
+
+        $this->assertNotNull($profile);
+        foreach ($missing['descriptor']->persistenceAttributes() as $field => $value) {
+            $this->assertSame($value, $profile->{$field}, $field);
         }
+        $this->assertSame($missing['descriptor']->fingerprint(), $first->sourceDescriptorFingerprint());
+        $this->assertSame($profileCount + 1, DB::table('supplier_import_source_profiles')->count());
+        $this->assertSame(1, DB::table('supplier_import_source_executions')->count());
+        $this->assertSame((int) $profile->id, (int) DB::table('supplier_import_source_executions')
+            ->value('supplier_import_source_profile_id'));
+        $profileBeforeRetry = (array) $profile;
 
-        $this->assertSame($profileCount, DB::table('supplier_import_source_profiles')->count());
-        $this->assertSame(0, DB::table('supplier_import_source_executions')->count());
+        $missing['job']->update(['xml_mapping_template_id' => null, 'type' => 'csv']);
+        $missing['feed']->update(['status' => 'inactive', 'feed_type' => 'csv']);
+        $missing['template']->update(['is_active' => false]);
+        $retry = $resolver->resolveSourceContext($missing['job']->id, $missing['claim_id']);
+
+        $this->assertSame($first->canonicalBytes(), $retry->canonicalBytes());
+        $this->assertSame(1, $missing['provider']->calls);
+        $this->assertSame($profileCount + 1, DB::table('supplier_import_source_profiles')->count());
+        $this->assertSame($profileBeforeRetry, (array) DB::table('supplier_import_source_profiles')->find($profile->id));
+        $this->assertSame($productsBefore, DB::table('products')->count());
+        $this->assertSame($supplierProductsBefore, DB::table('supplier_products')->count());
+    }
+
+    public function test_resolver_fails_closed_for_inactive_ownership_and_conflicting_profiles(): void
+    {
+        $claimOwner = $this->fixture('xml');
 
         $inactive = $this->fixture('xml');
         $inactive['feed']->update(['status' => 'inactive']);
@@ -331,7 +378,7 @@ final class PhaseThreeP0SliceTwoMysqlTest extends TestCase
         $other = $this->fixture('xml');
         try {
             $this->resolver($other['provider'])
-                ->resolveSourceContext($other['job']->id, $missing['claim_id']);
+                ->resolveSourceContext($other['job']->id, $claimOwner['claim_id']);
             $this->fail('A claim from another job was accepted.');
         } catch (RuntimeException $exception) {
             $this->assertSame('source_context_claim_mismatch', $exception->getMessage());
@@ -352,36 +399,48 @@ final class PhaseThreeP0SliceTwoMysqlTest extends TestCase
             'source_identity' => 'snapshot-source-v1:profile:'.sprintf('%032x', $contradictory['feed']->id),
             'created_at' => now('UTC')->format('Y-m-d H:i:s.u'),
         ]);
+        $profileBefore = (array) DB::table('supplier_import_source_profiles')
+            ->where('supplier_feed_id', $contradictory['feed']->id)
+            ->first();
 
         try {
             $this->resolver($contradictory['provider'])
                 ->resolveSourceContext($contradictory['job']->id, $contradictory['claim_id']);
             $this->fail('Contradictory persisted profile bytes were accepted.');
-        } catch (InvalidArgumentException $exception) {
-            $this->assertSame('noncanonical_mapping_contract_bytes', $exception->getMessage());
+        } catch (SupplierImportSourceProfileDescriptorCollisionException $exception) {
+            $this->assertSame('source_profile_descriptor_fingerprint_collision', $exception->getMessage());
         }
 
+        $this->assertSame($profileBefore, (array) DB::table('supplier_import_source_profiles')
+            ->where('supplier_feed_id', $contradictory['feed']->id)
+            ->first());
         $this->assertSame(0, DB::table('supplier_import_source_executions')->count());
     }
 
-    public function test_selector_change_cannot_reinterpret_a_preexisting_profile_or_create_b(): void
+    public function test_selector_change_creates_distinct_profile_b_without_reinterpreting_profile_a(): void
     {
         $fixture = $this->fixture('xml');
         $profilesBefore = DB::table('supplier_import_source_profiles')->count();
+        $profileABefore = (array) DB::table('supplier_import_source_profiles')->find($fixture['profile_id']);
         $fixture['template']->update([
             'field_map' => ['supplier_sku' => 'changed.code', 'name' => 'changed.name'],
         ]);
+        $mappingB = $this->xmlMapping($fixture['template']->fresh());
+        $descriptorB = $fixture['provider']->descriptorFor($fixture['feed'], $mappingB);
 
-        try {
-            $this->resolver($fixture['provider'])
-                ->resolveSourceContext($fixture['job']->id, $fixture['claim_id']);
-            $this->fail('Selector B reused profile A.');
-        } catch (RuntimeException $exception) {
-            $this->assertSame('source_context_profile_not_found', $exception->getMessage());
-        }
+        $context = $this->resolver($fixture['provider'])
+            ->resolveSourceContext($fixture['job']->id, $fixture['claim_id']);
+        $profileB = DB::table('supplier_import_source_profiles')
+            ->where('source_descriptor_fingerprint', $descriptorB->fingerprint())
+            ->first();
 
-        $this->assertSame($profilesBefore, DB::table('supplier_import_source_profiles')->count());
-        $this->assertSame(0, DB::table('supplier_import_source_executions')->count());
+        $this->assertNotNull($profileB);
+        $this->assertNotSame($fixture['profile_id'], (int) $profileB->id);
+        $this->assertSame($descriptorB->fingerprint(), $context->sourceDescriptorFingerprint());
+        $this->assertSame($profilesBefore + 1, DB::table('supplier_import_source_profiles')->count());
+        $this->assertSame($profileABefore, (array) DB::table('supplier_import_source_profiles')->find($fixture['profile_id']));
+        $this->assertSame((int) $profileB->id, (int) DB::table('supplier_import_source_executions')
+            ->value('supplier_import_source_profile_id'));
     }
 
     public function test_concurrent_resolution_converges_to_one_source_execution(): void
@@ -390,7 +449,7 @@ final class PhaseThreeP0SliceTwoMysqlTest extends TestCase
             $this->fail('pcntl_fork is required for Phase III-P0 Slice 2 MySQL concurrency validation.');
         }
 
-        $fixture = $this->fixture('xml');
+        $fixture = $this->fixture('xml', persistProfile: false);
         $directory = sys_get_temp_dir().DIRECTORY_SEPARATOR.'phase-three-p0-slice-two-'.bin2hex(random_bytes(8));
         $start = $directory.DIRECTORY_SEPARATOR.'start';
         $children = [];
@@ -447,6 +506,7 @@ final class PhaseThreeP0SliceTwoMysqlTest extends TestCase
                 trim((string) file_get_contents($directory.DIRECTORY_SEPARATOR.'result-1')),
             ];
             $this->assertSame($results[0], $results[1]);
+            $this->assertSame(1, DB::table('supplier_import_source_profiles')->count());
             $this->assertSame(1, DB::table('supplier_import_source_executions')->count());
             $this->assertSame(0, DB::table('products')->count());
             $this->assertSame(0, DB::table('supplier_products')->count());
@@ -471,12 +531,14 @@ final class PhaseThreeP0SliceTwoMysqlTest extends TestCase
 
     /**
      * @return array{
+     *   supplier: Supplier,
      *   feed: SupplierFeed,
      *   template: ?XmlMappingTemplate,
      *   job: ImportJob,
      *   history: ImportHistory,
      *   claim_id: int,
      *   profile_id: ?int,
+     *   descriptor: CanonicalSupplierSourceProfileDescriptor,
      *   provider: FixedSupplierImportSourceDescriptorProvider
      * }
      */
@@ -537,7 +599,7 @@ final class PhaseThreeP0SliceTwoMysqlTest extends TestCase
             ]);
         }
 
-        return compact('feed', 'template', 'job', 'history', 'provider') + [
+        return compact('supplier', 'feed', 'template', 'job', 'history', 'descriptor', 'provider') + [
             'claim_id' => $claimId,
             'profile_id' => $profileId,
         ];
@@ -548,8 +610,23 @@ final class PhaseThreeP0SliceTwoMysqlTest extends TestCase
         return new SupplierImportSourceContextResolver(
             app(DatabaseManager::class),
             $provider,
+            app(SupplierImportSourceProfileRepository::class),
             new SupplierImportSourceExecutionRepository,
         );
+    }
+
+    private function authorizeDowngrade(): void
+    {
+        putenv(self::DOWN_CONFIRMATION_ENV.'=true');
+        $_ENV[self::DOWN_CONFIRMATION_ENV] = 'true';
+        $_SERVER[self::DOWN_CONFIRMATION_ENV] = 'true';
+    }
+
+    private function assertDowngradeAuthorizationConsumed(): void
+    {
+        $this->assertFalse(getenv(self::DOWN_CONFIRMATION_ENV));
+        $this->assertArrayNotHasKey(self::DOWN_CONFIRMATION_ENV, $_ENV);
+        $this->assertArrayNotHasKey(self::DOWN_CONFIRMATION_ENV, $_SERVER);
     }
 
     private function xmlMapping(XmlMappingTemplate $template): CanonicalSupplierImportMapping

@@ -2882,6 +2882,17 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
             $this->assertStringContainsString('P0-04 through P0-09', $status, $statusDocument);
             $this->assertStringContainsString('NOT SPECIFIED', $status, $statusDocument);
         }
+
+        $roadmap = preg_replace('/\s+/', ' ', $this->readDocument('docs/ROADMAP.md'));
+        $this->assertIsString($roadmap);
+        $this->assertStringContainsString(
+            'the execution/context foundation is implemented on this branch and remains dormant pending merge and deployment',
+            $roadmap,
+        );
+        $this->assertStringNotContainsString(
+            'execution/context, revision, five-field claim binding and the ten-bound policy remain unimplemented',
+            $roadmap,
+        );
     }
 
     public function test_phase_three_p0_runtime_plan_has_independent_bof_to_eof_structural_authority(): void
