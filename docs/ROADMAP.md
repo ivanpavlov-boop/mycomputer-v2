@@ -352,18 +352,28 @@ disabled. `CART-025` remains open.
     inactive. Phase III-P0 Slice 1's P0-01/P0-02 source-profile foundation was
     merged through PR #219, CI #478 verified, deployed at
     `30b05f4aaacad38f3c6f4b782a5d90004c8740ff`, and remains dormant. The exact
-    next item is the P0-03-only Phase III-P0 Slice 2 immutable source-execution
-    and resolved-context foundation. It is defined but not
-    implementation-authorized; P0-04 through P0-09 remain unsliced and
-    unauthorized. No runtime queue setting, worker, command, parser change,
+    P0-03-only Phase III-P0 Slice 2 was separately implementation-authorized by
+    the repository owner. Phase III-P0 Slice 2's P0-03 immutable
+    source-execution/resolved-context implementation is present in the current
+    tree and remains dormant. Repository presence does not establish staging or
+    production deployment and does not authorize runtime activation; deployment
+    status requires separate deployment evidence. P0-04 through P0-09 remain
+    unimplemented, unsliced, and unauthorized. All ten numeric production bounds
+    remain `NOT SPECIFIED`. No runtime queue
+    setting, worker, command, parser change,
     capture repository/hook, producer, historical backfill or operational
     evidence exists. Phase III runtime is unimplemented and not authorized.
     <!-- phase-iii-architecture-status-reference authority=phase-iii-architecture-contract-v1 -->
     The exact current status map is owned only by the
     [canonical Phase III architecture contract](IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md#phase-iii-provenance-and-bounds-architecture-decision)
     and is not mirrored here. The immutable profile foundation is deployed but
-    inactive; execution/context, revision, five-field claim binding and the
-    ten-bound policy remain unimplemented. All ten numeric production values
+    inactive; the P0-03 execution/context implementation is present in the
+    current tree and remains dormant. Repository presence does not establish
+    staging or production deployment and does not authorize runtime activation;
+    deployment status requires separate deployment evidence. Payload receipt,
+    revision, five-field claim binding and the ten-bound policy remain
+    unimplemented. All
+    ten numeric production values
     remain `NOT SPECIFIED`. Claim source
     binding does not replace candidate provenance. C3D.1 remains blocked until
     the canonical remaining gate and later

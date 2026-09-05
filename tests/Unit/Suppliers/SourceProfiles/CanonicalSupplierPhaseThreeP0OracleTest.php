@@ -289,8 +289,12 @@ final class CanonicalSupplierPhaseThreeP0OracleTest extends TestCase
         $this->assertFalse(CanonicalSupplierPhaseThreeP0ConnectionOutcome::isUncertain($ordinary));
     }
 
-    public function test_slice_one_down_operations_are_the_exact_single_statement_contracts(): void
+    public function test_implemented_p0_down_operations_are_the_exact_single_statement_contracts(): void
     {
+        $this->assertSame(
+            'DROP TABLE `supplier_import_source_executions`',
+            CanonicalSupplierPhaseThreeP0Oracle::operation('P0-03-DOWN-01')['sql'],
+        );
         $this->assertSame(
             'DROP TABLE `supplier_import_source_profiles`',
             CanonicalSupplierPhaseThreeP0Oracle::operation('P0-02-DOWN-01')['sql'],

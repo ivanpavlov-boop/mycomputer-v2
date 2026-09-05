@@ -43,12 +43,14 @@ final class CanonicalSupplierPhaseThreeP0Schema
     private const FORWARD_STATES = [
         'P0-01' => ['predecessor' => 'P0', 'target' => 'P1'],
         'P0-02' => ['predecessor' => 'P1', 'target' => 'P2'],
+        'P0-03' => ['predecessor' => 'P2', 'target' => 'P3'],
     ];
 
     /** @var array<string, array{initial: string, target: string, operation: string}> */
     private const DOWN_STATES = [
         'P0-01' => ['initial' => 'P1', 'target' => 'P0', 'operation' => 'P0-01-DOWN-01'],
         'P0-02' => ['initial' => 'P2', 'target' => 'P1', 'operation' => 'P0-02-DOWN-01'],
+        'P0-03' => ['initial' => 'P3', 'target' => 'P2', 'operation' => 'P0-03-DOWN-01'],
     ];
 
     private static bool $active = false;
@@ -69,11 +71,12 @@ final class CanonicalSupplierPhaseThreeP0Schema
         self::withGuard(function (PDO $pdo) use ($step, $states): void {
             self::assertState($pdo, $states['predecessor'], 'phase_three_p0_forward_precondition_failed');
 
-            if ($step === P0MigrationStep::P0_01) {
-                self::executeP0_01Forward($pdo);
-            } else {
-                self::executeP0_02Forward($pdo);
-            }
+            match ($step) {
+                P0MigrationStep::P0_01 => self::executeP0_01Forward($pdo),
+                P0MigrationStep::P0_02 => self::executeP0_02Forward($pdo),
+                P0MigrationStep::P0_03 => self::executeP0_03Forward($pdo),
+                default => throw new RuntimeException('phase_three_p0_forward_step_not_implemented'),
+            };
 
             self::assertState($pdo, $states['target'], 'phase_three_p0_forward_postcondition_failed');
         });
@@ -87,11 +90,12 @@ final class CanonicalSupplierPhaseThreeP0Schema
         $primaryFailure = null;
 
         try {
+            self::consumeDestructiveAuthorization($invocationId);
+
             if ($states === null) {
                 self::fail('phase_three_p0_downgrade_step_not_implemented', $invocationId);
             }
 
-            self::assertDestructiveEnvironment($invocationId);
             self::assertProtectedGatesDisabled($invocationId);
 
             self::withGuard(function (PDO $pdo) use ($step, $states, $invocationId, &$evidence): void {
@@ -116,9 +120,15 @@ final class CanonicalSupplierPhaseThreeP0Schema
                     self::fail('phase_three_p0_step_not_terminal', $invocationId);
                 }
 
-                if ($step === P0MigrationStep::P0_02 && self::tableHasRowsForDowngrade(
+                $appendOnlyTable = match ($step) {
+                    P0MigrationStep::P0_02 => 'supplier_import_source_profiles',
+                    P0MigrationStep::P0_03 => 'supplier_import_source_executions',
+                    default => null,
+                };
+
+                if ($appendOnlyTable !== null && self::tableHasRowsForDowngrade(
                     $pdo,
-                    'supplier_import_source_profiles',
+                    $appendOnlyTable,
                     $invocationId,
                     $evidence,
                 )) {
@@ -235,6 +245,59 @@ final class CanonicalSupplierPhaseThreeP0Schema
                 BEFORE DELETE ON `supplier_import_source_profiles`
                 FOR EACH ROW
                 SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Immutable source profile cannot be deleted'
+                SQL);
+        });
+    }
+
+    private static function executeP0_03Forward(PDO $pdo): void
+    {
+        self::withCanonicalP0Session($pdo, function (PDO $pdo): void {
+            $pdo->exec(<<<'SQL'
+                CREATE TABLE `supplier_import_source_executions` (
+                  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+                  `supplier_id` bigint unsigned NOT NULL,
+                  `supplier_feed_id` bigint unsigned NOT NULL,
+                  `import_job_id` bigint unsigned NOT NULL,
+                  `import_history_id` bigint unsigned NOT NULL,
+                  `supplier_import_source_profile_id` bigint unsigned NOT NULL,
+                  `source_identity` varchar(128) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+                  `source_descriptor_fingerprint` char(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+                  `importer_key` varchar(96) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+                  `importer_version` varchar(32) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+                  `import_job_identity_version` varchar(96) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+                  `import_job_identity_canonical_bytes` mediumblob NOT NULL,
+                  `import_job_identity_fingerprint` char(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+                  `resolved_source_context_version` varchar(96) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+                  `captured_at` timestamp(6) NOT NULL,
+                  `source_execution_fingerprint` char(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+                  `created_at` timestamp(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+                  PRIMARY KEY (`id`),
+                  UNIQUE KEY `uq_import_source_execution_fingerprint` (`source_execution_fingerprint`),
+                  UNIQUE KEY `uq_import_source_execution_history` (`import_history_id`),
+                  UNIQUE KEY `uq_import_source_execution_scope` (`id`, `supplier_id`, `supplier_feed_id`, `source_identity`, `source_descriptor_fingerprint`, `source_execution_fingerprint`),
+                  UNIQUE KEY `uq_import_source_execution_receipt_scope` (`id`, `source_execution_fingerprint`),
+                  KEY `ix_import_source_execution_profile_fk` (`supplier_import_source_profile_id`, `supplier_id`, `supplier_feed_id`, `source_identity`, `source_descriptor_fingerprint`),
+                  KEY `ix_import_source_execution_feed_owner_fk` (`supplier_feed_id`, `supplier_id`),
+                  KEY `ix_import_source_execution_job_scope_fk` (`import_job_id`, `supplier_id`, `supplier_feed_id`),
+                  CONSTRAINT `fk_import_source_execution_profile` FOREIGN KEY (`supplier_import_source_profile_id`, `supplier_id`, `supplier_feed_id`, `source_identity`, `source_descriptor_fingerprint`) REFERENCES `supplier_import_source_profiles` (`id`, `supplier_id`, `supplier_feed_id`, `source_identity`, `source_descriptor_fingerprint`) ON UPDATE RESTRICT ON DELETE RESTRICT,
+                  CONSTRAINT `fk_import_source_execution_feed_owner` FOREIGN KEY (`supplier_feed_id`, `supplier_id`) REFERENCES `supplier_feeds` (`id`, `supplier_id`) ON UPDATE RESTRICT ON DELETE RESTRICT,
+                  CONSTRAINT `fk_import_source_execution_job_scope` FOREIGN KEY (`import_job_id`, `supplier_id`, `supplier_feed_id`) REFERENCES `import_jobs` (`id`, `supplier_id`, `supplier_feed_id`) ON UPDATE RESTRICT ON DELETE RESTRICT,
+                  CONSTRAINT `fk_import_source_execution_history` FOREIGN KEY (`import_history_id`) REFERENCES `import_histories` (`id`) ON UPDATE RESTRICT ON DELETE RESTRICT,
+                  CONSTRAINT `chk_import_source_execution_versions` CHECK (((`import_job_identity_version` = _ascii'supplier_import_job_identity_v1') and (`resolved_source_context_version` = _ascii'supplier_import_resolved_source_context_v1'))),
+                  CONSTRAINT `chk_import_source_execution_fingerprints` CHECK (((length(`source_identity`) between 1 and 128) and regexp_like(`source_identity`,_ascii'^snapshot-source-v1:[a-z0-9]+([._-][a-z0-9]+)*(:[a-z0-9]+([._-][a-z0-9]+)*)*$',_cp866'c') and (length(`source_descriptor_fingerprint`) = 64) and regexp_like(`source_descriptor_fingerprint`,_ascii'^[0-9a-f]{64}$',_cp866'c') and (length(`import_job_identity_fingerprint`) = 64) and regexp_like(`import_job_identity_fingerprint`,_ascii'^[0-9a-f]{64}$',_cp866'c') and (length(`source_execution_fingerprint`) = 64) and regexp_like(`source_execution_fingerprint`,_ascii'^[0-9a-f]{64}$',_cp866'c')))
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='mycomputer:phase-iii-p0:v1:owner=P0-03'
+                SQL);
+            $pdo->exec(<<<'SQL'
+                CREATE TRIGGER `trg_import_source_execution_no_update`
+                BEFORE UPDATE ON `supplier_import_source_executions`
+                FOR EACH ROW
+                SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Immutable source execution cannot be updated'
+                SQL);
+            $pdo->exec(<<<'SQL'
+                CREATE TRIGGER `trg_import_source_execution_no_delete`
+                BEFORE DELETE ON `supplier_import_source_executions`
+                FOR EACH ROW
+                SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Immutable source execution cannot be deleted'
                 SQL);
         });
     }
@@ -459,12 +522,20 @@ final class CanonicalSupplierPhaseThreeP0Schema
         }
     }
 
-    private static function assertDestructiveEnvironment(string $invocationId): void
+    private static function consumeDestructiveAuthorization(string $invocationId): void
     {
-        if (! app()->environment(['local', 'testing'])
-            || getenv(self::DOWN_CONFIRMATION_ENV) !== 'true') {
+        $confirmation = getenv(self::DOWN_CONFIRMATION_ENV);
+        self::clearDestructiveAuthorizationEnvironment();
+
+        if (! app()->environment(['local', 'testing']) || $confirmation !== 'true') {
             self::fail('phase_three_p0_downgrade_not_authorized', $invocationId);
         }
+    }
+
+    private static function clearDestructiveAuthorizationEnvironment(): void
+    {
+        putenv(self::DOWN_CONFIRMATION_ENV);
+        unset($_ENV[self::DOWN_CONFIRMATION_ENV], $_SERVER[self::DOWN_CONFIRMATION_ENV]);
     }
 
     private static function assertProtectedGatesDisabled(?string $invocationId = null): void

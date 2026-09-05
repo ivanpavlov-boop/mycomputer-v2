@@ -38,6 +38,16 @@ final class PhaseThreeP0SliceOneMysqlTest extends TestCase
 
         $this->assertStringStartsWith('8.4.', (string) DB::scalar('SELECT VERSION()'));
         $this->artisan('migrate:fresh', ['--force' => true])->assertExitCode(0);
+
+        putenv('SUPPLIER_PHASE_THREE_P0_EMPTY_SCHEMA_DOWN_CONFIRMED=true');
+        try {
+            $p03 = require database_path('migrations/2026_08_28_090002_create_supplier_import_source_executions_table.php');
+            $p03->down();
+        } finally {
+            putenv('SUPPLIER_PHASE_THREE_P0_EMPTY_SCHEMA_DOWN_CONFIRMED');
+        }
+
+        $this->assertSame('P2', CanonicalSupplierPhaseThreeP0Schema::classify(DB::connection()->getPdo())['state']);
     }
 
     protected function tearDown(): void
@@ -63,6 +73,7 @@ final class PhaseThreeP0SliceOneMysqlTest extends TestCase
         $p02->down();
         $this->assertSame('P1', CanonicalSupplierPhaseThreeP0Schema::classify(DB::connection()->getPdo())['state']);
 
+        putenv('SUPPLIER_PHASE_THREE_P0_EMPTY_SCHEMA_DOWN_CONFIRMED=true');
         try {
             $p02->down();
             $this->fail('P0-02 downgrade was accepted from its predecessor.');
@@ -71,6 +82,7 @@ final class PhaseThreeP0SliceOneMysqlTest extends TestCase
         }
 
         $this->assertSame('P1', CanonicalSupplierPhaseThreeP0Schema::classify(DB::connection()->getPdo())['state']);
+        putenv('SUPPLIER_PHASE_THREE_P0_EMPTY_SCHEMA_DOWN_CONFIRMED=true');
         $p01->down();
         $this->assertSame('P0', CanonicalSupplierPhaseThreeP0Schema::classify(DB::connection()->getPdo())['state']);
 
@@ -206,6 +218,7 @@ final class PhaseThreeP0SliceOneMysqlTest extends TestCase
             ADD INDEX `ix_unexpected_phase_three_p0_test` (`supplier_id`)
             SQL);
 
+        putenv('SUPPLIER_PHASE_THREE_P0_EMPTY_SCHEMA_DOWN_CONFIRMED=true');
         try {
             $migration->down();
             $this->fail('Unknown schema state executed destructive DDL.');

@@ -527,15 +527,20 @@ deployed to staging and inactive. Phase II's guarded models and canonical byte
 contracts are implemented, merged through PR #213, CI-verified, deployed to
 staging and uncalled. Phase III-P0 Slice 1's P0-01/P0-02 source-profile
 foundation is implemented through PR #219, CI #478 verified, deployed at
-`30b05f4aaacad38f3c6f4b782a5d90004c8740ff`, and dormant. Phase III persistence
-remains unimplemented and is not implementation-authorized.
+`30b05f4aaacad38f3c6f4b782a5d90004c8740ff`, and dormant. Complete Phase III
+persistence remains unimplemented and is not implementation-authorized beyond
+the separately authorized P0-03 scope below.
 <!-- phase-iii-architecture-status-reference authority=phase-iii-architecture-contract-v1 -->
 The exact current status map is owned only by the
 [canonical Phase III architecture contract](IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md#phase-iii-provenance-and-bounds-architecture-decision)
-and is not mirrored here. The exact next item is Phase III-P0 Slice 2, limited
-to P0-03 and the immutable source-execution/resolved-context foundation. It is
-defined but not implementation-authorized; P0-04 through P0-09 remain unsliced
-and unauthorized. All ten numeric production bounds remain `NOT SPECIFIED`.
+and is not mirrored here. Phase III-P0 Slice 2 was separately
+implementation-authorized by the repository owner for P0-03 only. Phase III-P0
+Slice 2's P0-03 immutable source-execution/resolved-context implementation is
+present in the current tree and remains dormant. Repository presence does not
+establish staging or production deployment and does not authorize runtime
+activation; deployment status requires separate deployment evidence. P0-04
+through P0-09 remain unimplemented, unsliced, and unauthorized. All ten numeric
+production bounds remain `NOT SPECIFIED`.
 Claim source binding does not
 replace candidate provenance. No
 evidence candidate exists and no operational preview is authorized.
