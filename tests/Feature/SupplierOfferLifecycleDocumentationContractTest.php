@@ -2861,32 +2861,76 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
             $plan,
         );
 
-        foreach ([
-            'docs/PHASES.md',
-            'docs/ROADMAP.md',
-            'docs/SUPPLIER_ONBOARDING_FRAMEWORK.md',
-            'docs/APCOM_OPERATIONAL_OFFER_LIFECYCLE_PREVIEW.md',
-        ] as $statusDocument) {
-            $status = preg_replace('/\s+/', ' ', $this->readDocument($statusDocument));
-            $this->assertIsString($status);
-            $this->assertStringContainsString('Phase III-P0 Slice 1', $status, $statusDocument);
+        $statusDocuments = [
+            'docs/PHASES.md' => [
+                '<!-- phase-iii-architecture-status-reference authority=phase-iii-architecture-contract-v1 -->',
+                '### Phase 9C.6.5C.3D.1-PRE.A Rollout Checkpoints',
+            ],
+            'docs/ROADMAP.md' => [
+                'Phase I tables/migrations and Phase II models/contracts now exist',
+                '12. Select Supplier #3 only',
+            ],
+            'docs/SUPPLIER_ONBOARDING_FRAMEWORK.md' => [
+                '<!-- phase-iii-architecture-status-reference authority=phase-iii-architecture-contract-v1 -->',
+                'Operational rollback is forward-only after deployment or protected-state use:',
+            ],
+            'docs/APCOM_OPERATIONAL_OFFER_LIFECYCLE_PREVIEW.md' => [
+                '<!-- phase-iii-architecture-status-reference authority=phase-iii-architecture-contract-v1 -->',
+                '## Immutable Persistence Rollout Checkpoints',
+            ],
+        ];
+
+        foreach ($statusDocuments as $statusDocument => [$start, $end]) {
+            $document = $this->readDocument($statusDocument);
+            $completeStatus = preg_replace('/\s+/', ' ', $document);
+            $this->assertIsString($completeStatus);
+            $this->assertStringContainsString('Phase III-P0 Slice 1', $completeStatus, $statusDocument);
             $this->assertStringContainsString(
                 '30b05f4aaacad38f3c6f4b782a5d90004c8740ff',
+                $completeStatus,
+                $statusDocument,
+            );
+
+            $currentStatus = $this->markdownSection($document, $start, $end);
+            $status = preg_replace('/\s+/', ' ', $currentStatus);
+            $this->assertIsString($status);
+            $this->assertStringContainsString('Phase III-P0 Slice 2', $status, $statusDocument);
+            $this->assertStringContainsString('implementation-authorized', $status, $statusDocument);
+            $this->assertStringContainsString(
+                "Phase III-P0 Slice 2's P0-03 immutable source-execution/resolved-context implementation is present in the current tree and remains dormant.",
                 $status,
                 $statusDocument,
             );
-            $this->assertStringContainsString('Phase III-P0 Slice 2', $status, $statusDocument);
-            $this->assertStringContainsString('implementation-authorized', $status, $statusDocument);
-            $this->assertStringContainsString('implemented on this branch', $status, $statusDocument);
-            $this->assertStringContainsString('remains dormant', $status, $statusDocument);
+            $this->assertStringContainsString(
+                'Repository presence does not establish staging or production deployment and does not authorize runtime activation; deployment status requires separate deployment evidence.',
+                $status,
+                $statusDocument,
+            );
             $this->assertStringContainsString('P0-04 through P0-09', $status, $statusDocument);
+            $this->assertStringContainsString('unimplemented', $status, $statusDocument);
             $this->assertStringContainsString('NOT SPECIFIED', $status, $statusDocument);
+
+            foreach ([
+                'implemented on this branch',
+                'pending ci',
+                'awaiting ci',
+                'pending merge',
+                'awaiting merge',
+                'in this pr',
+            ] as $transientStatus) {
+                $this->assertStringNotContainsString(
+                    $transientStatus,
+                    strtolower($status),
+                    "{$statusDocument} contains transient current-state wording: {$transientStatus}",
+                );
+            }
         }
 
+        $this->assertStringContainsString('| `PH3-RDY-003` | `BLOCKED` |', $design);
         $roadmap = preg_replace('/\s+/', ' ', $this->readDocument('docs/ROADMAP.md'));
         $this->assertIsString($roadmap);
         $this->assertStringContainsString(
-            'the execution/context foundation is implemented on this branch and remains dormant pending merge and deployment',
+            'Payload receipt, revision, five-field claim binding and the ten-bound policy remain unimplemented',
             $roadmap,
         );
         $this->assertStringNotContainsString(

@@ -166,16 +166,19 @@ producer exists. Phase II's guarded models/canonical byte contracts are also
 implemented, merged, CI-verified, deployed to staging, and uncalled. Phase
 III-P0 Slice 1's P0-01/P0-02 source-profile foundation is implemented through
 PR #219, CI #478 verified, deployed at
-`30b05f4aaacad38f3c6f4b782a5d90004c8740ff`, and dormant. Snapshot persistence
-remains unimplemented and not implementation-authorized.
+`30b05f4aaacad38f3c6f4b782a5d90004c8740ff`, and dormant. Complete snapshot
+persistence remains unimplemented and not implementation-authorized beyond the
+separately authorized P0-03 scope below.
 <!-- phase-iii-architecture-status-reference authority=phase-iii-architecture-contract-v1 -->
 The exact current readiness map is owned only by the
 [canonical Phase III architecture contract](IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md#phase-iii-provenance-and-bounds-architecture-decision).
 This preview does not mirror that map. Phase III-P0 Slice 2 was separately
-implementation-authorized by the repository owner for P0-03 only. Its immutable
-source-execution/resolved-context foundation is implemented on this branch,
-pending independent review, CI, merge and deployment, and remains dormant.
-P0-04 through P0-09 remain unsliced and unauthorized. All ten numeric
+implementation-authorized by the repository owner for P0-03 only. Phase III-P0
+Slice 2's P0-03 immutable source-execution/resolved-context implementation is
+present in the current tree and remains dormant. Repository presence does not
+establish staging or production deployment and does not authorize runtime
+activation; deployment status requires separate deployment evidence. P0-04
+through P0-09 remain unimplemented, unsliced, and unauthorized. All ten numeric
 production bounds remain `NOT SPECIFIED`. C3D.1 remains blocked
 until the canonical remaining gate, the fine-grained checkpoints below, and
 future qualified warm-up complete. Supplier #3 remains unselected and
