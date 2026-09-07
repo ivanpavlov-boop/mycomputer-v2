@@ -23,8 +23,11 @@ The approved design entered `main` through PR #211:
   ordered fields including `claimed_at`;
 - republish resume-state fingerprint: exactly 16 ordered fields.
 
-The current implementation baseline is `origin/main` at
-`30b05f4aaacad38f3c6f4b782a5d90004c8740ff`:
+The implementation baseline recorded for the Slice 2 completion review is
+merge commit `21b201df9b159d7289c7538f56877890c764302a`.
+Deployment status requires the dated evidence linked below; repository
+presence alone does not establish deployment or authorize runtime activation.
+The completed foundations at this reviewed baseline are:
 
 - Phase I canonical schema: implemented, merged through PR #212, CI-verified,
   deployed to staging, and behaviorally dormant;
@@ -33,6 +36,11 @@ The current implementation baseline is `origin/main` at
 - Phase III-P0 Slice 1: P0-01/P0-02 and the immutable source-profile foundation
   implemented through PR #219, CI #478 verified, deployed to staging, and
   dormant;
+- Phase III-P0 Slice 2: P0-03 source-execution/resolved-context foundation
+  implemented through PR #222 and verified by post-merge CI #487; staging
+  deployment is supported by
+  [owner-provided evidence dated 2026-09-05](PHASE_III_P0_SLICE_2_STAGING_EVIDENCE_2026_09_05.md),
+  and the foundation remains dormant;
 - Phase III snapshot persistence/cohort authorization: provenance and durable
   source-binding architecture selected, still unimplemented and not
   implementation-authorized.
@@ -582,9 +590,11 @@ immutability.
 
 ### Phase III-P0 - Protected source provenance prerequisite foundation
 
-**Status.** Slice 1 is implemented, merged, deployed and dormant. Slice 2 is
-defined below but is not implementation-authorized. P0-04 through P0-09 remain
-unsliced and not implementation-authorized. This subphase is additive to, and
+**Status.** Slice 1 and Slice 2 are implemented, merged, deployed and dormant;
+Slice 2 deployment rests on the dated owner-provided record linked below.
+Slice 3 is proposed as P0-04 only, DEFINED_NOT_IMPLEMENTATION_AUTHORIZED.
+P0-05 through P0-09 remain unimplemented, unsliced and unauthorized.
+This subphase is additive to, and
 does not rewrite, the historical deployed Phase I ten-table foundation or
 frozen Phase II contracts.
 
@@ -1283,7 +1293,7 @@ mutation or Catalog Sync. PR #219 merged feature head
 `30b05f4aaacad38f3c6f4b782a5d90004c8740ff`; CI #478 passed and both migrations
 deployed successfully.
 
-The exact immediate successor is **Phase 9C.6.5C.3D - Phase III-P0 Slice 2:
+The completed **Phase 9C.6.5C.3D - Phase III-P0 Slice 2:
 Immutable Source Execution and Resolved Context Foundation**. Its exact scope is
 P0-03 only: the additive `supplier_import_source_executions` migration and P3
 oracle; append-only source-execution model; immutable `ImportJobIdentity` and
@@ -1296,14 +1306,22 @@ insert/reuse. XML requires its exact locked template; CSV carries a null
 template. Same canonical identity is idempotent; conflict or selector drift
 fails closed.
 
-Slice 2 is `DEFINED_NOT_IMPLEMENTATION_AUTHORIZED`. After this authority update
-is merged, implementation requires a separate explicit repository-owner
-authorization. Its prerequisites are deployed inactive Phase I and Phase II,
-completed Slice 1/P2, the exact P2 -> P3 migration boundary, and the frozen P0
-schema/downgrade oracle. Current main satisfies the technical prerequisites but
-this plan grants no implementation or runtime authority.
+Slice 2 is `IMPLEMENTED_MERGED_DEPLOYED_DORMANT`. PR #222 merged at
+`21b201df9b159d7289c7538f56877890c764302a`; post-merge CI #487 succeeded.
+The [dated owner-provided staging record](PHASE_III_P0_SLICE_2_STAGING_EVIDENCE_2026_09_05.md)
+records P3 deployment without claiming content preservation from row counts.
+The next proposed boundary is Phase 9C.6.5C.3D - Phase III-P0 Slice 3:
+Immutable Source Payload Receipt Foundation, P0-04 only,
+`DEFINED_NOT_IMPLEMENTATION_AUTHORIZED`. Its
+[subordinate proposal](PHASE_III_P0_SLICE_3_RECEIPT_FOUNDATION_PROPOSAL.md)
+requires independent design review and a later implementation decision.
+Its dependencies are deployed dormant P3, the existing P3 -> P4 oracle and
+invocation-scoped coordinator. P0-05 through P0-09 remain unsliced and
+unauthorized. BoundedImmutableSourcePayload ownership, acquisition,
+downloader/parser adapters and EOF integration require a separate future gate.
+This plan grants no implementation or runtime authority.
 
-When separately authorized, Slice 2 permits only the exact P0-03 schema
+Slice 2 permits only its separately authorized exact P0-03 schema
 addition and isolated-test calls that insert/reuse profiles and insert immutable
 source executions. It forbids P0-04 through P0-09; source fetch; payload receipt;
 downloader/parser adapters; import or Catalog Sync execution; `supplier_products`
@@ -1687,10 +1705,9 @@ binding but cannot become active. Phase X supplies the DB-backed binding; even
 that merge does not activate recovery without canonical fresh evidence and a
 separate operational authorization.
 
-The first safe next action is to merge the documentation-only Slice 1 authority
-alignment, then obtain a separate explicit repository-owner authorization for
-the defined P0-03-only Slice 2. No code branch for Slice 2 may infer authority
-from this plan. The exact current status map remains exclusively in the
+The next safe step is independent design review of the P0-04-only Slice 3
+proposal, followed by a separate repository-owner implementation decision.
+Neither Slice 2 completion nor this plan authorizes Slice 3 implementation. The exact current status map remains exclusively in the
 referenced canonical architecture contract. The remaining numeric-evidence
 gate requires separately authorized production-evidence collection and review
 for all ten bounds. Neither Slice 2 nor that evidence work authorizes Phase III
