@@ -178,12 +178,32 @@ Slice 2's P0-03 immutable source-execution/resolved-context implementation is
 present in the current tree and remains dormant. Repository presence does not
 establish staging or production deployment and does not authorize runtime
 activation; deployment status requires separate deployment evidence. P0-04
-through P0-09 remain unimplemented, unsliced, and unauthorized. All ten numeric
+remains unimplemented and not implementation-authorized within defined Slice 3.
+P0-05 through P0-09 remain unimplemented, unsliced, and unauthorized. All ten numeric
 production bounds remain `NOT SPECIFIED`. C3D.1 remains blocked
 until the canonical remaining gate, the fine-grained checkpoints below, and
 future qualified warm-up complete. Supplier #3 remains unselected and
 unstarted. No evidence candidate exists and no operational preview is
 authorized.
+
+<!-- slice-two-deployment-evidence:start -->
+Slice 2 completion: `IMPLEMENTED_MERGED_DEPLOYED_DORMANT`, supported by
+[owner-provided staging evidence dated 2026-09-05](PHASE_III_P0_SLICE_2_STAGING_EVIDENCE_2026_09_05.md).
+That record distinguishes verified merge/CI from owner-confirmed deployment and
+does not infer content preservation from unchanged row counts.
+Slice 3 is canonically defined as P0-04 only,
+`DEFINED_NOT_IMPLEMENTATION_AUTHORIZED`. The
+[subordinate Slice 3 proposal](PHASE_III_P0_SLICE_3_RECEIPT_FOUNDATION_PROPOSAL.md)
+is not another schema, semantic registry or readiness map; independent design
+review and a later owner implementation decision are required.
+The owner-approved one-time prose revision dated 2026-09-06 is applied.
+P0-04 remains unimplemented and not implementation-authorized; P0-05 through
+P0-09 remain unimplemented, unsliced and unauthorized. Receipt transport,
+BoundedImmutableSourcePayload ownership, download/redirect handling, parser/EOF
+integration, live callers and capture remain excluded. The canonical remaining
+numeric-evidence gate is unchanged; all ten bounds remain NOT SPECIFIED.
+No runtime activation is granted.
+<!-- slice-two-deployment-evidence:end -->
 
 ## Immutable Persistence Rollout Checkpoints
 

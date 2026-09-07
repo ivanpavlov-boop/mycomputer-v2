@@ -3752,11 +3752,14 @@ rule above.
 <!-- phase-iii-architecture-contract:start id=phase-iii-architecture-contract-v1 -->
 ### Phase III provenance and bounds architecture decision
 
-This subsection is the selected architecture. Phase III-P0 Slice 1 implements
-only the P0-01/P0-02 source-profile foundation identified below; it is deployed
-and dormant. Every remaining table, model, importer, repository, job,
-configuration and feature gate described here remains design authority only
-until a later explicitly authorized implementation phase adds it.
+This subsection is the selected architecture. Phase III-P0 Slice 1's
+P0-01/P0-02 and Slice 2's P0-03 foundations are implemented, merged and dormant.
+Slice 2 deployment is recorded as owner-provided evidence dated 2026-09-05 in
+[the Slice 2 staging record](PHASE_III_P0_SLICE_2_STAGING_EVIDENCE_2026_09_05.md).
+P0-04 and later prerequisites remain unimplemented and unauthorized. Every
+remaining table, model, importer, repository, job, configuration and feature
+gate remains design authority only until separately authorized; neither
+deployment nor this status correction authorizes runtime activation.
 The complete marker-bounded CURRENT authority is closed-world. From the exact
 CURRENT authority marker through the matching contract end marker, every
 normalized byte and every ordered structural unit is canonical. Each unit has a
@@ -5165,13 +5168,13 @@ P0-01/P0-02 migrations deployed successfully.
 | Canonical slice | Exact scope | Authority status |
 | --- | --- | --- |
 | `Phase 9C.6.5C.3D - Phase III-P0 Slice 1` | P0-01 plus P0-02 and the immutable source-profile foundation above | `IMPLEMENTED_MERGED_DEPLOYED_DORMANT`; complete and closed unless a concrete regression is found |
-| `Phase 9C.6.5C.3D - Phase III-P0 Slice 2` | P0-03 plus the immutable source-execution and resolved-source-context foundation below | `DEFINED_NOT_IMPLEMENTATION_AUTHORIZED`; requires a separate explicit implementation authorization after this authority change is merged |
-| later Phase III-P0 slices | P0-04 through P0-09 and every downloader, parser, staging-pointer, claim-source and policy integration | `NOT_SLICED_NOT_AUTHORIZED`; no ordering or grouping beyond the existing migration dependency registry may be inferred |
+| `Phase 9C.6.5C.3D - Phase III-P0 Slice 2` | P0-03 plus the immutable source-execution and resolved-source-context foundation below | `IMPLEMENTED_MERGED_DEPLOYED_DORMANT`; deployment evidence is owner-provided and dated 2026-09-05 |
+| `Phase 9C.6.5C.3D - Phase III-P0 Slice 3` | P0-04 only: dormant immutable source-payload receipt persistence foundation | `DEFINED_NOT_IMPLEMENTATION_AUTHORIZED`; independent design review and a later repository-owner implementation decision are required |
+| later Phase III-P0 slices | P0-05 through P0-09 and every downloader, parser, staging-pointer, claim-source and policy integration | `NOT_SLICED_NOT_AUTHORIZED`; no ordering or grouping beyond the existing migration dependency registry may be inferred |
 
-The exact next canonical implementation item is therefore **Phase
-9C.6.5C.3D - Phase III-P0 Slice 2: Immutable Source Execution and Resolved
-Context Foundation**. Its exact scope is P0-03 only and its dormant application
-contracts: the additive `supplier_import_source_executions` migration and
+The completed **Phase 9C.6.5C.3D - Phase III-P0 Slice 2: Immutable Source
+Execution and Resolved Context Foundation** contains P0-03 only and its dormant
+application contracts: the additive `supplier_import_source_executions` migration and
 canonical P3 oracle; append-only `SupplierImportSourceExecution` model;
 immutable `ImportJobIdentity` and `ResolvedSupplierImportSourceContext` values;
 their canonical serializers and fingerprints; and
@@ -5183,16 +5186,26 @@ transaction. CSV keeps a null template; XML requires the exact locked template.
 Identical canonical execution identity is idempotent, while a conflicting
 identity or mutable-selector drift fails closed.
 
-Slice 2 prerequisites are current `main` containing the deployed inactive Phase
-I and Phase II authorities and completed Slice 1/P2 state; an exact clean P2 ->
-P3 migration boundary; the already frozen P0 schema oracle and downgrade
-coordinator; and a separate repository-owner implementation authorization.
-The first three are satisfied by
-`30b05f4aaacad38f3c6f4b782a5d90004c8740ff`; the separate implementation
-authorization is intentionally not granted by this design-alignment change.
+Slice 2 merged through PR #222 at
+`21b201df9b159d7289c7538f56877890c764302a`; post-merge CI #487 succeeded.
+Its P3 deployment evidence is linked above; count checks do not prove content
+preservation. Slice 1 remains complete, closed and dormant.
 
-When separately authorized, Slice 2 may mutate schema only by adding the exact
-P0-03 table. Its dormant resolver may insert or reuse source profiles and insert
+The next proposed implementation boundary is **Phase 9C.6.5C.3D - Phase III-P0
+Slice 3: Immutable Source Payload Receipt Foundation**: P0-04 only. The exact
+P3 -> P4 transition uses the existing coordinator and frozen P4 oracle. Its
+dormant model, canonical receipt value and transactional insert/reuse repository
+must preserve the existing payload-integrity contract, composite execution
+binding and append-only evidence. The
+[Slice 3 proposal](PHASE_III_P0_SLICE_3_RECEIPT_FOUNDATION_PROPOSAL.md)
+separates synthetic persistence tests from future transport/handle/EOF
+integration. It is subordinate planning, not a schema or semantic authority.
+No source acquisition, BoundedImmutableSourcePayload owner, downloader/parser
+adapter, runtime caller or P0-05 through P0-09 implementation is authorized.
+All operational bounds and runtime gates remain unchanged.
+
+Slice 2's separately authorized schema change added only the exact P0-03
+table. Its dormant resolver may insert or reuse source profiles and insert
 immutable source executions only when called directly by isolated tests or a
 later separately authorized runtime integration. It may not fetch a
 source, create a payload receipt, parse supplier data, dispatch or run an
