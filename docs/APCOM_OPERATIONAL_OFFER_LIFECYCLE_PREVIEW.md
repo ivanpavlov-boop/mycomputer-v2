@@ -168,7 +168,7 @@ III-P0 Slice 1's P0-01/P0-02 source-profile foundation is implemented through
 PR #219, CI #478 verified, deployed at
 `30b05f4aaacad38f3c6f4b782a5d90004c8740ff`, and dormant. Complete snapshot
 persistence remains unimplemented and not implementation-authorized beyond the
-separately authorized P0-03 scope below.
+separately authorized dormant P0-03 and P0-04 scopes below.
 <!-- phase-iii-architecture-status-reference authority=phase-iii-architecture-contract-v1 -->
 The exact current readiness map is owned only by the
 [canonical Phase III architecture contract](IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md#phase-iii-provenance-and-bounds-architecture-decision).
@@ -177,8 +177,9 @@ implementation-authorized by the repository owner for P0-03 only. Phase III-P0
 Slice 2's P0-03 immutable source-execution/resolved-context implementation is
 present in the current tree and remains dormant. Repository presence does not
 establish staging or production deployment and does not authorize runtime
-activation; deployment status requires separate deployment evidence. P0-04
-remains unimplemented and not implementation-authorized within defined Slice 3.
+activation; deployment status requires separate deployment evidence.
+P0-04 receipt persistence is present and dormant under separate owner
+implementation authorization dated 2026-09-07; validation remains separately recorded.
 P0-05 through P0-09 remain unimplemented, unsliced, and unauthorized. All ten numeric
 production bounds remain `NOT SPECIFIED`. C3D.1 remains blocked
 until the canonical remaining gate, the fine-grained checkpoints below, and
@@ -192,12 +193,15 @@ Slice 2 completion: `IMPLEMENTED_MERGED_DEPLOYED_DORMANT`, supported by
 That record distinguishes verified merge/CI from owner-confirmed deployment and
 does not infer content preservation from unchanged row counts.
 Slice 3 is canonically defined as P0-04 only,
-`DEFINED_NOT_IMPLEMENTATION_AUTHORIZED`. The
+`IMPLEMENTATION_PRESENT_DORMANT`. The
 [subordinate Slice 3 proposal](PHASE_III_P0_SLICE_3_RECEIPT_FOUNDATION_PROPOSAL.md)
-is not another schema, semantic registry or readiness map; independent design
-review and a later owner implementation decision are required.
+is not another schema, semantic registry or readiness map; its earlier
+implementation decision is historical. Separate owner authorization dated
+2026-09-07 permits only local dormant P0-04 persistence and isolated tests.
+See [the implementation record](PHASE_III_P0_SLICE_3_IMPLEMENTATION_RECORD.md)
+for validation and review; presence proves neither merge nor deployment.
 The owner-approved one-time prose revision dated 2026-09-06 is applied.
-P0-04 remains unimplemented and not implementation-authorized; P0-05 through
+P0-04 receipt persistence is present and dormant; P0-05 through
 P0-09 remain unimplemented, unsliced and unauthorized. Receipt transport,
 BoundedImmutableSourcePayload ownership, download/redirect handling, parser/EOF
 integration, live callers and capture remain excluded. The canonical remaining

@@ -44,6 +44,7 @@ final class CanonicalSupplierPhaseThreeP0Schema
         'P0-01' => ['predecessor' => 'P0', 'target' => 'P1'],
         'P0-02' => ['predecessor' => 'P1', 'target' => 'P2'],
         'P0-03' => ['predecessor' => 'P2', 'target' => 'P3'],
+        'P0-04' => ['predecessor' => 'P3', 'target' => 'P4'],
     ];
 
     /** @var array<string, array{initial: string, target: string, operation: string}> */
@@ -51,6 +52,7 @@ final class CanonicalSupplierPhaseThreeP0Schema
         'P0-01' => ['initial' => 'P1', 'target' => 'P0', 'operation' => 'P0-01-DOWN-01'],
         'P0-02' => ['initial' => 'P2', 'target' => 'P1', 'operation' => 'P0-02-DOWN-01'],
         'P0-03' => ['initial' => 'P3', 'target' => 'P2', 'operation' => 'P0-03-DOWN-01'],
+        'P0-04' => ['initial' => 'P4', 'target' => 'P3', 'operation' => 'P0-04-DOWN-01'],
     ];
 
     private static bool $active = false;
@@ -75,6 +77,7 @@ final class CanonicalSupplierPhaseThreeP0Schema
                 P0MigrationStep::P0_01 => self::executeP0_01Forward($pdo),
                 P0MigrationStep::P0_02 => self::executeP0_02Forward($pdo),
                 P0MigrationStep::P0_03 => self::executeP0_03Forward($pdo),
+                P0MigrationStep::P0_04 => self::executeP0_04Forward($pdo),
                 default => throw new RuntimeException('phase_three_p0_forward_step_not_implemented'),
             };
 
@@ -123,6 +126,7 @@ final class CanonicalSupplierPhaseThreeP0Schema
                 $appendOnlyTable = match ($step) {
                     P0MigrationStep::P0_02 => 'supplier_import_source_profiles',
                     P0MigrationStep::P0_03 => 'supplier_import_source_executions',
+                    P0MigrationStep::P0_04 => 'supplier_import_source_payload_receipts',
                     default => null,
                 };
 
@@ -298,6 +302,44 @@ final class CanonicalSupplierPhaseThreeP0Schema
                 BEFORE DELETE ON `supplier_import_source_executions`
                 FOR EACH ROW
                 SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Immutable source execution cannot be deleted'
+                SQL);
+        });
+    }
+
+    private static function executeP0_04Forward(PDO $pdo): void
+    {
+        self::withCanonicalP0Session($pdo, function (PDO $pdo): void {
+            $pdo->exec(<<<'SQL'
+                CREATE TABLE `supplier_import_source_payload_receipts` (
+                  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+                  `supplier_import_source_execution_id` bigint unsigned NOT NULL,
+                  `source_execution_fingerprint` char(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+                  `receipt_version` varchar(96) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+                  `accepted_payload_bytes` bigint unsigned NOT NULL,
+                  `accepted_payload_sha256` char(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+                  `payload_receipt_fingerprint` char(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+                  `created_at` timestamp(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+                  PRIMARY KEY (`id`),
+                  UNIQUE KEY `uq_import_source_payload_receipt_execution` (`supplier_import_source_execution_id`),
+                  UNIQUE KEY `uq_import_source_payload_receipt_fingerprint` (`payload_receipt_fingerprint`),
+                  KEY `ix_import_source_payload_receipt_execution_fk` (`supplier_import_source_execution_id`, `source_execution_fingerprint`),
+                  CONSTRAINT `fk_import_source_payload_receipt_execution` FOREIGN KEY (`supplier_import_source_execution_id`, `source_execution_fingerprint`) REFERENCES `supplier_import_source_executions` (`id`, `source_execution_fingerprint`) ON UPDATE RESTRICT ON DELETE RESTRICT,
+                  CONSTRAINT `chk_import_source_payload_receipt_version` CHECK ((`receipt_version` = _ascii'supplier_import_source_payload_receipt_v1')),
+                  CONSTRAINT `chk_import_source_payload_receipt_bytes` CHECK ((`accepted_payload_bytes` > 0)),
+                  CONSTRAINT `chk_import_source_payload_receipt_fingerprints` CHECK (((length(`source_execution_fingerprint`) = 64) and regexp_like(`source_execution_fingerprint`,_ascii'^[0-9a-f]{64}$',_cp866'c') and (length(`accepted_payload_sha256`) = 64) and regexp_like(`accepted_payload_sha256`,_ascii'^[0-9a-f]{64}$',_cp866'c') and (length(`payload_receipt_fingerprint`) = 64) and regexp_like(`payload_receipt_fingerprint`,_ascii'^[0-9a-f]{64}$',_cp866'c')))
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='mycomputer:phase-iii-p0:v1:owner=P0-04'
+                SQL);
+            $pdo->exec(<<<'SQL'
+                CREATE TRIGGER `trg_import_source_payload_receipt_no_update`
+                BEFORE UPDATE ON `supplier_import_source_payload_receipts`
+                FOR EACH ROW
+                SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Immutable source payload receipt cannot be updated'
+                SQL);
+            $pdo->exec(<<<'SQL'
+                CREATE TRIGGER `trg_import_source_payload_receipt_no_delete`
+                BEFORE DELETE ON `supplier_import_source_payload_receipts`
+                FOR EACH ROW
+                SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Immutable source payload receipt cannot be deleted'
                 SQL);
         });
     }

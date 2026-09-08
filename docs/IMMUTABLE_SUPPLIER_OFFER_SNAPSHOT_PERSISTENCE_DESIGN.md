@@ -3756,7 +3756,11 @@ This subsection is the selected architecture. Phase III-P0 Slice 1's
 P0-01/P0-02 and Slice 2's P0-03 foundations are implemented, merged and dormant.
 Slice 2 deployment is recorded as owner-provided evidence dated 2026-09-05 in
 [the Slice 2 staging record](PHASE_III_P0_SLICE_2_STAGING_EVIDENCE_2026_09_05.md).
-P0-04 and later prerequisites remain unimplemented and unauthorized. Every
+P0-04 receipt persistence is present and dormant under the separate owner
+implementation authorization dated 2026-09-07. Its local validation and review
+status are recorded in [the implementation record](PHASE_III_P0_SLICE_3_IMPLEMENTATION_RECORD.md).
+Repository presence proves neither full validation, merge nor deployment.
+P0-05 through P0-09 remain unimplemented, unsliced and unauthorized. Every
 remaining table, model, importer, repository, job, configuration and feature
 gate remains design authority only until separately authorized; neither
 deployment nor this status correction authorizes runtime activation.
@@ -5169,7 +5173,7 @@ P0-01/P0-02 migrations deployed successfully.
 | --- | --- | --- |
 | `Phase 9C.6.5C.3D - Phase III-P0 Slice 1` | P0-01 plus P0-02 and the immutable source-profile foundation above | `IMPLEMENTED_MERGED_DEPLOYED_DORMANT`; complete and closed unless a concrete regression is found |
 | `Phase 9C.6.5C.3D - Phase III-P0 Slice 2` | P0-03 plus the immutable source-execution and resolved-source-context foundation below | `IMPLEMENTED_MERGED_DEPLOYED_DORMANT`; deployment evidence is owner-provided and dated 2026-09-05 |
-| `Phase 9C.6.5C.3D - Phase III-P0 Slice 3` | P0-04 only: dormant immutable source-payload receipt persistence foundation | `DEFINED_NOT_IMPLEMENTATION_AUTHORIZED`; independent design review and a later repository-owner implementation decision are required |
+| `Phase 9C.6.5C.3D - Phase III-P0 Slice 3` | P0-04 only: dormant immutable source-payload receipt persistence foundation | `IMPLEMENTATION_PRESENT_DORMANT`; separate owner implementation authorization dated 2026-09-07; validation, review, merge and deployment require their own evidence |
 | later Phase III-P0 slices | P0-05 through P0-09 and every downloader, parser, staging-pointer, claim-source and policy integration | `NOT_SLICED_NOT_AUTHORIZED`; no ordering or grouping beyond the existing migration dependency registry may be inferred |
 
 The completed **Phase 9C.6.5C.3D - Phase III-P0 Slice 2: Immutable Source
@@ -5191,7 +5195,7 @@ Slice 2 merged through PR #222 at
 Its P3 deployment evidence is linked above; count checks do not prove content
 preservation. Slice 1 remains complete, closed and dormant.
 
-The next proposed implementation boundary is **Phase 9C.6.5C.3D - Phase III-P0
+The separately authorized implementation boundary is **Phase 9C.6.5C.3D - Phase III-P0
 Slice 3: Immutable Source Payload Receipt Foundation**: P0-04 only. The exact
 P3 -> P4 transition uses the existing coordinator and frozen P4 oracle. Its
 dormant model, canonical receipt value and transactional insert/reuse repository
@@ -5200,6 +5204,9 @@ binding and append-only evidence. The
 [Slice 3 proposal](PHASE_III_P0_SLICE_3_RECEIPT_FOUNDATION_PROPOSAL.md)
 separates synthetic persistence tests from future transport/handle/EOF
 integration. It is subordinate planning, not a schema or semantic authority.
+The dated proposal's earlier lack of implementation authorization is historical;
+the later 2026-09-07 owner decision permits only local P0-04 persistence and
+isolated tests. The implementation record does not authorize runtime activation.
 No source acquisition, BoundedImmutableSourcePayload owner, downloader/parser
 adapter, runtime caller or P0-05 through P0-09 implementation is authorized.
 All operational bounds and runtime gates remain unchanged.
