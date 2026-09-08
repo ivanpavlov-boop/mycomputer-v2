@@ -592,7 +592,10 @@ immutability.
 
 **Status.** Slice 1 and Slice 2 are implemented, merged, deployed and dormant;
 Slice 2 deployment rests on the dated owner-provided record linked below.
-Slice 3 is proposed as P0-04 only, DEFINED_NOT_IMPLEMENTATION_AUTHORIZED.
+Slice 3 is present as P0-04 only, IMPLEMENTATION_PRESENT_DORMANT.
+The separate owner implementation authorization is dated 2026-09-07.
+See [the local implementation record](PHASE_III_P0_SLICE_3_IMPLEMENTATION_RECORD.md)
+for validation and review status; presence proves neither merge nor deployment.
 P0-05 through P0-09 remain unimplemented, unsliced and unauthorized.
 This subphase is additive to, and
 does not rewrite, the historical deployed Phase I ten-table foundation or
@@ -1310,11 +1313,13 @@ Slice 2 is `IMPLEMENTED_MERGED_DEPLOYED_DORMANT`. PR #222 merged at
 `21b201df9b159d7289c7538f56877890c764302a`; post-merge CI #487 succeeded.
 The [dated owner-provided staging record](PHASE_III_P0_SLICE_2_STAGING_EVIDENCE_2026_09_05.md)
 records P3 deployment without claiming content preservation from row counts.
-The next proposed boundary is Phase 9C.6.5C.3D - Phase III-P0 Slice 3:
+The separately authorized boundary is Phase 9C.6.5C.3D - Phase III-P0 Slice 3:
 Immutable Source Payload Receipt Foundation, P0-04 only,
-`DEFINED_NOT_IMPLEMENTATION_AUTHORIZED`. Its
+`IMPLEMENTATION_PRESENT_DORMANT`. Its
 [subordinate proposal](PHASE_III_P0_SLICE_3_RECEIPT_FOUNDATION_PROPOSAL.md)
-requires independent design review and a later implementation decision.
+records the earlier pre-implementation decision. The later owner decision dated
+2026-09-07 authorizes local dormant P0-04 persistence and isolated tests only.
+Full validation, independent review, merge and deployment remain separate gates.
 Its dependencies are deployed dormant P3, the existing P3 -> P4 oracle and
 invocation-scoped coordinator. P0-05 through P0-09 remain unsliced and
 unauthorized. BoundedImmutableSourcePayload ownership, acquisition,
@@ -1705,9 +1710,11 @@ binding but cannot become active. Phase X supplies the DB-backed binding; even
 that merge does not activate recovery without canonical fresh evidence and a
 separate operational authorization.
 
-The next safe step is independent design review of the P0-04-only Slice 3
-proposal, followed by a separate repository-owner implementation decision.
-Neither Slice 2 completion nor this plan authorizes Slice 3 implementation. The exact current status map remains exclusively in the
+The next safe step is independent implementation review of the P0-04-only
+Slice 3 candidate and review of its exact protected lifecycle-alignment proposal.
+The separate owner decision dated 2026-09-07 authorizes local dormant P0-04
+implementation, not runtime activation; this plan is not that authorization.
+The exact current status map remains exclusively in the
 referenced canonical architecture contract. The remaining numeric-evidence
 gate requires separately authorized production-evidence collection and review
 for all ten bounds. Neither Slice 2 nor that evidence work authorizes Phase III

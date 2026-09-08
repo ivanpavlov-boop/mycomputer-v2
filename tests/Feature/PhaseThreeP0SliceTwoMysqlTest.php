@@ -46,6 +46,10 @@ final class PhaseThreeP0SliceTwoMysqlTest extends TestCase
 
         $this->assertStringStartsWith('8.4.', (string) DB::scalar('SELECT VERSION()'));
         $this->artisan('migrate:fresh', ['--force' => true])->assertExitCode(0);
+        $this->authorizeDowngrade();
+        $p04 = require database_path('migrations/2026_08_28_090003_create_supplier_import_source_payload_receipts_table.php');
+        $p04->down();
+        $this->assertDowngradeAuthorizationConsumed();
         $this->assertSame('P3', CanonicalSupplierPhaseThreeP0Schema::classify(DB::connection()->getPdo())['state']);
     }
 

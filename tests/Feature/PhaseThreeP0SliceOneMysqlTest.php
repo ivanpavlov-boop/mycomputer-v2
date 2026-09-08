@@ -41,6 +41,14 @@ final class PhaseThreeP0SliceOneMysqlTest extends TestCase
 
         putenv('SUPPLIER_PHASE_THREE_P0_EMPTY_SCHEMA_DOWN_CONFIRMED=true');
         try {
+            $p04 = require database_path('migrations/2026_08_28_090003_create_supplier_import_source_payload_receipts_table.php');
+            $p04->down();
+        } finally {
+            putenv('SUPPLIER_PHASE_THREE_P0_EMPTY_SCHEMA_DOWN_CONFIRMED');
+        }
+
+        putenv('SUPPLIER_PHASE_THREE_P0_EMPTY_SCHEMA_DOWN_CONFIRMED=true');
+        try {
             $p03 = require database_path('migrations/2026_08_28_090002_create_supplier_import_source_executions_table.php');
             $p03->down();
         } finally {

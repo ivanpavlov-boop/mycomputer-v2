@@ -357,8 +357,9 @@ disabled. `CART-025` remains open.
     source-execution/resolved-context implementation is present in the current
     tree and remains dormant. Repository presence does not establish staging or
     production deployment and does not authorize runtime activation; deployment
-    status requires separate deployment evidence. P0-04 remains unimplemented
-    and not implementation-authorized within defined Slice 3. P0-05 through
+    status requires separate deployment evidence. P0-04 receipt persistence is
+    present and dormant under separate owner implementation authorization dated
+    2026-09-07; validation remains separately recorded. P0-05 through
     P0-09 remain unimplemented, unsliced, and unauthorized. All ten numeric
     production bounds
     remain `NOT SPECIFIED`. No runtime queue
@@ -372,8 +373,8 @@ disabled. `CART-025` remains open.
     inactive; the P0-03 execution/context implementation is present in the
     current tree and remains dormant. Repository presence does not establish
     staging or production deployment and does not authorize runtime activation;
-    deployment status requires separate deployment evidence. Payload receipt,
-    revision, five-field claim binding and the ten-bound policy remain
+    deployment status requires separate deployment evidence. Receipt persistence
+    is present and dormant. Revision, five-field claim binding and the ten-bound policy remain
     unimplemented. All
     ten numeric production values
     remain `NOT SPECIFIED`. Claim source
@@ -393,12 +394,15 @@ disabled. `CART-025` remains open.
     That record distinguishes verified merge/CI from owner-confirmed deployment and
     does not infer content preservation from unchanged row counts.
     Slice 3 is canonically defined as P0-04 only,
-    `DEFINED_NOT_IMPLEMENTATION_AUTHORIZED`. The
+    `IMPLEMENTATION_PRESENT_DORMANT`. The
     [subordinate Slice 3 proposal](PHASE_III_P0_SLICE_3_RECEIPT_FOUNDATION_PROPOSAL.md)
-    is not another schema, semantic registry or readiness map; independent design
-    review and a later owner implementation decision are required.
+    is not another schema, semantic registry or readiness map; its earlier
+    implementation decision is historical. Separate owner authorization dated
+    2026-09-07 permits only local dormant P0-04 persistence and isolated tests.
+    See [the implementation record](PHASE_III_P0_SLICE_3_IMPLEMENTATION_RECORD.md)
+    for validation and review; presence proves neither merge nor deployment.
     The owner-approved one-time prose revision dated 2026-09-06 is applied.
-    P0-04 remains unimplemented and not implementation-authorized; P0-05 through
+    P0-04 receipt persistence is present and dormant; P0-05 through
     P0-09 remain unimplemented, unsliced and unauthorized. Receipt transport,
     BoundedImmutableSourcePayload ownership, download/redirect handling, parser/EOF
     integration, live callers and capture remain excluded. The canonical remaining
