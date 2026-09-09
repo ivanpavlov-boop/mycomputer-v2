@@ -359,7 +359,8 @@ disabled. `CART-025` remains open.
     production deployment and does not authorize runtime activation; deployment
     status requires separate deployment evidence. P0-04 receipt persistence is
     present and dormant under separate owner implementation authorization dated
-    2026-09-07; validation remains separately recorded. P0-05 through
+    2026-09-07; validation remains separately recorded. Slice 4 / P0-05 is
+    defined but NOT implementation-authorized. P0-06 through
     P0-09 remain unimplemented, unsliced, and unauthorized. All ten numeric
     production bounds
     remain `NOT SPECIFIED`. No runtime queue
@@ -388,6 +389,8 @@ disabled. `CART-025` remains open.
     `c22fc9a8dddf3c6778ab0b88e5a50cbc02fe3f21`. The planned dedicated worker adds
     no automatic schedule. No evidence candidate exists, no operational preview
     is authorized, and Supplier #3 remains unselected and unstarted.
+    Historical approval/presence note retained from the 2026-09-07 checkpoint;
+    the dated follow-up below and canonical sequence govern subsequent evidence.
     <!-- slice-two-deployment-evidence:start -->
     Slice 2 completion: `IMPLEMENTED_MERGED_DEPLOYED_DORMANT`, supported by
     [owner-provided staging evidence dated 2026-09-05](PHASE_III_P0_SLICE_2_STAGING_EVIDENCE_2026_09_05.md).
@@ -409,6 +412,13 @@ disabled. `CART-025` remains open.
     numeric-evidence gate is unchanged; all ten bounds remain NOT SPECIFIED.
     No runtime activation is granted.
     <!-- slice-two-deployment-evidence:end -->
+
+    Dated operational follow-up: [Slice 3 staging evidence, 2026-09-08](PHASE_III_P0_SLICE_3_STAGING_EVIDENCE_2026_09_08.md)
+    records owner-confirmed deployment separately from code presence and historical
+    local/design reviews. [Proposed Slice 4 / P0-05 boundary](PHASE_III_P0_SLICE_4_IDENTITY_HEAD_FOUNDATION_PROPOSAL.md)
+    is subordinate to the canonical Slice 4 definition and grants no implementation
+    or runtime permission. The historical unsliced boundary above records its dated
+    checkpoint; the existing canonical reference remains the sole gate authority.
 
 12. Select Supplier #3 only after a reviewed readiness matrix and explicit human
    decision; ASBIS remains Supplier #2.

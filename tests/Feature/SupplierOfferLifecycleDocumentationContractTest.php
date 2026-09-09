@@ -7,6 +7,156 @@ use Tests\TestCase;
 
 final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
 {
+    public function test_slice_three_dated_deployment_is_not_presence_or_runtime_authorization(): void
+    {
+        $record = $this->readDocument('docs/PHASE_III_P0_SLICE_3_STAGING_EVIDENCE_2026_09_08.md');
+        $this->assertSame([], $this->sliceFourEvidenceViolations($record));
+        foreach ([
+            ['repository owner supplied', 'author independently observed'],
+            ['IMPLEMENTED_MERGED_DEPLOYED_DORMANT', 'RUNTIME_ENABLED'],
+            ['NOT proof of byte-for-byte content', 'proof of byte-for-byte content'],
+            ['supplied provenance hash, not an independently verified local-file', 'independently verified local-file'],
+            ['200 / 200 / 200; staging/admin curl followed redirects', '200 authenticated session proven by HTTP alone'],
+            ['05750da719b933937b80af83858a4a7f0803296f', str_repeat('0', 40)],
+        ] as [$old, $new]) {
+            $this->assertStringContainsString($old, $record);
+            $this->assertNotSame([], $this->sliceFourEvidenceViolations(str_replace($old, $new, $record)), $old);
+        }
+        $this->assertNotSame([], $this->sliceFourEvidenceViolations($record."\n| Products | 1866 before and after |\n"));
+        $this->assertSame([], $this->sliceFourEvidenceViolations($record."\nHistorical Slice 3 proposal: NOT AUTHORIZED at its dated review.\n"));
+        $design = $this->readDocument('docs/IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md');
+        $plan = $this->readDocument('docs/PHASE_9C6_5C3D1_RUNTIME_IMPLEMENTATION_PLAN.md');
+        $this->assertSame([], $this->phaseThreeP0SliceThreePresenceContract($design, $plan, $this->discoverSliceThreeArtifacts(base_path())));
+        $this->assertNotSame([], $this->phaseThreeP0SliceThreePresenceContract(
+            str_replace('IMPLEMENTATION_PRESENT_DORMANT', 'IMPLEMENTED_MERGED_DEPLOYED_DORMANT', $design),
+            $plan,
+            $this->discoverSliceThreeArtifacts(base_path()),
+        ));
+    }
+
+    public function test_slice_four_proposal_retains_whole_transaction_and_future_only_foundation(): void
+    {
+        $proposal = $this->readDocument('docs/PHASE_III_P0_SLICE_4_IDENTITY_HEAD_FOUNDATION_PROPOSAL.md');
+        $this->assertSame([], $this->sliceFourProposalViolations($proposal));
+        foreach ([
+            ['DEFINED_NOT_IMPLEMENTATION_AUTHORIZED', 'IMPLEMENTATION_AUTHORIZED'],
+            ['P0-05 only', 'P0-05 plus P0-06'],
+            ['ONE transaction', 'separate transactions'],
+            ['Attempt head INSERT first', 'Lock absent head first'],
+            ['reject null/non-string', 'coerce input to string'],
+            ['Never trim away invalid controls', 'Trim away invalid controls'],
+            ['uq_supplier_product_identity_head', 'any duplicate key'],
+            ['no reachable P5 partial state', 'arbitrary P5 recovery state'],
+            ['P0-06 through P0-09 remain unimplemented, unsliced and unauthorized', 'P0-06 through P0-09 are authorized'],
+            ['PH3-RDY-003 remains BLOCKED', 'PH3-RDY-003 is CLOSED'],
+            ['P0-05 implementation is NOT AUTHORIZED', 'P0-05 implementation is AUTHORIZED'],
+        ] as [$old, $new]) {
+            $this->assertStringContainsString($old, $proposal);
+            $this->assertNotSame([], $this->sliceFourProposalViolations(str_replace($old, $new, $proposal)), $old);
+        }
+        foreach (['classification=CURRENT', '<!-- phase-iii-architecture-status-reference authority=phase-iii-architecture-contract-v1 -->', '| F11 | invented |'] as $shadow) {
+            $this->assertNotSame([], $this->sliceFourProposalViolations($proposal."\n".$shadow));
+        }
+        $this->assertSame([], $this->sliceFourProposalViolations($proposal."\nHistorical Slice 1/2 boundary: no receipt implementation was authorized then.\n"));
+        $this->assertCount(6, $this->discoverSliceThreeArtifacts(base_path()));
+        foreach ([
+            'app/Models/SupplierProductIdentityHead.php',
+            'app/Data/Suppliers/Imports/SupplierProductLogicalKey.php',
+            'app/Repositories/Suppliers/SupplierProductIdentityHeadRepository.php',
+            'tests/Feature/PhaseThreeP0SliceFourMysqlTest.php',
+            'tests/Unit/Suppliers/Imports/SupplierProductLogicalKeyContractTest.php',
+        ] as $path) {
+            $this->assertFileDoesNotExist(base_path($path));
+        }
+        $this->assertSame([], glob(base_path('database/migrations/*_create_supplier_product_identity_heads_table.php')));
+    }
+
+    public function test_slice_four_references_are_outside_history_without_shadow_markers(): void
+    {
+        foreach (['PHASES.md', 'ROADMAP.md', 'APCOM_OPERATIONAL_OFFER_LIFECYCLE_PREVIEW.md', 'SUPPLIER_ONBOARDING_FRAMEWORK.md'] as $file) {
+            $document = $this->readDocument('docs/'.$file);
+            $historyEnd = strpos($document, '<!-- slice-two-deployment-evidence:end -->');
+            $this->assertNotFalse($historyEnd);
+            foreach (['PHASE_III_P0_SLICE_3_STAGING_EVIDENCE_2026_09_08.md', 'PHASE_III_P0_SLICE_4_IDENTITY_HEAD_FOUNDATION_PROPOSAL.md'] as $link) {
+                $this->assertSame(1, substr_count($document, $link), $file);
+                $this->assertGreaterThan($historyEnd, strpos($document, $link));
+            }
+            $this->assertSame(1, substr_count($document, '<!-- phase-iii-architecture-status-reference authority=phase-iii-architecture-contract-v1 -->'));
+        }
+    }
+
+    private function sliceFourEvidenceViolations(string $document): array
+    {
+        $violations = [];
+        $text = preg_replace('/\s+/', ' ', $document);
+        foreach ([
+            'Operational status: `IMPLEMENTED_MERGED_DEPLOYED_DORMANT`, P0-04 only.',
+            'repository owner supplied', 'documentation author did not access the VPS',
+            'supplied provenance hash, not an independently verified local-file',
+            '05750da719b933937b80af83858a4a7f0803296f', '34231480826',
+            'NOT proof of byte-for-byte content',
+            'admin HTTP 200 alone is not authenticated-access proof',
+            'empty queue log does not prove a job ran',
+            'scan end was not separately timestamped',
+            'not a replacement value in that contract',
+        ] as $required) {
+            if (! str_contains($text, $required)) {
+                $violations[] = $required;
+            }
+        }
+        foreach ([
+            '| Products | 1866 before and after |',
+            '| supplier_products | 6717 before and after |',
+            '| Migration result | Ran, batch 28; execution DONE; only this exact path executed |',
+            '| Local / public staging / admin HTTP | 200 / 200 / 200; staging/admin curl followed redirects |',
+        ] as $row) {
+            if (count(array_keys(preg_split('/\R/', $document), $row, true)) !== 1) {
+                $violations[] = $row;
+            }
+        }
+
+        return $violations;
+    }
+
+    private function sliceFourProposalViolations(string $document): array
+    {
+        $violations = [];
+        $text = preg_replace('/\s+/', ' ', $document);
+        foreach ([
+            'Proposed status: `DEFINED_NOT_IMPLEMENTATION_AUTHORIZED`.',
+            'Immutable Supplier Product Logical Identity-Head Foundation - P0-05 only',
+            'P0-05 implementation is NOT AUTHORIZED',
+            'NON-AUTHORITATIVE PROPOSAL awaiting independent design review and canonical adoption',
+            'ONE transaction', 'reject null/non-string', 'Never trim away invalid controls',
+            'Attempt head INSERT first', 'uq_supplier_product_identity_head',
+            'FOR UPDATE', 'never starts/commits/rolls back an outer transaction or savepoint',
+            'committed head without its uniquely bound SupplierProduct is corrupt',
+            'Head-empty alone is NOT sufficient', 'no reachable P5 partial state',
+            'P0-06 through P0-09 remain unimplemented, unsliced and unauthorized',
+            'PH3-RDY-003 remains BLOCKED', 'all ten operational bounds remain NOT SPECIFIED',
+            'runtime activation UNAUTHORIZED',
+            'Unicode format (Cf) characters', 'must precede a runtime validator',
+        ] as $required) {
+            if (! str_contains($text, $required)) {
+                $violations[] = $required;
+            }
+        }
+        if (str_contains($document, 'classification=CURRENT') || str_contains($document, '<!-- phase-iii-')) {
+            $violations[] = 'Shadow authority marker';
+        }
+        preg_match_all('/^\| (F\d+) \|/m', $document, $rows);
+        if ($rows[1] !== array_map(fn (int $id): string => 'F'.$id, range(1, 10))) {
+            $violations[] = 'Foundation matrix must contain F1-F10 exactly once in order';
+        }
+        foreach (['## Proposed decision, not active authority', '## Planned foundation acceptance', '## Deferred integration acceptance', '## Mandatory whole-transaction dependency'] as $heading) {
+            if (count(array_keys(preg_split('/\R/', $document), $heading, true)) !== 1) {
+                $violations[] = $heading;
+            }
+        }
+
+        return $violations;
+    }
+
     public function test_policy_documents_record_the_preview_only_lifecycle_contract(): void
     {
         $missing = file_get_contents(base_path('docs/SUPPLIER_OFFER_MISSING_LIFECYCLE_POLICY.md'));
@@ -1843,7 +1993,8 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
             [$normalizedDesign, '| `Phase 9C.6.5C.3D - Phase III-P0 Slice 3` | P0-04 only: dormant immutable source-payload receipt persistence foundation | `IMPLEMENTATION_PRESENT_DORMANT`;'],
             [$normalizedDesign, 'separate owner implementation authorization dated 2026-09-07'],
             [$normalizedPlan, 'Slice 3 is present as P0-04 only, IMPLEMENTATION_PRESENT_DORMANT.'],
-            [$normalizedPlan, 'P0-05 through P0-09 remain unimplemented, unsliced and unauthorized.'],
+            [$normalizedPlan, 'P0-06 through P0-09 remain unimplemented, unsliced and unauthorized.'],
+            [$normalizedPlan, 'Slice 4 is defined as P0-05 only, DEFINED_NOT_IMPLEMENTATION_AUTHORIZED.'],
             [$normalizedPlan, 'Runtime activation remains zero.'],
         ] as [$text, $needle]) {
             if (! str_contains($text, $needle)) {
@@ -3023,7 +3174,7 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
             );
             $this->assertStringContainsString('P0-03 only', $authority);
             $this->assertStringContainsString('IMPLEMENTATION_PRESENT_DORMANT', $authority);
-            $this->assertStringContainsString('P0-05 through P0-09', $authority);
+            $this->assertStringContainsString('P0-06 through P0-09', $authority);
             $this->assertStringContainsString('Runtime activation remains zero.', $authority);
         }
 
@@ -3178,7 +3329,8 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
             'design sequence' => [$this->markdownSection($current, '<!-- phase-iii-p0-slice-sequence classification=CURRENT id=phase-iii-p0-slice-sequence-v1 -->', 'The subordinate runtime plan is accepted only'), [
                 '| `Phase 9C.6.5C.3D - Phase III-P0 Slice 2` | P0-03 plus the immutable source-execution and resolved-source-context foundation below | `IMPLEMENTED_MERGED_DEPLOYED_DORMANT`; deployment evidence is owner-provided and dated 2026-09-05 |',
                 '| `Phase 9C.6.5C.3D - Phase III-P0 Slice 3` | P0-04 only: dormant immutable source-payload receipt persistence foundation | `IMPLEMENTATION_PRESENT_DORMANT`;',
-                '| later Phase III-P0 slices | P0-05 through P0-09',
+                '| `Phase 9C.6.5C.3D - Phase III-P0 Slice 4` | P0-05 only:',
+                '| later Phase III-P0 slices | P0-06 through P0-09',
                 'count checks do not prove content preservation',
                 'It is subordinate planning, not a schema or semantic authority.',
                 'No source acquisition, BoundedImmutableSourcePayload owner, downloader/parser adapter, runtime caller or P0-05 through P0-09 implementation is authorized.',
@@ -3188,7 +3340,7 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
                 'Slice 1 and Slice 2 are implemented, merged, deployed and dormant;',
                 'dated owner-provided record',
                 'Slice 3 is present as P0-04 only, IMPLEMENTATION_PRESENT_DORMANT.',
-                'P0-05 through P0-09 remain unimplemented, unsliced and unauthorized.',
+                'P0-06 through P0-09 remain unimplemented, unsliced and unauthorized.',
             ]],
             'plan sequence' => [$this->markdownSection($plan, '## Future Phase III-P0 provenance migration allocation', '## Historical deployed Phase I ten-table migration dependency plan'), [
                 'Slice 2 is `IMPLEMENTED_MERGED_DEPLOYED_DORMANT`.',
@@ -3196,7 +3348,7 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
                 'PHASE_III_P0_SLICE_2_STAGING_EVIDENCE_2026_09_05.md',
                 'without claiming content preservation from row counts',
                 'Slice 3: Immutable Source Payload Receipt Foundation, P0-04 only, `IMPLEMENTATION_PRESENT_DORMANT`.',
-                'P0-05 through P0-09 remain unsliced and unauthorized.',
+                'P0-06 through P0-09 remain unsliced and unauthorized.',
                 'BoundedImmutableSourcePayload ownership, acquisition, downloader/parser adapters and EOF integration require a separate future gate.',
                 'This plan grants no implementation or runtime authority.',
                 'Runtime activation remains zero.',
@@ -7446,8 +7598,8 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
         // UNAPPLIED review proposal: measurements independently matched in PHP and Node; not approved.
         return [
             'version' => 'phase-iii-architecture-document-closed-world-v1',
-            'normalized_bytes' => 1890654,
-            'line_count' => 8144,
+            'normalized_bytes' => 1891902,
+            'line_count' => 8158,
             'unit_count' => 1137,
             'unit_categories' => [
                 'CANONICAL_HEADING_EXACT' => 86,
@@ -7456,8 +7608,8 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
                 'CANONICAL_PARAGRAPH_EXACT' => 867,
                 'CANONICAL_TABLE_EXACT' => 71,
             ],
-            'byte_fingerprint' => '48dd156fac27bdc774f1e6e297b4d9df07a54157de69bc55ff5cd8eeb2830289',
-            'unit_fingerprint' => '3dce4799ebfba0198231171d1dc2d7ec69727ba60d5a836a7d6d1eb5835b4ef0',
+            'byte_fingerprint' => '17581b0a5a7511648c1f0c8a53f56b78c480f2b9086f99d1a00c2dbdcf3b5cfc',
+            'unit_fingerprint' => 'd17b5a10c71b5162809687004d2dd472b31ee88b7dcaddb3f5988cece6f07498',
             'region_order' => [
                 'pre-current-reference-history-v1',
                 'current-architecture-authority-v1',
@@ -7483,8 +7635,8 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
                 'current-architecture-authority-v1' => [
                     'id' => 'current-architecture-authority-v1',
                     'position' => 2,
-                    'normalized_bytes' => 1482845,
-                    'line_count' => 2648,
+                    'normalized_bytes' => 1484093,
+                    'line_count' => 2662,
                     'unit_count' => 293,
                     'unit_categories' => [
                         'CANONICAL_HEADING_EXACT' => 16,
@@ -7493,8 +7645,8 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
                         'CANONICAL_PARAGRAPH_EXACT' => 202,
                         'CANONICAL_TABLE_EXACT' => 26,
                     ],
-                    'byte_fingerprint' => '224acae7af4fe0a5832d6a6dff765cd1c6bd0a3d42c7e41656d8e2fd6cca1b8e',
-                    'unit_fingerprint' => '8ec84c1152b2c50c0c15f5d58b4ff3851017896d15ae7e105d00c24f3532909b',
+                    'byte_fingerprint' => '178bce50634afab7d09845a91ce6be8908b5a10f67f715d54f35d9b06c43c61e',
+                    'unit_fingerprint' => 'c5d4ee12351cececedf587799ca3e8515b964740e00a2bc07ca966cbab1a50bd',
                 ],
                 'post-current-reference-history-v1' => [
                     'id' => 'post-current-reference-history-v1',
@@ -7522,8 +7674,8 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
         // UNAPPLIED review proposal: measurements independently matched in PHP and Node; not approved.
         return [
             'version' => 'phase-iii-current-architecture-closed-world-v1',
-            'normalized_bytes' => 1482845,
-            'line_count' => 2648,
+            'normalized_bytes' => 1484093,
+            'line_count' => 2662,
             'unit_count' => 293,
             'unit_categories' => [
                 'CANONICAL_HEADING_EXACT' => 16,
@@ -7532,8 +7684,8 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
                 'CANONICAL_PARAGRAPH_EXACT' => 202,
                 'CANONICAL_TABLE_EXACT' => 26,
             ],
-            'byte_fingerprint' => 'd3360feee413c43d276556c789436691e01210d0ae659edc47d52199aaa1eeef',
-            'unit_fingerprint' => 'ed783cf757aad8ba81adc3abdaaa6754739c4de48ae51f64ecd2dedebfc56d4b',
+            'byte_fingerprint' => 'c598bea3415294629dfe7f97012fd2539082782726c8d65b9a67f1ba18dff280',
+            'unit_fingerprint' => 'ffdc1e68088178cfa2e0dab83b0f4578d5992e06324a5b3cbb44dba7686e9a2b',
         ];
     }
 
@@ -7543,18 +7695,18 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
         // UNAPPLIED review proposal: measurements independently matched in PHP and Node; not approved.
         return [
             'version' => 'phase-iii-runtime-plan-closed-world-v1',
-            'normalized_bytes' => 117262,
-            'line_count' => 1723,
-            'unit_count' => 498,
+            'normalized_bytes' => 118449,
+            'line_count' => 1739,
+            'unit_count' => 499,
             'unit_categories' => [
                 'CANONICAL_HEADING_EXACT' => 48,
                 'CANONICAL_LITERAL_EXACT' => 2,
                 'CANONICAL_MARKER_EXACT' => 7,
-                'CANONICAL_PARAGRAPH_EXACT' => 425,
+                'CANONICAL_PARAGRAPH_EXACT' => 426,
                 'CANONICAL_TABLE_EXACT' => 16,
             ],
-            'byte_fingerprint' => 'f3134ad32497ed32ae8a1912ec68ba676844410afa8e5884bc49c3bbd10286d5',
-            'unit_fingerprint' => 'f5d1b9a307adb1b479560753db65570b2c468a2b5e345521ce4052e3706f71fc',
+            'byte_fingerprint' => 'f2f6240a7176870a762cef414dd1b5b75a40250324d9485f72e15f9dabc9e21a',
+            'unit_fingerprint' => '71eb65ab5b08a637d3eae6d0cab4473c66cb3109949acceac3206a4f2dc38bc0',
         ];
     }
 
