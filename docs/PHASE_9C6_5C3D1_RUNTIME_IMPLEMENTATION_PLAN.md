@@ -45,6 +45,15 @@ The completed foundations at this reviewed baseline are:
   source-binding architecture selected, still unimplemented and not
   implementation-authorized.
 
+Subsequent Slice 3 completion is separately recorded at PR #224 merge
+`05750da719b933937b80af83858a4a7f0803296f`, merge CI #491, and
+[owner-provided staging evidence dated 2026-09-08](PHASE_III_P0_SLICE_3_STAGING_EVIDENCE_2026_09_08.md).
+That dated P4 deployment is IMPLEMENTED_MERGED_DEPLOYED_DORMANT; it does not
+rewrite the fixed Slice 2 review baseline or the Slice 3 code-presence contract.
+The next defined slice is Slice 4 / P0-05 only, DEFINED_NOT_IMPLEMENTATION_AUTHORIZED;
+see the [subordinate proposal](PHASE_III_P0_SLICE_4_IDENTITY_HEAD_FOUNDATION_PROPOSAL.md).
+P0-06 through P0-09 remain unsliced and unauthorized; runtime activation stays closed.
+
 <!-- phase-iii-architecture-status-reference authority=phase-iii-architecture-contract-v1 -->
 The exact current Phase III architecture status map is owned only by the
 [canonical architecture contract](IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md#phase-iii-provenance-and-bounds-architecture-decision).
@@ -596,7 +605,9 @@ Slice 3 is present as P0-04 only, IMPLEMENTATION_PRESENT_DORMANT.
 The separate owner implementation authorization is dated 2026-09-07.
 See [the local implementation record](PHASE_III_P0_SLICE_3_IMPLEMENTATION_RECORD.md)
 for validation and review status; presence proves neither merge nor deployment.
-P0-05 through P0-09 remain unimplemented, unsliced and unauthorized.
+Slice 3 operational completion is separately evidenced as IMPLEMENTED_MERGED_DEPLOYED_DORMANT.
+Slice 4 is defined as P0-05 only, DEFINED_NOT_IMPLEMENTATION_AUTHORIZED.
+P0-06 through P0-09 remain unimplemented, unsliced and unauthorized.
 This subphase is additive to, and
 does not rewrite, the historical deployed Phase I ten-table foundation or
 frozen Phase II contracts.
@@ -1321,8 +1332,13 @@ records the earlier pre-implementation decision. The later owner decision dated
 2026-09-07 authorizes local dormant P0-04 persistence and isolated tests only.
 Full validation, independent review, merge and deployment remain separate gates.
 Its dependencies are deployed dormant P3, the existing P3 -> P4 oracle and
-invocation-scoped coordinator. P0-05 through P0-09 remain unsliced and
-unauthorized. BoundedImmutableSourcePayload ownership, acquisition,
+invocation-scoped coordinator. Slice 3's dated 2026-09-08 operational evidence
+records completed dormant deployment, not runtime activation. The next defined
+boundary is Slice 4 / P0-05 only, DEFINED_NOT_IMPLEMENTATION_AUTHORIZED.
+Its dormant head primitive must remain inside the complete caller-owned
+SupplierProduct/revision/pointer transaction; no independent head commit is allowed.
+P0-06 through P0-09 remain unsliced and unauthorized.
+BoundedImmutableSourcePayload ownership, acquisition,
 downloader/parser adapters and EOF integration require a separate future gate.
 This plan grants no implementation or runtime authority.
 

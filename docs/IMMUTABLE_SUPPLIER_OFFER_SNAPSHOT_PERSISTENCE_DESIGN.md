@@ -3760,7 +3760,14 @@ P0-04 receipt persistence is present and dormant under the separate owner
 implementation authorization dated 2026-09-07. Its local validation and review
 status are recorded in [the implementation record](PHASE_III_P0_SLICE_3_IMPLEMENTATION_RECORD.md).
 Repository presence proves neither full validation, merge nor deployment.
-P0-05 through P0-09 remain unimplemented, unsliced and unauthorized. Every
+Slice 3 operational completion is supported separately by the
+[owner-provided 2026-09-08 staging record](PHASE_III_P0_SLICE_3_STAGING_EVIDENCE_2026_09_08.md):
+PR #224 merge `05750da719b933937b80af83858a4a7f0803296f`, successful merge CI #491,
+P4 deployed dormant. This does not replace its code-presence contract.
+Slice 4 is defined as P0-05 only, DEFINED_NOT_IMPLEMENTATION_AUTHORIZED;
+the [subordinate boundary proposal](PHASE_III_P0_SLICE_4_IDENTITY_HEAD_FOUNDATION_PROPOSAL.md)
+does not authorize implementation. P0-06 through P0-09 remain unimplemented,
+unsliced and unauthorized. Every
 remaining table, model, importer, repository, job, configuration and feature
 gate remains design authority only until separately authorized; neither
 deployment nor this status correction authorizes runtime activation.
@@ -5174,7 +5181,8 @@ P0-01/P0-02 migrations deployed successfully.
 | `Phase 9C.6.5C.3D - Phase III-P0 Slice 1` | P0-01 plus P0-02 and the immutable source-profile foundation above | `IMPLEMENTED_MERGED_DEPLOYED_DORMANT`; complete and closed unless a concrete regression is found |
 | `Phase 9C.6.5C.3D - Phase III-P0 Slice 2` | P0-03 plus the immutable source-execution and resolved-source-context foundation below | `IMPLEMENTED_MERGED_DEPLOYED_DORMANT`; deployment evidence is owner-provided and dated 2026-09-05 |
 | `Phase 9C.6.5C.3D - Phase III-P0 Slice 3` | P0-04 only: dormant immutable source-payload receipt persistence foundation | `IMPLEMENTATION_PRESENT_DORMANT`; separate owner implementation authorization dated 2026-09-07; validation, review, merge and deployment require their own evidence |
-| later Phase III-P0 slices | P0-05 through P0-09 and every downloader, parser, staging-pointer, claim-source and policy integration | `NOT_SLICED_NOT_AUTHORIZED`; no ordering or grouping beyond the existing migration dependency registry may be inferred |
+| `Phase 9C.6.5C.3D - Phase III-P0 Slice 4` | P0-05 only: dormant immutable supplier-product logical identity-head foundation | `DEFINED_NOT_IMPLEMENTATION_AUTHORIZED`; separate exact owner implementation authorization required |
+| later Phase III-P0 slices | P0-06 through P0-09 and every downloader, parser, staging-pointer, claim-source and policy integration | `NOT_SLICED_NOT_AUTHORIZED`; no ordering or grouping beyond the existing migration dependency registry may be inferred |
 
 The completed **Phase 9C.6.5C.3D - Phase III-P0 Slice 2: Immutable Source
 Execution and Resolved Context Foundation** contains P0-03 only and its dormant
@@ -5210,6 +5218,12 @@ isolated tests. The implementation record does not authorize runtime activation.
 No source acquisition, BoundedImmutableSourcePayload owner, downloader/parser
 adapter, runtime caller or P0-05 through P0-09 implementation is authorized.
 All operational bounds and runtime gates remain unchanged.
+Slice 3 has separate dated operational status IMPLEMENTED_MERGED_DEPLOYED_DORMANT
+in the linked 2026-09-08 staging record; the presence row is intentionally unchanged.
+The next defined boundary is Slice 4, P0-05 only, with implementation NOT AUTHORIZED.
+Any future head insert/lock primitive must use the caller-owned whole transaction;
+it cannot commit an unbound head. Complete SupplierProduct/revision/pointer binding
+remains a later integration prerequisite, never a P0-05 "bind later" exception.
 
 Slice 2's separately authorized schema change added only the exact P0-03
 table. Its dormant resolver may insert or reuse source profiles and insert
