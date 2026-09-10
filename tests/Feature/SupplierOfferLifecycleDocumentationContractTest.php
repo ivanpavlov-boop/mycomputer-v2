@@ -7,6 +7,130 @@ use Tests\TestCase;
 
 final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
 {
+    public function test_slice_four_sku_interpretation_is_pinned_without_implementation_authority(): void
+    {
+        $design = $this->readDocument('docs/IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md');
+        $proposal = $this->readDocument('docs/PHASE_III_P0_SLICE_4_IDENTITY_HEAD_FOUNDATION_PROPOSAL.md');
+        $this->assertSame([], $this->sliceFourSkuRuleViolations($design, $proposal));
+        foreach ([
+            ['Cc OR Cf', 'Cc only'],
+            ['Cc OR Cf', 'all \\p{C}'],
+            ['Unicode Character Database 17.0.0', 'host Unicode version'],
+            ['Unicode Character Database 17.0.0', 'Unicode Character Database 18.0.0'],
+            ['2066..206F', '2065..206F'],
+            ['13430..1343F', '13430..13440'],
+            ['0000..001F, 007F..009F', '0000..001F'],
+            ['https://www.unicode.org/Public/17.0.0/ucd/', 'https://www.unicode.org/Public/UCD/latest/ucd/'],
+            ['d62e5bab70ca74f099343f71224fa051cb1fdd61a1ab45c0488c44cfc0b6102e', str_repeat('0', 64)],
+            ['24c7fed1195c482faaefd5c1e7eb821c5ee1fb6de07ecdbaa64b56a99da22c08', str_repeat('0', 64)],
+            ['Reject the ENTIRE raw SKU before PHP trim()', 'Trim the raw SKU before rejection'],
+            ['255 Unicode scalar values', '255 grapheme clusters'],
+            ['1020 UTF-8 bytes', '1024 UTF-8 bytes'],
+            ['same forbidden set', 'runtime forbidden set'],
+            ['Never delete, replace, normalize,', 'Delete, replace, normalize,'],
+            ['MUST NOT silently change', 'may silently change'],
+            ['S4-CF-001 remains OPEN', 'S4-CF-001 is CLOSED'],
+            ['It grants no P0-05 implementation', 'It grants P0-05 implementation'],
+        ] as [$old, $new]) {
+            $this->assertStringContainsString($old, $design);
+            $this->assertNotSame([], $this->sliceFourSkuRuleViolations(str_replace($old, $new, $design), $proposal), $old);
+        }
+        $start = strpos($design, '##### Proposed logical-head SKU control and format interpretation');
+        $end = strpos($design, 'Protected SupplierProduct rows gain nullable', $start);
+        $this->assertNotFalse($start);
+        $this->assertNotFalse($end);
+        $withoutRule = substr($design, 0, $start).substr($design, $end);
+        $this->assertNotSame([], $this->sliceFourSkuRuleViolations($withoutRule, $proposal));
+    }
+
+    public function test_slice_four_subordinate_sku_rule_cannot_widen_or_authorize_implementation(): void
+    {
+        $design = $this->readDocument('docs/IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md');
+        $proposal = $this->readDocument('docs/PHASE_III_P0_SLICE_4_IDENTITY_HEAD_FOUNDATION_PROPOSAL.md');
+        foreach ([
+            ['Cc OR Cf', 'Default_Ignorable_Code_Point'],
+            ['17.0.0:', 'latest:'],
+            ['BEFORE PHP trim()', 'AFTER PHP trim()'],
+            ['same set;', 'runtime set;'],
+            ['S4-CF-001 remains OPEN', 'S4-CF-001 is CLOSED'],
+            ['DEFINED_NOT_IMPLEMENTATION_AUTHORIZED', 'IMPLEMENTATION_AUTHORIZED'],
+            ['P0-05 implementation is NOT AUTHORIZED', 'P0-05 implementation is AUTHORIZED'],
+            ['finite design calculations do not prove implementation', 'finite design calculations prove implementation'],
+            ['235 forbidden scalars', 'all invisible characters'],
+        ] as [$old, $new]) {
+            $this->assertStringContainsString($old, $proposal);
+            $this->assertNotSame([], $this->sliceFourSkuRuleViolations($design, str_replace($old, $new, $proposal)), $old);
+        }
+    }
+
+    private function sliceFourSkuRuleViolations(string $design, string $proposal): array
+    {
+        $violations = [];
+        $designText = preg_replace('/\s+/', ' ', $design);
+        $proposalText = preg_replace('/\s+/', ' ', $proposal);
+        foreach ([
+            'S4-CF-001 remains OPEN. This is a PROPOSED canonical interpretation until separately accepted and applied',
+            'It grants no P0-05 implementation or runtime activation authorization.',
+            'scoped ONLY to the supplier-product logical-head SKU',
+            '"control-bearing" means at least one Unicode scalar value with General_Category Cc OR Cf in Unicode Character Database 17.0.0.',
+            'exactly 235 scalar values: 65 Cc and 170 Cf',
+            '277514 original bytes', '1134783 original bytes',
+            'https://www.unicode.org/Public/17.0.0/ucd/extracted/DerivedGeneralCategory.txt',
+            'https://www.unicode.org/Public/17.0.0/ucd/DerivedCoreProperties.txt',
+            'd62e5bab70ca74f099343f71224fa051cb1fdd61a1ab45c0488c44cfc0b6102e',
+            '24c7fed1195c482faaefd5c1e7eb821c5ee1fb6de07ecdbaa64b56a99da22c08',
+            'PHP/PCRE/ICU/Unicode upgrades MUST NOT silently change this set',
+            'Validation order: require a string without coercion; reject null/non-string and ill-formed UTF-8.',
+            'Reject the ENTIRE raw SKU before PHP trim() and before opening a transaction',
+            '255 Unicode scalar values or 1020 UTF-8 bytes',
+            'Count scalar values, not grapheme clusters or UTF-16 code units.',
+            'Never delete, replace, normalize, case-fold or truncate invalid input.',
+            'Only after raw validation apply PHP trim(); reject empty output and recheck UTF-8, both limits and the same forbidden set.',
+            'Preserve every remaining byte',
+            'Supplier/feed ownership and exact-byte identity remain unchanged.',
+            'The rule is NOT all \\p{C}, Default_Ignorable_Code_Point, whitespace or visually invisible characters.',
+            'ZWJ/ZWNJ are rejected even when meaningful in a writing system.',
+            'No real supplier compatibility audit is claimed',
+            'U+0600 and U+13430 are Cf and reject despite not being Default_Ignorable_Code_Point.',
+            'U+2065 is the deliberate gap between Cf intervals; U+13440 is outside Cf.',
+            'U+FEFF rejects at start, middle and end, never stripped from an extracted SKU.',
+            'Cyrillic U+0416 encoded d096 is preserved: continuation byte 96 is not U+0096.',
+            'Malformed/overlong/truncated UTF-8, encoded surrogates and values above U+10FFFF reject without replacement.',
+        ] as $required) {
+            if (! str_contains($designText, $required)) {
+                $violations[] = 'Canonical SKU interpretation: '.$required;
+            }
+        }
+        $ranges = <<<'TEXT'
+```text
+Cc: 0000..001F, 007F..009F
+Cf: 00AD, 0600..0605, 061C, 06DD, 070F, 0890..0891, 08E2, 180E,
+200B..200F, 202A..202E, 2060..2064, 2066..206F, FEFF, FFF9..FFFB,
+110BD, 110CD, 13430..1343F, 1BCA0..1BCA3, 1D173..1D17A, E0001,
+E0020..E007F
+```
+TEXT;
+        if (substr_count($design, $ranges) !== 1) {
+            $violations[] = 'Exactly one pinned Cc/Cf range block is required';
+        }
+        foreach ([
+            'S4-CF-001 remains OPEN.', 'must precede a runtime validator',
+            'General_Category Cc OR Cf in Unicode Character Database 17.0.0:',
+            '235 forbidden scalars', '940 raw rejections',
+            '255-scalar/1020-byte limits BEFORE PHP trim() and BEFORE opening a transaction.',
+            'After trim, reject empty output and recheck UTF-8, both limits and the same set;',
+            'Proposed status: `DEFINED_NOT_IMPLEMENTATION_AUTHORIZED`.',
+            'P0-05 implementation is NOT AUTHORIZED',
+            'finite design calculations do not prove implementation',
+        ] as $required) {
+            if (! str_contains($proposalText, $required)) {
+                $violations[] = 'Subordinate SKU interpretation: '.$required;
+            }
+        }
+
+        return $violations;
+    }
+
     public function test_slice_three_dated_deployment_is_not_presence_or_runtime_authorization(): void
     {
         $record = $this->readDocument('docs/PHASE_III_P0_SLICE_3_STAGING_EVIDENCE_2026_09_08.md');
@@ -3890,7 +4014,7 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
 
         $this->assertSame([], $canonical['violations'], implode(PHP_EOL, $canonical['violations']));
         $this->assertSame('CANONICAL_CURRENT_ARCHITECTURE', $canonical['current_architecture_inventory']['classification']);
-        $this->assertSame(293, $canonical['current_architecture_inventory']['unit_count']);
+        $this->assertSame(300, $canonical['current_architecture_inventory']['unit_count']);
         // Receipt presence and the existing SHA-256 inventory wording share one
         // introductory structural paragraph, adding one diagnostic candidate.
         $this->assertSame(18, $canonical['candidate_count']);
@@ -4040,7 +4164,7 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
 
         $this->assertSame([], $canonical['violations'], implode(PHP_EOL, $canonical['violations']));
         $this->assertSame('CANONICAL_ARCHITECTURE_DOCUMENT', $canonical['architecture_document_inventory']['classification']);
-        $this->assertSame(1137, $canonical['architecture_document_inventory']['unit_count']);
+        $this->assertSame(1144, $canonical['architecture_document_inventory']['unit_count']);
         $this->assertSame($expectedRegions, $canonical['architecture_document_inventory']['region_order']);
         $this->assertSame($expectedRegions, array_keys($canonical['architecture_document_inventory']['regions']));
         foreach ($expectedRegions as $position => $id) {
@@ -7598,18 +7722,18 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
         // UNAPPLIED review proposal: measurements independently matched in PHP and Node; not approved.
         return [
             'version' => 'phase-iii-architecture-document-closed-world-v1',
-            'normalized_bytes' => 1891902,
-            'line_count' => 8158,
-            'unit_count' => 1137,
+            'normalized_bytes' => 1895300,
+            'line_count' => 8214,
+            'unit_count' => 1144,
             'unit_categories' => [
-                'CANONICAL_HEADING_EXACT' => 86,
-                'CANONICAL_LITERAL_EXACT' => 72,
+                'CANONICAL_HEADING_EXACT' => 87,
+                'CANONICAL_LITERAL_EXACT' => 73,
                 'CANONICAL_MARKER_EXACT' => 41,
-                'CANONICAL_PARAGRAPH_EXACT' => 867,
+                'CANONICAL_PARAGRAPH_EXACT' => 872,
                 'CANONICAL_TABLE_EXACT' => 71,
             ],
-            'byte_fingerprint' => '17581b0a5a7511648c1f0c8a53f56b78c480f2b9086f99d1a00c2dbdcf3b5cfc',
-            'unit_fingerprint' => 'd17b5a10c71b5162809687004d2dd472b31ee88b7dcaddb3f5988cece6f07498',
+            'byte_fingerprint' => 'b8dea913640d1ba73aba20f35b0d13239c59c422adb170097c4f75219a1f17a4',
+            'unit_fingerprint' => 'a0db9e19adc392da64bf0249992f4d3ac54c7c7e8ad40047717a355f1c8ce289',
             'region_order' => [
                 'pre-current-reference-history-v1',
                 'current-architecture-authority-v1',
@@ -7635,18 +7759,18 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
                 'current-architecture-authority-v1' => [
                     'id' => 'current-architecture-authority-v1',
                     'position' => 2,
-                    'normalized_bytes' => 1484093,
-                    'line_count' => 2662,
-                    'unit_count' => 293,
+                    'normalized_bytes' => 1487491,
+                    'line_count' => 2718,
+                    'unit_count' => 300,
                     'unit_categories' => [
-                        'CANONICAL_HEADING_EXACT' => 16,
-                        'CANONICAL_LITERAL_EXACT' => 18,
+                        'CANONICAL_HEADING_EXACT' => 17,
+                        'CANONICAL_LITERAL_EXACT' => 19,
                         'CANONICAL_MARKER_EXACT' => 31,
-                        'CANONICAL_PARAGRAPH_EXACT' => 202,
+                        'CANONICAL_PARAGRAPH_EXACT' => 207,
                         'CANONICAL_TABLE_EXACT' => 26,
                     ],
-                    'byte_fingerprint' => '178bce50634afab7d09845a91ce6be8908b5a10f67f715d54f35d9b06c43c61e',
-                    'unit_fingerprint' => 'c5d4ee12351cececedf587799ca3e8515b964740e00a2bc07ca966cbab1a50bd',
+                    'byte_fingerprint' => '1ca4056cfc03ae8d1bd7791601e756c3a7238af37e01346ccf66e916aad836fc',
+                    'unit_fingerprint' => 'e82e1ba850d9f949522a6a14618a0434c5d8373527f0f5df5d85020213c84a3f',
                 ],
                 'post-current-reference-history-v1' => [
                     'id' => 'post-current-reference-history-v1',
@@ -7674,18 +7798,18 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
         // UNAPPLIED review proposal: measurements independently matched in PHP and Node; not approved.
         return [
             'version' => 'phase-iii-current-architecture-closed-world-v1',
-            'normalized_bytes' => 1484093,
-            'line_count' => 2662,
-            'unit_count' => 293,
+            'normalized_bytes' => 1487491,
+            'line_count' => 2718,
+            'unit_count' => 300,
             'unit_categories' => [
-                'CANONICAL_HEADING_EXACT' => 16,
-                'CANONICAL_LITERAL_EXACT' => 18,
+                'CANONICAL_HEADING_EXACT' => 17,
+                'CANONICAL_LITERAL_EXACT' => 19,
                 'CANONICAL_MARKER_EXACT' => 31,
-                'CANONICAL_PARAGRAPH_EXACT' => 202,
+                'CANONICAL_PARAGRAPH_EXACT' => 207,
                 'CANONICAL_TABLE_EXACT' => 26,
             ],
-            'byte_fingerprint' => 'c598bea3415294629dfe7f97012fd2539082782726c8d65b9a67f1ba18dff280',
-            'unit_fingerprint' => 'ffdc1e68088178cfa2e0dab83b0f4578d5992e06324a5b3cbb44dba7686e9a2b',
+            'byte_fingerprint' => 'e473c46c6ee7f5309a0a62ffbe009ca578038ae63385a3fe6c8255c029f12b22',
+            'unit_fingerprint' => 'c225f65ccbfe679c26b0c9a89dc86b9dca98d83f870546a622a2fe9a70f06889',
         ];
     }
 

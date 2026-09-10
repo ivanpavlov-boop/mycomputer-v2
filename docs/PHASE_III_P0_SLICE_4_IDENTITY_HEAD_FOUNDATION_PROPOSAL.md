@@ -144,13 +144,25 @@ normalization, case folding, text-collation equality or existing identity-hash
 fallback is permitted. ID values must be exact positive supplier/feed IDs within
 the application's integer representation; reject coercion and ownership mismatch.
 
-Control classification detail for design review: the authority says
-"control-bearing" but does not name a Unicode property or version. The fixed
-C0/DEL/C1 rejection vectors below are unambiguous; this proposal does not silently
-approve or reject all Unicode format (Cf) characters as a new canonical rule.
-An explicit canonical interpretation for that edge set must precede a runtime
-validator. This is a bounded pre-implementation design question, not permission
-to accept unclassified input or weaken the raw-control prohibition.
+Control classification proposal: S4-CF-001 remains OPEN. Separate acceptance
+and application of the [proposed canonical interpretation](IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md#proposed-logical-head-sku-control-and-format-interpretation)
+must precede a runtime validator. For this logical-head SKU only,
+"control-bearing" means General_Category Cc OR Cf in Unicode Character Database
+17.0.0: exactly 65 Cc + 170 Cf = 235 Unicode scalar values, using the canonical
+2/21 literal ranges and both pinned original-byte reference checksums.
+Unicode format (Cf) characters include ZWJ/ZWNJ: reject them even when meaningful
+in a writing system. This is an intended tradeoff, not a supplier compatibility
+audit or a claim that all Cf are invisible or all invisible characters are Cf.
+PHP/PCRE/ICU/Unicode upgrades must not implicitly change the pinned set.
+Do not broaden rejection to all \p{C}, Default_Ignorable_Code_Point, whitespace
+or visually invisible characters.
+
+The whole raw string must pass well-formed UTF-8, the pinned Cc/Cf rejection and
+255-scalar/1020-byte limits BEFORE PHP trim() and BEFORE opening a transaction.
+Reject without deletion, replacement, normalization, case folding or truncation.
+After trim, reject empty output and recheck UTF-8, both limits and the same set;
+preserve every remaining byte. Counts are scalar values, not grapheme clusters
+or UTF-16 code units. Supplier/feed ownership and exact-byte identity do not change.
 
 Vectors below are literal input hex -> canonical output hex or rejection.
 Repeated notation means exact byte repetition, not a runtime generator contract.
@@ -172,6 +184,22 @@ check verify these review fixtures only; no production validator was created.
 | `20` + `41` repeated 255 | REJECT before trim | raw 256 characters |
 | `f09f9880` repeated 255 | same 1020 bytes | inclusive character and byte limits |
 | `f09f9880` repeated 256 | REJECT | 256 characters / 1024 bytes |
+
+Additional proposed F3 acceptance keeps all 21 existing literal cases unchanged.
+Finite design calculations separately cover all 235 forbidden scalars at start,
+middle, end and between ASCII spaces (940 raw rejections), plus every interval
+boundary against the full union, including the U+2065 gap. They are not PHP/P0-05
+implementation evidence. U+FEFF rejects in all three positions; U+0600/U+13430
+reject despite not being Default_Ignorable_Code_Point. Otherwise-valid U+034F,
+U+FE0F, U+E0100, U+13440, U+2028/U+2029, U+2065, NBSP, private-use and unassigned
+scalars remain byte-identical. Cyrillic U+0416 d096 is not a U+0096 control.
+Malformed/overlong/truncated UTF-8, encoded surrogates and values above U+10FFFF
+reject without replacement. 254 A + Cf and 255 A + Cf reject; 127 pairs of
+65cc81 plus 65 are 255 scalars and remain unchanged, whereas 128 pairs are 256
+scalars and reject. Existing 255/256-scalar and 1020/1024-byte boundaries remain.
+The design-review package records literal hex, expected and independently computed
+results separately. S4-CF-001 closure is conditional on separate adoption,
+not accomplished by these calculations; P0-05 implementation is NOT AUTHORIZED.
 
 The SQL CHECK cannot validate arbitrary binary strings as canonical SKU.
 The immutable value and controlled insertion boundary must enforce this grammar.
@@ -223,7 +251,7 @@ databases only; synthetic parent setup is separate from operations under test.
 | --- | --- | --- | --- | --- |
 | F1 | Fresh and populated P4 -> P5; exact independent inspection, +15 objects; wrong session/malformed/unknown prefix | MySQL 8.4, frozen oracle | exact P5 or zero precondition DDL | Head DDL only; foundation |
 | F2 | Exact five ordered columns/indexes/CHECK/FK; null/length/feed-owner failures | MySQL synthetic supplier/feed parents | exact ownership, all invalid inputs rejected | Disposable head inserts only; foundation |
-| F3 | All fixed raw/canonical vectors and immutable value typing; no EAN/MPN/hash fallback | Pure PHP and independent byte fixtures | exact bytes/distinction or rejection before SQL | No DB writes; foundation; Unicode edge interpretation resolved before implementation |
+| F3 | All fixed raw/canonical vectors, pinned UCD 17.0.0 Cc OR Cf set, 940 raw-rejection positions, distinguishing categories and immutable value typing; no EAN/MPN/hash fallback | Future pure PHP tests; separate finite design calculations do not prove implementation | exact bytes/distinction or rejection before trim/transaction; recheck after trim | No DB writes; foundation; separate adoption of S4-CF-001 interpretation must precede implementation |
 | F4 | Raw/model no-op UPDATE, DELETE, REPLACE/upsert/rebind, force/unguarded/touch; exact duplicate reuse | MySQL + model fixtures | rejects mutation; unchanged original ID/created_at/row snapshots | Disposable initial inserts; foundation |
 | F5 | INSERT then same-tuple FOR UPDATE, exact reuse/conflict; inject unrelated SQL failures | MySQL explicit connection/transaction | relevant duplicate only; unrelated failures propagate | Caller-owned head insert or zero; foundation |
 | F6 | Independent-process same-key/different-key races; first contender rollback and retry | Linux PHP pcntl, separate MySQL sessions, performance_schema lock evidence | same canonical key converges; distinct keys remain distinct; loser can insert after rollback | Disposable heads/parent setup; foundation; barriers/observed waits, not sleeps alone |
