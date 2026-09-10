@@ -5790,6 +5790,62 @@ protected writer compares the head bytes with the SupplierProduct/revision SKU
 bytes before reuse and fails
 `supplier_product_logical_identity_conflict` on any mismatch.
 
+##### Proposed logical-head SKU control and format interpretation
+
+S4-CF-001 remains OPEN. This is a PROPOSED canonical interpretation until
+separately accepted and applied; only that adoption could close the ambiguity.
+It grants no P0-05 implementation or runtime activation authorization.
+The following rule is scoped ONLY to the supplier-product logical-head SKU,
+not shared canonical string/identity helpers or other supplier fields.
+
+"control-bearing" means at least one Unicode scalar value with General_Category
+Cc OR Cf in Unicode Character Database 17.0.0. The forbidden set is pinned to
+exactly 235 scalar values: 65 Cc and 170 Cf, with no implicit runtime version.
+The 2 Cc ranges and 21 Cf ranges/singletons are exactly:
+
+```text
+Cc: 0000..001F, 007F..009F
+Cf: 00AD, 0600..0605, 061C, 06DD, 070F, 0890..0891, 08E2, 180E,
+200B..200F, 202A..202E, 2060..2064, 2066..206F, FEFF, FFF9..FFFB,
+110BD, 110CD, 13430..1343F, 1BCA0..1BCA3, 1D173..1D17A, E0001,
+E0020..E007F
+```
+
+Reference identity: [DerivedGeneralCategory.txt](https://www.unicode.org/Public/17.0.0/ucd/extracted/DerivedGeneralCategory.txt),
+277514 original bytes, SHA-256
+`d62e5bab70ca74f099343f71224fa051cb1fdd61a1ab45c0488c44cfc0b6102e`.
+The distinguishing-property reference is
+[DerivedCoreProperties.txt](https://www.unicode.org/Public/17.0.0/ucd/DerivedCoreProperties.txt),
+1134783 original bytes, SHA-256
+`24c7fed1195c482faaefd5c1e7eb821c5ee1fb6de07ecdbaa64b56a99da22c08`.
+These are source checksums, not new application hash domains, schema oracles
+or authority registries. PHP/PCRE/ICU/Unicode upgrades MUST NOT silently change
+this set; no floating latest URL or runtime property-table version is authority.
+
+Validation order: require a string without coercion; reject null/non-string
+and ill-formed UTF-8. Reject the ENTIRE raw SKU before PHP trim() and before
+opening a transaction if it contains any member of that pinned forbidden set
+or exceeds 255 Unicode scalar values or 1020 UTF-8 bytes. Count scalar values,
+not grapheme clusters or UTF-16 code units. Never delete, replace, normalize,
+case-fold or truncate invalid input. Only after raw validation apply PHP trim();
+reject empty output and recheck UTF-8, both limits and the same forbidden set.
+Preserve every remaining byte, including case, internal spaces and non-trimmed
+whitespace. Supplier/feed ownership and exact-byte identity remain unchanged.
+
+The rule is NOT all \p{C}, Default_Ignorable_Code_Point, whitespace or visually
+invisible characters. ZWJ/ZWNJ are rejected even when meaningful in a writing
+system. No real supplier compatibility audit is claimed; not all Cf are
+invisible and not all invisible characters are Cf. U+0600 and U+13430 are Cf
+and reject despite not being Default_Ignorable_Code_Point. Otherwise-valid
+U+034F, U+FE0F, U+E0100 and U+13440 (Mn), U+2028/U+2029 (Zl/Zp), U+2065 (Cn),
+NBSP, private-use and unassigned scalar values are not rejected by this set.
+U+2065 is the deliberate gap between Cf intervals; U+13440 is outside Cf.
+U+FEFF rejects at start, middle and end, never stripped from an extracted SKU.
+Cyrillic U+0416 encoded d096 is preserved: continuation byte 96 is not U+0096.
+Malformed/overlong/truncated UTF-8, encoded surrogates and values above U+10FFFF
+reject without replacement. Finite design calculations are not implementation
+evidence; future validator tests still require separate P0-05 authorization.
+
 Protected SupplierProduct rows gain nullable
 `supplier_product_identity_head_id` and `current_source_revision_id`. P0-06
 first creates the empty append-only revision table with
