@@ -5790,10 +5790,10 @@ protected writer compares the head bytes with the SupplierProduct/revision SKU
 bytes before reuse and fails
 `supplier_product_logical_identity_conflict` on any mismatch.
 
-##### Proposed logical-head SKU control and format interpretation
+##### Adopted logical-head SKU control and format interpretation
 
-S4-CF-001 remains OPEN. This is a PROPOSED canonical interpretation until
-separately accepted and applied; only that adoption could close the ambiguity.
+S4-CF-001 is CLOSED at design level. The pinned Unicode interpretation below
+is ADOPTED as the canonical supplier-product logical-head SKU rule.
 It grants no P0-05 implementation or runtime activation authorization.
 The following rule is scoped ONLY to the supplier-product logical-head SKU,
 not shared canonical string/identity helpers or other supplier fields.

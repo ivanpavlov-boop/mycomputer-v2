@@ -144,9 +144,10 @@ normalization, case folding, text-collation equality or existing identity-hash
 fallback is permitted. ID values must be exact positive supplier/feed IDs within
 the application's integer representation; reject coercion and ownership mismatch.
 
-Control classification proposal: S4-CF-001 remains OPEN. Separate acceptance
-and application of the [proposed canonical interpretation](IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md#proposed-logical-head-sku-control-and-format-interpretation)
-must precede a runtime validator. For this logical-head SKU only,
+Control classification: S4-CF-001 is CLOSED at design level. Its pinned Unicode
+interpretation is ADOPTED in the [canonical persistence design](IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md#adopted-logical-head-sku-control-and-format-interpretation).
+Separate P0-05 implementation authorization must precede a runtime validator.
+For this logical-head SKU only,
 "control-bearing" means General_Category Cc OR Cf in Unicode Character Database
 17.0.0: exactly 65 Cc + 170 Cf = 235 Unicode scalar values, using the canonical
 2/21 literal ranges and both pinned original-byte reference checksums.
@@ -198,8 +199,9 @@ reject without replacement. 254 A + Cf and 255 A + Cf reject; 127 pairs of
 65cc81 plus 65 are 255 scalars and remain unchanged, whereas 128 pairs are 256
 scalars and reject. Existing 255/256-scalar and 1020/1024-byte boundaries remain.
 The design-review package records literal hex, expected and independently computed
-results separately. S4-CF-001 closure is conditional on separate adoption,
-not accomplished by these calculations; P0-05 implementation is NOT AUTHORIZED.
+results separately. These calculations are not the authority for S4-CF-001
+design adoption; only the canonical persistence design is authoritative.
+P0-05 implementation is NOT AUTHORIZED.
 
 The SQL CHECK cannot validate arbitrary binary strings as canonical SKU.
 The immutable value and controlled insertion boundary must enforce this grammar.
@@ -251,7 +253,7 @@ databases only; synthetic parent setup is separate from operations under test.
 | --- | --- | --- | --- | --- |
 | F1 | Fresh and populated P4 -> P5; exact independent inspection, +15 objects; wrong session/malformed/unknown prefix | MySQL 8.4, frozen oracle | exact P5 or zero precondition DDL | Head DDL only; foundation |
 | F2 | Exact five ordered columns/indexes/CHECK/FK; null/length/feed-owner failures | MySQL synthetic supplier/feed parents | exact ownership, all invalid inputs rejected | Disposable head inserts only; foundation |
-| F3 | All fixed raw/canonical vectors, pinned UCD 17.0.0 Cc OR Cf set, 940 raw-rejection positions, distinguishing categories and immutable value typing; no EAN/MPN/hash fallback | Future pure PHP tests; separate finite design calculations do not prove implementation | exact bytes/distinction or rejection before trim/transaction; recheck after trim | No DB writes; foundation; separate adoption of S4-CF-001 interpretation must precede implementation |
+| F3 | All fixed raw/canonical vectors, pinned UCD 17.0.0 Cc OR Cf set, 940 raw-rejection positions, distinguishing categories and immutable value typing; no EAN/MPN/hash fallback | Future pure PHP tests; separate finite design calculations do not prove implementation | exact bytes/distinction or rejection before trim/transaction; recheck after trim | No DB writes; foundation; adopted S4-CF-001 design rule; separate P0-05 implementation authorization required |
 | F4 | Raw/model no-op UPDATE, DELETE, REPLACE/upsert/rebind, force/unguarded/touch; exact duplicate reuse | MySQL + model fixtures | rejects mutation; unchanged original ID/created_at/row snapshots | Disposable initial inserts; foundation |
 | F5 | INSERT then same-tuple FOR UPDATE, exact reuse/conflict; inject unrelated SQL failures | MySQL explicit connection/transaction | relevant duplicate only; unrelated failures propagate | Caller-owned head insert or zero; foundation |
 | F6 | Independent-process same-key/different-key races; first contender rollback and retry | Linux PHP pcntl, separate MySQL sessions, performance_schema lock evidence | same canonical key converges; distinct keys remain distinct; loser can insert after rollback | Disposable heads/parent setup; foundation; barriers/observed waits, not sleeps alone |
