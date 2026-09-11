@@ -29,13 +29,15 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
             ['same forbidden set', 'runtime forbidden set'],
             ['Never delete, replace, normalize,', 'Delete, replace, normalize,'],
             ['MUST NOT silently change', 'may silently change'],
-            ['S4-CF-001 remains OPEN', 'S4-CF-001 is CLOSED'],
+            ['S4-CF-001 is CLOSED at design level', 'S4-CF-001 remains OPEN'],
+            ['is ADOPTED as the canonical', 'is PROPOSED as the canonical'],
             ['It grants no P0-05 implementation', 'It grants P0-05 implementation'],
+            ['or runtime activation authorization.', 'and permits runtime activation.'],
         ] as [$old, $new]) {
             $this->assertStringContainsString($old, $design);
             $this->assertNotSame([], $this->sliceFourSkuRuleViolations(str_replace($old, $new, $design), $proposal), $old);
         }
-        $start = strpos($design, '##### Proposed logical-head SKU control and format interpretation');
+        $start = strpos($design, '##### Adopted logical-head SKU control and format interpretation');
         $end = strpos($design, 'Protected SupplierProduct rows gain nullable', $start);
         $this->assertNotFalse($start);
         $this->assertNotFalse($end);
@@ -52,7 +54,10 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
             ['17.0.0:', 'latest:'],
             ['BEFORE PHP trim()', 'AFTER PHP trim()'],
             ['same set;', 'runtime set;'],
-            ['S4-CF-001 remains OPEN', 'S4-CF-001 is CLOSED'],
+            ['S4-CF-001 is CLOSED at design level', 'S4-CF-001 remains OPEN'],
+            ['interpretation is ADOPTED', 'interpretation is PROPOSED'],
+            ['Separate P0-05 implementation authorization must precede a runtime validator', 'Design adoption alone permits a runtime validator'],
+            ['separate P0-05 implementation authorization required', 'P0-05 implementation authorization granted'],
             ['DEFINED_NOT_IMPLEMENTATION_AUTHORIZED', 'IMPLEMENTATION_AUTHORIZED'],
             ['P0-05 implementation is NOT AUTHORIZED', 'P0-05 implementation is AUTHORIZED'],
             ['finite design calculations do not prove implementation', 'finite design calculations prove implementation'],
@@ -69,7 +74,7 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
         $designText = preg_replace('/\s+/', ' ', $design);
         $proposalText = preg_replace('/\s+/', ' ', $proposal);
         foreach ([
-            'S4-CF-001 remains OPEN. This is a PROPOSED canonical interpretation until separately accepted and applied',
+            'S4-CF-001 is CLOSED at design level. The pinned Unicode interpretation below is ADOPTED as the canonical supplier-product logical-head SKU rule.',
             'It grants no P0-05 implementation or runtime activation authorization.',
             'scoped ONLY to the supplier-product logical-head SKU',
             '"control-bearing" means at least one Unicode scalar value with General_Category Cc OR Cf in Unicode Character Database 17.0.0.',
@@ -114,7 +119,10 @@ TEXT;
             $violations[] = 'Exactly one pinned Cc/Cf range block is required';
         }
         foreach ([
-            'S4-CF-001 remains OPEN.', 'must precede a runtime validator',
+            'S4-CF-001 is CLOSED at design level.', 'interpretation is ADOPTED in the [canonical persistence design]',
+            'IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md#adopted-logical-head-sku-control-and-format-interpretation',
+            'Separate P0-05 implementation authorization must precede a runtime validator.',
+            'adopted S4-CF-001 design rule; separate P0-05 implementation authorization required',
             'General_Category Cc OR Cf in Unicode Character Database 17.0.0:',
             '235 forbidden scalars', '940 raw rejections',
             '255-scalar/1020-byte limits BEFORE PHP trim() and BEFORE opening a transaction.',
@@ -174,6 +182,10 @@ TEXT;
             ['P0-06 through P0-09 remain unimplemented, unsliced and unauthorized', 'P0-06 through P0-09 are authorized'],
             ['PH3-RDY-003 remains BLOCKED', 'PH3-RDY-003 is CLOSED'],
             ['P0-05 implementation is NOT AUTHORIZED', 'P0-05 implementation is AUTHORIZED'],
+            ['S4-CF-001 is CLOSED at design level', 'S4-CF-001 remains OPEN'],
+            ['interpretation is ADOPTED', 'interpretation is PROPOSED'],
+            ['Separate P0-05 implementation authorization must precede a runtime validator', 'Design adoption alone permits a runtime validator'],
+            ['separate P0-05 implementation authorization required', 'P0-05 implementation authorization granted'],
         ] as [$old, $new]) {
             $this->assertStringContainsString($old, $proposal);
             $this->assertNotSame([], $this->sliceFourProposalViolations(str_replace($old, $new, $proposal)), $old);
@@ -259,7 +271,10 @@ TEXT;
             'P0-06 through P0-09 remain unimplemented, unsliced and unauthorized',
             'PH3-RDY-003 remains BLOCKED', 'all ten operational bounds remain NOT SPECIFIED',
             'runtime activation UNAUTHORIZED',
-            'Unicode format (Cf) characters', 'must precede a runtime validator',
+            'Unicode format (Cf) characters', 'S4-CF-001 is CLOSED at design level.',
+            'interpretation is ADOPTED in the [canonical persistence design]',
+            'Separate P0-05 implementation authorization must precede a runtime validator.',
+            'adopted S4-CF-001 design rule; separate P0-05 implementation authorization required',
         ] as $required) {
             if (! str_contains($text, $required)) {
                 $violations[] = $required;
@@ -7722,7 +7737,7 @@ TEXT;
         // UNAPPLIED review proposal: measurements independently matched in PHP and Node; not approved.
         return [
             'version' => 'phase-iii-architecture-document-closed-world-v1',
-            'normalized_bytes' => 1895300,
+            'normalized_bytes' => 1895291,
             'line_count' => 8214,
             'unit_count' => 1144,
             'unit_categories' => [
@@ -7732,8 +7747,8 @@ TEXT;
                 'CANONICAL_PARAGRAPH_EXACT' => 872,
                 'CANONICAL_TABLE_EXACT' => 71,
             ],
-            'byte_fingerprint' => 'b8dea913640d1ba73aba20f35b0d13239c59c422adb170097c4f75219a1f17a4',
-            'unit_fingerprint' => 'a0db9e19adc392da64bf0249992f4d3ac54c7c7e8ad40047717a355f1c8ce289',
+            'byte_fingerprint' => 'a9702abd1cf2afa5aad83e005e55af5237933787b33f2bdc8d828f4f2cffbe55',
+            'unit_fingerprint' => '175146f60ac1be92375df9c2f1363031d23bc8fece32ff7e312972abd8f87373',
             'region_order' => [
                 'pre-current-reference-history-v1',
                 'current-architecture-authority-v1',
@@ -7759,7 +7774,7 @@ TEXT;
                 'current-architecture-authority-v1' => [
                     'id' => 'current-architecture-authority-v1',
                     'position' => 2,
-                    'normalized_bytes' => 1487491,
+                    'normalized_bytes' => 1487482,
                     'line_count' => 2718,
                     'unit_count' => 300,
                     'unit_categories' => [
@@ -7769,8 +7784,8 @@ TEXT;
                         'CANONICAL_PARAGRAPH_EXACT' => 207,
                         'CANONICAL_TABLE_EXACT' => 26,
                     ],
-                    'byte_fingerprint' => '1ca4056cfc03ae8d1bd7791601e756c3a7238af37e01346ccf66e916aad836fc',
-                    'unit_fingerprint' => 'e82e1ba850d9f949522a6a14618a0434c5d8373527f0f5df5d85020213c84a3f',
+                    'byte_fingerprint' => '1aef7737e054b8bed7ed3de6af5af9c428826fe24e9d55e6b7d81fa9bde9f4a9',
+                    'unit_fingerprint' => '4f1ae31413ccdd09e596dc0ade75090dfc4e7d054fc066ebbc3f148fd0633602',
                 ],
                 'post-current-reference-history-v1' => [
                     'id' => 'post-current-reference-history-v1',
@@ -7798,7 +7813,7 @@ TEXT;
         // UNAPPLIED review proposal: measurements independently matched in PHP and Node; not approved.
         return [
             'version' => 'phase-iii-current-architecture-closed-world-v1',
-            'normalized_bytes' => 1487491,
+            'normalized_bytes' => 1487482,
             'line_count' => 2718,
             'unit_count' => 300,
             'unit_categories' => [
@@ -7808,8 +7823,8 @@ TEXT;
                 'CANONICAL_PARAGRAPH_EXACT' => 207,
                 'CANONICAL_TABLE_EXACT' => 26,
             ],
-            'byte_fingerprint' => 'e473c46c6ee7f5309a0a62ffbe009ca578038ae63385a3fe6c8255c029f12b22',
-            'unit_fingerprint' => 'c225f65ccbfe679c26b0c9a89dc86b9dca98d83f870546a622a2fe9a70f06889',
+            'byte_fingerprint' => '291099bf9f40fe678e173dc28150e7dc1eb4edc083988dd9ea5b332950b4b51d',
+            'unit_fingerprint' => '6c068994dbc6b41105c327f2e67b44c16c797625834823e27c19fe3cd358b9d9',
         ];
     }
 
