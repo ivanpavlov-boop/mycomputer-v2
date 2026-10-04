@@ -4,7 +4,7 @@
       <NuxtImg
         v-if="activeVisibleImage"
         :src="imageSrc(activeVisibleImage.path)"
-        :alt="activeVisibleImage.alt_text || productName"
+        :alt="activeVisibleImage.alt_text?.trim() ? activeVisibleImage.alt_text : productName"
         class="h-full w-full object-contain"
         @error="markImageFailed(activeVisibleImage.path)"
       />
@@ -24,7 +24,7 @@
       >
         <NuxtImg
           :src="imageSrc(image.path)"
-          :alt="image.alt_text || productName"
+          :alt="image.alt_text?.trim() ? image.alt_text : productName"
           class="aspect-square w-full object-contain"
           loading="lazy"
           @error="markImageFailed(image.path)"
@@ -38,7 +38,8 @@
 import type { ProductImage } from '~/types/api'
 
 const props = defineProps<{ images: ProductImage[]; productName: string }>()
-const activeImage = ref<ProductImage | null>(props.images[0] || null)
+const initialImage = (images: ProductImage[]) => images.find(image => image.is_primary === true) || images[0] || null
+const activeImage = ref<ProductImage | null>(initialImage(props.images))
 const failedImagePaths = ref<Set<string>>(new Set())
 const config = useRuntimeConfig()
 const storageBase = computed(() => String(config.public.apiBaseUrl).replace(/\/api\/v1\/?$/, ''))
@@ -62,6 +63,6 @@ function markImageFailed(path: string) {
 
 watch(() => props.images, (images) => {
   failedImagePaths.value = new Set()
-  activeImage.value = images[0] || null
+  activeImage.value = initialImage(images)
 })
 </script>

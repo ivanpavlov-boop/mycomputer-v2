@@ -34,8 +34,10 @@ export function useSeo() {
   }
 
   function product(product: ProductDetail) {
-    const title = product.localized?.meta_title || product.seo?.meta_title || product.localized?.name || product.name
-    const description = product.localized?.meta_description || product.seo?.meta_description || product.localized?.short_description || product.short_description || ''
+    const title = [product.localized?.meta_title, product.seo?.meta_title, product.localized?.name]
+      .find(value => value?.trim()) || product.name
+    const description = [product.localized?.meta_description, product.seo?.meta_description, product.localized?.short_description, product.short_description]
+      .find(value => value?.trim()) || ''
 
     useSeoMeta({
       title,

@@ -5,7 +5,7 @@
         <NuxtImg
           v-if="primaryImagePath && !primaryImageFailed"
           :src="imageSrc(primaryImagePath)"
-          :alt="product.primary_image.alt_text || productName"
+          :alt="product.primary_image.alt_text?.trim() ? product.primary_image.alt_text : productName"
           class="h-full w-full object-contain"
           loading="lazy"
           @error="primaryImageFailed = true"
