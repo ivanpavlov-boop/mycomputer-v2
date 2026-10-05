@@ -9,6 +9,7 @@ use App\Http\Resources\ProductDetailResource;
 use App\Models\Product;
 use App\Services\Products\PublicProductAttributeFilterService;
 use App\Services\Products\PublicProductPriceFilterService;
+use App\Services\Reviews\ReviewStatsService;
 use App\Support\Api\ProductQueryFilters;
 use App\Support\Localization\Locales;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -21,6 +22,7 @@ class ProductController extends Controller
         ProductQueryFilters $filters,
         PublicProductAttributeFilterService $attributeFilters,
         PublicProductPriceFilterService $priceFilters,
+        ReviewStatsService $reviewStats,
     ): AnonymousResourceCollection {
         $validated = $request->validated();
         $selectedAttributes = $validated['attribute_filters'] ?? [];
@@ -38,6 +40,8 @@ class ProductController extends Controller
             ->sort($query, $validated['sort'] ?? null)
             ->paginate($filters->perPage($validated))
             ->appends($request->query());
+
+        $reviewStats->loadCardSummaries($paginator->getCollection());
 
         return ProductCardResource::collection($paginator)->additional($filterMetadata);
     }

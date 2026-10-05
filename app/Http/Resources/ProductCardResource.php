@@ -12,7 +12,7 @@ class ProductCardResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
-        $reviewSummary = app(ReviewStatsService::class)->summary($this->resource);
+        $reviewSummary = app(ReviewStatsService::class)->cardSummary($this->resource);
         $locale = Locales::fromRequest($request);
 
         return [
