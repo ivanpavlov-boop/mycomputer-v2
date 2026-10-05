@@ -14,6 +14,7 @@ use App\Models\ProductAttributeValue;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Testing\TestResponse;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 class PublicProductFilterFacetPersistenceTest extends TestCase
@@ -150,8 +151,11 @@ class PublicProductFilterFacetPersistenceTest extends TestCase
         );
     }
 
-    public function test_facet_persistence_is_bounded_read_only_and_excludes_non_public_or_supplier_values(): void
-    {
+    #[DataProvider('controlledAttributePrices')]
+    public function test_facet_persistence_is_bounded_read_only_and_excludes_non_public_or_supplier_values(
+        int $controlledPrice,
+        bool $included,
+    ): void {
         $category = Category::factory()->create();
         $processor = $this->attribute('processor', ProductAttribute::TYPE_SELECT);
         [$intel, $amd, $private] = $this->attributeOptions($processor, [
@@ -160,21 +164,24 @@ class PublicProductFilterFacetPersistenceTest extends TestCase
             'Private' => 'private',
         ]);
         $this->assign($category, $processor, CategoryAttributeFilterControl::Options);
-        foreach ([[$intel, 100], [$amd, 200]] as [$option, $price]) {
-            $this->value($this->product($category, ['price' => $price]), $processor, ['attribute_value_id' => $option->id]);
-        }
-        $this->value(Product::factory()->manualDraft()->create(['category_id' => $category->id]), $processor, ['attribute_value_id' => $private->id]);
-        $this->value($this->product($category, ['active' => false]), $processor, ['attribute_value_id' => $private->id]);
-        $deleted = $this->product($category);
+        $low = $this->product($category, ['price' => 100]);
+        $high = $this->product($category, ['price' => 200]);
+        $this->value($low, $processor, ['attribute_value_id' => $intel->id]);
+        $this->value($high, $processor, ['attribute_value_id' => $amd->id]);
+        $this->value(Product::factory()->manualDraft()->create(['category_id' => $category->id, 'price' => 50]), $processor, ['attribute_value_id' => $private->id]);
+        $this->value($this->product($category, ['active' => false, 'price' => 60]), $processor, ['attribute_value_id' => $private->id]);
+        $deleted = $this->product($category, ['price' => 70]);
         $this->value($deleted, $processor, ['attribute_value_id' => $private->id]);
         $deleted->delete();
-        $this->value($this->product($category), $processor, [
+        $controlled = $this->product($category, ['price' => $controlledPrice]);
+        $this->value($controlled, $processor, [
             'attribute_value_id' => $private->id,
             'source' => ProductAttributeValue::SOURCE_CONTROLLED_SYNC,
         ]);
         $corrupt = $this->assign(Category::factory()->create(), $this->attribute('weight', ProductAttribute::TYPE_DECIMAL), CategoryAttributeFilterControl::MinMax);
         DB::table('category_product_attributes')->where('id', $corrupt->id)->update(['filter_control_type' => 'yes_no']);
 
+        $expectedIds = $included ? [$low->id, $controlled->id] : [$low->id];
         $tables = ['products', 'product_attribute_values', 'category_product_attributes', 'supplier_products'];
         $before = collect($tables)->mapWithKeys(fn (string $table): array => [$table => DB::table($table)->count()])->all();
         $timestamps = Product::query()->pluck('updated_at', 'id')->map(fn (mixed $value): string => (string) $value)->all();
@@ -183,10 +190,11 @@ class PublicProductFilterFacetPersistenceTest extends TestCase
 
         $response = $this->getJson('/api/v1/products?price_max=150')
             ->assertOk()
-            ->assertJsonCount(1, 'data');
+            ->assertJsonCount(count($expectedIds), 'data');
         $queryCount = count(DB::getQueryLog());
         DB::disableQueryLog();
 
+        $this->assertEqualsCanonicalizing($expectedIds, array_column($response->json('data'), 'id'));
         $this->assertSame(['intel', 'amd'], array_column($response->json('filters.0.options'), 'key'));
         $this->assertLessThanOrEqual(24, $queryCount);
         $this->assertSame($before, collect($tables)->mapWithKeys(fn (string $table): array => [$table => DB::table($table)->count()])->all());
@@ -196,6 +204,18 @@ class PublicProductFilterFacetPersistenceTest extends TestCase
             ->assertJsonMissing(['key' => 'private'])
             ->assertJsonMissingPath('supplier_products')
             ->assertJsonMissingPath('exception');
+    }
+
+    /**
+     * @return array<string, array{int, bool}>
+     */
+    public static function controlledAttributePrices(): array
+    {
+        return [
+            'below maximum' => [125, true],
+            'at maximum' => [150, true],
+            'above maximum' => [250, false],
+        ];
     }
 
     /**
