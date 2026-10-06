@@ -39,6 +39,26 @@ vendor/bin/pint --test
 
 ## What Is Allowed
 
+### Backend Image Permissions
+
+For deployment gate changes, run the command-boundary tests and then the actual
+Linux Docker regression (Bash, Node, Docker and `jq` required):
+
+```bash
+node --test scripts/tests/backend-image-guard.test.cjs
+docker build --tag mycomputer-backend-permission-test:local .
+bash scripts/tests/backend-image-permissions.sh mycomputer-backend-permission-test:local
+```
+
+The `backend-image-permissions` CI job runs these checks independently of the
+database suites. Real containers must pass as `www-data` with normal source
+modes and fail for each of the three historical `600 root:root` PHP paths. A
+readable file missing its expected class must fail Composer autoload validation.
+Only disposable derived test images are modified; no stack, database, volume or
+production environment is used. Command mocks do not establish a Docker PASS.
+
+### General Scope
+
 - UI-only changes may use feature/view assertions.
 - Read-only diagnostics must assert no products or `supplier_products` are modified.
 - Write operations must test server-side validation and skipped/failed rows.

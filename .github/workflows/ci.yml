@@ -6,6 +6,21 @@ on:
   pull_request:
 
 jobs:
+  backend-image-permissions:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Image guard command tests
+        run: node --test scripts/tests/backend-image-guard.test.cjs
+      - name: Build backend test image
+        run: docker build --tag mycomputer-backend-permission-test:ci .
+      - name: Check non-root readability, autoload and rejected permissions
+        run: bash scripts/tests/backend-image-permissions.sh mycomputer-backend-permission-test:ci
+
   backend:
     runs-on: ubuntu-latest
 
