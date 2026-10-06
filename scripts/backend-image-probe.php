@@ -1,5 +1,9 @@
 <?php
 
+use App\Http\Controllers\Api\V1\ProductController;
+use App\Http\Resources\ProductCardResource;
+use App\Services\Reviews\ReviewStatsService;
+
 // Run only through verify-backend-images.sh, as www-data in an isolated image.
 // Do not bootstrap Laravel: the probe must not need .env, a database or storage.
 $checkReadable = static function (string $path): void {
@@ -36,9 +40,9 @@ try {
     require 'vendor/autoload.php';
 
     foreach ([
-        App\Http\Controllers\Api\V1\ProductController::class,
-        App\Http\Resources\ProductCardResource::class,
-        App\Services\Reviews\ReviewStatsService::class,
+        ProductController::class,
+        ProductCardResource::class,
+        ReviewStatsService::class,
     ] as $class) {
         if (! class_exists($class)) {
             throw new RuntimeException("AUTOLOAD_FAILED: {$class}");
