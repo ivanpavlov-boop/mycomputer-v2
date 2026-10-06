@@ -225,16 +225,26 @@ Pint/tests when requested by the prompt.
 ## VPS Deploy Reference
 
 Use only after the PR is merged into `main` and deployment is explicitly
-requested. Do not include secrets in commands or docs.
+requested. Use a clean checkout and a verified backup; preserve effective flags.
+Do not include secrets in commands or docs. The
+[backend image readability gate](DEPLOYMENT.md#backend-image-readability-gate)
+requires `jq` and must pass before activation. Serialize deployments; do not
+retag images between the check and activation.
 
 ```bash
+(
+set -euo pipefail
 cd /var/www/mycomputer-v2
 
-git fetch origin
-git reset --hard origin/main
+(
+    umask 022
+    git fetch origin
+    git merge --ff-only origin/main
+)
 
 docker compose build app frontend queue scheduler
-docker compose up -d app frontend queue scheduler
+bash scripts/verify-backend-images.sh
+docker compose up -d --no-build --pull never app frontend queue scheduler
 
 sleep 10
 
@@ -251,7 +261,11 @@ docker compose restart nginx
 
 sleep 10
 curl -I http://localhost:8080
+)
 ```
+
+Use `umask 077` separately for secrets and backup creation. A failed readability
+check is a deployment stop, not permission to loosen `.env` or backup modes.
 
 ## Post-Deploy Smoke Tests
 

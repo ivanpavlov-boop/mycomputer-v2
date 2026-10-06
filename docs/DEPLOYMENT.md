@@ -174,14 +174,25 @@ NUXT_PUBLIC_LEGAL_CONTENT_APPROVED=false
 
 ## Safe VPS Deploy Command
 
+Use a clean checkout, the approved merged target and a verified backup. Run one
+deployment at a time for this Compose project. Preserve the measured environment
+and commerce/Catalog Sync flags; the commands below do not authorize a mode change.
+
 ```bash
+(
+set -euo pipefail
 cd /var/www/mycomputer-v2
 
-git fetch origin
-git reset --hard origin/main
+# Only source checkout needs a public-readable creation mask.
+(
+    umask 022
+    git fetch origin
+    git merge --ff-only origin/main
+)
 
 docker compose build app frontend queue scheduler
-docker compose up -d app frontend queue scheduler
+bash scripts/verify-backend-images.sh
+docker compose up -d --no-build --pull never app frontend queue scheduler
 
 sleep 10
 
@@ -201,7 +212,44 @@ docker compose restart nginx
 sleep 10
 
 curl -I http://localhost:8080
+)
 ```
+
+### Backend Image Readability Gate
+
+The gate requires Bash, Docker Compose v2 and `jq`. It resolves the configured
+`app`, `queue` and `scheduler` build image names, including the Compose project
+name, then probes their local image IDs. It never selects the images of old
+running containers. A missing image, unreadable PHP source or failed autoload
+stops the command before activation. `deploy/staging/bootstrap.sh` also runs
+this gate immediately after building, before starting services.
+
+Each probe runs as non-root `www-data` with a read-only root filesystem, no
+network, no application volumes and no service environment. It opens PHP files
+under `app`, `bootstrap`, `config`, `database`, `routes`, `resources/views` and
+`vendor`, checks the entry files, and loads the catalog controller, card resource
+and review statistics service through Composer. It does not bootstrap Laravel,
+start workers, migrate, repair permissions or read production data. This is an
+image check; post-activation health, mounts, flags and HTTP smoke checks remain
+required.
+
+For a single already-built image:
+
+```bash
+bash scripts/verify-backend-images.sh --image LOCAL_IMAGE_ID
+```
+
+Keep the emitted image IDs in the release log. The gate detects retagging during
+its checks but does not lock Docker: do not rebuild, pull or retag between the
+check and activation. The activation command disables implicit builds/pulls.
+
+Root can build and autoload a `600 root:root` source file that PHP-FPM cannot
+read. Use `umask 022` only around source checkout. It affects newly created
+files; it does not repair existing bad modes. On failure, inspect the reported
+path and its parents, make an explicitly reviewed narrow correction, then
+rebuild and recheck. Never apply recursive `chmod 777` or relax secrets to make
+the gate pass. Keep `.env`, credentials and backup archives private; create
+backups in a separate `umask 077` subshell and preserve their existing protection.
 
 ## Common Issue: nginx Upstream App Or Frontend Not Found
 

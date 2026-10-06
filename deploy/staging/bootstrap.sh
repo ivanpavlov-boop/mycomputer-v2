@@ -74,11 +74,15 @@ ensure_env() {
 }
 
 require_command docker
+require_command jq
 docker compose version >/dev/null
 ensure_env
 
 log "Building Docker images..."
 docker compose build
+
+log "Checking backend image permissions and autoload as www-data..."
+bash "$ROOT_DIR/scripts/verify-backend-images.sh"
 
 log "Starting infrastructure services..."
 docker compose up -d mysql redis meilisearch
