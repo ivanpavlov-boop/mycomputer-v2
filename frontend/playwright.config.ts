@@ -37,6 +37,8 @@ export default defineConfig({
         NUXT_API_SERVER_BASE_URL: `${fixtureUrl}/api/v1`,
         NUXT_PUBLIC_API_BASE_URL: `${fixtureUrl}/api/v1`,
         NUXT_PUBLIC_SITE_URL: storefrontUrl,
+        // Exercise the production gallery alias using only local synthetic images.
+        NUXT_IPX_ALIAS: JSON.stringify({ '/product-gallery/apcom': `${fixtureUrl}/__test/gallery-image` }),
         NUXT_PUBLIC_CART_COOKIE_SECURE: 'false',
         NUXT_PUBLIC_COMMERCE_ENABLED: 'true',
         NUXT_PUBLIC_COMMERCE_CONFIRMATION_ENABLED: 'true',
@@ -59,7 +61,7 @@ export default defineConfig({
       use: {
         ...devices['iPhone 13'],
       },
-      testMatch: /(?:cart-mobile|cart-recovery-capability|checkout-payment-acceptance|pre-launch-navigation)\.spec\.ts/,
+      testMatch: /(?:cart-mobile|cart-recovery-capability|checkout-payment-acceptance|pre-launch-navigation|product-gallery)\.spec\.ts/,
     },
   ],
 })

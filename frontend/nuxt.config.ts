@@ -1,5 +1,6 @@
 import { fileURLToPath } from 'node:url'
 import { storefrontLocales } from './app/utils/locales'
+import { productGalleryImageAliases } from './app/utils/productGalleryImages'
 
 const useApprovedLegalTestFixture = process.env.PLAYWRIGHT_TEST_BUILD === 'true'
   && process.env.LEGAL_CONTENT_TEST_FIXTURE === 'approved'
@@ -51,6 +52,15 @@ export default defineNuxtConfig({
   image: {
     domains: ['localhost', '127.0.0.1'],
     format: ['webp', 'jpg', 'png'],
+    none: {}, // Direct original-image fallback after a failed thumbnail transform.
+    alias: productGalleryImageAliases,
+    ipx: {
+      http: {
+        domains: ['localhost', '127.0.0.1', 'apcom.shop'],
+        // Do not let an allowed image host redirect the server to another host.
+        fetchOptions: { redirect: 'error', timeout: 5000, retry: 0 },
+      },
+    },
   },
   i18n: {
     defaultLocale: 'bg',
