@@ -129,6 +129,27 @@ The Laravel backend must expose:
 - `/api/v1/pc-builder*`
 - `/api/v1/ai*`
 
+## Product gallery images
+
+The selected image is eager-loaded and preloaded with high fetch priority. The
+first row of five thumbnails is eager-loaded; subsequent thumbnails retain lazy
+loading. Hovering or focusing a thumbnail prepares its full image at low priority.
+
+Published `https://apcom.shop/media/catalog/product/` images use a gallery-only
+IPX alias for 160/320 px WebP thumbnails, preserving their aspect ratio. Other
+image sources retain their existing resolution path. The alias does not enable
+remote optimization for product cards or other storefront components. IPX keeps
+an explicit host allowlist, rejects redirects and bounds remote requests to five
+seconds without retries. A failed thumbnail variant retries the original before
+the existing unavailable-image fallback applies. This is presentation processing;
+catalog image records, original files, ordering and manual ALT text are unchanged.
+
+`tests/product-gallery-images.test.ts` verifies real resizing and the remote-host
+boundary with synthetic images. `test/browser/product-gallery.spec.ts` checks
+SSR loading hints, resized HTTP responses, selection and original-image fallback
+on desktop and mobile. Its external-looking URLs are intercepted locally, and the
+IPX alias points to the local fixture; browser tests never fetch supplier images.
+
 ## Staging QA
 
 Before staging approval, run:

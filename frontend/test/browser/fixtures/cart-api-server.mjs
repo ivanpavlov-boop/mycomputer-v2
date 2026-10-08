@@ -1,5 +1,6 @@
 import { createServer } from 'node:http'
 import { fileURLToPath } from 'node:url'
+import sharp from 'sharp'
 import {
   FIXTURE_API_URL,
   FIXTURE_BUNDLE,
@@ -14,6 +15,8 @@ import {
 
 const state = createFixtureState()
 const port = Number(new URL(FIXTURE_API_URL).port)
+const galleryImage = await sharp({ create: { width: 1200, height: 800, channels: 3, background: '#4488cc' } })
+  .png().toBuffer()
 
 function corsHeaders(origin) {
   return {
@@ -278,6 +281,12 @@ const server = createServer(async (request, response) => {
   const url = new URL(request.url || '/', FIXTURE_API_URL)
   const origin = request.headers.origin || null
 
+  if (['GET', 'HEAD'].includes(request.method) && /^\/__test\/gallery-image\/\d+\.png$/.test(url.pathname)) {
+    response.writeHead(200, { 'Content-Type': 'image/png', 'Cache-Control': 'public, max-age=300' })
+    response.end(request.method === 'HEAD' ? undefined : galleryImage)
+    return
+  }
+
   if (origin && origin !== FIXTURE_ORIGIN) {
     send(response, 403, safeError('forbidden', 403).body, origin)
     return
@@ -347,7 +356,7 @@ const server = createServer(async (request, response) => {
       data: {
         ...FIXTURE_PRODUCT,
         description: 'Подробно описание на тестовия продукт.',
-        images: [],
+        images: state.scenario.product_images || [],
         attributes: [],
         specification_groups: [],
         related_products: [],

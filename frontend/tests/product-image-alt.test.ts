@@ -7,6 +7,7 @@ import { ModuleKind, ScriptTarget, transpileModule } from 'typescript'
 import { afterEach, describe, expect, it } from 'vitest'
 import * as Vue from 'vue'
 import type { ProductCard, ProductImage } from '../app/types/api'
+import * as productGalleryImages from '../app/utils/productGalleryImages'
 
 // Compile the real SFCs with the same Nuxt auto-import setup as the gallery tests.
 function component(relativePath: string) {
@@ -17,9 +18,10 @@ function component(relativePath: string) {
     compilerOptions: { module: ModuleKind.CommonJS, target: ScriptTarget.ESNext },
   })
   const exports = { default: {} as Vue.Component }
-  new Function('exports', 'require', 'ref', 'computed', 'watch', 'useRuntimeConfig', 'useLocalePath', outputText)(
+  new Function('exports', 'require', 'ref', 'computed', 'watch', 'useRuntimeConfig', 'useLocalePath', 'useImage', outputText)(
     exports,
     (id: string) => {
+      if (id === '~/utils/productGalleryImages') return productGalleryImages
       if (id !== 'vue') throw new Error(`Unexpected component import: ${id}`)
       return Vue
     },
@@ -28,6 +30,7 @@ function component(relativePath: string) {
     Vue.watch,
     () => ({ public: { apiBaseUrl: 'https://catalog.example/api/v1' } }),
     () => (path: string) => path,
+    () => (source: string) => source,
   )
   return exports.default
 }
