@@ -68,7 +68,7 @@
               @remove="removeActiveAttributeFilter"
               @clear-all="clearAllAttributeFilters"
             />
-            <CatalogProductGrid v-if="products.length" :products="products" />
+            <CatalogProductGrid v-if="products.length" :products="products" prioritize-images />
             <div v-else class="space-y-4">
               <UiEmptyState
                 title="Няма активни продукти за показване."

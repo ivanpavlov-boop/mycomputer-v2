@@ -17,6 +17,26 @@ const state = createFixtureState()
 const port = Number(new URL(FIXTURE_API_URL).port)
 const galleryImage = await sharp({ create: { width: 1200, height: 800, channels: 3, background: '#4488cc' } })
   .png().toBuffer()
+const catalogObservations = []
+const categoryWaiters = new Map()
+const productsArrived = new Set()
+
+function catalogProducts(url) {
+  const page = Number(url.searchParams.get('page') || 1)
+  const category = url.pathname.includes('keyboards') ? 'keyboards' : 'laptops'
+  return {
+    data: Array.from({ length: 15 }, (_, i) => ({
+      ...FIXTURE_PRODUCT, id: page * 100 + i,
+      slug: `${category}-${page}-${i}`,
+      primary_image: {
+        path: `https://apcom.shop/media/catalog/product/${i}.png`,
+        alt_text: i === 0 ? '  Manual card ALT  ' : '   ', is_primary: true,
+      },
+    })),
+    links: {}, meta: { current_page: page, last_page: 2, per_page: 15, total: 30 },
+    filters: [], active_filters: [], price_filter: null,
+  }
+}
 
 function corsHeaders(origin) {
   return {
@@ -281,6 +301,35 @@ const server = createServer(async (request, response) => {
   const url = new URL(request.url || '/', FIXTURE_API_URL)
   const origin = request.headers.origin || null
 
+  if (request.method === 'GET' && url.pathname === '/__test/catalog-observations') {
+    send(response, 200, { data: catalogObservations }, origin)
+    return
+  }
+
+  if (state.scenario.catalog_images && request.method === 'GET') {
+    const category = /^\/api\/v1\/categories\/(laptops|keyboards)(\/products)?$/.exec(url.pathname)
+    if (url.pathname === '/api/v1/products' || category) {
+      const locale = request.headers['x-locale'] || url.searchParams.get('locale') || 'bg'
+      const key = `${locale}:${category?.[1]}`
+      catalogObservations.push({ phase: 'received', path: url.pathname, query: url.search, locale })
+      if (!category || category[2]) {
+        productsArrived.add(key)
+        categoryWaiters.get(key)?.()
+        send(response, 200, catalogProducts(url), origin)
+      } else {
+        // A deterministic barrier: a serial detail -> products implementation cannot finish.
+        if (!productsArrived.has(key)) await new Promise(resolve => categoryWaiters.set(key, resolve))
+        catalogObservations.push({ phase: 'detail-released', path: url.pathname, locale })
+        send(response, 200, { data: { ...FIXTURE_CATEGORY, slug: category[1], name: category[1] } }, origin)
+      }
+      return
+    }
+    if (url.pathname === '/api/v1/navigation/categories') {
+      send(response, 200, { data: [FIXTURE_CATEGORY, { ...FIXTURE_CATEGORY, id: 2, slug: 'keyboards', name: 'Keyboards' }] }, origin)
+      return
+    }
+  }
+
   if (['GET', 'HEAD'].includes(request.method) && /^\/__test\/gallery-image\/\d+\.png$/.test(url.pathname)) {
     response.writeHead(200, { 'Content-Type': 'image/png', 'Cache-Control': 'public, max-age=300' })
     response.end(request.method === 'HEAD' ? undefined : galleryImage)
@@ -397,6 +446,10 @@ const server = createServer(async (request, response) => {
 
   if (request.method === 'POST' && url.pathname === '/__test/reset') {
     state.reset()
+    categoryWaiters.forEach(resolve => resolve())
+    categoryWaiters.clear()
+    productsArrived.clear()
+    catalogObservations.length = 0
     send(response, 200, { data: state.snapshot() }, origin)
     return
   }

@@ -73,7 +73,7 @@
               @remove="removeActiveAttributeFilter"
               @clear-all="clearAllAttributeFilters"
             />
-            <CatalogProductGrid v-if="products.length" :products="products" />
+            <CatalogProductGrid v-if="products.length" :products="products" prioritize-images />
 
             <div v-else class="space-y-4">
               <UiEmptyState
@@ -173,17 +173,22 @@ const categoryProductQuery = computed(() => {
   return query
 })
 
-const { data: categoryData, error: categoryError, pending: categoryPending } = await useAsyncData(
+const categoryRequest = useAsyncData(
   () => `category-${locale.value}-${slug.value}`,
   () => categories.detail(slug.value),
   { watch: [() => route.params.slug, locale] },
 )
 
-const { data: productsResponse, error: productsError, pending: productsPending } = await useAsyncData(
+const productsRequest = useAsyncData(
   () => `category-products-${locale.value}-${slug.value}`,
   () => categories.products(slug.value, categoryProductQuery.value),
   { watch: [() => route.params.slug, categoryProductQuery, locale] },
 )
+
+const [
+  { data: categoryData, error: categoryError, pending: categoryPending },
+  { data: productsResponse, error: productsError, pending: productsPending },
+] = await Promise.all([categoryRequest, productsRequest])
 
 const category = computed(() => categoryData.value?.data)
 const normalizedProductsResponse = computed(() => paginatedResource<ProductCard>(productsResponse.value))

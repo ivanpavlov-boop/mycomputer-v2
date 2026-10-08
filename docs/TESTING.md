@@ -39,6 +39,14 @@ vendor/bin/pint --test
 
 ## What Is Allowed
 
+Catalog card image changes also require the synthetic image/browser tests and
+the real Nginx proxy checks in [Catalog Card Image Delivery](CATALOG_CARD_IMAGES.md).
+An unavailable container engine must be reported separately from a portable
+Nginx proxy result; static template assertions are not a cache integration PASS.
+The independent `frontend-card-cache` Linux CI job runs the actual proxy harness
+with an isolated Nginx prefix and retains success/failure evidence. See the same
+document for the explicit executable, output paths and platform limitations.
+
 ### Backend Image Permissions
 
 For deployment gate changes, run the command-boundary tests and then the actual
