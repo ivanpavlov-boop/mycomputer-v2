@@ -97,7 +97,7 @@ describe('category detail page', () => {
       brand: { name: 'Lenovo' },
     })
     expect(page).toContain('CatalogProductGrid v-if="products.length" :products="products"')
-    expect(grid).toContain('CatalogProductCard v-for="product in products"')
+    expect(grid).toContain('v-for="(product, index) in products"')
     expect(card).toContain('{{ productName }}')
     expect(card).toContain('product.category.name')
     expect(card).toContain('product.brand.name')

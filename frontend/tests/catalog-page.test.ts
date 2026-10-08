@@ -179,7 +179,7 @@ describe('catalog page', () => {
     expect(products).toHaveLength(1)
     expect(products[0]?.name).toBe('Logitech Universal Folio Keyboard')
     expect(page).toContain('CatalogProductGrid v-if="products.length" :products="products"')
-    expect(grid).toContain('CatalogProductCard v-for="product in products"')
+    expect(grid).toContain('v-for="(product, index) in products"')
     expect(card).toContain('{{ productName }}')
     expect(card).toContain(':to="localePath(`/p/${product.slug}`)"')
     expect(card).toContain('Няма снимка')
@@ -209,8 +209,10 @@ describe('catalog page', () => {
 
     expect(card).toContain(':to="localePath(`/p/${product.slug}`)"')
     expect(card).toContain('Няма снимка')
-    expect(card).toContain('@error="primaryImageFailed = true"')
-    expect(card).toContain('watch(primaryImagePath')
+    // The two-stage fallback and prop replacement are exercised on the component
+    // in product-card-loading.test.ts; this page contract checks the wiring.
+    expect(card).toContain('@error="onImageError"')
+    expect(card).toContain('watch(() => [props.product.id, primaryImagePath.value]')
     expect(card).toContain('Виж продукта')
   })
 

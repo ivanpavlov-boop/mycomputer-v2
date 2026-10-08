@@ -50,6 +50,9 @@ export default defineNuxtConfig({
     },
   },
   image: {
+    providers: {
+      card: { provider: '~/providers/card' },
+    },
     domains: ['localhost', '127.0.0.1'],
     format: ['webp', 'jpg', 'png'],
     none: {}, // Direct original-image fallback after a failed thumbnail transform.

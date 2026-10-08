@@ -5,10 +5,17 @@
         <NuxtImg
           v-if="primaryImagePath && !primaryImageFailed"
           :src="imageSrc(primaryImagePath)"
+          :provider="useOriginalImage ? 'none' : 'card'"
           :alt="product.primary_image.alt_text?.trim() ? product.primary_image.alt_text : productName"
           class="h-full w-full object-contain"
-          loading="lazy"
-          @error="primaryImageFailed = true"
+          width="320"
+          height="320"
+          sizes="640px sm:320px xl:240px"
+          densities="x1 x2"
+          :loading="imagePriority === 'lazy' ? 'lazy' : 'eager'"
+          :fetchpriority="imagePriority === 'high' ? 'high' : undefined"
+          decoding="async"
+          @error="onImageError"
         />
         <div v-else class="flex h-full w-full flex-col items-center justify-center gap-2 text-center text-slate-400">
           <span class="text-4xl" aria-hidden="true">□</span>
@@ -45,17 +52,29 @@
 <script setup lang="ts">
 import type { ProductCard } from '~/types/api'
 
-const props = defineProps<{ product: ProductCard }>()
+const props = withDefaults(defineProps<{ product: ProductCard; imagePriority?: 'lazy' | 'eager' | 'high' }>(), {
+  imagePriority: 'lazy',
+})
 
 const config = useRuntimeConfig()
 const localePath = useLocalePath()
 const primaryImageFailed = ref(false)
+const useOriginalImage = ref(false)
 const primaryImagePath = computed(() => props.product.primary_image?.path || '')
 const productName = computed(() => props.product.localized?.name || props.product.name)
 const storageBase = computed(() => String(config.public.apiBaseUrl).replace(/\/api\/v1\/?$/, ''))
 const imageSrc = (path: string) => path.startsWith('http') ? path : `${storageBase.value}/storage/${path}`
 
-watch(primaryImagePath, () => {
+function onImageError() {
+  if (!useOriginalImage.value) {
+    useOriginalImage.value = true
+    return
+  }
+  primaryImageFailed.value = true
+}
+
+watch(() => [props.product.id, primaryImagePath.value], () => {
   primaryImageFailed.value = false
+  useOriginalImage.value = false
 })
 </script>

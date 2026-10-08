@@ -61,7 +61,7 @@ export default defineConfig({
       use: {
         ...devices['iPhone 13'],
       },
-      testMatch: /(?:cart-mobile|cart-recovery-capability|checkout-payment-acceptance|pre-launch-navigation|product-gallery)\.spec\.ts/,
+      testMatch: /(?:cart-mobile|cart-recovery-capability|checkout-payment-acceptance|pre-launch-navigation|product-gallery|product-card-images)\.spec\.ts/,
     },
   ],
 })
