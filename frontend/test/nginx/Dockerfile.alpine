@@ -5,7 +5,9 @@ FROM ${NGINX_IMAGE}
 RUN apk add --no-cache nodejs npm
 WORKDIR /fixture/frontend
 COPY frontend/package.json frontend/package-lock.json ./
-RUN npm ci --ignore-scripts --no-audit --no-fund
+RUN npm ci --ignore-scripts --no-audit --no-fund \
+    && npm rebuild sharp --ignore-scripts=false \
+    && node -e "console.log(JSON.stringify(require('sharp').versions))"
 COPY frontend/test/nginx ./test/nginx
 COPY deploy/nginx/mycomputer.conf.template /fixture/deploy/nginx/mycomputer.conf.template
 RUN mkdir /evidence && chown nginx:nginx /evidence

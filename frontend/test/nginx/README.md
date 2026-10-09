@@ -84,7 +84,8 @@ fixture runs under the ordinary runner user with its own config and PID.
 The separate `frontend-card-cache-alpine` job pulls the project's
 `nginx:1.27-alpine`, records its resolved digest/image identity and builds
 `Dockerfile.alpine` FROM that digest. It adds CI-only Node/npm and locked
-platform-native dependencies (ignoring application lifecycle scripts), not
+platform-native dependencies (ignoring application lifecycle scripts, then
+running the locked Sharp native install via `npm rebuild sharp`), not
 another Nginx binary. It runs the harness as `nginx`, with writable isolated
 cache/temp/output paths. `REQUIRE_ALPINE=1` rejects a non-Alpine or root runtime.
 Node/Sharp/libvips, Nginx, Alpine release and UID/GID are recorded. Apache is
