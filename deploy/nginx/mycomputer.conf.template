@@ -1,4 +1,4 @@
-proxy_cache_path /var/cache/nginx/catalog-images levels=1:2 keys_zone=catalog_images:8m max_size=256m inactive=1d use_temp_path=off;
+proxy_cache_path /var/cache/nginx/catalog-images levels=1:2 keys_zone=catalog_images:8m max_size=1g min_free=1g inactive=7d use_temp_path=off;
 
 map "$upstream_status:$upstream_http_content_type" $card_image_uncacheable {
     default 1;
@@ -6,6 +6,18 @@ map "$upstream_status:$upstream_http_content_type" $card_image_uncacheable {
 }
 
 map $upstream_http_vary $card_image_varies {
+    default 1;
+    "" 0;
+}
+
+# X-Accel-Expires must never override the public-only admission boundary.
+map $upstream_http_cache_control $card_image_private {
+    default 0;
+    "" 1;
+    ~*(private|no-store|no-cache) 1;
+}
+
+map $upstream_http_set_cookie $card_image_cookies {
     default 1;
     "" 0;
 }
@@ -128,14 +140,18 @@ server {
         proxy_set_header Host $proxy_host;
         proxy_set_header Accept "image/webp";
         proxy_cache catalog_images;
-        proxy_cache_key "$scheme$proxy_host$request_uri";
+        proxy_cache_key "card-shared-ttl-v1|$scheme$proxy_host$request_uri";
         proxy_cache_valid 200 5m;
+        proxy_cache_background_update off;
+        proxy_cache_use_stale off;
+        proxy_pass_header Date;
+        proxy_pass_header X-Accel-Expires;
         proxy_cache_lock on;
         proxy_cache_lock_timeout 15s;
         proxy_cache_lock_age 15s;
         proxy_read_timeout 10s;
         proxy_cache_bypass $http_cache_control;
-        proxy_no_cache $card_image_uncacheable $card_image_varies $http_cache_control;
+        proxy_no_cache $card_image_uncacheable $card_image_varies $card_image_private $card_image_cookies $http_cache_control;
         # Keep native Cache-Control/Set-Cookie protection; never serve stale errors.
         add_header X-Image-Cache $upstream_cache_status always;
         add_header X-Frame-Options "SAMEORIGIN" always;

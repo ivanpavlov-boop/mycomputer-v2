@@ -46,6 +46,16 @@ Nginx proxy result; static template assertions are not a cache integration PASS.
 The independent `frontend-card-cache` Linux CI job runs the actual proxy harness
 with an isolated Nginx prefix and retains success/failure evidence. See the same
 document for the explicit executable, output paths and platform limitations.
+Option A cache changes additionally require fixed-clock source-policy tests and
+the real two-cache absolute-expiry, sparse-HIT, no-stale, connection-reuse,
+restart/namespace and controlled-failure cleanup checks. See
+[the proxy harness commands](../frontend/test/nginx/README.md). Report Windows,
+Linux, Alpine/container and isolated Apache-chain outcomes separately;
+an unavailable runtime is NOT RUN, not an implicit PASS. Do not provision or use
+the live VPS to fill a local validation gap.
+CI requires the Apache encoded-path assertions in `frontend-card-cache` and the
+project Nginx image/runtime-user assertions in `frontend-card-cache-alpine`.
+The latter is a synthetic proxy harness container, not the frontend image.
 
 ### Backend Image Permissions
 

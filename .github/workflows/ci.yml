@@ -135,15 +135,20 @@ jobs:
           echo "NGINX_BINARY=$RUNNER_TEMP/card-cache-nginx/usr/sbin/nginx" >> "$GITHUB_ENV"
           echo "NGINX_FASTCGI_PARAMS=$RUNNER_TEMP/card-cache-nginx/etc/nginx/fastcgi_params" >> "$GITHUB_ENV"
           echo "NGINX_TEST_OUTPUT=$RUNNER_TEMP/card-cache-evidence/proxy" >> "$GITHUB_ENV"
+          echo "APACHE_BINARY=/usr/sbin/apache2" >> "$GITHUB_ENV"
+          echo "APACHE_MODULE_DIR=/usr/lib/apache2/modules" >> "$GITHUB_ENV"
+          echo "REQUIRE_APACHE=1" >> "$GITHUB_ENV"
 
       - name: Install frontend
         run: npm ci
 
-      - name: Extract Linux Nginx without installing a service
+      - name: Provision isolated Linux Nginx and Apache binaries
         run: |
           set -euo pipefail
           {
             sudo apt-get update
+            # apache2-bin supplies binaries/modules, not the apache2 service package.
+            sudo apt-get install -y --no-install-recommends apache2-bin
             mkdir "$RUNNER_TEMP/card-cache-packages" "$RUNNER_TEMP/card-cache-nginx"
             cd "$RUNNER_TEMP/card-cache-packages"
             apt-get download nginx nginx-common
@@ -152,11 +157,16 @@ jobs:
             done
             test -x "$NGINX_BINARY"
             test -f "$NGINX_FASTCGI_PARAMS"
+            test -x "$APACHE_BINARY"
+            for module in mpm_event authz_core proxy proxy_http; do
+              test -f "$APACHE_MODULE_DIR/mod_${module}.so"
+            done
             node --version
             "$NGINX_BINARY" -V
+            "$APACHE_BINARY" -v
           } 2>&1 | tee "$RUNNER_TEMP/card-cache-evidence/provision.log"
 
-      - name: Validate config and real public image cache
+      - name: Validate Apache encoded paths and real public image cache
         run: |
           set -euo pipefail
           node test/nginx/card-cache.mjs \
@@ -171,9 +181,66 @@ jobs:
           path: |
             ${{ runner.temp }}/card-cache-evidence/*.log
             ${{ runner.temp }}/card-cache-evidence/proxy/results.json
-            ${{ runner.temp }}/card-cache-evidence/proxy/nginx.conf
+            ${{ runner.temp }}/card-cache-evidence/proxy/*.conf
+            ${{ runner.temp }}/card-cache-evidence/proxy/events.jsonl
             ${{ runner.temp }}/card-cache-evidence/proxy/fastcgi_params
             ${{ runner.temp }}/card-cache-evidence/proxy/logs/*.log
+          if-no-files-found: warn
+          retention-days: 7
+
+  frontend-card-cache-alpine:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build disposable harness from the project Nginx runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir "$RUNNER_TEMP/card-cache-alpine-evidence"
+          {
+            docker pull nginx:1.27-alpine
+            docker image inspect nginx:1.27-alpine > "$RUNNER_TEMP/card-cache-alpine-evidence/base-image.json"
+            base=$(docker image inspect nginx:1.27-alpine --format '{{index .RepoDigests 0}}')
+            test -n "$base"
+            docker build --build-arg "NGINX_IMAGE=$base" \
+              -f frontend/test/nginx/Dockerfile.alpine -t card-cache-alpine:ci .
+            docker image inspect card-cache-alpine:ci > "$RUNNER_TEMP/card-cache-alpine-evidence/fixture-image.json"
+          } 2>&1 | tee "$RUNNER_TEMP/card-cache-alpine-evidence/provision.log"
+
+      - name: Validate Alpine cache as the Nginx runtime user
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker create --name card-cache-alpine-fixture card-cache-alpine:ci
+          docker start --attach card-cache-alpine-fixture \
+            > >(tee "$RUNNER_TEMP/card-cache-alpine-evidence/stdout.log") \
+            2> >(tee "$RUNNER_TEMP/card-cache-alpine-evidence/stderr.log" >&2)
+          test "$(docker inspect card-cache-alpine-fixture --format '{{.State.ExitCode}}')" = 0
+
+      - name: Collect evidence and remove only this disposable container
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          if docker inspect card-cache-alpine-fixture > "$RUNNER_TEMP/card-cache-alpine-evidence/container.json" 2>/dev/null; then
+            trap 'docker rm -f card-cache-alpine-fixture' EXIT
+            docker cp card-cache-alpine-fixture:/evidence/. "$RUNNER_TEMP/card-cache-alpine-evidence/"
+          fi
+
+      - name: Upload Alpine evidence on success or failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-card-cache-alpine-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/card-cache-alpine-evidence/*.json
+            ${{ runner.temp }}/card-cache-alpine-evidence/*.log
+            ${{ runner.temp }}/card-cache-alpine-evidence/proxy/results.json
+            ${{ runner.temp }}/card-cache-alpine-evidence/proxy/events.jsonl
+            ${{ runner.temp }}/card-cache-alpine-evidence/proxy/*.conf
+            ${{ runner.temp }}/card-cache-alpine-evidence/proxy/fastcgi_params
+            ${{ runner.temp }}/card-cache-alpine-evidence/proxy/logs/*.log
           if-no-files-found: warn
           retention-days: 7
 
