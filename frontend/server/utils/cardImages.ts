@@ -28,29 +28,44 @@ export function cardSource(source: string, options: Options) {
   throw new Error('Source outside public catalog image locations')
 }
 
-export function publicImageMaxAge(headers: Headers, now = Date.now()) {
+export function publicImageCachePolicy(headers: Headers, now = Date.now(), requestTime = now, responseTime = now) {
+  const uncacheable = { browserMaxAge: 0, sharedMaxAge: 0 }
+  if (![now, requestTime, responseTime].every(Number.isFinite) || requestTime > responseTime || responseTime > now) return uncacheable
   // Vary is deliberately conservative: do not share any source-dependent response.
-  if (headers.has('set-cookie') || headers.has('vary') || headers.get('pragma')?.toLowerCase().includes('no-cache')) return 0
+  if (headers.has('set-cookie') || headers.has('vary') || headers.get('pragma')?.toLowerCase().includes('no-cache')) return uncacheable
   const control = headers.get('cache-control') || ''
-  if (/\b(private|no-store|no-cache)\b/i.test(control)) return 0
-  const directives = control.split(',').map(value => value.trim()).filter(Boolean)
-  if (directives.some(value => !/^(public|immutable|must-revalidate|proxy-revalidate|(s-maxage|max-age)=\d+)$/i.test(value))) return 0
-  if (['max-age', 's-maxage'].some(name => directives.filter(value => value.toLowerCase().startsWith(`${name}=`)).length > 1)) return 0
-  const maxAge = /(?:^|,)\s*s-maxage=(\d+)/i.exec(control) || /(?:^|,)\s*max-age=(\d+)/i.exec(control)
-  let ttl = Math.min(300, maxAge ? Number(maxAge[1]) : 300)
-  if (headers.has('expires') && !maxAge) {
-    const expires = Date.parse(headers.get('expires')!)
-    if (!Number.isFinite(expires)) return 0
-    ttl = Math.min(ttl, Math.max(0, Math.floor((expires - now) / 1000)))
+  if (/\b(private|no-store|no-cache)\b/i.test(control)) return uncacheable
+  const directives = control ? control.split(',').map(value => value.trim().toLowerCase()) : []
+  if (directives.some(value => !/^(public|immutable|must-revalidate|proxy-revalidate|(s-maxage|max-age)=\d+)$/.test(value))) return uncacheable
+  const names = directives.map(value => value.split('=')[0])
+  if (new Set(names).size !== names.length) return uncacheable
+  // Keep the reviewed stricter source permission, including max-age=0.
+  const lifetimes = directives.filter(value => /^(s-maxage|max-age)=/.test(value)).map(value => Number(value.split('=')[1]))
+  if (lifetimes.some(value => !Number.isSafeInteger(value) || value > 2147483647)) return uncacheable
+  const httpDate = (value: string) => {
+    const parsed = Date.parse(value)
+    return Number.isFinite(parsed) && new Date(parsed).toUTCString() === value ? parsed : NaN
   }
-  const age = headers.get('age') || '0'
-  if (!/^\d+$/.test(age)) return 0
-  return Math.max(0, ttl - Number(age))
+  const date = headers.has('date') ? httpDate(headers.get('date')!) : responseTime
+  const expires = headers.has('expires') ? httpDate(headers.get('expires')!) : undefined
+  if (!Number.isFinite(date) || date > responseTime || (expires !== undefined && !Number.isFinite(expires))) return uncacheable
+  const lifetime = lifetimes.length ? Math.min(...lifetimes) : expires !== undefined ? Math.max(0, (expires - date) / 1000) : 300
+  const age = headers.get('age') ?? '0'
+  if (!/^\d+$/.test(age) || !Number.isSafeInteger(Number(age)) || Number(age) > 2147483647) return uncacheable
+  const currentAge = Math.max(responseTime - date, Number(age) * 1000 + responseTime - requestTime) + now - responseTime
+  const remaining = Math.max(0, Math.floor(lifetime - currentAge / 1000))
+  const longEligible = directives.includes('public') && (lifetimes.length > 0 || expires !== undefined)
+  return { browserMaxAge: Math.min(300, remaining), sharedMaxAge: Math.min(longEligible ? 172800 : 300, remaining) }
+}
+
+export function publicImageMaxAge(headers: Headers, now = Date.now()) {
+  return publicImageCachePolicy(headers, now).browserMaxAge
 }
 
 export function createCardImageHandler(options: Options) {
   return defineEventHandler(async (event) => {
     setResponseHeader(event, 'Cache-Control', 'private, no-store')
+    setResponseHeader(event, 'X-Accel-Expires', '0')
     setResponseHeader(event, 'Content-Security-Policy', "default-src 'none'")
     setResponseHeader(event, 'X-Content-Type-Options', 'nosniff')
     try {
@@ -58,12 +73,14 @@ export function createCardImageHandler(options: Options) {
       if (!match || !cardImageWidths.includes(Number(match[1]))) throw new Error('Invalid variant')
       const source = cardSource(decodeURIComponent(match[2]!), options)
       // Never forward a user's headers/cookies/credentials to an image source.
+      const requestTime = Date.now()
       const response = await fetch(source, {
         redirect: 'error',
         credentials: 'omit',
-        headers: { accept: 'image/webp,image/jpeg,image/png,image/avif' },
+        headers: { accept: 'image/webp,image/jpeg,image/png,image/avif', 'cache-control': 'no-cache' },
         signal: AbortSignal.timeout(5000),
       })
+      const responseTime = Date.now()
       if (response.status !== 200 || !/^image\/(jpeg|png|webp|avif)(?:;|$)/i.test(response.headers.get('content-type') || '')) {
         await response.body?.cancel()
         throw new Error('Invalid image response')
@@ -87,8 +104,13 @@ export function createCardImageHandler(options: Options) {
         sharpOptions: { limitInputPixels: 40_000_000 },
       })
       const { data } = await ipx('/image', { w: match[1]!, f: 'webp', q: '80' }).process()
-      const ttl = publicImageMaxAge(response.headers)
-      setResponseHeader(event, 'Cache-Control', ttl ? `public, max-age=${ttl}, s-maxage=${ttl}` : 'private, no-store')
+      const now = Date.now()
+      const { browserMaxAge, sharedMaxAge } = publicImageCachePolicy(response.headers, now, requestTime, responseTime)
+      setResponseHeader(event, 'Date', new Date(now).toUTCString())
+      setResponseHeader(event, 'Cache-Control', sharedMaxAge ? `public, max-age=${browserMaxAge}, s-maxage=${sharedMaxAge}, must-revalidate` : 'private, no-store')
+      // Nginx's relative s-maxage cache timer does not consume an upstream Age/Date.
+      // An absolute deadline also survives a late HIT through another proxy cache.
+      if (sharedMaxAge) setResponseHeader(event, 'X-Accel-Expires', `@${Math.floor(now / 1000) + sharedMaxAge}`)
       setResponseHeader(event, 'Content-Type', 'image/webp')
       return data
     } catch {

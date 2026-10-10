@@ -33,7 +33,8 @@ Errors are generic and non-cacheable. Source cookies are never sent to clients.
 
 Only Nginx's explicit `/_ipx/cards/` location uses `catalog_images`. HTML, API,
 prices, availability and commerce remain outside it. The disk cache has an
-8 MiB key zone, 256 MiB configured maximum and one-day inactive eviction. Nginx's
+8 MiB key zone, 1 GiB configured maximum, 1 GiB minimum free space and seven-day
+inactive eviction (`max_size=1g min_free=1g inactive=7d`). Nginx's
 cache manager enforces the disk maximum asynchronously, not as an instantaneous
 disk quota. Budget disk headroom accordingly. This cache is disposable and is
 not mounted as application/product storage.
@@ -43,19 +44,68 @@ via `proxy_cache_lock` (15-second lock wait/age; 10-second upstream read timeout
 Lock expiry can permit another request if processing exceeds those bounds; this
 is not an unbounded/exactly-once guarantee.
 
-Source max-age/s-maxage/Expires/Age are respected with a five-minute ceiling.
-Absent freshness metadata defaults to five minutes. Private, no-store, no-cache,
-Set-Cookie, any Vary, malformed or ambiguous directives disable caching. Nginx
-also retains its native Cache-Control/Set-Cookie protections and independently
-rejects non-200/non-WebP/Vary responses. Incoming headers and bodies are not
-forwarded from this proxy location. Client Cache-Control forces a bypass and
-prevents storing that response. No stale-error serving is enabled.
+### Option A: Separate Browser And Shared Freshness
 
-At expiry the next request fetches and processes the original again. Same-URL
-updates can remain visible for the old response's remaining TTL (at most five
-minutes). An error does not replace a good object with a cached error. Changing
-the source URL creates a separate key. Security headers are explicitly repeated
-because location-level `add_header` disables server-level inheritance.
+The owner approved local implementation of Option A and its freshness tradeoffs,
+not deployment. Browser freshness is at most 300 seconds. Shared freshness is at
+most 172800 seconds (48 hours), only for an explicitly `public` source with valid
+max-age/s-maxage or Expires permission. Other sources retain the conservative
+300-second ceiling. If both max-age and s-maxage exist, the smaller permission
+wins; zero is not missing and cannot fall back to Expires. Missing freshness
+defaults to 300 seconds, not 48 hours.
+
+Source age is consumed before these ceilings: the greater of apparent Date age
+and Age plus request/response delay, then body transfer/processing time. HTTP
+dates must be valid canonical IMF-fixdate; invalid/future Date, invalid Expires,
+invalid Age, duplicate/conflicting/unsupported directives and delta-seconds over
+2147483647 fail closed. Private, no-store, no-cache, Set-Cookie, any Vary or
+Pragma no-cache disable caching. This deliberately rejects more metadata than a
+general-purpose HTTP cache. The fixed source request has `Cache-Control: no-cache`
+to request upstream validation; client headers and credentials are never used.
+
+For an eligible source with at least 48 hours remaining, the processed response
+is `Cache-Control: public, max-age=300, s-maxage=172800, must-revalidate`.
+A source with 120 seconds remaining instead gets max-age=120 and s-maxage=120;
+elapsed work can reduce both. Uncacheable responses use `private, no-store` and
+`X-Accel-Expires: 0`. No stale-while-revalidate or stale-if-error is emitted.
+
+The response Date records completion of processing, with already-consumed
+source age deducted from the TTL. `X-Accel-Expires: @<Unix seconds>` fixes the
+absolute shared expiry to that Date plus remaining shared freshness. The proxy
+passes this Date and absolute expiry through HITs. Browser freshness therefore
+does not restart at a late HIT. A second Nginx cache also uses the same absolute
+deadline rather than starting another s-maxage interval. Nginx 1.27.5's relative
+Cache-Control timer does not itself subtract upstream Date/Age, and must not be
+assumed to generate an increasing Age header. The real two-cache test checks
+actual Date, Age, Cache-Control, bytes and expiry, not merely header presence.
+See the [Nginx cache header precedence](https://nginx.org/en/docs/http/ngx_http_proxy_module.html#proxy_cache_valid)
+and [1.27.5 upstream implementation](https://github.com/nginx/nginx/blob/release-1.27.5/src/http/ngx_http_upstream.c).
+
+Because X-Accel-Expires takes precedence over native caching metadata, explicit
+proxy no-cache maps independently veto restrictive Cache-Control, Set-Cookie,
+non-200, non-WebP and any Vary, even with a positive absolute expiry. Incoming
+headers and bodies are not forwarded. Client Cache-Control forces BYPASS and
+prevents storing that response. Security headers are explicitly repeated because
+location-level `add_header` disables server-level inheritance.
+
+Background update and stale serving are explicitly off. At full expiry the next
+request synchronously fetches/processes the original. Timeout/error never serves
+the expired image or stores an error. There is no source/validator store, warmer,
+worker or scheduler. Seven-day retention is only eviction policy, not permission
+to serve expired content. Cold/evicted images still incur download/processing.
+Same-URL replacement or deletion can remain unseen for the old response's
+remaining shared TTL (up to 48 hours); widths are not invalidated atomically.
+Changing a URL creates a separate key, not an atomic purge of old variants.
+
+### Namespace And Rollback
+
+The cache key starts with `card-shared-ttl-v1|`, followed by scheme, upstream host
+and the complete variant URI. Old five-minute entries are not reused. A future
+authorized rollback must restore the previous 300-second policy AND select a
+different fresh namespace, for example `card-short-ttl-rollback-v1|`. Do not
+reuse either policy's populated namespace or assume a reload removes long-lived
+objects. Old objects can be evicted normally. No rollout, purge or rollback is
+performed by local tests; the accelerated rollback fixture uses its own prefix.
 
 ## Validation
 
@@ -84,19 +134,29 @@ node test/nginx/card-cache.mjs
 
 It renders the actual template, changing only local paths, ephemeral loopback
 ports/upstreams and disabled fixture flags. It executes `nginx -t`, real proxy
-MISS/HIT, cold coalescing, variant separation, expiry, recovery, privacy/MIME/
-status exclusions, header isolation and graceful shutdown. The config, results
-and Nginx logs remain in the external directory. On Linux, `NGINX_FASTCGI_PARAMS`
+MISS/HIT, cold coalescing, variant separation, aged sparse HITs through two cache
+layers, browser expiry before shared expiry, synchronous replacement, real
+upstream timeout without stale serving, recovery, privacy/MIME/status exclusions,
+HTTP/1.1 socket reuse, an independent warm HIT during a held MISS, restart and
+fresh rollback namespace isolation. Incremental events, config, results and
+Nginx logs remain in the external directory. On Linux, `NGINX_FASTCGI_PARAMS`
 is typically `/etc/nginx/fastcgi_params`; it is not guessed by the test.
 The harness also overrides all five Nginx temporary paths inside its own prefix,
 so Linux distribution defaults cannot write to system temporary directories.
+Failure injection and optional isolated Apache proxy-chain commands are in
+[the harness README](../frontend/test/nginx/README.md). Missing Apache is reported
+as NOT RUN, not an Apache PASS. Linux/Alpine/container results must also be
+recorded separately; Windows is not production-platform parity. No suite uses
+the live VPS as a fixture or changes the machine clock.
 
 ### Linux CI
 
 The independent `frontend-card-cache` job in `.github/workflows/ci.yml` runs this
 same test on Ubuntu 24.04 with Node 22 and `npm ci`. It downloads the Ubuntu
 `nginx` and `nginx-common` packages and extracts them under `runner.temp`, without
-installing a package, starting a system service, Docker or application servers.
+installing Nginx or starting a system service, Docker or application servers.
+It installs CI-only `apache2-bin` and dependencies (not the Apache service
+package) and requires the isolated Apache chain; missing modules/binaries fail.
 Nginx runs as the ordinary runner user on ephemeral loopback ports. There are no
 supplier requests, database fixtures, Nuxt builds or browser runs in this job.
 
@@ -112,10 +172,21 @@ objects and installed dependencies are not uploaded. Runtime metadata and
 `nginx -V` identify the actual tested versions; diagnostics can be partial if
 setup fails or the runner is forcibly stopped.
 
-This covers real Linux config/proxy behavior using Ubuntu's Nginx package, not
-the production `nginx:1.27-alpine` container or its filesystem permissions.
-Adding the job is not an executed Linux CI PASS. Local portable Windows results
-and future CI results must remain separately reported.
+The Apache fixture uses `AllowEncodedSlashes NoDecode` and `ProxyPass ... nocanon`
+for the exact card route. Strict synthetic paths prove that encoded source URLs
+survive without decoding/re-encoding/slash changes. Damaged paths cannot succeed
+merely because a generic fixture returns an image for every request. Late HITs,
+headers/absolute expiry, image bytes, counts and connection reuse are asserted.
+
+The separate `frontend-card-cache-alpine` job pins its disposable harness build
+to the pulled digest of the project's `nginx:1.27-alpine`. It records base and
+fixture image/container identities, Alpine/Node/Nginx/Sharp versions, UID/GID,
+and tests writable cache/temp paths as the Nginx runtime user. It uses that
+image's Nginx, not Ubuntu's or an apk replacement. This is not an actual frontend
+application-container test or a live Apache configuration check. The same proxy
+assertions must pass; unavailable expected binaries never become an implicit
+skip. Local Windows, Linux Apache and Alpine results remain separate, and each
+CI result must be tied to the tested commit. Artifacts survive success/failure.
 
 ## Deployment And Measurement
 
