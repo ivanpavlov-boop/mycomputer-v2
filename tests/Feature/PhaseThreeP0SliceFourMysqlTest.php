@@ -79,15 +79,16 @@ final class PhaseThreeP0SliceFourMysqlTest extends TestCase
 
     public function test_fresh_p5_matches_frozen_oracle_and_creation_session(): void
     {
+        $databaseCollation = $this->schemaDefaultCollation();
         $inspection = (new CanonicalSupplierPhaseThreeP0SchemaInspector(DB::connection()->getPdo()))->inspect();
-        $this->assertSame('utf8mb4_unicode_ci', $inspection['schema_default_collation']);
+        $this->assertSame($databaseCollation, $inspection['schema_default_collation']);
         $head = array_values(array_filter($inspection['raw_signatures'], fn ($s) => ($s['table'] ?? $s['child_table'] ?? null) === self::TABLE));
         $this->assertCount(15, $head);
         foreach ($head as $signature) {
             if ($signature['type'] === 'trigger') {
                 $this->assertSame('cp866', $signature['character_set_client']);
                 $this->assertSame('cp866_general_ci', $signature['collation_connection']);
-                $this->assertSame('utf8mb4_unicode_ci', $signature['database_collation']);
+                $this->assertSame($databaseCollation, $signature['database_collation']);
             }
         }
         $before = $this->creationSession();
@@ -720,13 +721,23 @@ final class PhaseThreeP0SliceFourMysqlTest extends TestCase
             }
             $database = DB::getDatabaseName();
             $this->assertMatchesRegularExpression('/\A[A-Za-z0-9_]+\z/', $database);
+            $databaseCollation = $this->schemaDefaultCollation();
             try {
                 DB::unprepared("ALTER DATABASE `{$database}` COLLATE utf8mb4_bin");
                 $this->authorizeDown();
                 $this->rejectedDown($migration, 'UNCLASSIFIED_P0_SCHEMA_STATE', $trace);
             } finally {
-                DB::unprepared("ALTER DATABASE `{$database}` COLLATE utf8mb4_unicode_ci");
+                DB::unprepared("ALTER DATABASE `{$database}` COLLATE {$databaseCollation}");
             }
+            $this->assertSame($databaseCollation, $this->schemaDefaultCollation());
+            $inspection = (new CanonicalSupplierPhaseThreeP0SchemaInspector(DB::connection()->getPdo()))->inspect();
+            $this->assertSame($databaseCollation, $inspection['schema_default_collation']);
+            foreach ($inspection['raw_signatures'] as $signature) {
+                if ($signature['type'] === 'trigger') {
+                    $this->assertSame($databaseCollation, $signature['database_collation']);
+                }
+            }
+            $this->assertPrefix('P5');
             $trigger = (array) DB::selectOne('SHOW CREATE TRIGGER trg_supplier_product_identity_head_no_delete');
             DB::unprepared('DROP TRIGGER trg_supplier_product_identity_head_no_delete');
             $this->authorizeDown();
@@ -1432,6 +1443,15 @@ final class PhaseThreeP0SliceFourMysqlTest extends TestCase
         $this->assertSame($prefix === 'P5' ? 309 : 294, $state['object_count']);
         $this->assertSame($prefix === 'P5' ? '8cc5afed3a68c4152bf1456a10741c5e23bd077bf4dae39cae639208872ca56f' : '1fc28641da815cd4737b50b5b8ed065918b3f416f970ba2cccef82e5342e8d57', $state['sha256']);
         Oracle::assertIntegrity();
+    }
+
+    private function schemaDefaultCollation(): string
+    {
+        $collation = DB::scalar('SELECT DEFAULT_COLLATION_NAME FROM information_schema.SCHEMATA WHERE SCHEMA_NAME = DATABASE()');
+        $this->assertIsString($collation);
+        $this->assertMatchesRegularExpression('/\Autf8mb4_[a-z0-9_]+\z/', $collation);
+
+        return $collation;
     }
 
     private function creationSession(): array
