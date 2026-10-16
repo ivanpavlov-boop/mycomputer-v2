@@ -40,6 +40,14 @@ final class PhaseThreeP0SliceOneMysqlTest extends TestCase
         $this->artisan('migrate:fresh', ['--force' => true])->assertExitCode(0);
 
         putenv('SUPPLIER_PHASE_THREE_P0_EMPTY_SCHEMA_DOWN_CONFIRMED=true');
+        $p05 = require database_path('migrations/2026_08_28_090004_create_supplier_product_identity_heads_table.php');
+        $p05->down();
+        $this->assertFalse(getenv('SUPPLIER_PHASE_THREE_P0_EMPTY_SCHEMA_DOWN_CONFIRMED'));
+        $this->assertArrayNotHasKey('SUPPLIER_PHASE_THREE_P0_EMPTY_SCHEMA_DOWN_CONFIRMED', $_ENV);
+        $this->assertArrayNotHasKey('SUPPLIER_PHASE_THREE_P0_EMPTY_SCHEMA_DOWN_CONFIRMED', $_SERVER);
+        $this->assertSame('P4', CanonicalSupplierPhaseThreeP0Schema::classify(DB::connection()->getPdo())['state']);
+
+        putenv('SUPPLIER_PHASE_THREE_P0_EMPTY_SCHEMA_DOWN_CONFIRMED=true');
         try {
             $p04 = require database_path('migrations/2026_08_28_090003_create_supplier_import_source_payload_receipts_table.php');
             $p04->down();

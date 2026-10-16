@@ -50,8 +50,12 @@ Subsequent Slice 3 completion is separately recorded at PR #224 merge
 [owner-provided staging evidence dated 2026-09-08](PHASE_III_P0_SLICE_3_STAGING_EVIDENCE_2026_09_08.md).
 That dated P4 deployment is IMPLEMENTED_MERGED_DEPLOYED_DORMANT; it does not
 rewrite the fixed Slice 2 review baseline or the Slice 3 code-presence contract.
-The next defined slice is Slice 4 / P0-05 only, DEFINED_NOT_IMPLEMENTATION_AUTHORIZED;
-see the [subordinate proposal](PHASE_III_P0_SLICE_4_IDENTITY_HEAD_FOUNDATION_PROPOSAL.md).
+Slice 4 is present as P0-05 only, IMPLEMENTATION_PRESENT_DORMANT.
+Separate owner authorization in the conversation dated 2026-10-12
+permits only the dormant foundation and isolated tests.
+Presence proves neither validation, merge nor deployment.
+Runtime activation remains unauthorized.
+See the [subordinate proposal](PHASE_III_P0_SLICE_4_IDENTITY_HEAD_FOUNDATION_PROPOSAL.md).
 P0-06 through P0-09 remain unsliced and unauthorized; runtime activation stays closed.
 
 <!-- phase-iii-architecture-status-reference authority=phase-iii-architecture-contract-v1 -->
@@ -606,7 +610,11 @@ The separate owner implementation authorization is dated 2026-09-07.
 See [the local implementation record](PHASE_III_P0_SLICE_3_IMPLEMENTATION_RECORD.md)
 for validation and review status; presence proves neither merge nor deployment.
 Slice 3 operational completion is separately evidenced as IMPLEMENTED_MERGED_DEPLOYED_DORMANT.
-Slice 4 is defined as P0-05 only, DEFINED_NOT_IMPLEMENTATION_AUTHORIZED.
+Slice 4 is present as P0-05 only, IMPLEMENTATION_PRESENT_DORMANT.
+Separate owner authorization in the conversation dated 2026-10-12
+permits only the dormant foundation and isolated tests.
+Presence proves neither validation, merge nor deployment.
+Runtime activation remains unauthorized.
 P0-06 through P0-09 remain unimplemented, unsliced and unauthorized.
 This subphase is additive to, and
 does not rewrite, the historical deployed Phase I ten-table foundation or
@@ -1333,8 +1341,13 @@ records the earlier pre-implementation decision. The later owner decision dated
 Full validation, independent review, merge and deployment remain separate gates.
 Its dependencies are deployed dormant P3, the existing P3 -> P4 oracle and
 invocation-scoped coordinator. Slice 3's dated 2026-09-08 operational evidence
-records completed dormant deployment, not runtime activation. The next defined
-boundary is Slice 4 / P0-05 only, DEFINED_NOT_IMPLEMENTATION_AUTHORIZED.
+records completed dormant deployment, not runtime activation.
+Slice 4 is present as P0-05 only, IMPLEMENTATION_PRESENT_DORMANT.
+Separate owner authorization in the conversation dated 2026-10-12
+permits only the dormant foundation and isolated tests.
+Presence proves neither validation, merge nor deployment.
+Runtime activation remains unauthorized. Its migration, model, logical key,
+private repository participant and MySQL/unit tests do not implement broader Slice 4 integration.
 Its dormant head primitive must remain inside the complete caller-owned
 SupplierProduct/revision/pointer transaction; no independent head commit is allowed.
 P0-06 through P0-09 remain unsliced and unauthorized.

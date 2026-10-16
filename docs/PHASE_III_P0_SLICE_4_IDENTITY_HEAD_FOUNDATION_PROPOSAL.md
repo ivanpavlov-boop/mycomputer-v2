@@ -2,6 +2,8 @@
 
 ## Proposed decision, not active authority
 
+Historical creation checkpoint:
+
 Proposed phase: **Phase 9C.6.5C.3D - Phase III-P0 Slice 4**.
 Proposed name: **Immutable Supplier Product Logical Identity-Head Foundation - P0-05 only**.
 Proposed status: `DEFINED_NOT_IMPLEMENTATION_AUTHORIZED`.
@@ -11,15 +13,34 @@ canonical adoption. That creation checkpoint left P0-05 through P0-09 unsliced.
 After separately authorized adoption, only the canonical sequence defines Slice 4;
 this subordinate proposal remains non-authoritative and grants no implementation.
 P0-06 through P0-09 remain unimplemented, unsliced and unauthorized. This proposal does not declare a
-new CURRENT registry or readiness map. P0-05 implementation is NOT AUTHORIZED.
-No P0-05 file, migration execution or runtime caller is added by this task.
+new CURRENT registry or readiness map. At that historical checkpoint,
+P0-05 implementation is NOT AUTHORIZED.
+That documentation task added no P0-05 file, migration execution or runtime caller.
 
-Verified base: `05750da719b933937b80af83858a4a7f0803296f`, PR #224 merge,
+Historical verified base: `05750da719b933937b80af83858a4a7f0803296f`, PR #224 merge,
 tree `279ae04b0780ff887e741f28a007907b701ce87e`. See
 [dated Slice 3 staging evidence](PHASE_III_P0_SLICE_3_STAGING_EVIDENCE_2026_09_08.md).
 Slice 3's operational completion, its code-presence contract, local R6 results,
 merge CI and runtime authorization are separate facts. Slice 1/2 history and
 the dated Slice 3 proposal/implementation record are not rewritten.
+
+## Current dormant presence
+
+Slice 4 is present as P0-05 only, IMPLEMENTATION_PRESENT_DORMANT.
+Separate owner authorization in the conversation dated 2026-10-12
+permits only the dormant foundation and isolated tests.
+Presence proves neither validation, merge nor deployment.
+Runtime activation remains unauthorized.
+The owner authorized the R2 18-path primary scope against exact base
+`477e268687c07c364aba330acfd18912efed043c`, including its private participant
+and narrowly measured current-prose/inventory transition. This is a reference
+to that conversation decision, not a newly created approval artifact or permission
+from this proposal. The six new migration/model/key/private-repository/MySQL-test/
+unit-test files are present; the existing coordinator has the narrow P0-05 extension.
+No production caller or public/protected write entry point is authorized.
+Broader Slice 4 integration and P0-06 through P0-09 remain excluded.
+F1-F10 validation, independent review, merge and deployment require separate
+evidence; no F1-F10 PASS or deployment is asserted here.
 
 ## Canonical sources
 
@@ -40,27 +61,30 @@ Implementation precedents inspected without modification:
 [comparator](../database/migrations/support/CanonicalSupplierPhaseThreeP0SchemaComparator.php),
 [receipt repository](../app/Repositories/Suppliers/SupplierImportSourcePayloadReceiptRepository.php),
 [Slice 3 MySQL tests](../tests/Feature/PhaseThreeP0SliceThreeMysqlTest.php).
-P0_05 is already an enum/oracle concept, not an implemented coordinator step.
+P0_05 was already an enum/oracle concept at proposal creation; the separately
+authorized dormant coordinator extension does not change that frozen authority.
 
 ## Minimal future artifacts
 
-Every path and PHP API below is PROPOSED, not an existing or authorized runtime
-surface. Canonical database names are fixed; PHP helper naming is subordinate.
+The artifact allocation below retains the proposal's acceptance obligations.
+The six new paths and coordinator extension are now present only within the
+separately authorized dormant scope above, not an authorized runtime surface.
+Canonical database names are fixed; PHP helper naming is subordinate.
 No service binding, provider boot action or production caller is part of the
 foundation. The transaction participant is deliberately not a standalone writer.
 
 | Proposed path / name | Responsibility / canonical dependency | Allowed future writes and transaction owner | Failure / acceptance / deferred integration |
 | --- | --- | --- | --- |
 | `database/migrations/2026_08_28_090004_create_supplier_product_identity_heads_table.php` | One thin P0-05 wrapper using existing `P0MigrationStep::P0_05`; exact P4 -> P5 | Canonical head table and its 14 subordinate objects only; existing dedicated DDL session/mutex | F1/F2/F9; malformed/session/unknown state rejects; no P0-06/P0-07 or runtime DDL |
-| `database/migrations/support/CanonicalSupplierPhaseThreeP0Schema.php` (minimal future extension only) | Add exact P0-05 forward/down routing and literal approved SQL; reuse invocation-scoped guard/consumption/evidence | Coordinator owns DDL, never caller-supplied SQL; no registry/oracle refresh | F1/F9/F10; complete pristine/shared predicates before DDL, uncertainty remains blocked |
+| `database/migrations/support/CanonicalSupplierPhaseThreeP0Schema.php` (minimal dormant extension only) | Exact P0-05 forward/down routing and literal approved SQL; reuse invocation-scoped guard/consumption/evidence | Coordinator owns DDL, never caller-supplied SQL; no registry/oracle refresh | F1/F9/F10; complete pristine/shared predicates before DDL, uncertainty remains blocked |
 | `app/Models/SupplierProductIdentityHead.php` | Append-only `supplier_product_identity_heads`; existing guarded model conventions, no updated_at/soft delete | Read/hydrate on explicit connection; insertion only through reviewed transaction participant | F2/F4; reject save/update/touch/touchQuietly/delete/force/unguarded/rebind/upsert paths; no mutable CRUD |
 | `app/Data/Suppliers/Imports/SupplierProductLogicalKey.php` | Minimal immutable supplier ID/feed ID/canonical SKU value; validation before transaction, unchanged UTF-8 bytes | Pure computation only; no DB, source read, timestamp, hash domain or allocator | F3/F8; invalid raw input and coercion reject; no legacy fallback or live selector reread |
-| `app/Repositories/Suppliers/SupplierProductIdentityHeadRepository.php`, proposed `insertOrLockInTransaction(Connection, SupplierProductLogicalKey)` | Narrow step-2/3 participant, not a whole-import repository; exact tuple/byte comparison | Caller owns outer transaction on that same connection; one head INSERT attempt and locked reuse only; never commit/rollback/start transaction | F5/F6/F7/F8; outside transaction rejects before SQL; exact duplicate only; complete binding/revision/pointer integration REQUIRED before live use |
+| `app/Repositories/Suppliers/SupplierProductIdentityHeadRepository.php`, private `insertOrLockInTransaction(Connection, SupplierProductLogicalKey)` | Narrow step-2/3 participant, not a whole-import repository; exact tuple/byte comparison; test-only Reflection access | Caller owns outer transaction on that same connection; one head INSERT attempt and locked reuse only; never commit/rollback/start transaction | F5/F6/F7/F8; outside transaction rejects before SQL; exact duplicate only; complete binding/revision/pointer integration REQUIRED before live use |
 | `tests/Feature/PhaseThreeP0SliceFourMysqlTest.php` | Future real MySQL 8.4/process F1/F2/F4-F10, based on existing Slice suites | Task-owned disposable schema/rows and necessary synthetic parents only | No real Product/staging writes; no claim that isolated head-only test commits are production-safe |
 | `tests/Unit/Suppliers/Imports/SupplierProductLogicalKeyContractTest.php` | Future immutable/raw-validation F3/F8 vectors; stable scope/bytes and rejection | None | No production validator created merely to generate proposal vectors |
 
 No separate orchestrator, source/profile/receipt fields, source fetcher, generic
-CRUD service or new head fingerprint belongs here. Future implementation must
+CRUD service or new head fingerprint belongs here. The dormant implementation must
 retain a private/dormant call graph. If the participant cannot remain within
 these transaction constraints, reduce implementation to schema/model/value;
 do not substitute an independently committing repository.
@@ -103,9 +127,9 @@ cp866 / cp866_general_ci; database collation is the attested
 ENVIRONMENT_DERIVED_DATABASE_COLLATION token, not a wildcard for changed table
 or connection collation. Preserve UTC and every existing session prerequisite.
 Complete signature/member sets and exact DOWN SQL are read from the registries.
-The review package includes a non-executed forward SQL transcription derived
-from those signatures; it is not an existing forward coordinator implementation
-or a new SQL registry. No candidate database defines these expectations.
+The historical review package includes a non-executed forward SQL transcription
+derived from those signatures; it is not implementation validation or a new SQL
+registry. No candidate database defines these expectations.
 
 P0-05-DOWN-01 is one MySQL 8.4 atomic DROP TABLE statement, including dependent
 head objects, exact terminal P5 -> P4, no reachable P5 partial state. It is
@@ -201,7 +225,8 @@ scalars and reject. Existing 255/256-scalar and 1020/1024-byte boundaries remain
 The design-review package records literal hex, expected and independently computed
 results separately. These calculations are not the authority for S4-CF-001
 design adoption; only the canonical persistence design is authoritative.
-P0-05 implementation is NOT AUTHORIZED.
+At that design-review checkpoint, P0-05 implementation is NOT AUTHORIZED;
+the separate current conversation authorization above is not granted by adoption.
 
 The SQL CHECK cannot validate arbitrary binary strings as canonical SKU.
 The immutable value and controlled insertion boundary must enforce this grammar.
@@ -245,8 +270,8 @@ acquisition/provenance.
 
 ## Planned foundation acceptance
 
-F1-F10 are FUTURE implementation tests, not executed migration/process results
-of this documentation task. All writes below use verified task-owned disposable
+F1-F10 remain acceptance requirements, not executed migration/process results
+claimed by this presence update. All writes below use verified task-owned disposable
 databases only; synthetic parent setup is separate from operations under test.
 
 | ID | Requirement / planned test | Fixture/environment | Expected result | Allowed writes / boundary |
@@ -263,9 +288,9 @@ databases only; synthetic parent setup is separate from operations under test.
 | F10 | Unchanged P0-01-P0-04/Phase I/II/oracle; actual filesystem discovery; full parent/Product/staging snapshots and same genuine active Super Admin | Existing suites, populated disposable fixtures, refreshed User::ROLE_SUPER_ADMIN identity/relationships/panel/manage-users predicates | preserved bytes/access before and after every transition; missing/extra/deferred files reject | Synthetic setup only outside head operation; foundation regression |
 
 Full backend/CI on exact future head, lint/Pint and scope review remain required
-for a separately authorized implementation. SQLite skips are not MySQL evidence;
-this task runs only documentation/pure checks and does not recreate the old DNS/
-Docker environment or run P0-05 migrations.
+for the separately authorized dormant implementation. SQLite skips are not MySQL
+evidence; source presence or environment capability does not establish F1-F10 PASS.
+The documentation specialist does not run migrations or application suites.
 
 ## Deferred integration acceptance
 
@@ -289,7 +314,7 @@ No operational recovery or actual receipt/source acceptance is authorized.
 
 ## Adoption and continuing safety
 
-The complete active documentation candidate preserves both protected authority
+Historical design-review checkpoint: the documentation candidate preserved both protected authority
 documents and every existing expectation/parser/method. The external
 `slice4-authority-alignment.UNAPPLIED.patch` is against that completed candidate,
 not against the old owner checkout. It proposes only lifecycle/next-slice prose,
@@ -299,6 +324,8 @@ patch application, re-blessing, parser relaxation or historical inventory update
 Separate exact owner authorization remains necessary after independent review;
 2026-09-06/07/08 approvals are historical and not reusable. Canonical adoption
 would still NOT authorize P0-05 implementation, runtime activation or deployment.
+The later conversation decision dated 2026-10-12 is the separate authorization
+for dormant P0-05 only, not permission from this historical patch or design adoption.
 
 Use the canonical readiness reference above: PH3-RDY-003 remains BLOCKED;
 all ten operational bounds remain NOT SPECIFIED; runtime activation UNAUTHORIZED.

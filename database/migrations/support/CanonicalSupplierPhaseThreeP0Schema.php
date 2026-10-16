@@ -45,6 +45,7 @@ final class CanonicalSupplierPhaseThreeP0Schema
         'P0-02' => ['predecessor' => 'P1', 'target' => 'P2'],
         'P0-03' => ['predecessor' => 'P2', 'target' => 'P3'],
         'P0-04' => ['predecessor' => 'P3', 'target' => 'P4'],
+        'P0-05' => ['predecessor' => 'P4', 'target' => 'P5'],
     ];
 
     /** @var array<string, array{initial: string, target: string, operation: string}> */
@@ -53,6 +54,7 @@ final class CanonicalSupplierPhaseThreeP0Schema
         'P0-02' => ['initial' => 'P2', 'target' => 'P1', 'operation' => 'P0-02-DOWN-01'],
         'P0-03' => ['initial' => 'P3', 'target' => 'P2', 'operation' => 'P0-03-DOWN-01'],
         'P0-04' => ['initial' => 'P4', 'target' => 'P3', 'operation' => 'P0-04-DOWN-01'],
+        'P0-05' => ['initial' => 'P5', 'target' => 'P4', 'operation' => 'P0-05-DOWN-01'],
     ];
 
     private static bool $active = false;
@@ -78,6 +80,7 @@ final class CanonicalSupplierPhaseThreeP0Schema
                 P0MigrationStep::P0_02 => self::executeP0_02Forward($pdo),
                 P0MigrationStep::P0_03 => self::executeP0_03Forward($pdo),
                 P0MigrationStep::P0_04 => self::executeP0_04Forward($pdo),
+                P0MigrationStep::P0_05 => self::executeP0_05Forward($pdo),
                 default => throw new RuntimeException('phase_three_p0_forward_step_not_implemented'),
             };
 
@@ -127,6 +130,7 @@ final class CanonicalSupplierPhaseThreeP0Schema
                     P0MigrationStep::P0_02 => 'supplier_import_source_profiles',
                     P0MigrationStep::P0_03 => 'supplier_import_source_executions',
                     P0MigrationStep::P0_04 => 'supplier_import_source_payload_receipts',
+                    P0MigrationStep::P0_05 => 'supplier_product_identity_heads',
                     default => null,
                 };
 
@@ -137,6 +141,10 @@ final class CanonicalSupplierPhaseThreeP0Schema
                     $evidence,
                 )) {
                     self::fail('phase_three_p0_append_only_table_not_pristine', $invocationId);
+                }
+
+                if ($step === P0MigrationStep::P0_05) {
+                    self::assertIdentityHeadHasNoInboundDependencies($pdo, $invocationId, $evidence);
                 }
 
                 $operation = CanonicalSupplierPhaseThreeP0Oracle::operation($states['operation']);
@@ -340,6 +348,40 @@ final class CanonicalSupplierPhaseThreeP0Schema
                 BEFORE DELETE ON `supplier_import_source_payload_receipts`
                 FOR EACH ROW
                 SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Immutable source payload receipt cannot be deleted'
+                SQL);
+        });
+    }
+
+    private static function executeP0_05Forward(PDO $pdo): void
+    {
+        self::withCanonicalP0Session($pdo, function (PDO $pdo): void {
+            $pdo->exec(<<<'SQL'
+                CREATE TABLE `supplier_product_identity_heads` (
+                  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+                  `supplier_id` bigint unsigned NOT NULL,
+                  `supplier_feed_id` bigint unsigned NOT NULL,
+                  `supplier_sku_bytes` varbinary(1020) NOT NULL,
+                  `created_at` timestamp(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+                  PRIMARY KEY (`id`),
+                  UNIQUE KEY `uq_supplier_product_identity_head` (`supplier_id`, `supplier_feed_id`, `supplier_sku_bytes`),
+                  UNIQUE KEY `uq_supplier_product_identity_head_scope` (`id`, `supplier_id`, `supplier_feed_id`),
+                  UNIQUE KEY `uq_supplier_product_identity_head_revision_scope` (`id`, `supplier_id`, `supplier_feed_id`, `supplier_sku_bytes`),
+                  KEY `ix_supplier_product_identity_head_feed_owner_fk` (`supplier_feed_id`, `supplier_id`),
+                  CONSTRAINT `fk_supplier_product_identity_head_feed_owner` FOREIGN KEY (`supplier_feed_id`, `supplier_id`) REFERENCES `supplier_feeds` (`id`, `supplier_id`) ON UPDATE RESTRICT ON DELETE RESTRICT,
+                  CONSTRAINT `chk_supplier_product_identity_head_sku_bytes` CHECK ((length(`supplier_sku_bytes`) between 1 and 1020))
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='mycomputer:phase-iii-p0:v1:owner=P0-05'
+                SQL);
+            $pdo->exec(<<<'SQL'
+                CREATE TRIGGER `trg_supplier_product_identity_head_no_update`
+                BEFORE UPDATE ON `supplier_product_identity_heads`
+                FOR EACH ROW
+                SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Immutable supplier product identity head cannot be updated'
+                SQL);
+            $pdo->exec(<<<'SQL'
+                CREATE TRIGGER `trg_supplier_product_identity_head_no_delete`
+                BEFORE DELETE ON `supplier_product_identity_heads`
+                FOR EACH ROW
+                SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Immutable supplier product identity head cannot be deleted'
                 SQL);
         });
     }
@@ -614,6 +656,37 @@ final class CanonicalSupplierPhaseThreeP0Schema
                     : 'CONNECTED';
 
             self::fail('phase_three_p0_schema_inspection_unavailable', $invocationId);
+        }
+    }
+
+    /** @param array<string, mixed> $evidence */
+    private static function assertIdentityHeadHasNoInboundDependencies(
+        PDO $pdo,
+        string $invocationId,
+        array &$evidence,
+    ): void {
+        try {
+            $hasDependency = $pdo->query(<<<'SQL'
+                SELECT EXISTS(
+                    SELECT 1 FROM information_schema.KEY_COLUMN_USAGE
+                    WHERE REFERENCED_TABLE_SCHEMA = DATABASE()
+                      AND REFERENCED_TABLE_NAME = 'supplier_product_identity_heads'
+                )
+                SQL)->fetchColumn();
+            if (! in_array($hasDependency, [0, 1], true)) {
+                throw new RuntimeException('Invalid dependency inspection result.');
+            }
+        } catch (Throwable $exception) {
+            $evidence['connection_status'] = $exception instanceof PDOException
+                && CanonicalSupplierPhaseThreeP0ConnectionOutcome::isUncertain($exception)
+                    ? 'UNCERTAIN'
+                    : 'CONNECTED';
+
+            self::fail('phase_three_p0_schema_inspection_unavailable', $invocationId);
+        }
+
+        if ($hasDependency === 1) {
+            self::fail('phase_three_p0_identity_head_has_inbound_dependencies', $invocationId);
         }
     }
 
