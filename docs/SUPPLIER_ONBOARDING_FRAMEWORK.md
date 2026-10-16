@@ -529,7 +529,7 @@ staging and uncalled. Phase III-P0 Slice 1's P0-01/P0-02 source-profile
 foundation is implemented through PR #219, CI #478 verified, deployed at
 `30b05f4aaacad38f3c6f4b782a5d90004c8740ff`, and dormant. Complete Phase III
 persistence remains unimplemented and is not implementation-authorized beyond
-the separately authorized dormant P0-03 and P0-04 scopes below.
+the separately authorized dormant P0-03, P0-04 and P0-05 scopes below.
 <!-- phase-iii-architecture-status-reference authority=phase-iii-architecture-contract-v1 -->
 The exact current status map is owned only by the
 [canonical Phase III architecture contract](IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md#phase-iii-provenance-and-bounds-architecture-decision)
@@ -541,7 +541,10 @@ establish staging or production deployment and does not authorize runtime
 activation; deployment status requires separate deployment evidence.
 P0-04 receipt persistence is present and dormant under separate owner
 implementation authorization dated 2026-09-07; validation remains separately recorded.
-Slice 4 / P0-05 is defined but NOT implementation-authorized.
+Slice 4 / P0-05 is present as IMPLEMENTATION_PRESENT_DORMANT under separate
+owner authorization in the conversation dated 2026-10-12, for the dormant
+foundation and isolated tests only. Presence proves neither validation, merge
+nor deployment and does not authorize broader Slice 4 integration or runtime activation.
 P0-06 through P0-09 remain unimplemented, unsliced, and unauthorized. All ten numeric
 production bounds remain `NOT SPECIFIED`.
 Claim source binding does not
@@ -578,6 +581,8 @@ local/design reviews. [Proposed Slice 4 / P0-05 boundary](PHASE_III_P0_SLICE_4_I
 is subordinate to the canonical Slice 4 definition and grants no implementation
 or runtime permission. The historical unsliced boundary above records its dated
 checkpoint; the existing canonical reference remains the sole gate authority.
+Current presence includes the six P0-05 migration/model/key/private-repository/
+MySQL-test/unit-test files only; P0-06 through P0-09 remain excluded.
 
 Operational rollback is forward-only after deployment or protected-state use:
 it disables gates/workers but preserves all schema, monitor/alert state and

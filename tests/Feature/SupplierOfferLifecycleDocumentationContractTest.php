@@ -60,6 +60,9 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
             ['separate P0-05 implementation authorization required', 'P0-05 implementation authorization granted'],
             ['DEFINED_NOT_IMPLEMENTATION_AUTHORIZED', 'IMPLEMENTATION_AUTHORIZED'],
             ['P0-05 implementation is NOT AUTHORIZED', 'P0-05 implementation is AUTHORIZED'],
+            ['Separate owner authorization in the conversation dated 2026-10-12', 'Design adoption alone'],
+            ['Slice 4 is present as P0-05 only, IMPLEMENTATION_PRESENT_DORMANT.', 'Slice 4 implementation is NOT AUTHORIZED.'],
+            ['Runtime activation remains unauthorized.', 'Runtime activation is permitted.'],
             ['finite design calculations do not prove implementation', 'finite design calculations prove implementation'],
             ['235 forbidden scalars', 'all invisible characters'],
         ] as [$old, $new]) {
@@ -70,9 +73,14 @@ final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
 
     private function sliceFourSkuRuleViolations(string $design, string $proposal): array
     {
-        $violations = [];
+        $violations = $this->sliceFourCurrentPresenceProseViolations($this->markdownSection(
+            $proposal,
+            '## Current dormant presence',
+            '## Canonical sources',
+        ));
         $designText = preg_replace('/\s+/', ' ', $design);
         $proposalText = preg_replace('/\s+/', ' ', $proposal);
+        $historicalText = preg_replace('/\s+/', ' ', $this->markdownSection($proposal, '## Proposed decision, not active authority', '## Current dormant presence'));
         foreach ([
             'S4-CF-001 is CLOSED at design level. The pinned Unicode interpretation below is ADOPTED as the canonical supplier-product logical-head SKU rule.',
             'It grants no P0-05 implementation or runtime activation authorization.',
@@ -131,7 +139,10 @@ TEXT;
             'P0-05 implementation is NOT AUTHORIZED',
             'finite design calculations do not prove implementation',
         ] as $required) {
-            if (! str_contains($proposalText, $required)) {
+            $text = in_array($required, ['Proposed status: `DEFINED_NOT_IMPLEMENTATION_AUTHORIZED`.', 'P0-05 implementation is NOT AUTHORIZED'], true)
+                ? $historicalText
+                : $proposalText;
+            if (! str_contains($text, $required)) {
                 $violations[] = 'Subordinate SKU interpretation: '.$required;
             }
         }
@@ -158,11 +169,11 @@ TEXT;
         $this->assertSame([], $this->sliceFourEvidenceViolations($record."\nHistorical Slice 3 proposal: NOT AUTHORIZED at its dated review.\n"));
         $design = $this->readDocument('docs/IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md');
         $plan = $this->readDocument('docs/PHASE_9C6_5C3D1_RUNTIME_IMPLEMENTATION_PLAN.md');
-        $this->assertSame([], $this->phaseThreeP0SliceThreePresenceContract($design, $plan, $this->discoverSliceThreeArtifacts(base_path())));
-        $this->assertNotSame([], $this->phaseThreeP0SliceThreePresenceContract(
+        $this->assertSame([], $this->phaseThreeP0SliceFourPresenceContract($design, $plan, $this->discoverSliceFourArtifacts(base_path())));
+        $this->assertNotSame([], $this->phaseThreeP0SliceFourPresenceContract(
             str_replace('IMPLEMENTATION_PRESENT_DORMANT', 'IMPLEMENTED_MERGED_DEPLOYED_DORMANT', $design),
             $plan,
-            $this->discoverSliceThreeArtifacts(base_path()),
+            $this->discoverSliceFourArtifacts(base_path()),
         ));
     }
 
@@ -182,6 +193,10 @@ TEXT;
             ['P0-06 through P0-09 remain unimplemented, unsliced and unauthorized', 'P0-06 through P0-09 are authorized'],
             ['PH3-RDY-003 remains BLOCKED', 'PH3-RDY-003 is CLOSED'],
             ['P0-05 implementation is NOT AUTHORIZED', 'P0-05 implementation is AUTHORIZED'],
+            ['Separate owner authorization in the conversation dated 2026-10-12', 'Design adoption alone'],
+            ['Slice 4 is present as P0-05 only, IMPLEMENTATION_PRESENT_DORMANT.', 'Slice 4 implementation is NOT AUTHORIZED.'],
+            ['Presence proves neither validation, merge nor deployment.', 'P0-05 is deployed; F1-F10 PASS.'],
+            ['Runtime activation remains unauthorized.', 'Runtime activation is permitted.'],
             ['S4-CF-001 is CLOSED at design level', 'S4-CF-001 remains OPEN'],
             ['interpretation is ADOPTED', 'interpretation is PROPOSED'],
             ['Separate P0-05 implementation authorization must precede a runtime validator', 'Design adoption alone permits a runtime validator'],
@@ -194,17 +209,18 @@ TEXT;
             $this->assertNotSame([], $this->sliceFourProposalViolations($proposal."\n".$shadow));
         }
         $this->assertSame([], $this->sliceFourProposalViolations($proposal."\nHistorical Slice 1/2 boundary: no receipt implementation was authorized then.\n"));
-        $this->assertCount(6, $this->discoverSliceThreeArtifacts(base_path()));
-        foreach ([
-            'app/Models/SupplierProductIdentityHead.php',
-            'app/Data/Suppliers/Imports/SupplierProductLogicalKey.php',
-            'app/Repositories/Suppliers/SupplierProductIdentityHeadRepository.php',
-            'tests/Feature/PhaseThreeP0SliceFourMysqlTest.php',
-            'tests/Unit/Suppliers/Imports/SupplierProductLogicalKeyContractTest.php',
-        ] as $path) {
-            $this->assertFileDoesNotExist(base_path($path));
+        $design = $this->readDocument('docs/IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md');
+        $plan = $this->readDocument('docs/PHASE_9C6_5C3D1_RUNTIME_IMPLEMENTATION_PLAN.md');
+        $present = $this->discoverSliceFourArtifacts(base_path());
+        $this->assertCount(12, $present);
+        $this->assertSame([], $this->phaseThreeP0SliceFourPresenceContract($design, $plan, $present));
+        foreach ($this->sliceFourFoundationPaths() as $path) {
+            $this->assertFileExists(base_path($path));
         }
-        $this->assertSame([], glob(base_path('database/migrations/*_create_supplier_product_identity_heads_table.php')));
+        $this->assertSame(
+            ['2026_08_28_090004_create_supplier_product_identity_heads_table.php'],
+            array_map('basename', glob(base_path('database/migrations/*_create_supplier_product_identity_heads_table.php')) ?: []),
+        );
     }
 
     public function test_slice_four_references_are_outside_history_without_shadow_markers(): void
@@ -256,8 +272,13 @@ TEXT;
 
     private function sliceFourProposalViolations(string $document): array
     {
-        $violations = [];
+        $violations = $this->sliceFourCurrentPresenceProseViolations($this->markdownSection(
+            $document,
+            '## Current dormant presence',
+            '## Canonical sources',
+        ));
         $text = preg_replace('/\s+/', ' ', $document);
+        $historicalText = preg_replace('/\s+/', ' ', $this->markdownSection($document, '## Proposed decision, not active authority', '## Current dormant presence'));
         foreach ([
             'Proposed status: `DEFINED_NOT_IMPLEMENTATION_AUTHORIZED`.',
             'Immutable Supplier Product Logical Identity-Head Foundation - P0-05 only',
@@ -276,7 +297,10 @@ TEXT;
             'Separate P0-05 implementation authorization must precede a runtime validator.',
             'adopted S4-CF-001 design rule; separate P0-05 implementation authorization required',
         ] as $required) {
-            if (! str_contains($text, $required)) {
+            $authority = in_array($required, ['Proposed status: `DEFINED_NOT_IMPLEMENTATION_AUTHORIZED`.', 'P0-05 implementation is NOT AUTHORIZED'], true)
+                ? $historicalText
+                : $text;
+            if (! str_contains($authority, $required)) {
                 $violations[] = $required;
             }
         }
@@ -1868,8 +1892,8 @@ TEXT;
             $this->assertStringContainsString($allocationAuthority, $plan);
         }
 
-        $runtimeArtifacts = $this->discoverSliceThreeArtifacts(base_path());
-        $this->assertSame([], $this->phaseThreeP0SliceThreePresenceContract($design, $plan, $runtimeArtifacts));
+        $runtimeArtifacts = $this->discoverSliceFourArtifacts(base_path());
+        $this->assertSame([], $this->phaseThreeP0SliceFourPresenceContract($design, $plan, $runtimeArtifacts));
         // The historical Slice 1 boundary remains profile-only; current presence has its own exact gate.
         $historicalSliceOne = array_values(array_intersect($runtimeArtifacts, ['app/Models/SupplierImportSourceProfile.php']));
         $transition = $this->phaseThreeP0SliceOneTransitionContract($design, $plan, $historicalSliceOne);
@@ -1885,9 +1909,9 @@ TEXT;
         $this->assertFileExists(base_path('app/Models/SupplierImportSourcePayloadReceipt.php'));
 
         foreach ([
-            'app/Models/SupplierProductIdentityHead.php',
             'app/Models/SupplierProductSourceRevision.php',
             'config/supplier_snapshot.php',
+            'config/supplier_snapshot_capture.php',
         ] as $futureRuntimeArtifact) {
             $this->assertFileDoesNotExist(base_path($futureRuntimeArtifact));
         }
@@ -1968,7 +1992,7 @@ TEXT;
     public function test_current_slice_three_presence_requires_exact_dormant_scope_and_retains_history(): void
     {
         $design = $this->readDocument('docs/IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md');
-        $plan = $this->readDocument('docs/PHASE_9C6_5C3D1_RUNTIME_IMPLEMENTATION_PLAN.md');
+        $plan = $this->historicalSliceThreePlan($this->readDocument('docs/PHASE_9C6_5C3D1_RUNTIME_IMPLEMENTATION_PLAN.md'));
         $allowed = $this->sliceThreeFoundationPaths();
         $this->assertSame([], $this->phaseThreeP0SliceThreePresenceContract($design, $plan, $allowed));
         foreach ($allowed as $path) {
@@ -2050,8 +2074,22 @@ TEXT;
     public function test_current_slice_three_discovery_rejects_missing_renamed_duplicate_and_deferred_files(): void
     {
         $design = $this->readDocument('docs/IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md');
-        $plan = $this->readDocument('docs/PHASE_9C6_5C3D1_RUNTIME_IMPLEMENTATION_PLAN.md');
+        $plan = $this->historicalSliceThreePlan($this->readDocument('docs/PHASE_9C6_5C3D1_RUNTIME_IMPLEMENTATION_PLAN.md'));
         $this->assertSliceThreeDiscoveryFixtures($design, $plan);
+    }
+
+    private function historicalSliceThreePlan(string $plan): string
+    {
+        // Only the historical six-artifact fixtures use this dated status projection.
+        return str_replace(
+            "Slice 4 is present as P0-05 only, IMPLEMENTATION_PRESENT_DORMANT.\n".
+                "Separate owner authorization in the conversation dated 2026-10-12\n".
+                "permits only the dormant foundation and isolated tests.\n".
+                "Presence proves neither validation, merge nor deployment.\n".
+                'Runtime activation remains unauthorized.',
+            'Slice 4 is defined as P0-05 only, DEFINED_NOT_IMPLEMENTATION_AUTHORIZED.',
+            str_replace(["\r\n", "\r"], "\n", $plan),
+        );
     }
 
     private function assertSliceThreeDiscoveryFixtures(string $design, string $plan): void
@@ -2142,6 +2180,226 @@ TEXT;
         }
 
         return $violations;
+    }
+
+    /** @return list<string> */
+    private function sliceFourFoundationPaths(): array
+    {
+        return [
+            ...$this->sliceThreeFoundationPaths(),
+            'database/migrations/2026_08_28_090004_create_supplier_product_identity_heads_table.php',
+            'app/Models/SupplierProductIdentityHead.php',
+            'app/Data/Suppliers/Imports/SupplierProductLogicalKey.php',
+            'app/Repositories/Suppliers/SupplierProductIdentityHeadRepository.php',
+            'tests/Feature/PhaseThreeP0SliceFourMysqlTest.php',
+            'tests/Unit/Suppliers/Imports/SupplierProductLogicalKeyContractTest.php',
+        ];
+    }
+
+    /** @return list<string> */
+    private function discoverSliceFourArtifacts(string $root): array
+    {
+        $root = rtrim($root, '/\\');
+        // Retain every receipt/head/later-migration suffix match, including renamed timestamps.
+        $artifacts = $this->discoverSliceThreeArtifacts($root);
+        foreach ([
+            'app/Data/Suppliers/Imports/SupplierProductLogicalKey.php',
+            'app/Repositories/Suppliers/SupplierProductIdentityHeadRepository.php',
+            'tests/Feature/PhaseThreeP0SliceFourMysqlTest.php',
+            'tests/Unit/Suppliers/Imports/SupplierProductLogicalKeyContractTest.php',
+            'config/supplier_snapshot_capture.php',
+        ] as $path) {
+            if (is_file($root.'/'.$path)) {
+                $artifacts[] = $path;
+            }
+        }
+        // Known head aliases are additional artifacts, never substitutes for approved exact paths.
+        foreach ([
+            'app/Models/*SupplierProductIdentityHead*.php',
+            'app/Data/Suppliers/Imports/*SupplierProductLogicalKey*.php',
+            'app/Repositories/Suppliers/*SupplierProductIdentityHead*.php',
+            'tests/Feature/*PhaseThreeP0SliceFour*.php',
+            'tests/Unit/Suppliers/Imports/*SupplierProductLogicalKey*.php',
+        ] as $pattern) {
+            foreach (glob($root.'/'.$pattern) ?: [] as $path) {
+                $relative = substr(str_replace('\\', '/', $path), strlen(str_replace('\\', '/', $root)) + 1);
+                if (is_file($path) && ! in_array($relative, $artifacts, true)) {
+                    $artifacts[] = $relative;
+                }
+            }
+        }
+
+        return $artifacts;
+    }
+
+    private function sliceFourCurrentPresenceProseViolations(string $document): array
+    {
+        $text = preg_replace('/\s+/', ' ', $document);
+        $violations = [];
+        foreach ([
+            'Slice 4 is present as P0-05 only, IMPLEMENTATION_PRESENT_DORMANT.',
+            'Separate owner authorization in the conversation dated 2026-10-12 permits only the dormant foundation and isolated tests.',
+            'Presence proves neither validation, merge nor deployment.',
+            'Runtime activation remains unauthorized.',
+        ] as $required) {
+            if (! str_contains($text, $required)) {
+                $violations[] = 'Current Slice 4 presence: '.$required;
+            }
+        }
+        foreach (['DEFINED_NOT_IMPLEMENTATION_AUTHORIZED', 'P0-05 implementation is NOT AUTHORIZED', 'Slice 4 implementation is NOT AUTHORIZED'] as $historicalOnly) {
+            if (str_contains($text, $historicalOnly)) {
+                $violations[] = 'Historical refusal cannot be a current Slice 4 status: '.$historicalOnly;
+            }
+        }
+
+        return $violations;
+    }
+
+    /** @param list<string> $present */
+    private function phaseThreeP0SliceFourPresenceContract(string $design, string $plan, array $present): array
+    {
+        $expected = $this->sliceFourFoundationPaths();
+        sort($expected);
+        sort($present);
+        $violations = $present === $expected ? [] : ['Current dormant foundation must contain exactly the twelve authorized artifacts.'];
+        $introduction = $this->markdownSection($design, '### Phase III provenance and bounds architecture decision', 'The complete marker-bounded CURRENT authority is closed-world.');
+        $prerequisite = $this->markdownSection($plan, '### Phase III-P0 - Protected source provenance prerequisite foundation', '**Goal.**');
+        $violations = [...$violations, ...$this->sliceFourCurrentPresenceProseViolations($introduction), ...$this->sliceFourCurrentPresenceProseViolations($prerequisite)];
+        $sequence = $this->markdownSection($design, '<!-- phase-iii-p0-slice-sequence classification=CURRENT id=phase-iii-p0-slice-sequence-v1 -->', 'The subordinate runtime plan is accepted only');
+        foreach ([
+            [$sequence, '| `Phase 9C.6.5C.3D - Phase III-P0 Slice 4` | P0-05 only: dormant immutable supplier-product logical identity-head foundation | `IMPLEMENTATION_PRESENT_DORMANT`; separate owner authorization in the conversation dated 2026-10-12; validation, review, merge and deployment require their own evidence |'],
+            [$sequence, '| later Phase III-P0 slices | P0-06 through P0-09'],
+            [$sequence, 'No source acquisition, BoundedImmutableSourcePayload owner, downloader/parser adapter, runtime caller or P0-06 through P0-09 implementation is authorized.'],
+            [$sequence, 'No production caller or public/protected write entry point is authorized.'],
+            [$sequence, 'Any future head insert/lock primitive must use the caller-owned whole transaction; it cannot commit an unbound head. Complete SupplierProduct/revision/pointer binding remains a later integration prerequisite, never a P0-05 "bind later" exception.'],
+            [$prerequisite, 'P0-06 through P0-09 remain unimplemented, unsliced and unauthorized.'],
+            [$plan, 'Runtime activation remains zero.'],
+        ] as [$text, $required]) {
+            if (! str_contains(preg_replace('/\s+/', ' ', $text), $required)) {
+                $violations[] = 'Exact current Slice 4 boundary: '.$required;
+            }
+        }
+        if (substr_count($design, '<!-- phase-iii-architecture-authority classification=CURRENT') !== 1
+            || substr_count($design, '<!-- phase-iii-p0-slice-sequence classification=CURRENT') !== 1
+            || substr_count($plan, '<!-- phase-iii-architecture-status-reference') !== 1) {
+            $violations[] = 'No additional current authority or status map is permitted.';
+        }
+
+        return $violations;
+    }
+
+    public function test_current_slice_four_requires_exact_dormant_artifacts(): void
+    {
+        $design = $this->readDocument('docs/IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md');
+        $plan = $this->readDocument('docs/PHASE_9C6_5C3D1_RUNTIME_IMPLEMENTATION_PLAN.md');
+        $present = $this->discoverSliceFourArtifacts(base_path());
+        $this->assertCount(12, $present);
+        $this->assertSame([], $this->phaseThreeP0SliceFourPresenceContract($design, $plan, $present));
+        $this->assertNotSame([], $this->phaseThreeP0SliceFourPresenceContract($design, $plan, $this->sliceThreeFoundationPaths()));
+        $this->assertNotSame([], $this->phaseThreeP0SliceFourPresenceContract($design, $plan, [...$present, $present[0]]));
+        foreach ($this->sliceFourFoundationPaths() as $path) {
+            $this->assertFileExists(base_path($path));
+            $this->assertNotSame([], $this->phaseThreeP0SliceFourPresenceContract($design, $plan, array_values(array_diff($present, [$path]))));
+        }
+    }
+
+    public function test_slice_four_discovery_rejects_missing_renamed_extra_and_deferred_files(): void
+    {
+        $design = $this->readDocument('docs/IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md');
+        $plan = $this->readDocument('docs/PHASE_9C6_5C3D1_RUNTIME_IMPLEMENTATION_PLAN.md');
+        $allowed = $this->sliceFourFoundationPaths();
+        $cases = ['normal' => $allowed];
+        foreach ($allowed as $required) {
+            $cases['missing '.$required] = array_values(array_diff($allowed, [$required]));
+        }
+        foreach ([
+            '2026_08_28_090003_create_supplier_import_source_payload_receipts_table.php',
+            '2026_08_28_090004_create_supplier_product_identity_heads_table.php',
+        ] as $migration) {
+            $approved = 'database/migrations/'.$migration;
+            $renamed = 'database/migrations/2099_01_01_000000_'.substr($migration, 18);
+            $cases['renamed '.$migration] = [...array_values(array_diff($allowed, [$approved])), $renamed];
+            $cases['duplicate '.$migration] = [...$allowed, $renamed];
+        }
+        foreach ([
+            'database/migrations/2099_01_01_000001_create_supplier_product_source_revisions_table.php',
+            'database/migrations/2099_01_01_000002_add_source_revision_pointers_to_supplier_products_table.php',
+            'database/migrations/2099_01_01_000003_add_source_authority_to_snapshot_claims_and_generations.php',
+            'database/migrations/2099_01_01_000004_add_policy_v2_authority_to_snapshot_claims_and_generations.php',
+            'app/Models/SupplierProductSourceRevision.php',
+            'app/Models/SupplierProductIdentityHeadAlias.php',
+            'app/Repositories/Suppliers/SupplierProductIdentityHeadWriter.php',
+            'app/Services/Suppliers/Imports/BoundedImmutableSourcePayload.php',
+            'app/Data/Suppliers/Imports/BoundedImmutableSourcePayload.php',
+            'app/Jobs/CaptureSupplierSnapshot.php',
+            'config/supplier_snapshot.php',
+            'config/supplier_snapshot_capture.php',
+        ] as $deferred) {
+            $cases['deferred '.$deferred] = [...$allowed, $deferred];
+        }
+        foreach ($cases as $label => $files) {
+            $root = tempnam(sys_get_temp_dir(), 'slice4-discovery-');
+            $this->assertNotFalse($root);
+            $this->assertStringStartsNotWith(strtolower(str_replace('\\', '/', realpath(base_path()))).'/', strtolower(str_replace('\\', '/', $root)));
+            $this->assertTrue(unlink($root));
+            $this->assertTrue(mkdir($root, 0700));
+            try {
+                foreach ($files as $file) {
+                    $directory = dirname($root.'/'.$file);
+                    if (! is_dir($directory)) {
+                        $this->assertTrue(mkdir($directory, 0700, true));
+                    }
+                    $this->assertNotFalse(file_put_contents($root.'/'.$file, "<?php // Discovery fixture only; never executed.\n"));
+                }
+                $discovered = $this->discoverSliceFourArtifacts($root);
+                sort($files);
+                sort($discovered);
+                $this->assertSame($files, $discovered, $label);
+                $violations = $this->phaseThreeP0SliceFourPresenceContract($design, $plan, $discovered);
+                if ($label === 'normal') {
+                    $this->assertCount(12, $discovered);
+                    $this->assertSame([], $violations, $label);
+                } else {
+                    $this->assertNotSame([], $violations, $label);
+                }
+            } finally {
+                $this->assertTrue((new Filesystem)->deleteDirectory($root));
+                $this->assertDirectoryDoesNotExist($root);
+            }
+        }
+    }
+
+    public function test_slice_four_presence_never_authorizes_runtime_or_later_slices(): void
+    {
+        $design = $this->readDocument('docs/IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md');
+        $plan = $this->readDocument('docs/PHASE_9C6_5C3D1_RUNTIME_IMPLEMENTATION_PLAN.md');
+        $present = $this->discoverSliceFourArtifacts(base_path());
+        $this->assertSame([], $this->phaseThreeP0SliceFourPresenceContract($design, $plan, $present));
+        foreach ([
+            ['Slice 4 is present as P0-05 only, IMPLEMENTATION_PRESENT_DORMANT.', 'Slice 4 is defined as P0-05 only, DEFINED_NOT_IMPLEMENTATION_AUTHORIZED.'],
+            ['Separate owner authorization in the conversation dated 2026-10-12', 'Design adoption alone'],
+            ['Runtime activation remains unauthorized.', 'Runtime activation is permitted.'],
+            ['Presence proves neither validation, merge nor deployment.', 'P0-05 is deployed; F1-F10 PASS.'],
+        ] as [$old, $new]) {
+            foreach (['design', 'plan'] as $target) {
+                $this->assertStringContainsString($old, $$target);
+                $this->assertNotSame([], $this->phaseThreeP0SliceFourPresenceContract(
+                    $target === 'design' ? str_replace($old, $new, $design) : $design,
+                    $target === 'plan' ? str_replace($old, $new, $plan) : $plan,
+                    $present,
+                ), $target.': '.$old);
+            }
+        }
+        foreach ([
+            ['it cannot commit an unbound head.', 'it may commit an unbound head.'],
+            ['No production caller or public/protected write entry point is authorized.', 'A live production caller and public write entry point are authorized.'],
+            ['| later Phase III-P0 slices | P0-06 through P0-09', '| later Phase III-P0 slices | P0-07 through P0-09'],
+        ] as [$old, $new]) {
+            $this->assertStringContainsString($old, $design);
+            $this->assertNotSame([], $this->phaseThreeP0SliceFourPresenceContract(str_replace($old, $new, $design), $plan, $present), $old);
+        }
+        $this->assertNotSame([], $this->phaseThreeP0SliceFourPresenceContract($design."\n<!-- phase-iii-architecture-authority classification=CURRENT id=shadow-status-map -->", $plan, $present));
+        $this->assertNotSame([], $this->phaseThreeP0SliceFourPresenceContract($design, $plan."\n<!-- phase-iii-architecture-status-reference authority=shadow-status-map -->", $present));
     }
 
     public function test_phase_three_architecture_contract_rejects_shadowing_and_semantic_regressions(): void
@@ -3320,7 +3578,7 @@ TEXT;
         $this->assertStringContainsString('P0-04 and `BoundedImmutableSourcePayload`, downloader/parser adapters and receipt-bound bytes are explicitly outside Slice 2.', $design);
         $this->assertStringContainsString('It forbids P0-04 through P0-09;', $plan);
         $this->assertStringContainsString(
-            'No source acquisition, BoundedImmutableSourcePayload owner, downloader/parser adapter, runtime caller or P0-05 through P0-09 implementation is authorized.',
+            'No source acquisition, BoundedImmutableSourcePayload owner, downloader/parser adapter, runtime caller or P0-06 through P0-09 implementation is authorized.',
             $design,
         );
         $this->assertStringContainsString(
@@ -3377,7 +3635,11 @@ TEXT;
                 $status,
                 $statusDocument,
             );
-            $this->assertStringContainsString('P0-05 through P0-09', $status, $statusDocument);
+            $currentOutsideHistory = preg_replace('/<!-- slice-two-deployment-evidence:start -->.*?<!-- slice-two-deployment-evidence:end -->/s', '', $currentStatus);
+            $currentOutsideHistory = preg_replace('/\s+/', ' ', $currentOutsideHistory);
+            $this->assertStringContainsString('P0-06 through P0-09', $currentOutsideHistory, $statusDocument);
+            $this->assertStringContainsString('Slice 4 / P0-05 is present as IMPLEMENTATION_PRESENT_DORMANT', $currentOutsideHistory, $statusDocument);
+            $this->assertStringContainsString('owner authorization in the conversation dated 2026-10-12', $currentOutsideHistory, $statusDocument);
             $this->assertStringContainsString('P0-04 receipt persistence is present and dormant', $status, $statusDocument);
             $this->assertStringContainsString('unimplemented', $status, $statusDocument);
             $this->assertStringContainsString('NOT SPECIFIED', $status, $statusDocument);
@@ -3472,13 +3734,17 @@ TEXT;
                 '| later Phase III-P0 slices | P0-06 through P0-09',
                 'count checks do not prove content preservation',
                 'It is subordinate planning, not a schema or semantic authority.',
-                'No source acquisition, BoundedImmutableSourcePayload owner, downloader/parser adapter, runtime caller or P0-05 through P0-09 implementation is authorized.',
+                'No source acquisition, BoundedImmutableSourcePayload owner, downloader/parser adapter, runtime caller or P0-06 through P0-09 implementation is authorized.',
                 'Runtime activation remains zero.',
             ]],
             'plan prerequisite status' => [$this->markdownSection($plan, '### Phase III-P0 - Protected source provenance prerequisite foundation', '### Phase III - Snapshot persistence and cohort authorization core'), [
                 'Slice 1 and Slice 2 are implemented, merged, deployed and dormant;',
                 'dated owner-provided record',
                 'Slice 3 is present as P0-04 only, IMPLEMENTATION_PRESENT_DORMANT.',
+                'Slice 4 is present as P0-05 only, IMPLEMENTATION_PRESENT_DORMANT.',
+                'Separate owner authorization in the conversation dated 2026-10-12 permits only the dormant foundation and isolated tests.',
+                'Presence proves neither validation, merge nor deployment.',
+                'Runtime activation remains unauthorized.',
                 'P0-06 through P0-09 remain unimplemented, unsliced and unauthorized.',
             ]],
             'plan sequence' => [$this->markdownSection($plan, '## Future Phase III-P0 provenance migration allocation', '## Historical deployed Phase I ten-table migration dependency plan'), [
@@ -4248,6 +4514,7 @@ TEXT;
             $this->assertSame('CANONICAL_CURRENT_ARCHITECTURE', $contract['current_architecture_inventory']['classification'], "{$case}: nested CURRENT inventory remains independently canonical");
             $this->assertSame($canonical['candidate_count'], $contract['candidate_count'], "{$case}: rejection must be lexical-independent");
         }
+        unset($boundaryMutations, $mutation, $contract, $canonical);
 
         $currentBlock = $this->phaseThreeCurrentArchitectureBlock($design);
         $renamedMarker = '<!-- phase-iii-architecture-authority classification=CURRENT id=phase-iii-architecture-contract-v2 -->';
@@ -4277,6 +4544,7 @@ TEXT;
             $this->assertNotSame([], $contract['violations'], $case);
             $this->assertNotSame('CANONICAL_ARCHITECTURE_DOCUMENT', $contract['architecture_document_inventory']['classification'], "{$case}: document classification");
         }
+        unset($structuralOuterMutations, $mutated, $contract, $currentBlock, $reordered);
 
         $designOnlyMutation = $this->replaceStructuralText(
             $design,
@@ -4287,11 +4555,13 @@ TEXT;
         $this->assertSame('DOCUMENT_STRUCTURAL_MISMATCH', $designOnlyContract['architecture_document_inventory']['classification']);
         $this->assertSame('CANONICAL_CURRENT_ARCHITECTURE', $designOnlyContract['current_architecture_inventory']['classification']);
         $this->assertNotSame([], $designOnlyContract['violations'], 'Changing only the candidate design must not update its expected oracle.');
+        unset($designOnlyMutation, $designOnlyContract);
 
         $lf = str_replace(["\r\n", "\r"], "\n", $design);
         $crlf = str_replace("\n", "\r\n", $lf);
         $this->assertSame([], $this->phaseThreeExclusiveSemanticContract($lf)['violations'], 'LF canonical control');
         $this->assertSame([], $this->phaseThreeExclusiveSemanticContract($crlf)['violations'], 'CRLF canonical control');
+        unset($lf, $crlf);
 
         $normalizationMutations = [
             'REV008-N01 trailing spaces' => $this->replaceStructuralText($design, '# Immutable Supplier Offer Snapshot Persistence Design', '# Immutable Supplier Offer Snapshot Persistence Design  '),
@@ -4307,6 +4577,7 @@ TEXT;
         foreach ($normalizationMutations as $case => $mutated) {
             $this->assertNotSame([], $this->phaseThreeExclusiveSemanticContract($mutated)['violations'], $case);
         }
+        unset($normalizationMutations, $mutated);
 
         $source = $this->readDocument('tests/Feature/SupplierOfferLifecycleDocumentationContractTest.php');
         $this->assertStringNotContainsString('UNCLASSIFIED'.'_CURRENT_STRUCTURE', $source);
@@ -7734,11 +8005,11 @@ TEXT;
     /** @return array<string, mixed> */
     private function expectedPhaseThreeArchitectureDocumentInventory(): array
     {
-        // UNAPPLIED review proposal: measurements independently matched in PHP and Node; not approved.
+        // Owner-authorized 2026-10-12 current-prose revision; actual PHP and independent Node agree.
         return [
             'version' => 'phase-iii-architecture-document-closed-world-v1',
-            'normalized_bytes' => 1895291,
-            'line_count' => 8214,
+            'normalized_bytes' => 1895771,
+            'line_count' => 8221,
             'unit_count' => 1144,
             'unit_categories' => [
                 'CANONICAL_HEADING_EXACT' => 87,
@@ -7747,8 +8018,8 @@ TEXT;
                 'CANONICAL_PARAGRAPH_EXACT' => 872,
                 'CANONICAL_TABLE_EXACT' => 71,
             ],
-            'byte_fingerprint' => 'a9702abd1cf2afa5aad83e005e55af5237933787b33f2bdc8d828f4f2cffbe55',
-            'unit_fingerprint' => '175146f60ac1be92375df9c2f1363031d23bc8fece32ff7e312972abd8f87373',
+            'byte_fingerprint' => '90d5f1ff15ebd5f1e63c25b02c84e49cb2d659a0df604fe6bd6e93fe0c3c0129',
+            'unit_fingerprint' => '1f70b00e21e5eb03ca73b852e7f0fc6b348bd971fcae86479b9379366742d456',
             'region_order' => [
                 'pre-current-reference-history-v1',
                 'current-architecture-authority-v1',
@@ -7774,8 +8045,8 @@ TEXT;
                 'current-architecture-authority-v1' => [
                     'id' => 'current-architecture-authority-v1',
                     'position' => 2,
-                    'normalized_bytes' => 1487482,
-                    'line_count' => 2718,
+                    'normalized_bytes' => 1487962,
+                    'line_count' => 2725,
                     'unit_count' => 300,
                     'unit_categories' => [
                         'CANONICAL_HEADING_EXACT' => 17,
@@ -7784,8 +8055,8 @@ TEXT;
                         'CANONICAL_PARAGRAPH_EXACT' => 207,
                         'CANONICAL_TABLE_EXACT' => 26,
                     ],
-                    'byte_fingerprint' => '1aef7737e054b8bed7ed3de6af5af9c428826fe24e9d55e6b7d81fa9bde9f4a9',
-                    'unit_fingerprint' => '4f1ae31413ccdd09e596dc0ade75090dfc4e7d054fc066ebbc3f148fd0633602',
+                    'byte_fingerprint' => '5c348e775551fea20a2cbc29319543cac69cab81efb7d792114c17682a0ecf0a',
+                    'unit_fingerprint' => 'f348bc9909e3afc1d71e0926ed383d30571429500783c07269cc0c028761a2ea',
                 ],
                 'post-current-reference-history-v1' => [
                     'id' => 'post-current-reference-history-v1',
@@ -7810,11 +8081,11 @@ TEXT;
     /** @return array<string, mixed> */
     private function expectedPhaseThreeCurrentArchitectureInventory(): array
     {
-        // UNAPPLIED review proposal: measurements independently matched in PHP and Node; not approved.
+        // Owner-authorized 2026-10-12 current-prose revision; actual PHP and independent Node agree.
         return [
             'version' => 'phase-iii-current-architecture-closed-world-v1',
-            'normalized_bytes' => 1487482,
-            'line_count' => 2718,
+            'normalized_bytes' => 1487962,
+            'line_count' => 2725,
             'unit_count' => 300,
             'unit_categories' => [
                 'CANONICAL_HEADING_EXACT' => 17,
@@ -7823,19 +8094,19 @@ TEXT;
                 'CANONICAL_PARAGRAPH_EXACT' => 207,
                 'CANONICAL_TABLE_EXACT' => 26,
             ],
-            'byte_fingerprint' => '291099bf9f40fe678e173dc28150e7dc1eb4edc083988dd9ea5b332950b4b51d',
-            'unit_fingerprint' => '6c068994dbc6b41105c327f2e67b44c16c797625834823e27c19fe3cd358b9d9',
+            'byte_fingerprint' => 'd89002ae920133abe9394dced4165baf5eb4c032812397995157d578a9a7528b',
+            'unit_fingerprint' => '133aad78b62675723a89c4fd46e986dc6c8612ff0610a86ab6a2e138f7c78017',
         ];
     }
 
     /** @return array<string, mixed> */
     private function expectedPhaseThreeRuntimePlanInventory(): array
     {
-        // UNAPPLIED review proposal: measurements independently matched in PHP and Node; not approved.
+        // Owner-authorized 2026-10-12 current-prose revision; actual PHP and independent Node agree.
         return [
             'version' => 'phase-iii-runtime-plan-closed-world-v1',
-            'normalized_bytes' => 118449,
-            'line_count' => 1739,
+            'normalized_bytes' => 119193,
+            'line_count' => 1752,
             'unit_count' => 499,
             'unit_categories' => [
                 'CANONICAL_HEADING_EXACT' => 48,
@@ -7844,8 +8115,8 @@ TEXT;
                 'CANONICAL_PARAGRAPH_EXACT' => 426,
                 'CANONICAL_TABLE_EXACT' => 16,
             ],
-            'byte_fingerprint' => 'f2f6240a7176870a762cef414dd1b5b75a40250324d9485f72e15f9dabc9e21a',
-            'unit_fingerprint' => '71eb65ab5b08a637d3eae6d0cab4473c66cb3109949acceac3206a4f2dc38bc0',
+            'byte_fingerprint' => 'a4f3ceee6dd149774dcbe6232036d48e48d686f7360dccdf10e41390798543d8',
+            'unit_fingerprint' => 'aeaca28969564063deb5b61bd8f152bbce21ebd8afd5dfe5c52d419276d4fbb8',
         ];
     }
 

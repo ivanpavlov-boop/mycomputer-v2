@@ -54,6 +54,10 @@ final class PhaseThreeP0SliceThreeMysqlTest extends TestCase
         }
         $this->assertStringStartsWith('8.4.', DB::scalar('SELECT VERSION()'));
         $this->artisan('migrate:fresh', ['--force' => true])->assertExitCode(0);
+        $this->authorizeDown();
+        $p05 = require database_path('migrations/2026_08_28_090004_create_supplier_product_identity_heads_table.php');
+        $p05->down();
+        $this->assertGrantConsumed();
         $this->assertP4();
     }
 

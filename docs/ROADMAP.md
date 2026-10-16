@@ -359,8 +359,11 @@ disabled. `CART-025` remains open.
     production deployment and does not authorize runtime activation; deployment
     status requires separate deployment evidence. P0-04 receipt persistence is
     present and dormant under separate owner implementation authorization dated
-    2026-09-07; validation remains separately recorded. Slice 4 / P0-05 is
-    defined but NOT implementation-authorized. P0-06 through
+    2026-09-07; validation remains separately recorded. Slice 4 / P0-05 is present
+    as IMPLEMENTATION_PRESENT_DORMANT under separate owner authorization in the
+    conversation dated 2026-10-12, for the dormant foundation and isolated tests
+    only. Presence proves neither validation, merge nor deployment and does not
+    authorize broader Slice 4 integration or runtime activation. P0-06 through
     P0-09 remain unimplemented, unsliced, and unauthorized. All ten numeric
     production bounds
     remain `NOT SPECIFIED`. No runtime queue
@@ -375,7 +378,8 @@ disabled. `CART-025` remains open.
     current tree and remains dormant. Repository presence does not establish
     staging or production deployment and does not authorize runtime activation;
     deployment status requires separate deployment evidence. Receipt persistence
-    is present and dormant. Revision, five-field claim binding and the ten-bound policy remain
+    is present and dormant, as is the narrowly authorized P0-05 identity-head foundation.
+    Revision, five-field claim binding and the ten-bound policy remain
     unimplemented. All
     ten numeric production values
     remain `NOT SPECIFIED`. Claim source
@@ -419,6 +423,8 @@ disabled. `CART-025` remains open.
     is subordinate to the canonical Slice 4 definition and grants no implementation
     or runtime permission. The historical unsliced boundary above records its dated
     checkpoint; the existing canonical reference remains the sole gate authority.
+    Current presence includes the six P0-05 migration/model/key/private-repository/
+    MySQL-test/unit-test files only; P0-06 through P0-09 remain excluded.
 
 12. Select Supplier #3 only after a reviewed readiness matrix and explicit human
    decision; ASBIS remains Supplier #2.
