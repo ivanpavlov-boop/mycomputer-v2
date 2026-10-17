@@ -1,8 +1,15 @@
 # Immutable Supplier Product Source Revision Foundation
 
 Date: 2026-10-17. Status: **NON-AUTHORITATIVE PROPOSAL / NOT IMPLEMENTED**.
-"Slice 5" is only a proposed review label, not an adopted canonical slice.
-P0-06 through P0-09 remain `NOT_SLICED_NOT_AUTHORIZED`.
+The prior R2 checkpoint is retained below as historical review context.
+The local design-adoption candidate defines Slice 5 only in the
+[canonical definition](IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md#slice-5---immutable-supplier-product-source-revision-foundation),
+with status `DEFINED_NOT_IMPLEMENTATION_AUTHORIZED`, P0-06 schema/read model only.
+DESIGN ADOPTION: CANDIDATE ONLY / NOT MERGED.
+This subordinate proposal grants no implementation or runtime activation authority.
+P0-06 remains unimplemented; P0-07 through P0-09 remain `NOT_SLICED_NOT_AUTHORIZED`.
+The previous R2 review PASS applies to that proposal, not this adoption candidate
+or future implementation. Deferred writer/integration remains outside Slice 5.
 
 ## Authority and Baseline
 
@@ -17,12 +24,18 @@ Read together with the [Slice 4 foundation proposal](PHASE_III_P0_SLICE_4_IDENTI
 [phase index](PHASES.md), [data ownership](DATA_OWNERSHIP.md),
 [Catalog Sync safety](CATALOG_SYNC_SAFETY.md) and [testing](TESTING.md).
 
-Review baseline is merge/deployed commit
-`be849c48279b65257fdcbcb217f4fa41a58a3104`, independently still GitHub main
-on 2026-10-17. Its tree equals PR head
+The historical R2 review baseline was merge/deployed commit
+`be849c48279b65257fdcbcb217f4fa41a58a3104`, independently GitHub main
+at that checkpoint on 2026-10-17. Its tree equals PR head
 `7b2b5cd8c048af2c2e6622cc9d83f6dadef0c102`:
 `2892872f87f0a93aa816d7b8e62cadf339da90c9`.
 This is a fixed review baseline, not a moving-main assumption.
+
+At R2, "Slice 5" was only a proposed review label, not an adopted canonical
+slice; P0-06 through P0-09 were `NOT_SLICED_NOT_AUTHORIZED`. The adoption
+candidate is based on PR #235 merge `c3f26156970f86276ccb350fa8aaee6c00eacabd`.
+Only its canonical definition may change the design status. Neither R2 nor
+this candidate provides owner implementation authorization or acceptance PASS.
 
 Current P0-05 code presence remains `IMPLEMENTATION_PRESENT_DORMANT`.
 Deployment evidence does not supply implementation or activation authority for
@@ -287,8 +300,9 @@ task-owned disposable MySQL 8.4 database:
 This is narrowly scoped legacy fixture preparation, not a global setup hook
 that hides P6. The new P0-06 foundation suite must inspect **true fresh P6**
 before any downgrade; it separately proves P5 -> P6 and guarded P6 -> P5.
-The four added PHP paths are future proposed work only. No PHP file is edited
-or executed in this documentation revision.
+The four added PHP paths are future proposed work only. At the R2 checkpoint
+no PHP file was edited or executed. This design-adoption candidate changes only
+the separately allowlisted documentation contract test, not those four suites.
 
 Existing `P0MigrationStep::P0_06`, oracle, inspector, comparator, Unicode data,
 identity hasher, identity-head participant, receipt implementation, factories,
@@ -296,10 +310,11 @@ providers, routes, jobs, schedules, flags and all unrelated tests remain
 unchanged. If tests expose a need outside this list, stop for scope review.
 No public write repository, new DTO or service container binding is included.
 
-The current closed-world documentation contracts correctly reject an
-unauthorized P0-06 implementation. Future adoption must resolve that boundary
-explicitly, without weakening guards or refreshing schema/semantic hashes.
-This documentation task changes neither those tests nor the canonical design.
+The closed-world documentation contracts continue to reject unauthorized
+P0-06 implementation. The adoption candidate changes the design-status boundary
+explicitly, without weakening presence guards or refreshing schema/semantic
+hashes. R2 itself changed neither the tests nor canonical design; the current
+candidate does not authorize any future runtime artifact.
 
 ## Future Acceptance Matrix
 
@@ -337,9 +352,11 @@ writes at every boundary. Single-process SQL uniqueness alone cannot prove them.
 1. Independently review schema-only plus guarded-model scope; confirm it is
    useful without a revision writer. A request for a writer requires a separate
    broader proposal, not an implicit expansion of this list.
-2. Explicitly decide canonical slice adoption/name, migration filename and
-   presence-test allocation in a later authorized task. This text does not
-   change `NOT_SLICED_NOT_AUTHORIZED` or grant implementation permission.
+2. Independently review the local canonical adoption candidate, exact name,
+   migration filename availability and unchanged current presence boundary.
+   At R2 these were open for a later adoption task; preparation is not merged
+   adoption or implementation permission. A separate owner decision must
+   precede implementation, including future presence-test allocation.
 3. Before any hash/value implementation, settle the independent golden-vector
    inputs and receipt/parser/projection boundaries. None are newly specified
    or proven by this proposal.
