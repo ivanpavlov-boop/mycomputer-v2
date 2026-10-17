@@ -56,7 +56,10 @@ permits only the dormant foundation and isolated tests.
 Presence proves neither validation, merge nor deployment.
 Runtime activation remains unauthorized.
 See the [subordinate proposal](PHASE_III_P0_SLICE_4_IDENTITY_HEAD_FOUNDATION_PROPOSAL.md).
-P0-06 through P0-09 remain unsliced and unauthorized; runtime activation stays closed.
+Slice 5 is defined only in the [canonical sequence and definition](IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md#slice-5---immutable-supplier-product-source-revision-foundation):
+P0-06 schema/read model only, DEFINED_NOT_IMPLEMENTATION_AUTHORIZED.
+P0-06 through P0-09 remain unimplemented and implementation-unauthorized.
+P0-07 through P0-09 remain unsliced and unauthorized; runtime activation stays closed.
 
 <!-- phase-iii-architecture-status-reference authority=phase-iii-architecture-contract-v1 -->
 The exact current Phase III architecture status map is owned only by the
@@ -615,7 +618,9 @@ Separate owner authorization in the conversation dated 2026-10-12
 permits only the dormant foundation and isolated tests.
 Presence proves neither validation, merge nor deployment.
 Runtime activation remains unauthorized.
-P0-06 through P0-09 remain unimplemented, unsliced and unauthorized.
+Slice 5 defines only P0-06 schema/read model; it supplies no implementation authority.
+P0-06 through P0-09 remain unimplemented and implementation-unauthorized.
+P0-07 through P0-09 remain unsliced and unauthorized.
 This subphase is additive to, and
 does not rewrite, the historical deployed Phase I ten-table foundation or
 frozen Phase II contracts.
@@ -1350,7 +1355,14 @@ Runtime activation remains unauthorized. Its migration, model, logical key,
 private repository participant and MySQL/unit tests do not implement broader Slice 4 integration.
 Its dormant head primitive must remain inside the complete caller-owned
 SupplierProduct/revision/pointer transaction; no independent head commit is allowed.
-P0-06 through P0-09 remain unsliced and unauthorized.
+Slice 5 is P0-06 schema/read model only, DEFINED_NOT_IMPLEMENTATION_AUTHORIZED,
+as defined solely in the canonical design. P0-06 remains unimplemented;
+P0-06 through P0-09 implementation remains unauthorized. P0-07 through P0-09
+remain unsliced and unauthorized. Deferred P0-06 writer/integration is not included.
+The canonical nine-file future allowlist, F1 guarded legacy fixture preparation,
+A10 five-suite real MySQL 8.4 acceptance and independent review obligations
+remain future requirements, not permission or validation evidence. No schema,
+semantic registry, operational bound or current artifact allowance changes here.
 BoundedImmutableSourcePayload ownership, acquisition,
 downloader/parser adapters and EOF integration require a separate future gate.
 This plan grants no implementation or runtime authority.

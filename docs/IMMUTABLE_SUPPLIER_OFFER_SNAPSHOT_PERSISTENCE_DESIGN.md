@@ -3770,8 +3770,9 @@ permits only the dormant foundation and isolated tests.
 Presence proves neither validation, merge nor deployment.
 Runtime activation remains unauthorized.
 The [subordinate boundary proposal](PHASE_III_P0_SLICE_4_IDENTITY_HEAD_FOUNDATION_PROPOSAL.md)
-does not authorize implementation. P0-06 through P0-09 remain unimplemented,
-unsliced and unauthorized. Every
+does not authorize implementation. Slice 5 defines only P0-06 schema/read model;
+P0-06 through P0-09 remain unimplemented and implementation-unauthorized.
+P0-07 through P0-09 remain unsliced and unauthorized. Every
 remaining table, model, importer, repository, job, configuration and feature
 gate remains design authority only until separately authorized; neither
 deployment nor this status correction authorizes runtime activation.
@@ -5186,7 +5187,8 @@ P0-01/P0-02 migrations deployed successfully.
 | `Phase 9C.6.5C.3D - Phase III-P0 Slice 2` | P0-03 plus the immutable source-execution and resolved-source-context foundation below | `IMPLEMENTED_MERGED_DEPLOYED_DORMANT`; deployment evidence is owner-provided and dated 2026-09-05 |
 | `Phase 9C.6.5C.3D - Phase III-P0 Slice 3` | P0-04 only: dormant immutable source-payload receipt persistence foundation | `IMPLEMENTATION_PRESENT_DORMANT`; separate owner implementation authorization dated 2026-09-07; validation, review, merge and deployment require their own evidence |
 | `Phase 9C.6.5C.3D - Phase III-P0 Slice 4` | P0-05 only: dormant immutable supplier-product logical identity-head foundation | `IMPLEMENTATION_PRESENT_DORMANT`; separate owner authorization in the conversation dated 2026-10-12; validation, review, merge and deployment require their own evidence |
-| later Phase III-P0 slices | P0-06 through P0-09 and every downloader, parser, staging-pointer, claim-source and policy integration | `NOT_SLICED_NOT_AUTHORIZED`; no ordering or grouping beyond the existing migration dependency registry may be inferred |
+| `Phase 9C.6.5C.3D - Phase III-P0 Slice 5` | Immutable Supplier Product Source Revision Foundation; P0-06 schema/read model only | `DEFINED_NOT_IMPLEMENTATION_AUTHORIZED`; unimplemented; separate implementation authorization required |
+| later Phase III-P0 slices | P0-07 through P0-09 and deferred P0-06 writer/integration, every downloader, parser, staging-pointer, claim-source and policy integration | `NOT_SLICED_NOT_AUTHORIZED`; no ordering or grouping beyond the existing migration dependency registry may be inferred |
 
 The completed **Phase 9C.6.5C.3D - Phase III-P0 Slice 2: Immutable Source
 Execution and Resolved Context Foundation** contains P0-03 only and its dormant
@@ -5231,6 +5233,85 @@ No production caller or public/protected write entry point is authorized.
 Any future head insert/lock primitive must use the caller-owned whole transaction;
 it cannot commit an unbound head. Complete SupplierProduct/revision/pointer binding
 remains a later integration prerequisite, never a P0-05 "bind later" exception.
+
+#### Slice 5 - Immutable Supplier Product Source Revision Foundation
+
+**Phase 9C.6.5C.3D - Phase III-P0 Slice 5** is defined as **P0-06 schema/read
+model only**, with status `DEFINED_NOT_IMPLEMENTATION_AUTHORIZED`.
+This local design-adoption candidate is not a merged adoption or an owner
+implementation approval. P0-06 remains unimplemented. Neither this definition
+nor its future file allowlist permits implementation or runtime activation.
+The existing twelve-artifact Slice 1-4 presence boundary remains unchanged.
+
+The future foundation is limited to exact frozen P5 -> P6 schema support,
+guarded terminal local/testing P6 -> P5, and an immutable read/hydrate-only
+`SupplierProductSourceRevision` model that rejects save/create and all other
+mutations. Synthetic isolated schema/model/guard/preservation tests and the
+limited legacy fixture preparation below are included; an application INSERT
+API, writable factory or operational writer is not. Model guards do not
+replace SQL immutability. No new schema, object, state, semantic or downgrade
+registry is introduced: the existing frozen P0-06 signatures, operations and
+oracle remain the sole exact P5/P6 authority. Fixed table and trigger-creation
+session collations stay fixed; database collation remains independently
+attested environment-derived metadata under the unchanged comparator.
+
+The exact future implementation allowlist is nine files, subject to separate
+authorization; these paths are not permission to create their artifacts now:
+
+| Future file | Slice 5 boundary |
+| --- | --- |
+| `database/migrations/2026_08_28_090005_create_supplier_product_source_revisions_table.php` | Exact P0-06 forward/down wrapper; filename must remain available |
+| `database/migrations/support/CanonicalSupplierPhaseThreeP0Schema.php` | Only frozen P0-06 dispatch and guarded terminal handling; preserve P0-01..05 |
+| `app/Models/SupplierProductSourceRevision.php` | Immutable read/hydrate-only model; prohibit save/create and all mutations |
+| `tests/Feature/PhaseThreeP0SourceRevisionFoundationMysqlTest.php` | True fresh P6 and isolated MySQL 8.4 schema/model/guard/preservation cases |
+| `tests/Feature/SupplierOfferLifecycleDocumentationContractTest.php` | Separately authorized presence expectations; retain historical and closed-world guards |
+| `tests/Feature/PhaseThreeP0SliceOneMysqlTest.php` | F1 preparation only; original Slice 1 scenarios and assertions unchanged |
+| `tests/Feature/PhaseThreeP0SliceTwoMysqlTest.php` | F1 preparation only; original Slice 2 scenarios and assertions unchanged |
+| `tests/Feature/PhaseThreeP0SliceThreeMysqlTest.php` | F1 preparation only; original Slice 3 scenarios and assertions unchanged |
+| `tests/Feature/PhaseThreeP0SliceFourMysqlTest.php` | F1 preparation only; original Slice 4 scenarios and assertions unchanged |
+
+F1 requires each legacy suite to verify exact fresh P6, then use a separate
+invocation-local authorization for guarded terminal P6 -> P5. Immediately
+prove consumption from the process environment, `$_ENV` and `$_SERVER`, and
+verify exact P5 schema and frozen hash before running its original scenario.
+Every subsequent down step retains its own separately consumed authorization.
+No migration exclusion, global fixture hook, direct DROP or weakened assertion
+may hide P6. The new P0-06 suite must inspect true fresh P6 before any down.
+
+The guarded down is local/testing only: exact terminal P6, pristine revisions,
+no inbound dependency or P7-P9 artifacts, unchanged environment/connection/
+mutex guards and complete inspection before destructive DDL. Preserve valid
+predecessor rows, Product/supplier_products data and the same active Super Admin.
+Use only the existing frozen single-step operation and prove exact P5 after it.
+Uncertain DDL/connection outcomes remain fail-closed with primary and secondary
+failures separate; operational recovery remains forward-only and evidence-preserving.
+
+P6 proves execution/head ownership and existence of a staging ID, not composite
+staging ownership, current-revision pointer consistency or CAS. Those P0-07
+guarantees remain absent. A synthetic existing cross-scope staging-ID control
+must expose this gap, not pretend P6 rejects it. Writer, fingerprint
+implementation, value builders, repositories, application INSERT APIs and
+importer/capture integration remain deferred and outside Slice 5. Complete
+source-revision functionality is not delivered by this foundation. P0-07 through
+P0-09 remain `NOT_SLICED_NOT_AUTHORIZED`.
+
+A10 requires all four legacy Slice 1-4 suites and the new P0-06 suite on real
+MySQL 8.4, plus applicable coordinator/oracle/documentation, immutable-model,
+protected-data/admin/sync regressions, PHP syntax/Pint and required CI. Exact
+schema checks include independently attested database collation under both
+`utf8mb4_0900_ai_ci` and `utf8mb4_unicode_ci`; neither SQLite nor a skip is a
+required MySQL PASS. All future P0-06 acceptance cases remain NOT RUN here.
+Independent Database/Laravel, Supplier Import, Catalog Sync Safety, Security
+and QA/Documentation review must cover the exact transition, P6/P7 gap,
+guarded down, F1 and zero activation; these are review responsibilities, not
+runtime agents. All ten operational bounds remain NOT SPECIFIED; no default
+or new readiness closure is supplied. No source fetch, staging/catalog write,
+import, backfill, Sync All, automatic sync, capture or rights change is authorized.
+
+The [R2 proposal and acceptance detail](PHASE_III_P0_SOURCE_REVISION_FOUNDATION_PROPOSAL.md)
+remain subordinate, non-authoritative review context. Its historical checkpoint
+does not override this definition, the frozen registries or separate owner
+implementation/activation decisions. Current Slice 1-4 history is unchanged.
 
 Slice 2's separately authorized schema change added only the exact P0-03
 table. Its dormant resolver may insert or reuse source profiles and insert
