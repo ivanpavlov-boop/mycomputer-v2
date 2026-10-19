@@ -169,11 +169,11 @@ TEXT;
         $this->assertSame([], $this->sliceFourEvidenceViolations($record."\nHistorical Slice 3 proposal: NOT AUTHORIZED at its dated review.\n"));
         $design = $this->readDocument('docs/IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md');
         $plan = $this->readDocument('docs/PHASE_9C6_5C3D1_RUNTIME_IMPLEMENTATION_PLAN.md');
-        $this->assertSame([], $this->phaseThreeP0SliceFourPresenceContract($design, $plan, $this->discoverSliceFourArtifacts(base_path())));
+        $this->assertSame([], $this->phaseThreeP0SliceFourPresenceContract($design, $plan, $this->historicalSliceFourArtifacts()));
         $this->assertNotSame([], $this->phaseThreeP0SliceFourPresenceContract(
             str_replace('IMPLEMENTATION_PRESENT_DORMANT', 'IMPLEMENTED_MERGED_DEPLOYED_DORMANT', $design),
             $plan,
-            $this->discoverSliceFourArtifacts(base_path()),
+            $this->historicalSliceFourArtifacts(),
         ));
     }
 
@@ -211,7 +211,7 @@ TEXT;
         $this->assertSame([], $this->sliceFourProposalViolations($proposal."\nHistorical Slice 1/2 boundary: no receipt implementation was authorized then.\n"));
         $design = $this->readDocument('docs/IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md');
         $plan = $this->readDocument('docs/PHASE_9C6_5C3D1_RUNTIME_IMPLEMENTATION_PLAN.md');
-        $present = $this->discoverSliceFourArtifacts(base_path());
+        $present = $this->historicalSliceFourArtifacts();
         $this->assertCount(12, $present);
         $this->assertSame([], $this->phaseThreeP0SliceFourPresenceContract($design, $plan, $present));
         foreach ($this->sliceFourFoundationPaths() as $path) {
@@ -1892,7 +1892,7 @@ TEXT;
             $this->assertStringContainsString($allocationAuthority, $plan);
         }
 
-        $runtimeArtifacts = $this->discoverSliceFourArtifacts(base_path());
+        $runtimeArtifacts = $this->historicalSliceFourArtifacts();
         $this->assertSame([], $this->phaseThreeP0SliceFourPresenceContract($design, $plan, $runtimeArtifacts));
         // The historical Slice 1 boundary remains profile-only; current presence has its own exact gate.
         $historicalSliceOne = array_values(array_intersect($runtimeArtifacts, ['app/Models/SupplierImportSourceProfile.php']));
@@ -1909,7 +1909,6 @@ TEXT;
         $this->assertFileExists(base_path('app/Models/SupplierImportSourcePayloadReceipt.php'));
 
         foreach ([
-            'app/Models/SupplierProductSourceRevision.php',
             'config/supplier_snapshot.php',
             'config/supplier_snapshot_capture.php',
         ] as $futureRuntimeArtifact) {
@@ -2303,7 +2302,7 @@ TEXT;
     {
         $design = $this->readDocument('docs/IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md');
         $plan = $this->readDocument('docs/PHASE_9C6_5C3D1_RUNTIME_IMPLEMENTATION_PLAN.md');
-        $present = $this->discoverSliceFourArtifacts(base_path());
+        $present = $this->historicalSliceFourArtifacts();
         $this->assertCount(12, $present);
         $this->assertSame([], $this->phaseThreeP0SliceFourPresenceContract($design, $plan, $present));
         $this->assertNotSame([], $this->phaseThreeP0SliceFourPresenceContract($design, $plan, $this->sliceThreeFoundationPaths()));
@@ -2387,7 +2386,7 @@ TEXT;
     {
         $design = $this->readDocument('docs/IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md');
         $plan = $this->readDocument('docs/PHASE_9C6_5C3D1_RUNTIME_IMPLEMENTATION_PLAN.md');
-        $present = $this->discoverSliceFourArtifacts(base_path());
+        $present = $this->historicalSliceFourArtifacts();
         $this->assertSame([], $this->phaseThreeP0SliceFourPresenceContract($design, $plan, $present));
         foreach ([
             ['Slice 4 is present as P0-05 only, IMPLEMENTATION_PRESENT_DORMANT.', 'Slice 4 is defined as P0-05 only, DEFINED_NOT_IMPLEMENTATION_AUTHORIZED.'],
@@ -2418,6 +2417,140 @@ TEXT;
     }
 
     /** @return list<string> */
+    private function historicalSliceFourArtifacts(): array
+    {
+        // The frozen design checkpoint stays twelve-artifact; never filter the live tree to imitate it.
+        return $this->discoverFoundationFixture($this->sliceFourFoundationPaths(), false);
+    }
+
+    /** @return list<string> */
+    private function sliceFiveFoundationPaths(): array
+    {
+        return [...$this->sliceFourFoundationPaths(),
+            'database/migrations/2026_08_28_090005_create_supplier_product_source_revisions_table.php',
+            'app/Models/SupplierProductSourceRevision.php',
+            'tests/Feature/PhaseThreeP0SourceRevisionFoundationMysqlTest.php',
+        ];
+    }
+
+    /** @return list<string> */
+    private function discoverSliceFiveArtifacts(string $root): array
+    {
+        $artifacts = $this->discoverSliceFourArtifacts($root);
+        foreach (['app', 'tests', 'routes', 'config', 'bootstrap'] as $directory) {
+            if (! is_dir($root.'/'.$directory)) {
+                continue;
+            }
+            foreach ((new Filesystem)->allFiles($root.'/'.$directory) as $file) {
+                $relative = $directory.'/'.str_replace('\\', '/', $file->getRelativePathname());
+                if (preg_match('/SupplierProductSourceRevision|PhaseThreeP0SourceRevision/', $relative)
+                    && ! in_array($relative, $artifacts, true)) {
+                    $artifacts[] = $relative;
+                }
+            }
+        }
+
+        return $artifacts;
+    }
+
+    /** @param list<string> $present */
+    private function sliceFivePresenceViolations(array $present): array
+    {
+        $expected = $this->sliceFiveFoundationPaths();
+        sort($expected);
+        sort($present);
+
+        return $present === $expected ? [] : ['Separate owner authorization permits exactly fifteen dormant artifacts.'];
+    }
+
+    /**
+     * @param  list<string>  $files
+     * @return list<string>
+     */
+    private function discoverFoundationFixture(array $files, bool $sliceFive): array
+    {
+        $root = tempnam(sys_get_temp_dir(), 'foundation-discovery-');
+        $this->assertNotFalse($root);
+        $this->assertStringStartsNotWith(strtolower(str_replace('\\', '/', realpath(base_path()))).'/', strtolower(str_replace('\\', '/', $root)));
+        $this->assertTrue(unlink($root));
+        $this->assertTrue(mkdir($root, 0700));
+        try {
+            foreach ($files as $file) {
+                if (! is_dir(dirname($root.'/'.$file))) {
+                    $this->assertTrue(mkdir(dirname($root.'/'.$file), 0700, true));
+                }
+                $this->assertNotFalse(file_put_contents($root.'/'.$file, "<?php // Inert discovery fixture; never executed.\n"));
+            }
+
+            return $sliceFive ? $this->discoverSliceFiveArtifacts($root) : $this->discoverSliceFourArtifacts($root);
+        } finally {
+            $this->assertTrue((new Filesystem)->deleteDirectory($root));
+            $this->assertDirectoryDoesNotExist($root);
+        }
+    }
+
+    public function test_slice_five_owner_authorized_presence_is_exact_and_dormant(): void
+    {
+        // Owner implementation authorization is separate from the unchanged design-adoption checkpoint.
+        $present = $this->discoverSliceFiveArtifacts(base_path());
+        $this->assertCount(15, $present);
+        $this->assertSame([], $this->sliceFivePresenceViolations($present));
+        $this->assertNotSame([], $this->sliceFivePresenceViolations([...$present, $present[0]]));
+        foreach ($this->sliceFiveFoundationPaths() as $path) {
+            $this->assertFileExists(base_path($path));
+        }
+        foreach (['app', 'routes', 'bootstrap', 'config'] as $directory) {
+            foreach ((new Filesystem)->allFiles(base_path($directory)) as $file) {
+                $relative = $directory.'/'.str_replace('\\', '/', $file->getRelativePathname());
+                if ($relative === 'app/Models/SupplierProductSourceRevision.php' || $file->getExtension() !== 'php') {
+                    continue;
+                }
+                $this->assertDoesNotMatchRegularExpression('/SupplierProductSourceRevision|supplier_product_source_revisions/', $file->getContents(), $relative);
+            }
+        }
+    }
+
+    public function test_slice_five_discovery_rejects_missing_renamed_duplicate_extra_and_deferred_artifacts(): void
+    {
+        $allowed = $this->sliceFiveFoundationPaths();
+        $cases = ['normal' => $allowed];
+        foreach ($allowed as $required) {
+            $cases['missing '.$required] = array_values(array_diff($allowed, [$required]));
+        }
+        $migration = 'database/migrations/2026_08_28_090005_create_supplier_product_source_revisions_table.php';
+        $renamed = 'database/migrations/2099_01_01_000000_create_supplier_product_source_revisions_table.php';
+        $cases['renamed'] = [...array_values(array_diff($allowed, [$migration])), $renamed];
+        $cases['duplicate'] = [...$allowed, $renamed];
+        foreach ([
+            'app/Models/SupplierProductSourceRevisionAlias.php',
+            'app/Data/Suppliers/Imports/SupplierProductSourceRevisionValue.php',
+            'app/Repositories/Suppliers/SupplierProductSourceRevisionRepository.php',
+            'app/Services/Suppliers/Imports/SupplierProductSourceRevisionWriter.php',
+            'app/Jobs/CaptureSupplierSnapshot.php',
+            'app/Jobs/SupplierProductSourceRevisionBackfill.php',
+            'routes/SupplierProductSourceRevision.php',
+            'config/supplier_snapshot_capture.php',
+            'database/migrations/2099_01_01_000002_add_source_revision_pointers_to_supplier_products_table.php',
+            'database/migrations/2099_01_01_000003_add_source_authority_to_snapshot_claims_and_generations.php',
+            'database/migrations/2099_01_01_000004_add_policy_v2_authority_to_snapshot_claims_and_generations.php',
+            'tests/Feature/PhaseThreeP0SourceRevisionFoundationAliasMysqlTest.php',
+        ] as $extra) {
+            $cases['extra '.$extra] = [...$allowed, $extra];
+        }
+        foreach ($cases as $label => $files) {
+            $discovered = $this->discoverFoundationFixture($files, true);
+            sort($files);
+            sort($discovered);
+            $this->assertSame($files, $discovered, $label);
+            if ($label === 'normal') {
+                $this->assertSame([], $this->sliceFivePresenceViolations($discovered));
+            } else {
+                $this->assertNotSame([], $this->sliceFivePresenceViolations($discovered), $label);
+            }
+        }
+    }
+
+    /** @return list<string> */
     private function sliceFiveFuturePaths(): array
     {
         return [
@@ -2441,11 +2574,11 @@ TEXT;
         $definition = $this->markdownSection($design, $heading, "Slice 2's separately authorized schema change");
         $this->assertSame(1, substr_count($design, $heading));
         $this->assertSame([], $this->phaseThreeClosedCurrentArchitectureContract($design)['violations']);
-        $this->assertSame([], $this->phaseThreeP0SliceFourPresenceContract($design, $plan, $this->discoverSliceFourArtifacts(base_path())));
+        $this->assertSame([], $this->phaseThreeP0SliceFourPresenceContract($design, $plan, $this->historicalSliceFourArtifacts()));
         preg_match_all('/^\| `([^`]+\.php)` \|/m', $definition, $paths);
         $this->assertSame($this->sliceFiveFuturePaths(), $paths[1]);
         foreach ([0, 2, 3] as $future) {
-            $this->assertFileDoesNotExist(base_path($this->sliceFiveFuturePaths()[$future]));
+            $this->assertFileExists(base_path($this->sliceFiveFuturePaths()[$future]));
         }
         foreach ([
             'P0-06 schema/read model only',

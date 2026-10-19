@@ -46,6 +46,20 @@ final class PhaseThreeP0SliceTwoMysqlTest extends TestCase
 
         $this->assertStringStartsWith('8.4.', (string) DB::scalar('SELECT VERSION()'));
         $this->artisan('migrate:fresh', ['--force' => true])->assertExitCode(0);
+        $p6 = CanonicalSupplierPhaseThreeP0Schema::classify(DB::connection()->getPdo());
+        $this->assertSame(['P6', 'NORMAL_PREFIX', 339, 'ea265e4717c2f61abba6731f08be576ff6fcd01fe6b673d61d41011a888056aa'],
+            [$p6['state'], $p6['classification'], $p6['object_count'], $p6['sha256']]);
+        $grant = 'SUPPLIER_PHASE_THREE_P0_EMPTY_SCHEMA_DOWN_CONFIRMED';
+        putenv($grant.'=true');
+        $_ENV[$grant] = $_SERVER[$grant] = 'true';
+        $p06 = require database_path('migrations/2026_08_28_090005_create_supplier_product_source_revisions_table.php');
+        $p06->down();
+        $this->assertFalse(getenv($grant));
+        $this->assertArrayNotHasKey($grant, $_ENV);
+        $this->assertArrayNotHasKey($grant, $_SERVER);
+        $p5 = CanonicalSupplierPhaseThreeP0Schema::classify(DB::connection()->getPdo());
+        $this->assertSame(['P5', 'NORMAL_PREFIX', 309, '8cc5afed3a68c4152bf1456a10741c5e23bd077bf4dae39cae639208872ca56f'],
+            [$p5['state'], $p5['classification'], $p5['object_count'], $p5['sha256']]);
         $this->authorizeDowngrade();
         $p05 = require database_path('migrations/2026_08_28_090004_create_supplier_product_identity_heads_table.php');
         $p05->down();
