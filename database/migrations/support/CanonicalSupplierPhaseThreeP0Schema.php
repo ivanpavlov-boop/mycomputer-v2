@@ -46,6 +46,7 @@ final class CanonicalSupplierPhaseThreeP0Schema
         'P0-03' => ['predecessor' => 'P2', 'target' => 'P3'],
         'P0-04' => ['predecessor' => 'P3', 'target' => 'P4'],
         'P0-05' => ['predecessor' => 'P4', 'target' => 'P5'],
+        'P0-06' => ['predecessor' => 'P5', 'target' => 'P6'],
     ];
 
     /** @var array<string, array{initial: string, target: string, operation: string}> */
@@ -55,6 +56,7 @@ final class CanonicalSupplierPhaseThreeP0Schema
         'P0-03' => ['initial' => 'P3', 'target' => 'P2', 'operation' => 'P0-03-DOWN-01'],
         'P0-04' => ['initial' => 'P4', 'target' => 'P3', 'operation' => 'P0-04-DOWN-01'],
         'P0-05' => ['initial' => 'P5', 'target' => 'P4', 'operation' => 'P0-05-DOWN-01'],
+        'P0-06' => ['initial' => 'P6', 'target' => 'P5', 'operation' => 'P0-06-DOWN-01'],
     ];
 
     private static bool $active = false;
@@ -81,6 +83,7 @@ final class CanonicalSupplierPhaseThreeP0Schema
                 P0MigrationStep::P0_03 => self::executeP0_03Forward($pdo),
                 P0MigrationStep::P0_04 => self::executeP0_04Forward($pdo),
                 P0MigrationStep::P0_05 => self::executeP0_05Forward($pdo),
+                P0MigrationStep::P0_06 => self::executeP0_06Forward($pdo),
                 default => throw new RuntimeException('phase_three_p0_forward_step_not_implemented'),
             };
 
@@ -131,6 +134,7 @@ final class CanonicalSupplierPhaseThreeP0Schema
                     P0MigrationStep::P0_03 => 'supplier_import_source_executions',
                     P0MigrationStep::P0_04 => 'supplier_import_source_payload_receipts',
                     P0MigrationStep::P0_05 => 'supplier_product_identity_heads',
+                    P0MigrationStep::P0_06 => 'supplier_product_source_revisions',
                     default => null,
                 };
 
@@ -145,6 +149,10 @@ final class CanonicalSupplierPhaseThreeP0Schema
 
                 if ($step === P0MigrationStep::P0_05) {
                     self::assertIdentityHeadHasNoInboundDependencies($pdo, $invocationId, $evidence);
+                }
+
+                if ($step === P0MigrationStep::P0_06) {
+                    self::assertSourceRevisionHasNoInboundDependencies($pdo, $invocationId, $evidence);
                 }
 
                 $operation = CanonicalSupplierPhaseThreeP0Oracle::operation($states['operation']);
@@ -382,6 +390,55 @@ final class CanonicalSupplierPhaseThreeP0Schema
                 BEFORE DELETE ON `supplier_product_identity_heads`
                 FOR EACH ROW
                 SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Immutable supplier product identity head cannot be deleted'
+                SQL);
+        });
+    }
+
+    private static function executeP0_06Forward(PDO $pdo): void
+    {
+        self::withCanonicalP0Session($pdo, function (PDO $pdo): void {
+            $pdo->exec(<<<'SQL'
+                CREATE TABLE `supplier_product_source_revisions` (
+                  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+                  `supplier_product_identity_head_id` bigint unsigned NOT NULL,
+                  `supplier_product_id` bigint unsigned NOT NULL,
+                  `supplier_import_source_execution_id` bigint unsigned NOT NULL,
+                  `supplier_id` bigint unsigned NOT NULL,
+                  `supplier_feed_id` bigint unsigned NOT NULL,
+                  `supplier_sku_bytes` varbinary(1020) NOT NULL,
+                  `source_identity` varchar(128) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+                  `source_descriptor_fingerprint` char(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+                  `source_execution_fingerprint` char(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+                  `source_member_identity_hash` char(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+                  `source_row_fingerprint` char(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+                  `staging_projection_fingerprint` char(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+                  `revision_fingerprint` char(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+                  `observed_at` timestamp(6) NOT NULL,
+                  `created_at` timestamp(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+                  PRIMARY KEY (`id`),
+                  UNIQUE KEY `uq_supplier_product_revision_execution_head` (`supplier_import_source_execution_id`, `supplier_product_identity_head_id`),
+                  UNIQUE KEY `uq_supplier_product_revision_pointer_scope` (`id`, `supplier_product_id`, `supplier_product_identity_head_id`, `supplier_id`, `supplier_feed_id`),
+                  KEY `ix_supplier_product_revision_head_fk` (`supplier_product_identity_head_id`, `supplier_id`, `supplier_feed_id`, `supplier_sku_bytes`),
+                  KEY `ix_supplier_product_revision_execution_fk` (`supplier_import_source_execution_id`, `supplier_id`, `supplier_feed_id`, `source_identity`, `source_descriptor_fingerprint`, `source_execution_fingerprint`),
+                  KEY `ix_supplier_product_revision_product_id_fk` (`supplier_product_id`),
+                  CONSTRAINT `fk_supplier_product_revision_head` FOREIGN KEY (`supplier_product_identity_head_id`, `supplier_id`, `supplier_feed_id`, `supplier_sku_bytes`) REFERENCES `supplier_product_identity_heads` (`id`, `supplier_id`, `supplier_feed_id`, `supplier_sku_bytes`) ON UPDATE RESTRICT ON DELETE RESTRICT,
+                  CONSTRAINT `fk_supplier_product_revision_execution` FOREIGN KEY (`supplier_import_source_execution_id`, `supplier_id`, `supplier_feed_id`, `source_identity`, `source_descriptor_fingerprint`, `source_execution_fingerprint`) REFERENCES `supplier_import_source_executions` (`id`, `supplier_id`, `supplier_feed_id`, `source_identity`, `source_descriptor_fingerprint`, `source_execution_fingerprint`) ON UPDATE RESTRICT ON DELETE RESTRICT,
+                  CONSTRAINT `fk_supplier_product_revision_product_id` FOREIGN KEY (`supplier_product_id`) REFERENCES `supplier_products` (`id`) ON UPDATE RESTRICT ON DELETE RESTRICT,
+                  CONSTRAINT `chk_supplier_product_revision_source_identity` CHECK (((length(`supplier_sku_bytes`) between 1 and 1020) and (length(`source_identity`) between 1 and 128) and regexp_like(`source_identity`,_ascii'^snapshot-source-v1:[a-z0-9]+([._-][a-z0-9]+)*(:[a-z0-9]+([._-][a-z0-9]+)*)*$',_cp866'c'))),
+                  CONSTRAINT `chk_supplier_product_revision_fingerprints` CHECK (((length(`source_descriptor_fingerprint`) = 64) and regexp_like(`source_descriptor_fingerprint`,_ascii'^[0-9a-f]{64}$',_cp866'c') and (length(`source_execution_fingerprint`) = 64) and regexp_like(`source_execution_fingerprint`,_ascii'^[0-9a-f]{64}$',_cp866'c') and (length(`source_member_identity_hash`) = 64) and regexp_like(`source_member_identity_hash`,_ascii'^[0-9a-f]{64}$',_cp866'c') and (length(`source_row_fingerprint`) = 64) and regexp_like(`source_row_fingerprint`,_ascii'^[0-9a-f]{64}$',_cp866'c') and (length(`staging_projection_fingerprint`) = 64) and regexp_like(`staging_projection_fingerprint`,_ascii'^[0-9a-f]{64}$',_cp866'c') and (length(`revision_fingerprint`) = 64) and regexp_like(`revision_fingerprint`,_ascii'^[0-9a-f]{64}$',_cp866'c')))
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='mycomputer:phase-iii-p0:v1:owner=P0-06'
+                SQL);
+            $pdo->exec(<<<'SQL'
+                CREATE TRIGGER `trg_supplier_product_revision_no_update`
+                BEFORE UPDATE ON `supplier_product_source_revisions`
+                FOR EACH ROW
+                SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Immutable supplier product source revision cannot be updated'
+                SQL);
+            $pdo->exec(<<<'SQL'
+                CREATE TRIGGER `trg_supplier_product_revision_no_delete`
+                BEFORE DELETE ON `supplier_product_source_revisions`
+                FOR EACH ROW
+                SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Immutable supplier product source revision cannot be deleted'
                 SQL);
         });
     }
@@ -687,6 +744,37 @@ final class CanonicalSupplierPhaseThreeP0Schema
 
         if ($hasDependency === 1) {
             self::fail('phase_three_p0_identity_head_has_inbound_dependencies', $invocationId);
+        }
+    }
+
+    /** @param array<string, mixed> $evidence */
+    private static function assertSourceRevisionHasNoInboundDependencies(
+        PDO $pdo,
+        string $invocationId,
+        array &$evidence,
+    ): void {
+        try {
+            $hasDependency = $pdo->query(<<<'SQL'
+                SELECT EXISTS(
+                    SELECT 1 FROM information_schema.KEY_COLUMN_USAGE
+                    WHERE REFERENCED_TABLE_SCHEMA = DATABASE()
+                      AND REFERENCED_TABLE_NAME = 'supplier_product_source_revisions'
+                )
+                SQL)->fetchColumn();
+            if (! in_array($hasDependency, [0, 1], true)) {
+                throw new RuntimeException('Invalid dependency inspection result.');
+            }
+        } catch (Throwable $exception) {
+            $evidence['connection_status'] = $exception instanceof PDOException
+                && CanonicalSupplierPhaseThreeP0ConnectionOutcome::isUncertain($exception)
+                    ? 'UNCERTAIN'
+                    : 'CONNECTED';
+
+            self::fail('phase_three_p0_schema_inspection_unavailable', $invocationId);
+        }
+
+        if ($hasDependency === 1) {
+            self::fail('phase_three_p0_source_revision_has_inbound_dependencies', $invocationId);
         }
     }
 
