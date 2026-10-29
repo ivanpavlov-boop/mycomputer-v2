@@ -1,5 +1,17 @@
 # Immutable Supplier Product Source Revision Foundation
 
+## Current status reconciliation — 2026-10-26
+
+P0-06 is IMPLEMENTATION_PRESENT_DORMANT at HEAD `b2d7e0bb428745dfe9d0e39a6973fd34a5cf371c`.
+Attributed staging/CI evidence is recorded in [Slice 5 evidence](PHASE_III_P0_SLICE_5_STAGING_EVIDENCE_2026_10_20.md); this is not a new deployment verification.
+P0-07 through P0-09 remain unimplemented and implementation-unauthorized.
+Deferred writer/integration remains excluded. The original 2026-10-17
+proposal and its NOT RUN/NOT STARTED checkpoint below are historical,
+not current implementation status or a fresh validation result.
+
+## Historical 2026-10-17 design proposal
+
+
 Date: 2026-10-17. Status: **NON-AUTHORITATIVE PROPOSAL / NOT IMPLEMENTED**.
 The prior R2 checkpoint is retained below as historical review context.
 The local design-adoption candidate defines Slice 5 only in the
