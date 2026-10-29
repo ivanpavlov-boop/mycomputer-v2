@@ -20,12 +20,12 @@ final class CanonicalSupplierPhaseThreeP0OracleTest extends TestCase
     {
         CanonicalSupplierPhaseThreeP0Oracle::assertIntegrity();
 
-        $this->assertCount(375, CanonicalSupplierPhaseThreeP0Oracle::signatures());
-        $this->assertCount(17, CanonicalSupplierPhaseThreeP0Oracle::states());
-        $this->assertCount(15, CanonicalSupplierPhaseThreeP0Oracle::operations());
-        $this->assertSame(168474, strlen(CanonicalSupplierPhaseThreeP0Oracle::metadataBytes()));
+        $this->assertCount(376, CanonicalSupplierPhaseThreeP0Oracle::signatures());
+        $this->assertCount(18, CanonicalSupplierPhaseThreeP0Oracle::states());
+        $this->assertCount(16, CanonicalSupplierPhaseThreeP0Oracle::operations());
+        $this->assertSame(173874, strlen(CanonicalSupplierPhaseThreeP0Oracle::metadataBytes()));
         $this->assertSame(
-            '0ca5b057d4733cb791d791bbf6113e8e7f3a678ffdd61a7c11ca36306023def6',
+            'cf58441e3f1c17254310e3e76a24605ad0aa1a89adcdab16568afad614f927f6',
             hash(
                 'sha256',
                 CanonicalSupplierPhaseThreeP0Oracle::METADATA_VERSION
@@ -33,6 +33,149 @@ final class CanonicalSupplierPhaseThreeP0OracleTest extends TestCase
                     .CanonicalSupplierPhaseThreeP0Oracle::metadataBytes(),
             ),
         );
+    }
+
+    public function test_candidate_maps_match_independent_design_goldens_and_keep_each_successor_variant(): void
+    {
+        // Authored from frozen S/B_X plus the accepted design delta before PHP transcription.
+        $expected = [
+            'P0_BASELINE' => 'dd03ca3b3610207ea12afbd14373a62275e74c8cda50f72b9e129006192bc812',
+            'P9' => '16e1dcd6521b19d31200a010fd532178e3684eacbc23907da8edabb630e31eeb',
+            'P9_DOWN_1' => 'ad390d2f921345302aff1f672ddd39376a11092f792e42ecc3d10c9d8b124a05',
+            'P9_DOWN_2' => 'd698f9638c16d769b122eb85424bc5a6f38b9ecf41ad2fcb56765af6bccae74f',
+            'P8' => '4a8e646732f220aa1403acbb13a8eb67a3fa2845aaff31acd48e937919c98f48',
+            'P8_DOWN_1' => 'df3bdedf29e9aded014b2d172926dd977bc372fbdb1c65089ac59b6ce8be8d68',
+            'P8_DOWN_2' => 'b992f274eb7f13a26a44ed98eca879b40e2d3e30e45a55c1c0665630f2ef2ae3',
+            'P7' => '765692fc06ba30ee87f27a7357edcb793927a52aef2375846a79257e5e8fcc83',
+            'P7_DOWN_1' => '3f42d4567c985254acd7aaab903469c1035d870881adba431592abe6d509cd03',
+            'P7_DOWN_2' => 'bf9efbbe90dc3add76109294b8de1801ce7a6e9af4684956415335a95485565a',
+            'P7_DOWN_3' => '99b8610f13a307576198c2e1d77b5b903061d23ff82adbd57dae47ac703b7e00',
+            'P6' => 'ea265e4717c2f61abba6731f08be576ff6fcd01fe6b673d61d41011a888056aa',
+            'P5' => '8cc5afed3a68c4152bf1456a10741c5e23bd077bf4dae39cae639208872ca56f',
+            'P4' => '1fc28641da815cd4737b50b5b8ed065918b3f416f970ba2cccef82e5342e8d57',
+            'P3' => '88e8c410ea052d66c6d8a920143f11fdf3ecca47f4c6c570afcecb16fce1cf2b',
+            'P2' => 'af7261209342b681f587e145190ab217c67a14af4334f0c0e99241cfe8ad0169',
+            'P1' => '0b857430da7679fd6692c1693ba1140e9826b68e497d23fc36abc81a7699e3bc',
+            'P0' => 'dd03ca3b3610207ea12afbd14373a62275e74c8cda50f72b9e129006192bc812',
+        ];
+        $typeOrder = ['table', 'column', 'index', 'foreign_key', 'check', 'trigger'];
+        foreach ($expected as $state => $hash) {
+            $records = array_values(CanonicalSupplierPhaseThreeP0Oracle::signaturesFor($state));
+            usort($records, static fn (array $a, array $b): int => array_search($a['signature']['type'], $typeOrder, true) <=> array_search($b['signature']['type'], $typeOrder, true)
+                ?: strcmp($a['object_id'], $b['object_id']));
+            $objects = array_map(static fn (array $r): array => ['id' => $r['object_id'], 'sha256' => hash('sha256', "phase-iii-p0-schema-signature-v1\0".json_encode($r['signature'], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR))], $records);
+            $bytes = json_encode(['state' => $state === 'P0_BASELINE' ? 'P0' : $state, 'objects' => $objects], JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
+            $domain = str_contains($state, '_DOWN_') ? 'phase-iii-p0-partial-state-v1' : 'phase-iii-p0-prefix-v1';
+            $this->assertSame($hash, hash('sha256', $domain."\0".$bytes), $state);
+            $this->assertSame($hash, CanonicalSupplierPhaseThreeP0Oracle::state($state)['sha256']);
+        }
+        $changed = [
+            0 => 'foreign_key:supplier_product_source_revisions:fk_supplier_product_revision_product_scope',
+            1 => 'index:supplier_product_source_revisions:ix_supplier_product_revision_product_scope_fk',
+            2 => 'index:supplier_products:uq_supplier_product_source_revision_scope',
+            3 => 'trigger:supplier_products:trg_supplier_product_source_projection_guard',
+            4 => 'trigger:supplier_products:trg_supplier_product_source_pointer_insert_guard',
+        ];
+        $frozenRemainders = [
+            'P8' => 'd30da2a40a2ad313f3fa60293ec49438e9d7228f5b92128669de2e0354f5c069',
+            'P8_DOWN_1' => '3aba457947731cca1492526e92eb2eb6c68b7570f44855c5e2096e37cb9712da',
+            'P8_DOWN_2' => 'f062239ceb7336c65a3900cad98cbda041f34e4a901ceeb4ce230ead8f14c08a',
+            'P9' => '0912b894208f4aaf15b4b8cedf9061cdf5a5dd1791292c06a7202455e7665321',
+            'P9_DOWN_1' => '9dee5d53546c4a57f1c20c7363d3bb9677a7f18bcb8c01403fb2b0652154cca4',
+            'P9_DOWN_2' => '06ba0d989430202f34ddac5331eefa7d59192b4e366e6f889d7ac851b625ea2e',
+        ];
+        foreach ($frozenRemainders as $state => $hash) {
+            $map = [];
+            foreach (CanonicalSupplierPhaseThreeP0Oracle::signaturesFor($state) as $id => $record) {
+                if (! in_array($id, $changed, true)) {
+                    $map[$id] = $record['sha256'];
+                }
+            }
+            ksort($map, SORT_STRING);
+            $this->assertSame($hash, hash('sha256', json_encode($map, JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR)), $state.' frozen B_X remainder');
+        }
+        $variant = 'check:supplier_offer_snapshot_generations:chk_snapshot_generation_qualification_tuple';
+        $this->assertSame('08e50d9848873b9ded0bb0f449f4229120fcde4f6bdba08cdbd9e8adbb78046e', CanonicalSupplierPhaseThreeP0Oracle::signaturesFor('P8_DOWN_2')[$variant]['sha256']);
+        $this->assertNotSame(CanonicalSupplierPhaseThreeP0Oracle::signaturesFor('P8')[$variant]['sha256'], CanonicalSupplierPhaseThreeP0Oracle::signaturesFor('P8_DOWN_2')[$variant]['sha256']);
+    }
+
+    public function test_candidate_has_four_exact_down_steps_and_strict_d1_d2_guards(): void
+    {
+        $expected = [
+            'P0-07-DOWN-01' => [
+                'precondition_state' => 'P7',
+                'result_state' => 'P7_DOWN_1',
+                'next_operation' => 'P0-07-DOWN-02',
+                'sql_sha256' => 'fae83a8cc42a6c4622548fda5e48b5863e7ad3657ad76c5aa3868d4e17e44200',
+            ],
+            'P0-07-DOWN-02' => [
+                'precondition_state' => 'P7_DOWN_1',
+                'result_state' => 'P7_DOWN_2',
+                'next_operation' => 'P0-07-DOWN-03',
+                'sql_sha256' => '28d5d6f9a81299fe2c9d1e6515eadaa9a39be4aae142bab5910a2eebd5228983',
+            ],
+            'P0-07-DOWN-03' => [
+                'precondition_state' => 'P7_DOWN_2',
+                'result_state' => 'P7_DOWN_3',
+                'next_operation' => 'P0-07-DOWN-04',
+                'sql_sha256' => 'd2603aa14ecedc2b3cc33461a9b6bd2ebfc50864cb790e6d05d1f0f32e918e9a',
+            ],
+            'P0-07-DOWN-04' => [
+                'precondition_state' => 'P7_DOWN_3',
+                'result_state' => 'P6',
+                'next_operation' => 'NONE_TARGET_PREFIX_VERIFICATION',
+                'sql_sha256' => '09dab898d7998022683aedfadce79825d449623de2d136bd2c3106b70c86723c',
+            ],
+        ];
+        foreach ($expected as $id => $golden) {
+            $actual = CanonicalSupplierPhaseThreeP0Oracle::operation($id);
+            foreach (['precondition_state', 'result_state', 'next_operation'] as $field) {
+                $this->assertSame($golden[$field], $actual[$field]);
+            }
+            $this->assertSame($golden['sql_sha256'], hash('sha256', "phase-iii-p0-downgrade-sql-v1\0".$actual['sql']));
+        }
+        $p7 = CanonicalSupplierPhaseThreeP0Oracle::signaturesFor('P7');
+        $reverse = $p7['foreign_key:supplier_product_source_revisions:fk_supplier_product_revision_product_scope']['signature'];
+        $this->assertSame(['supplier_product_id', 'supplier_id', 'supplier_feed_id'], $reverse['child_columns']);
+        $this->assertSame(['id', 'supplier_id', 'supplier_feed_id'], $reverse['parent_columns']);
+        $this->assertSame(['current_source_revision_id', 'id', 'supplier_product_identity_head_id', 'supplier_id', 'supplier_feed_id'], $p7['foreign_key:supplier_products:fk_supplier_product_current_revision']['signature']['child_columns']);
+        $body = $p7['trigger:supplier_products:trg_supplier_product_source_projection_guard']['signature']['action_statement'];
+        $positions = [];
+        foreach (['source pointers must be complete', 'identity scope is immutable', 'source revision cannot be cleared', 'Bound source pointer scope cannot be NULL', 'INNER JOIN', 'ELSEIF NEW.'] as $branch) {
+            $position = strpos($body, $branch);
+            $this->assertNotFalse($position, $branch);
+            $positions[] = $position;
+        }
+        $sorted = $positions;
+        sort($sorted);
+        $this->assertSame($sorted, $positions, 'Ordered six-branch decision contract');
+        foreach ([
+            0 => 'supplier_sku',
+            1 => 'ean',
+            2 => 'mpn',
+            3 => 'name',
+            4 => 'brand_name',
+            5 => 'category_name',
+            6 => 'external_availability_status',
+            7 => 'external_availability_label',
+            8 => 'currency',
+            9 => 'payload_hash',
+        ] as $field) {
+            $this->assertStringContainsString('NOT (CAST(OLD.`'.$field.'` AS BINARY) <=> CAST(NEW.`'.$field.'` AS BINARY))', $body);
+        }
+        foreach ([
+            0 => 'price',
+            1 => 'supplier_price_raw',
+            2 => 'recommended_price',
+            3 => 'quantity',
+            4 => 'availability_status_id',
+            5 => 'raw_data',
+            6 => 'received_at',
+        ] as $field) {
+            $this->assertStringContainsString('NOT (OLD.`'.$field.'` <=> NEW.`'.$field.'`)', $body);
+        }
+        $this->assertStringContainsString('h.`supplier_sku_bytes` = CAST(NEW.`supplier_sku` AS BINARY)', $body);
+        $this->assertSame('INSERT', $p7['trigger:supplier_products:trg_supplier_product_source_pointer_insert_guard']['signature']['event']);
     }
 
     public function test_matching_utf8mb4_schema_defaults_normalize_to_one_canonical_trigger_identity(): void
@@ -163,7 +306,7 @@ final class CanonicalSupplierPhaseThreeP0OracleTest extends TestCase
     {
         $comparator = new CanonicalSupplierPhaseThreeP0SchemaComparator;
 
-        foreach (['P9_DOWN_1', 'P9_DOWN_2', 'P8_DOWN_1', 'P8_DOWN_2', 'P7_DOWN_1', 'P7_DOWN_2'] as $state) {
+        foreach (['P9_DOWN_1', 'P9_DOWN_2', 'P8_DOWN_1', 'P8_DOWN_2', 'P7_DOWN_1', 'P7_DOWN_2', 'P7_DOWN_3'] as $state) {
             $this->assertSame(
                 $state,
                 $comparator->classify($comparator->expectedSignatures($state))['state'],

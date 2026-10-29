@@ -58,7 +58,9 @@ Runtime activation remains unauthorized.
 See the [subordinate proposal](PHASE_III_P0_SLICE_4_IDENTITY_HEAD_FOUNDATION_PROPOSAL.md).
 Slice 5 is defined only in the [canonical sequence and definition](IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md#slice-5---immutable-supplier-product-source-revision-foundation):
 P0-06 schema/read model only, DEFINED_NOT_IMPLEMENTATION_AUTHORIZED.
-P0-06 through P0-09 remain unimplemented and implementation-unauthorized.
+P0-06 is IMPLEMENTATION_PRESENT_DORMANT at HEAD `b2d7e0bb428745dfe9d0e39a6973fd34a5cf371c`.
+Attributed staging/CI evidence is recorded in [Slice 5 evidence](PHASE_III_P0_SLICE_5_STAGING_EVIDENCE_2026_10_20.md); this is not a new deployment verification.
+P0-07 through P0-09 remain unimplemented and implementation-unauthorized.
 P0-07 through P0-09 remain unsliced and unauthorized; runtime activation stays closed.
 
 <!-- phase-iii-architecture-status-reference authority=phase-iii-architecture-contract-v1 -->
@@ -619,7 +621,9 @@ permits only the dormant foundation and isolated tests.
 Presence proves neither validation, merge nor deployment.
 Runtime activation remains unauthorized.
 Slice 5 defines only P0-06 schema/read model; it supplies no implementation authority.
-P0-06 through P0-09 remain unimplemented and implementation-unauthorized.
+P0-06 is IMPLEMENTATION_PRESENT_DORMANT at HEAD `b2d7e0bb428745dfe9d0e39a6973fd34a5cf371c`.
+Attributed staging/CI evidence is recorded in [Slice 5 evidence](PHASE_III_P0_SLICE_5_STAGING_EVIDENCE_2026_10_20.md); this is not a new deployment verification.
+P0-07 through P0-09 remain unimplemented and implementation-unauthorized.
 P0-07 through P0-09 remain unsliced and unauthorized.
 This subphase is additive to, and
 does not rewrite, the historical deployed Phase I ten-table foundation or
@@ -1125,7 +1129,7 @@ before protected runtime use is permitted.
 | P0-04 | `supplier_import_source_payload_receipts`: `id>supplier_import_source_execution_id>source_execution_fingerprint>receipt_version>accepted_payload_bytes>accepted_payload_sha256>payload_receipt_fingerprint>created_at` | `PRIMARY(id)`; `uq_import_source_payload_receipt_execution(supplier_import_source_execution_id)`; `uq_import_source_payload_receipt_fingerprint(payload_receipt_fingerprint)`; `ix_import_source_payload_receipt_execution_fk(supplier_import_source_execution_id>source_execution_fingerprint)` | `fk_import_source_payload_receipt_execution`; `chk_import_source_payload_receipt_version`; `chk_import_source_payload_receipt_bytes`; `chk_import_source_payload_receipt_fingerprints`; `trg_import_source_payload_receipt_no_update`; `trg_import_source_payload_receipt_no_delete` |
 | P0-05 | `supplier_product_identity_heads`: `id>supplier_id>supplier_feed_id>supplier_sku_bytes>created_at` | `PRIMARY(id)`; `uq_supplier_product_identity_head(supplier_id>supplier_feed_id>supplier_sku_bytes)`; `uq_supplier_product_identity_head_scope(id>supplier_id>supplier_feed_id)`; `uq_supplier_product_identity_head_revision_scope(id>supplier_id>supplier_feed_id>supplier_sku_bytes)`; `ix_supplier_product_identity_head_feed_owner_fk(supplier_feed_id>supplier_id)` | `fk_supplier_product_identity_head_feed_owner`; `chk_supplier_product_identity_head_sku_bytes`; `trg_supplier_product_identity_head_no_update`; `trg_supplier_product_identity_head_no_delete` |
 | P0-06 | `supplier_product_source_revisions`: `id>supplier_product_identity_head_id>supplier_product_id>supplier_import_source_execution_id>supplier_id>supplier_feed_id>supplier_sku_bytes>source_identity>source_descriptor_fingerprint>source_execution_fingerprint>source_member_identity_hash>source_row_fingerprint>staging_projection_fingerprint>revision_fingerprint>observed_at>created_at` | `PRIMARY(id)`; `uq_supplier_product_revision_execution_head(supplier_import_source_execution_id>supplier_product_identity_head_id)`; `uq_supplier_product_revision_pointer_scope(id>supplier_product_id>supplier_product_identity_head_id>supplier_id>supplier_feed_id)`; `ix_supplier_product_revision_head_fk(supplier_product_identity_head_id>supplier_id>supplier_feed_id>supplier_sku_bytes)`; `ix_supplier_product_revision_execution_fk(supplier_import_source_execution_id>supplier_id>supplier_feed_id>source_identity>source_descriptor_fingerprint>source_execution_fingerprint)`; `ix_supplier_product_revision_product_id_fk(supplier_product_id)` | `fk_supplier_product_revision_head`; `fk_supplier_product_revision_execution`; `fk_supplier_product_revision_product_id`; `chk_supplier_product_revision_source_identity`; `chk_supplier_product_revision_fingerprints`; `trg_supplier_product_revision_no_update`; `trg_supplier_product_revision_no_delete` |
-| P0-07 | `supplier_products`: `supplier_product_identity_head_id>current_source_revision_id`; no new revision columns | `uq_supplier_product_identity_head_assignment(supplier_product_identity_head_id)`; `uq_supplier_product_source_revision_scope(id>supplier_product_identity_head_id>supplier_id>supplier_feed_id)`; `ix_supplier_product_identity_head_fk(supplier_product_identity_head_id>supplier_id>supplier_feed_id)`; `ix_supplier_product_current_revision_fk(current_source_revision_id>id>supplier_product_identity_head_id>supplier_id>supplier_feed_id)`; `ix_supplier_product_revision_product_scope_fk(supplier_product_id>supplier_product_identity_head_id>supplier_id>supplier_feed_id)` on `supplier_product_source_revisions` | `fk_supplier_product_identity_head`; `fk_supplier_product_current_revision`; replace `fk_supplier_product_revision_product_id` with `fk_supplier_product_revision_product_scope`; `chk_supplier_product_source_revision_pointers`; `trg_supplier_product_source_projection_guard` |
+| P0-07 | `supplier_products`: `supplier_product_identity_head_id>current_source_revision_id`; no new revision columns | `uq_supplier_product_identity_head_assignment(supplier_product_identity_head_id)`; `uq_supplier_product_source_revision_scope(id>supplier_id>supplier_feed_id)`; `ix_supplier_product_identity_head_fk(supplier_product_identity_head_id>supplier_id>supplier_feed_id)`; `ix_supplier_product_current_revision_fk(current_source_revision_id>id>supplier_product_identity_head_id>supplier_id>supplier_feed_id)`; `ix_supplier_product_revision_product_scope_fk(supplier_product_id>supplier_id>supplier_feed_id)` on `supplier_product_source_revisions` | `fk_supplier_product_identity_head`; `fk_supplier_product_current_revision`; replace `fk_supplier_product_revision_product_id` with `fk_supplier_product_revision_product_scope`; `chk_supplier_product_source_revision_pointers`; `trg_supplier_product_source_projection_guard`; `trg_supplier_product_source_pointer_insert_guard` |
 | P0-08 | `supplier_import_execution_claims`: `cohort_source_identity`; no new generation column | `uq_import_execution_claim_id_cohort_source(id>cohort_source_identity)`; `ix_snapshot_generation_claim_source(supplier_import_execution_claim_id>source_identity)` | replace `chk_import_claim_cohort_authorization_tuple`; replace `chk_import_claim_processing_owner`; `chk_import_execution_claim_cohort_source_identity`; `trg_import_execution_claim_cohort_source_immutable`; `fk_snapshot_generation_claim_source` |
 | P0-09 | `supplier_import_execution_claims`: `cohort_bounds_policy_key>cohort_bounds_policy_version>cohort_bounds_policy_fingerprint`; `supplier_offer_snapshot_generations`: `bounds_policy_key>bounds_policy_version>bounds_policy_fingerprint` | `uq_import_claim_id_bounds_policy(id>cohort_bounds_policy_key>cohort_bounds_policy_version>cohort_bounds_policy_fingerprint)`; `ix_snapshot_generation_bounds_policy(supplier_import_execution_claim_id>bounds_policy_key>bounds_policy_version>bounds_policy_fingerprint)` | `chk_import_claim_cohort_policy_authority`; `chk_import_claim_cohort_policy_identity`; replace `chk_import_claim_processing_owner`; `trg_import_execution_claim_cohort_policy_immutable`; `chk_snapshot_generation_bounds_policy_identity`; `fk_snapshot_generation_bounds_policy` |
 <!-- phase-iii-p0-artifact-registry:end id=phase-iii-p0-artifact-inventory-v1 -->
@@ -1162,16 +1166,17 @@ absent side. No count-only or one-way validation is sufficient.
 
 Reproduce the separate canonical metadata JSON in exact registry order with
 ordered top-level keys `version>objects>states>operations` and version
-`phase-iii-p0-oracle-metadata-v1`. Its exact length is `168474` bytes and the
+`phase-iii-p0-oracle-metadata-v1`. Its exact length is `173874` bytes and the
 hardcoded SHA-256 over domain `phase-iii-p0-oracle-metadata-v1`, NUL and those
 bytes is
-`0ca5b057d4733cb791d791bbf6113e8e7f3a678ffdd61a7c11ca36306023def6`.
+`cf58441e3f1c17254310e3e76a24605ad0aa1a89adcdab16568afad614f927f6`.
 This metadata constant is independent of candidate DDL/database state and does
-not alter any downgrade-SQL hash. The collation-authority refreeze changes the
-16 trigger signature hashes, their registry IDs, all 17 state hashes and the
-operation bindings that carry those hashes; the canonical design contains the
-complete old/new ledger. Object, state and operation counts remain 375, 17 and
-15, and P0 remains 207 records.
+not derive any expected value from implementation output. The historical
+collation-authority refreeze changed 16 trigger signatures and all 17 then-current
+state hashes, at counts 375/17/15; its unchanged ledger remains in the canonical
+design. This D1-D3/R2 candidate has 376 signatures, 18 states and 16 operations,
+including new P0-07-DOWN-01 SQL and shifted P0-07-DOWN-02/03/04 bindings.
+P0 remains 207 records; P0-P6 maps/signatures/hashes are unchanged.
 
 The exact signature sources and field orders are: table
 `type>table>table_type>engine>row_format>table_collation>create_options>table_comment`
@@ -1217,18 +1222,19 @@ records in the canonical design. The exact normal-prefix authority is:
 | P4 | 294 | `1fc28641da815cd4737b50b5b8ed065918b3f416f970ba2cccef82e5342e8d57` |
 | P5 | 309 | `8cc5afed3a68c4152bf1456a10741c5e23bd077bf4dae39cae639208872ca56f` |
 | P6 | 339 | `ea265e4717c2f61abba6731f08be576ff6fcd01fe6b673d61d41011a888056aa` |
-| P7 | 349 | `87a549668d891206e5bd29e75514616916d71b87708f2d964a8824c8b3c0bebe` |
-| P8 | 355 | `3d9ebf157c1374e2fd8271d0ce5c5b3ead0e85dcc2061914297ee5af65c7f495` |
-| P9 | 368 | `48138998d6168fab3275475ba09ee8af261116a7cf0bed8ff8be33dfa97ff406` |
+| P7 | 350 | `765692fc06ba30ee87f27a7357edcb793927a52aef2375846a79257e5e8fcc83` |
+| P8 | 356 | `4a8e646732f220aa1403acbb13a8eb67a3fa2845aaff31acd48e937919c98f48` |
+| P9 | 369 | `16e1dcd6521b19d31200a010fd532178e3684eacbc23907da8edabb630e31eeb` |
 
 The only recognized partial hashes are
-`P9_DOWN_1=084cbc4d6992621b283a45be6f5ff0c412cbb4936f173f26d5e45116ea951ed4`,
-`P9_DOWN_2=57ff5af1375648c6753665531fdc949531a401af85bd75fcc6fe16e0867b3431`,
-`P8_DOWN_1=21c2c27a8d9357766bb4183b5a205305e115c155b616cbb67c92ec8a0976948e`,
-`P8_DOWN_2=11edaac97962d7e6ac316ebda46b3f171723ed7d919b1242049f2bf3a09ad9a2`,
-`P7_DOWN_1=680a78d1b5c54488255b39da92e4995c3bcaa5d900f7b8f0baf40846c1f2c7be`
+`P9_DOWN_1=ad390d2f921345302aff1f672ddd39376a11092f792e42ecc3d10c9d8b124a05`,
+`P9_DOWN_2=d698f9638c16d769b122eb85424bc5a6f38b9ecf41ad2fcb56765af6bccae74f`,
+`P8_DOWN_1=df3bdedf29e9aded014b2d172926dd977bc372fbdb1c65089ac59b6ce8be8d68`,
+`P8_DOWN_2=b992f274eb7f13a26a44ed98eca879b40e2d3e30e45a55c1c0665630f2ef2ae3`,
+`P7_DOWN_1=3f42d4567c985254acd7aaab903469c1035d870881adba431592abe6d509cd03`
 and
-`P7_DOWN_2=65dbb7dd13d42731577f66a58fd6b7bf02d6fe44988b7eaaad747a8a517702ea`.
+`P7_DOWN_2=bf9efbbe90dc3add76109294b8de1801ce7a6e9af4684956415335a95485565a`,
+`P7_DOWN_3=99b8610f13a307576198c2e1d77b5b903061d23ff82adbd57dae47ac703b7e00`.
 Every other shape is `UNCLASSIFIED_P0_SCHEMA_STATE` and executes zero DDL.
 
 Fresh MySQL 8.4 integration must create one disposable schema with
@@ -1256,10 +1262,10 @@ missing baseline, source-profile rows, P0-03 present, nested invocation and
 concurrent guard failure. Exact reversible Slice 1 proof is
 `P0 -> P1 -> P2 -> P1 -> P0`.
 
-The physical statement inventory is fixed at 15: one atomic statement each for
-P0-01 through P0-06 and three each for P0-07, P0-08 and P0-09. Exact SQL and
+The physical statement inventory is fixed at 16: one atomic statement each for
+P0-01 through P0-06, four for P0-07 and three each for P0-08 and P0-09. Exact SQL and
 affected object hashes are copied from the canonical operation registry; callers
-cannot supply SQL. Only the six exact partial states above may resume. A fresh
+cannot supply SQL. Only the seven exact partial states above may resume. A fresh
 ordinary `down()` for the same originating enum reacquires the mutex, fully
 re-enumerates, obtains a new invocation-local authorization and executes only
 the remaining operation IDs. Wrong-step resume, repeated committed DDL,
@@ -1355,9 +1361,9 @@ Runtime activation remains unauthorized. Its migration, model, logical key,
 private repository participant and MySQL/unit tests do not implement broader Slice 4 integration.
 Its dormant head primitive must remain inside the complete caller-owned
 SupplierProduct/revision/pointer transaction; no independent head commit is allowed.
-Slice 5 is P0-06 schema/read model only, DEFINED_NOT_IMPLEMENTATION_AUTHORIZED,
-as defined solely in the canonical design. P0-06 remains unimplemented;
-P0-06 through P0-09 implementation remains unauthorized. P0-07 through P0-09
+Slice 5 is P0-06 schema/read model only, IMPLEMENTATION_PRESENT_DORMANT
+at HEAD b2d7e0bb428745dfe9d0e39a6973fd34a5cf371c, as reconciled in the canonical design.
+P0-07 through P0-09 implementation remains unauthorized. P0-07 through P0-09
 remain unsliced and unauthorized. Deferred P0-06 writer/integration is not included.
 The canonical nine-file future allowlist, F1 guarded legacy fixture preparation,
 A10 five-suite real MySQL 8.4 acceptance and independent review obligations
@@ -1761,3 +1767,18 @@ gate requires separately authorized production-evidence collection and review
 for all ten bounds. Neither Slice 2 nor that evidence work authorizes Phase III
 runtime implementation, which remains unimplemented and unauthorized until the
 remaining gate is separately closed.
+
+## P0-07 canonical candidate reconciliation, 2026-10-26
+
+2026-10-26 isolated canonical candidate: the five-document design package is OWNER APPROVED. New P7/successor oracle literals are CANDIDATE — NOT OWNER APPROVED. Original-worktree adoption and P0-07 implementation/runtime activation are NOT PERFORMED.
+
+Follow the sole [canonical D1-D3/R2 authority](IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md#p0-07-d1-d3r2-candidate-reconciliation-2026-10-26).
+Reverse ownership is (product,supplier,feed); full pointer ownership remains
+(revision,product,head,supplier,feed). Preserve compatible populated P6 after
+independent pre-DDL scope checks. Keep the pair-only CHECK and add the INSERT
+scope guard beside the ordered UPDATE guard. No writer/admission is activated.
+P7/P7_DOWN_1/P7_DOWN_2/P7_DOWN_3 counts are 350/349/348/348. Four down
+operations remove INSERT, remove UPDATE, restore the P6 reverse pair, then
+remove the product pointer artifacts. Each successor uses its own frozen B_X
+plus four signature replacements and INSERT; P8_DOWN_2 retains its own CHECK.
+Registry cardinalities are 376 signatures, 18 states and 16 operations.

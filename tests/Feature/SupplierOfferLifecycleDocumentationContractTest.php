@@ -7,6 +7,33 @@ use Tests\TestCase;
 
 final class SupplierOfferLifecycleDocumentationContractTest extends TestCase
 {
+    public function test_p007_candidate_reconciliation_keeps_design_and_runtime_boundaries_explicit(): void
+    {
+        $design = $this->readDocument('docs/IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md');
+        $section = $this->markdownSection($design, '#### P0-07 D1-D3/R2 candidate reconciliation (2026-10-26)', 'Protected SupplierProduct rows gain nullable');
+        $text = preg_replace('/\s+/', ' ', $section);
+        foreach (['CANDIDATE — NOT OWNER APPROVED', 'independent NULL-safe product/supplier/feed ownership', 'P6 terminal down still requires an empty revision table', 'The pair-only CHECK is unchanged', 'Only a bound unchanged-r row runs the source-change guard', 'does not recompute fingerprints', 'pre-existing committed unbound head is corrupt', 'stale CAS=0 is conflict', 'REPEATABLE READ WITH CONSISTENT SNAPSHOT at T0', 'Later claim/fence locks do not refresh the source cut', 'Availability SET NULL before T0', 'each successor X', 'own frozen B_X', "P8_DOWN_2's qualification CHECK"] as $required) {
+            $this->assertStringContainsString($required, $text);
+            $pattern = '/'.str_replace(' ', '\\s+', preg_quote($required, '/')).'/u';
+            $changedSection = preg_replace($pattern, 'weakened candidate rule', $section, 1, $replacements);
+            $this->assertSame(1, $replacements, $required);
+            $this->assertNotSame([], $this->phaseThreeClosedCurrentArchitectureContract(str_replace($section, $changedSection, $design))['violations'], $required);
+        }
+        $plan = $this->readDocument('docs/PHASE_9C6_5C3D1_RUNTIME_IMPLEMENTATION_PLAN.md');
+        foreach (['| P7 | `350 (9/174/75/27/50/15)` |', '| P8 | `356 (9/175/77/28/51/16)` |', '| P9 | `369 (9/181/79/29/54/17)` |'] as $row) {
+            $this->assertStringContainsString($row, $design);
+        }
+        foreach (['| P7 | 350 |', '| P8 | 356 |', '| P9 | 369 |', 'Its exact length is `173874` bytes', 'fixed at 16'] as $required) {
+            $this->assertStringContainsString($required, $plan);
+        }
+        foreach (['PHASE_III_P0_STAGING_SOURCE_REVISION_POINTERS_FOUNDATION_PROPOSAL.md', 'PHASE_III_P0_STAGING_SOURCE_REVISION_POINTERS_D1_D3_RESOLUTION_PROPOSAL.md'] as $file) {
+            $proposal = $this->readDocument('docs/'.$file);
+            $this->assertStringContainsString('2026-10-26', $proposal);
+            $this->assertStringContainsString('A2/A8/A9', $proposal);
+            $this->assertStringContainsString('CANDIDATE — NOT OWNER APPROVED', $proposal);
+        }
+    }
+
     public function test_slice_four_sku_interpretation_is_pinned_without_implementation_authority(): void
     {
         $design = $this->readDocument('docs/IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md');
@@ -2079,10 +2106,16 @@ TEXT;
 
     private function historicalSliceThreePlan(string $plan): string
     {
+        $plan = str_replace(
+            "P0-06 is IMPLEMENTATION_PRESENT_DORMANT at HEAD `b2d7e0bb428745dfe9d0e39a6973fd34a5cf371c`.\n".
+                "Attributed staging/CI evidence is recorded in [Slice 5 evidence](PHASE_III_P0_SLICE_5_STAGING_EVIDENCE_2026_10_20.md); this is not a new deployment verification.\n",
+            '',
+            str_replace(["\r\n", "\r"], "\n", $plan),
+        );
         // Only the historical six-artifact fixtures use this dated status projection.
         $plan = str_replace(
             "Slice 5 defines only P0-06 schema/read model; it supplies no implementation authority.\n".
-                "P0-06 through P0-09 remain unimplemented and implementation-unauthorized.\n".
+                "P0-07 through P0-09 remain unimplemented and implementation-unauthorized.\n".
                 'P0-07 through P0-09 remain unsliced and unauthorized.',
             'P0-06 through P0-09 remain unimplemented, unsliced and unauthorized.',
             str_replace(["\r\n", "\r"], "\n", $plan),
@@ -2278,10 +2311,10 @@ TEXT;
         foreach ([
             [$sequence, '| `Phase 9C.6.5C.3D - Phase III-P0 Slice 4` | P0-05 only: dormant immutable supplier-product logical identity-head foundation | `IMPLEMENTATION_PRESENT_DORMANT`; separate owner authorization in the conversation dated 2026-10-12; validation, review, merge and deployment require their own evidence |'],
             [$sequence, '| later Phase III-P0 slices | P0-07 through P0-09 and deferred P0-06 writer/integration'],
-            [$sequence, 'No source acquisition, BoundedImmutableSourcePayload owner, downloader/parser adapter, runtime caller or P0-06 through P0-09 implementation is authorized.'],
+            [$sequence, 'No source acquisition, BoundedImmutableSourcePayload owner, downloader/parser adapter, runtime caller or P0-07 through P0-09 implementation is authorized.'],
             [$sequence, 'No production caller or public/protected write entry point is authorized.'],
             [$sequence, 'Any future head insert/lock primitive must use the caller-owned whole transaction; it cannot commit an unbound head. Complete SupplierProduct/revision/pointer binding remains a later integration prerequisite, never a P0-05 "bind later" exception.'],
-            [$prerequisite, 'P0-06 through P0-09 remain unimplemented and implementation-unauthorized.'],
+            [$prerequisite, 'P0-07 through P0-09 remain unimplemented and implementation-unauthorized.'],
             [$prerequisite, 'P0-07 through P0-09 remain unsliced and unauthorized.'],
             [$plan, 'Runtime activation remains zero.'],
         ] as [$text, $required]) {
@@ -2407,7 +2440,7 @@ TEXT;
             ['it cannot commit an unbound head.', 'it may commit an unbound head.'],
             ['No production caller or public/protected write entry point is authorized.', 'A live production caller and public write entry point are authorized.'],
             ['| later Phase III-P0 slices | P0-07 through P0-09 and deferred P0-06 writer/integration', '| later Phase III-P0 slices | P0-08 through P0-09'],
-            ['P0-06 through P0-09 implementation is authorized.', 'P0-07 through P0-09 implementation is authorized.'],
+            ['P0-07 through P0-09 implementation is authorized.', 'P0-08 through P0-09 implementation is authorized.'],
         ] as [$old, $new]) {
             $this->assertStringContainsString($old, $design);
             $this->assertNotSame([], $this->phaseThreeP0SliceFourPresenceContract(str_replace($old, $new, $design), $plan, $present), $old);
@@ -2566,7 +2599,7 @@ TEXT;
         ];
     }
 
-    public function test_slice_five_definition_is_exact_future_only_and_keeps_current_presence(): void
+    public function test_slice_five_definition_reconciles_dormant_presence_and_retains_historical_scope(): void
     {
         $design = $this->readDocument('docs/IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md');
         $plan = $this->readDocument('docs/PHASE_9C6_5C3D1_RUNTIME_IMPLEMENTATION_PLAN.md');
@@ -2583,7 +2616,7 @@ TEXT;
         foreach ([
             'P0-06 schema/read model only',
             'DEFINED_NOT_IMPLEMENTATION_AUTHORIZED',
-            'P0-06 remains unimplemented.',
+            'Current status is `IMPLEMENTATION_PRESENT_DORMANT` at the stated HEAD.',
             'exact frozen P5 -> P6',
             'guarded terminal local/testing P6 -> P5',
             'rejects save/create and all other mutations',
@@ -2593,7 +2626,7 @@ TEXT;
         ] as $required) {
             $this->assertStringContainsString($required, preg_replace('/\s+/', ' ', str_replace('**', '', $definition)));
         }
-        $row = '| `Phase 9C.6.5C.3D - Phase III-P0 Slice 5` | Immutable Supplier Product Source Revision Foundation; P0-06 schema/read model only | `DEFINED_NOT_IMPLEMENTATION_AUTHORIZED`; unimplemented; separate implementation authorization required |';
+        $row = '| `Phase 9C.6.5C.3D - Phase III-P0 Slice 5` | Immutable Supplier Product Source Revision Foundation; P0-06 schema/read model only | `IMPLEMENTATION_PRESENT_DORMANT` at the stated HEAD; attributed Slice 5 evidence; writer/integration excluded |';
         $this->assertSame(1, substr_count($design, $row));
         $mutations = [
             'missing definition' => str_replace($definition, '', $design),
@@ -2605,8 +2638,8 @@ TEXT;
         ];
         foreach ([
             ['DEFINED_NOT_IMPLEMENTATION_AUTHORIZED', 'IMPLEMENTATION_AUTHORIZED'],
-            ['permits implementation or runtime activation', 'permits implementation and runtime activation'],
-            ['P0-06 remains unimplemented.', 'P0-06 is implemented.'],
+            ['not a fresh execution result or runtime activation grant', 'a fresh runtime activation grant'],
+            ['Current status is `IMPLEMENTATION_PRESENT_DORMANT`', 'Current status is `RUNTIME_AUTHORIZED`'],
             ['P0-07 through\nP0-09 remain', 'P0-08 through\nP0-09 remain'],
             ['importer/capture integration remain deferred and outside Slice 5.', 'importer/capture integration is included in Slice 5.'],
             ['not composite\nstaging ownership, current-revision pointer consistency or CAS.', 'including composite\nstaging ownership, current-revision pointer consistency and CAS.'],
@@ -3340,9 +3373,9 @@ TEXT;
         $oracle = $this->phaseThreeP0ConcreteOracleContract($design, $plan);
 
         $this->assertSame([], $oracle['violations'], implode(PHP_EOL, $oracle['violations']));
-        $this->assertCount(375, $oracle['objects']);
-        $this->assertCount(17, $oracle['states']);
-        $this->assertCount(15, $oracle['operations']);
+        $this->assertCount(376, $oracle['objects']);
+        $this->assertCount(18, $oracle['states']);
+        $this->assertCount(16, $oracle['operations']);
         $this->assertSame($this->expectedPhaseThreeP0StateHashes(), $oracle['state_hashes']);
         $this->assertSame([
             'BASELINE' => 207,
@@ -3352,7 +3385,7 @@ TEXT;
             'P0-04' => 19,
             'P0-05' => 15,
             'P0-06' => 30,
-            'P0-07' => 12,
+            'P0-07' => 13,
             'P0-08' => 10,
             'P0-09' => 14,
         ], $oracle['owner_counts']);
@@ -3664,6 +3697,7 @@ TEXT;
             'P0-07-DOWN-01',
             'P0-07-DOWN-02',
             'P0-07-DOWN-03',
+            'P0-07-DOWN-04',
             'P0-08-DOWN-01',
             'P0-08-DOWN-02',
             'P0-08-DOWN-03',
@@ -3671,9 +3705,45 @@ TEXT;
             'P0-09-DOWN-02',
             'P0-09-DOWN-03',
         ], $oracle['operation_ids_sorted']);
+        $this->assertSame(array_keys($this->expectedPhaseThreeP0DowngradeTransitions()), array_keys($oracle['operations']));
+        $this->assertSame(
+            $this->expectedPhaseThreeP0DowngradeTransitions(),
+            array_map(static fn (array $operation): array => [
+                'precondition_state' => $operation['precondition_state'],
+                'result_state' => $operation['result_state'],
+                'next_operation' => $operation['next_operation'],
+            ], $oracle['operations']),
+        );
+        foreach ([
+            'missing P0-07-DOWN-04' => static function (array &$records): void {
+                $index = array_search('P0-07-DOWN-04', array_column($records, 'operation_id'), true);
+                array_splice($records, $index, 1);
+            },
+            'duplicate P0-07-DOWN-04' => static function (array &$records): void {
+                $index = array_search('P0-07-DOWN-04', array_column($records, 'operation_id'), true);
+                array_splice($records, $index, 0, [$records[$index]]);
+            },
+            'reordered P0-07-DOWN-04' => static function (array &$records): void {
+                $index = array_search('P0-07-DOWN-04', array_column($records, 'operation_id'), true);
+                [$records[$index - 1], $records[$index]] = [$records[$index], $records[$index - 1]];
+            },
+            'skip P0-07-DOWN-04 recovery' => static function (array &$records): void {
+                $index = array_search('P0-07-DOWN-03', array_column($records, 'operation_id'), true);
+                $records[$index]['next_operation'] = 'NONE_TARGET_PREFIX_VERIFICATION';
+            },
+        ] as $case => $mutator) {
+            $mutated = $this->mutatePhaseThreeP0JsonlRegistry(
+                $design,
+                'phase-iii-p0-downgrade-operation-registry',
+                'phase-iii-p0-downgrade-operations-v1',
+                $mutator,
+            );
+            $this->assertNotSame([], $this->phaseThreeP0ConcreteOracleContract($mutated, $plan)['violations'], $case);
+        }
         $this->assertSame([
             'P7_DOWN_1',
             'P7_DOWN_2',
+            'P7_DOWN_3',
             'P8_DOWN_1',
             'P8_DOWN_2',
             'P9_DOWN_1',
@@ -3744,7 +3814,7 @@ TEXT;
 
         $this->assertSame([], $canonical['violations'], implode(PHP_EOL, $canonical['violations']));
         $this->assertSame($this->expectedPhaseThreeP0OracleMetadataSha256(), $canonical['metadata_sha256'], 'OR17 canonical metadata must pass.');
-        $this->assertCount(375, array_unique(array_column($canonical['objects'], 'registry_id')), 'OR17 registry IDs must be globally unique.');
+        $this->assertCount(376, array_unique(array_column($canonical['objects'], 'registry_id')), 'OR17 registry IDs must be globally unique.');
 
         $objectsMarker = ['phase-iii-p0-object-signature-registry', 'phase-iii-p0-object-signatures-v1'];
         $statesMarker = ['phase-iii-p0-state-signature-registry', 'phase-iii-p0-state-signatures-v1'];
@@ -3867,14 +3937,39 @@ TEXT;
             );
             $this->assertStringContainsString('P0-03 only', $authority);
             $this->assertStringContainsString('IMPLEMENTATION_PRESENT_DORMANT', $authority);
-            $this->assertStringContainsString('P0-06 through P0-09', $authority);
+            $this->assertStringContainsString('P0-07 through P0-09', $authority);
             $this->assertStringContainsString('Runtime activation remains zero.', $authority);
         }
+
+        foreach ([
+            'P0-06 is IMPLEMENTATION_PRESENT_DORMANT at HEAD `b2d7e0bb428745dfe9d0e39a6973fd34a5cf371c`.',
+            'P0-07 through P0-09 remain unimplemented and implementation-unauthorized.',
+            'P0-07 through P0-09 and deferred P0-06 writer/integration',
+        ] as $currentAuthority) {
+            $this->assertStringContainsString($currentAuthority, $design);
+        }
+        foreach ([
+            'Slice 5 is P0-06 schema/read model only, IMPLEMENTATION_PRESENT_DORMANT',
+            'P0-07 through P0-09 implementation remains unauthorized.',
+            'Deferred P0-06 writer/integration is not included.',
+        ] as $currentAuthority) {
+            $this->assertStringContainsString($currentAuthority, $plan);
+        }
+        $this->assertNotSame([], $this->phaseThreeClosedCurrentArchitectureContract($this->replaceStructuralText(
+            $designDocument,
+            'P0-06 is IMPLEMENTATION_PRESENT_DORMANT',
+            'P0-06 is NOT_IMPLEMENTED',
+        ))['violations']);
+        $this->assertNotSame([], $this->phaseThreeClosedRuntimePlanContract($this->replaceStructuralText(
+            $planDocument,
+            'Slice 5 is P0-06 schema/read model only, IMPLEMENTATION_PRESENT_DORMANT',
+            'Slice 5 is P0-06 schema/read model only, NOT_IMPLEMENTED',
+        ))['violations']);
 
         $this->assertStringContainsString('P0-04 and `BoundedImmutableSourcePayload`, downloader/parser adapters and receipt-bound bytes are explicitly outside Slice 2.', $design);
         $this->assertStringContainsString('It forbids P0-04 through P0-09;', $plan);
         $this->assertStringContainsString(
-            'No source acquisition, BoundedImmutableSourcePayload owner, downloader/parser adapter, runtime caller or P0-06 through P0-09 implementation is authorized.',
+            'No source acquisition, BoundedImmutableSourcePayload owner, downloader/parser adapter, runtime caller or P0-07 through P0-09 implementation is authorized.',
             $design,
         );
         $this->assertStringContainsString(
@@ -3933,7 +4028,18 @@ TEXT;
             );
             $currentOutsideHistory = preg_replace('/<!-- slice-two-deployment-evidence:start -->.*?<!-- slice-two-deployment-evidence:end -->/s', '', $currentStatus);
             $currentOutsideHistory = preg_replace('/\s+/', ' ', $currentOutsideHistory);
-            $this->assertStringContainsString('P0-06 through P0-09', $currentOutsideHistory, $statusDocument);
+            if ($statusDocument === 'docs/PHASES.md') {
+                foreach ([
+                    'P0-06 is IMPLEMENTATION_PRESENT_DORMANT at HEAD `b2d7e0bb428745dfe9d0e39a6973fd34a5cf371c`.',
+                    'P0-07 through P0-09 remain unimplemented and implementation-unauthorized.',
+                    'deferred P0-06 writer/integration is excluded.',
+                ] as $currentAuthority) {
+                    $this->assertStringContainsString($currentAuthority, $currentOutsideHistory, $statusDocument);
+                }
+            } else {
+                // These unchanged reference documents retain their dated Slice 2/4 boundary.
+                $this->assertStringContainsString('P0-06 through P0-09', $currentOutsideHistory, $statusDocument);
+            }
             $this->assertStringContainsString('Slice 4 / P0-05 is present as IMPLEMENTATION_PRESENT_DORMANT', $currentOutsideHistory, $statusDocument);
             $this->assertStringContainsString('owner authorization in the conversation dated 2026-10-12', $currentOutsideHistory, $statusDocument);
             $this->assertStringContainsString('P0-04 receipt persistence is present and dormant', $status, $statusDocument);
@@ -4030,7 +4136,7 @@ TEXT;
                 '| later Phase III-P0 slices | P0-07 through P0-09 and deferred P0-06 writer/integration',
                 'count checks do not prove content preservation',
                 'It is subordinate planning, not a schema or semantic authority.',
-                'No source acquisition, BoundedImmutableSourcePayload owner, downloader/parser adapter, runtime caller or P0-06 through P0-09 implementation is authorized.',
+                'No source acquisition, BoundedImmutableSourcePayload owner, downloader/parser adapter, runtime caller or P0-07 through P0-09 implementation is authorized.',
                 'Runtime activation remains zero.',
             ]],
             'plan prerequisite status' => [$this->markdownSection($plan, '### Phase III-P0 - Protected source provenance prerequisite foundation', '### Phase III - Snapshot persistence and cohort authorization core'), [
@@ -4041,7 +4147,7 @@ TEXT;
                 'Separate owner authorization in the conversation dated 2026-10-12 permits only the dormant foundation and isolated tests.',
                 'Presence proves neither validation, merge nor deployment.',
                 'Runtime activation remains unauthorized.',
-                'P0-06 through P0-09 remain unimplemented and implementation-unauthorized.',
+                'P0-07 through P0-09 remain unimplemented and implementation-unauthorized.',
                 'P0-07 through P0-09 remain unsliced and unauthorized.',
             ]],
             'plan sequence' => [$this->markdownSection($plan, '## Future Phase III-P0 provenance migration allocation', '## Historical deployed Phase I ten-table migration dependency plan'), [
@@ -4050,7 +4156,7 @@ TEXT;
                 'PHASE_III_P0_SLICE_2_STAGING_EVIDENCE_2026_09_05.md',
                 'without claiming content preservation from row counts',
                 'Slice 3: Immutable Source Payload Receipt Foundation, P0-04 only, `IMPLEMENTATION_PRESENT_DORMANT`.',
-                'P0-06 through P0-09 implementation remains unauthorized.',
+                'P0-07 through P0-09 implementation remains unauthorized.',
                 'P0-07 through P0-09 remain unsliced and unauthorized.',
                 'BoundedImmutableSourcePayload ownership, acquisition, downloader/parser adapters and EOF integration require a separate future gate.',
                 'This plan grants no implementation or runtime authority.',
@@ -4593,7 +4699,7 @@ TEXT;
 
         $this->assertSame([], $canonical['violations'], implode(PHP_EOL, $canonical['violations']));
         $this->assertSame('CANONICAL_CURRENT_ARCHITECTURE', $canonical['current_architecture_inventory']['classification']);
-        $this->assertSame(310, $canonical['current_architecture_inventory']['unit_count']);
+        $this->assertSame(313, $canonical['current_architecture_inventory']['unit_count']);
         // Receipt presence and the existing SHA-256 inventory wording share one
         // introductory structural paragraph, adding one diagnostic candidate.
         $this->assertSame(18, $canonical['candidate_count']);
@@ -4743,7 +4849,7 @@ TEXT;
 
         $this->assertSame([], $canonical['violations'], implode(PHP_EOL, $canonical['violations']));
         $this->assertSame('CANONICAL_ARCHITECTURE_DOCUMENT', $canonical['architecture_document_inventory']['classification']);
-        $this->assertSame(1154, $canonical['architecture_document_inventory']['unit_count']);
+        $this->assertSame(1157, $canonical['architecture_document_inventory']['unit_count']);
         $this->assertSame($expectedRegions, $canonical['architecture_document_inventory']['region_order']);
         $this->assertSame($expectedRegions, array_keys($canonical['architecture_document_inventory']['regions']));
         foreach ($expectedRegions as $position => $id) {
@@ -6945,7 +7051,7 @@ TEXT;
             '| P0-04 | `supplier_import_source_payload_receipts`: `id>supplier_import_source_execution_id>source_execution_fingerprint>receipt_version>accepted_payload_bytes>accepted_payload_sha256>payload_receipt_fingerprint>created_at` | `PRIMARY(id)`; `uq_import_source_payload_receipt_execution(supplier_import_source_execution_id)`; `uq_import_source_payload_receipt_fingerprint(payload_receipt_fingerprint)`; `ix_import_source_payload_receipt_execution_fk(supplier_import_source_execution_id>source_execution_fingerprint)` | `fk_import_source_payload_receipt_execution`; `chk_import_source_payload_receipt_version`; `chk_import_source_payload_receipt_bytes`; `chk_import_source_payload_receipt_fingerprints`; `trg_import_source_payload_receipt_no_update`; `trg_import_source_payload_receipt_no_delete` |',
             '| P0-05 | `supplier_product_identity_heads`: `id>supplier_id>supplier_feed_id>supplier_sku_bytes>created_at` | `PRIMARY(id)`; `uq_supplier_product_identity_head(supplier_id>supplier_feed_id>supplier_sku_bytes)`; `uq_supplier_product_identity_head_scope(id>supplier_id>supplier_feed_id)`; `uq_supplier_product_identity_head_revision_scope(id>supplier_id>supplier_feed_id>supplier_sku_bytes)`; `ix_supplier_product_identity_head_feed_owner_fk(supplier_feed_id>supplier_id)` | `fk_supplier_product_identity_head_feed_owner`; `chk_supplier_product_identity_head_sku_bytes`; `trg_supplier_product_identity_head_no_update`; `trg_supplier_product_identity_head_no_delete` |',
             '| P0-06 | `supplier_product_source_revisions`: `id>supplier_product_identity_head_id>supplier_product_id>supplier_import_source_execution_id>supplier_id>supplier_feed_id>supplier_sku_bytes>source_identity>source_descriptor_fingerprint>source_execution_fingerprint>source_member_identity_hash>source_row_fingerprint>staging_projection_fingerprint>revision_fingerprint>observed_at>created_at` | `PRIMARY(id)`; `uq_supplier_product_revision_execution_head(supplier_import_source_execution_id>supplier_product_identity_head_id)`; `uq_supplier_product_revision_pointer_scope(id>supplier_product_id>supplier_product_identity_head_id>supplier_id>supplier_feed_id)`; `ix_supplier_product_revision_head_fk(supplier_product_identity_head_id>supplier_id>supplier_feed_id>supplier_sku_bytes)`; `ix_supplier_product_revision_execution_fk(supplier_import_source_execution_id>supplier_id>supplier_feed_id>source_identity>source_descriptor_fingerprint>source_execution_fingerprint)`; `ix_supplier_product_revision_product_id_fk(supplier_product_id)` | `fk_supplier_product_revision_head`; `fk_supplier_product_revision_execution`; `fk_supplier_product_revision_product_id`; `chk_supplier_product_revision_source_identity`; `chk_supplier_product_revision_fingerprints`; `trg_supplier_product_revision_no_update`; `trg_supplier_product_revision_no_delete` |',
-            '| P0-07 | `supplier_products`: `supplier_product_identity_head_id>current_source_revision_id`; no new revision columns | `uq_supplier_product_identity_head_assignment(supplier_product_identity_head_id)`; `uq_supplier_product_source_revision_scope(id>supplier_product_identity_head_id>supplier_id>supplier_feed_id)`; `ix_supplier_product_identity_head_fk(supplier_product_identity_head_id>supplier_id>supplier_feed_id)`; `ix_supplier_product_current_revision_fk(current_source_revision_id>id>supplier_product_identity_head_id>supplier_id>supplier_feed_id)`; `ix_supplier_product_revision_product_scope_fk(supplier_product_id>supplier_product_identity_head_id>supplier_id>supplier_feed_id)` on `supplier_product_source_revisions` | `fk_supplier_product_identity_head`; `fk_supplier_product_current_revision`; replace `fk_supplier_product_revision_product_id` with `fk_supplier_product_revision_product_scope`; `chk_supplier_product_source_revision_pointers`; `trg_supplier_product_source_projection_guard` |',
+            '| P0-07 | `supplier_products`: `supplier_product_identity_head_id>current_source_revision_id`; no new revision columns | `uq_supplier_product_identity_head_assignment(supplier_product_identity_head_id)`; `uq_supplier_product_source_revision_scope(id>supplier_id>supplier_feed_id)`; `ix_supplier_product_identity_head_fk(supplier_product_identity_head_id>supplier_id>supplier_feed_id)`; `ix_supplier_product_current_revision_fk(current_source_revision_id>id>supplier_product_identity_head_id>supplier_id>supplier_feed_id)`; `ix_supplier_product_revision_product_scope_fk(supplier_product_id>supplier_id>supplier_feed_id)` on `supplier_product_source_revisions` | `fk_supplier_product_identity_head`; `fk_supplier_product_current_revision`; replace `fk_supplier_product_revision_product_id` with `fk_supplier_product_revision_product_scope`; `chk_supplier_product_source_revision_pointers`; `trg_supplier_product_source_projection_guard`; `trg_supplier_product_source_pointer_insert_guard` |',
             '| P0-08 | `supplier_import_execution_claims`: `cohort_source_identity`; no new generation column | `uq_import_execution_claim_id_cohort_source(id>cohort_source_identity)`; `ix_snapshot_generation_claim_source(supplier_import_execution_claim_id>source_identity)` | replace `chk_import_claim_cohort_authorization_tuple`; replace `chk_import_claim_processing_owner`; `chk_import_execution_claim_cohort_source_identity`; `trg_import_execution_claim_cohort_source_immutable`; `fk_snapshot_generation_claim_source` |',
             '| P0-09 | `supplier_import_execution_claims`: `cohort_bounds_policy_key>cohort_bounds_policy_version>cohort_bounds_policy_fingerprint`; `supplier_offer_snapshot_generations`: `bounds_policy_key>bounds_policy_version>bounds_policy_fingerprint` | `uq_import_claim_id_bounds_policy(id>cohort_bounds_policy_key>cohort_bounds_policy_version>cohort_bounds_policy_fingerprint)`; `ix_snapshot_generation_bounds_policy(supplier_import_execution_claim_id>bounds_policy_key>bounds_policy_version>bounds_policy_fingerprint)` | `chk_import_claim_cohort_policy_authority`; `chk_import_claim_cohort_policy_identity`; replace `chk_import_claim_processing_owner`; `trg_import_execution_claim_cohort_policy_immutable`; `chk_snapshot_generation_bounds_policy_identity`; `fk_snapshot_generation_bounds_policy` |',
         ];
@@ -7280,14 +7386,14 @@ TEXT;
         $objects = $objectsBlock['records'];
         $stateRows = $statesBlock['records'];
         $operationRows = $operationsBlock['records'];
-        if (count($objects) !== 375) {
-            $violations[] = 'Concrete P0 object-signature registry must contain exactly 375 records.';
+        if (count($objects) !== 376) {
+            $violations[] = 'Concrete P0 object-signature registry must contain exactly 376 records.';
         }
-        if (count($stateRows) !== 17) {
-            $violations[] = 'Concrete P0 state registry must contain baseline, ten prefixes and six partial states.';
+        if (count($stateRows) !== 18) {
+            $violations[] = 'Concrete P0 state registry must contain baseline, ten prefixes and seven partial states.';
         }
-        if (count($operationRows) !== 15) {
-            $violations[] = 'Concrete P0 downgrade registry must contain exactly 15 physical statements.';
+        if (count($operationRows) !== 16) {
+            $violations[] = 'Concrete P0 downgrade registry must contain exactly 16 physical statements.';
         }
 
         $signatureKeys = [
@@ -7375,7 +7481,7 @@ TEXT;
         ksort($ownerCounts);
         $expectedOwnerCounts = [
             'BASELINE' => 207, 'P0-01' => 1, 'P0-02' => 33, 'P0-03' => 34,
-            'P0-04' => 19, 'P0-05' => 15, 'P0-06' => 30, 'P0-07' => 12,
+            'P0-04' => 19, 'P0-05' => 15, 'P0-06' => 30, 'P0-07' => 13,
             'P0-08' => 10, 'P0-09' => 14,
         ];
         if ($ownerCounts !== $expectedOwnerCounts) {
@@ -7548,12 +7654,12 @@ TEXT;
             $operations[$id] = $record;
         }
         if (array_keys($operations) !== array_keys($expectedOperations)) {
-            $violations[] = 'Concrete P0 physical DDL ordering differs from the exact 15-operation authority.';
+            $violations[] = 'Concrete P0 physical DDL ordering differs from the exact 16-operation authority.';
         }
 
         $metadataCanonicalJson = $this->phaseThreeP0OracleMetadataCanonicalJson($objects, $stateRows, $operationRows);
         $metadataSha256 = hash('sha256', "phase-iii-p0-oracle-metadata-v1\0".$metadataCanonicalJson);
-        if (strlen($metadataCanonicalJson) !== 168474) {
+        if (strlen($metadataCanonicalJson) !== 173874) {
             $violations[] = 'Concrete P0 oracle metadata canonical JSON length is not exact.';
         }
         if ($metadataSha256 !== $this->expectedPhaseThreeP0OracleMetadataSha256()) {
@@ -7578,7 +7684,7 @@ TEXT;
             'The `source_locator_key` length CHECK is exact frozen byte authority, while its physical column remains `VARCHAR(128) CHARACTER SET ascii COLLATE ascii_bin`.',
             'The complete canonical locator is therefore exactly 89 characters and 89 bytes.',
             'The CHECK keeps `LENGTH(source_locator_key) = 89` alongside the exact versioned regex',
-            '0ca5b057d4733cb791d791bbf6113e8e7f3a678ffdd61a7c11ca36306023def6',
+            'cf58441e3f1c17254310e3e76a24605ad0aa1a89adcdab16568afad614f927f6',
             'Trigger `DATABASE_COLLATION` is the only environment-derived literal in this signature contract.',
             'Fresh-install integration must therefore prove A and B both classify as the same P0 before P0-01 and the same P1 after P0-01',
             'No unrelated object, SQL or downgrade-SQL golden changes.',
@@ -7589,7 +7695,7 @@ TEXT;
         }
         $normalizedPlan = preg_replace('/\s+/', ' ', $plan) ?? $plan;
         foreach ([
-            'The physical statement inventory is fixed at 15',
+            'The physical statement inventory is fixed at 16',
             'Every invocation emits exactly one authoritative synchronous structured event',
             'P0-02 down is one atomic `DROP TABLE`',
             'UNCLASSIFIED_P0_SCHEMA_STATE',
@@ -7600,7 +7706,7 @@ TEXT;
             'Within the same P0-02 authority, `source_locator_key` remains exactly `VARCHAR(128) CHARACTER SET ascii COLLATE ascii_bin`',
             'the canonical locator is exactly 89 characters and 89 bytes.',
             'Keep `LENGTH(source_locator_key) = 89` and the exact versioned regex together.',
-            '0ca5b057d4733cb791d791bbf6113e8e7f3a678ffdd61a7c11ca36306023def6',
+            'cf58441e3f1c17254310e3e76a24605ad0aa1a89adcdab16568afad614f927f6',
             'The sole environment-derived exception is the required trigger `database_collation` field.',
             'Fresh MySQL 8.4 integration must create one disposable schema with `utf8mb4_0900_ai_ci` and one with `utf8mb4_unicode_ci`',
             'no database-level `utf8mb4_unicode_ci` prerequisite, `ALTER DATABASE`, alternate migration route or hidden bootstrap DDL is authorized',
@@ -8303,25 +8409,25 @@ TEXT;
     /** @return array<string, mixed> */
     private function expectedPhaseThreeArchitectureDocumentInventory(): array
     {
-        // Slice 5 design-only delta; actual PHP and independent Node agree; frozen regions unchanged.
+        // Independent Node inventory of authored design bytes; no implementation-derived oracle.
         return [
             'version' => 'phase-iii-architecture-document-closed-world-v1',
-            'normalized_bytes' => 1901899,
-            'line_count' => 8302,
-            'unit_count' => 1154,
+            'normalized_bytes' => 1971603,
+            'line_count' => 8359,
+            'unit_count' => 1157,
             'unit_categories' => [
-                'CANONICAL_HEADING_EXACT' => 88,
+                'CANONICAL_HEADING_EXACT' => 89,
                 'CANONICAL_LITERAL_EXACT' => 73,
                 'CANONICAL_MARKER_EXACT' => 41,
-                'CANONICAL_PARAGRAPH_EXACT' => 880,
+                'CANONICAL_PARAGRAPH_EXACT' => 882,
                 'CANONICAL_TABLE_EXACT' => 72,
             ],
-            'byte_fingerprint' => 'd98c1cb99479da90ac0809bb4b94100812cb358ac696536f6ea927eeb5f8a1a4',
-            'unit_fingerprint' => 'dfbbf5cb8b930fe6823667163a4fb68cd922cdc3d01703ad6cac47a036b7710a',
+            'byte_fingerprint' => 'd0945301fba040230d99d1e19bf34b861ade55feeef15a79161fed33b9411f1d',
+            'unit_fingerprint' => '26aa4253a6dc3271502fd5f1d0c78b3a01bd4f0faa7bdc3e663b7fa263f14044',
             'region_order' => [
-                'pre-current-reference-history-v1',
-                'current-architecture-authority-v1',
-                'post-current-reference-history-v1',
+                0 => 'pre-current-reference-history-v1',
+                1 => 'current-architecture-authority-v1',
+                2 => 'post-current-reference-history-v1',
             ],
             'regions' => [
                 'pre-current-reference-history-v1' => [
@@ -8343,18 +8449,18 @@ TEXT;
                 'current-architecture-authority-v1' => [
                     'id' => 'current-architecture-authority-v1',
                     'position' => 2,
-                    'normalized_bytes' => 1494090,
-                    'line_count' => 2806,
-                    'unit_count' => 310,
+                    'normalized_bytes' => 1563794,
+                    'line_count' => 2863,
+                    'unit_count' => 313,
                     'unit_categories' => [
-                        'CANONICAL_HEADING_EXACT' => 18,
+                        'CANONICAL_HEADING_EXACT' => 19,
                         'CANONICAL_LITERAL_EXACT' => 19,
                         'CANONICAL_MARKER_EXACT' => 31,
-                        'CANONICAL_PARAGRAPH_EXACT' => 215,
+                        'CANONICAL_PARAGRAPH_EXACT' => 217,
                         'CANONICAL_TABLE_EXACT' => 27,
                     ],
-                    'byte_fingerprint' => '8795edc72a90473096991519ca90e704d311b38838dab275533b46a2daeba61a',
-                    'unit_fingerprint' => '6d51b8179f69fa787d6f8a75268681bcade14fd1586c08b9c58d4742f8fd6555',
+                    'byte_fingerprint' => '700b410f60467999d0bdbf255505f2954cc22c54b0e7bbeccd453c0dfe0ea7f8',
+                    'unit_fingerprint' => '1c8cb2b5d8aae6c54f1b824eb18d1c0b84f778453ebd2e753d8fbf91582039d5',
                 ],
                 'post-current-reference-history-v1' => [
                     'id' => 'post-current-reference-history-v1',
@@ -8379,42 +8485,42 @@ TEXT;
     /** @return array<string, mixed> */
     private function expectedPhaseThreeCurrentArchitectureInventory(): array
     {
-        // Slice 5 design-only delta; actual PHP and independent Node agree; no schema refresh.
+        // Independent Node inventory of authored design bytes; no implementation-derived oracle.
         return [
             'version' => 'phase-iii-current-architecture-closed-world-v1',
-            'normalized_bytes' => 1494090,
-            'line_count' => 2806,
-            'unit_count' => 310,
+            'normalized_bytes' => 1563794,
+            'line_count' => 2863,
+            'unit_count' => 313,
             'unit_categories' => [
-                'CANONICAL_HEADING_EXACT' => 18,
+                'CANONICAL_HEADING_EXACT' => 19,
                 'CANONICAL_LITERAL_EXACT' => 19,
                 'CANONICAL_MARKER_EXACT' => 31,
-                'CANONICAL_PARAGRAPH_EXACT' => 215,
+                'CANONICAL_PARAGRAPH_EXACT' => 217,
                 'CANONICAL_TABLE_EXACT' => 27,
             ],
-            'byte_fingerprint' => 'd4bcea3ae2b057c1657fb5f5b403ec3edb546bf7bd85840ea4be0d6a0ff5fef1',
-            'unit_fingerprint' => '74c3142115b3d5561acbb0097496e7bb266a938f34082be1536280f4f8f23f9d',
+            'byte_fingerprint' => 'a4970b6cf6a2ec75ded47bc316564f8c068767a95bddb386c3b83a1ccba4d4af',
+            'unit_fingerprint' => '48483e52e6205626c0b480bffe5cbbf8735d8dd336973bd49bf583b0390a5194',
         ];
     }
 
     /** @return array<string, mixed> */
     private function expectedPhaseThreeRuntimePlanInventory(): array
     {
-        // Three current-status paragraphs only; actual PHP and independent Node agree.
+        // Independent Node inventory of authored design bytes; no implementation-derived oracle.
         return [
             'version' => 'phase-iii-runtime-plan-closed-world-v1',
-            'normalized_bytes' => 120247,
-            'line_count' => 1764,
-            'unit_count' => 499,
+            'normalized_bytes' => 122105,
+            'line_count' => 1785,
+            'unit_count' => 502,
             'unit_categories' => [
-                'CANONICAL_HEADING_EXACT' => 48,
+                'CANONICAL_HEADING_EXACT' => 49,
                 'CANONICAL_LITERAL_EXACT' => 2,
                 'CANONICAL_MARKER_EXACT' => 7,
-                'CANONICAL_PARAGRAPH_EXACT' => 426,
+                'CANONICAL_PARAGRAPH_EXACT' => 428,
                 'CANONICAL_TABLE_EXACT' => 16,
             ],
-            'byte_fingerprint' => '3a79a7ea9756d54a9cc933ef35dc15f8da2f0746e39ba45788747867391f9837',
-            'unit_fingerprint' => '512576f1cb3cbe73253728b9e0a9c87be2a9837adb76450c022f0f65675e3fde',
+            'byte_fingerprint' => '940a0ca6ef96003b3db1e232755c209eef7cb44beb538f9cf0b5919b3eda1f14',
+            'unit_fingerprint' => '344e49c6a1d6235743ce80a1d4c3427d724eaad10fbda58af54c6f4b738da838',
         ];
     }
 
@@ -8579,17 +8685,19 @@ TEXT;
     /** @return array<string, string> */
     private function expectedPhaseThreeP0StateHashes(): array
     {
+        // Independent design-side literal inventory; never read from the implementation under test.
         return [
             'P0_BASELINE' => 'dd03ca3b3610207ea12afbd14373a62275e74c8cda50f72b9e129006192bc812',
-            'P9' => '48138998d6168fab3275475ba09ee8af261116a7cf0bed8ff8be33dfa97ff406',
-            'P9_DOWN_1' => '084cbc4d6992621b283a45be6f5ff0c412cbb4936f173f26d5e45116ea951ed4',
-            'P9_DOWN_2' => '57ff5af1375648c6753665531fdc949531a401af85bd75fcc6fe16e0867b3431',
-            'P8' => '3d9ebf157c1374e2fd8271d0ce5c5b3ead0e85dcc2061914297ee5af65c7f495',
-            'P8_DOWN_1' => '21c2c27a8d9357766bb4183b5a205305e115c155b616cbb67c92ec8a0976948e',
-            'P8_DOWN_2' => '11edaac97962d7e6ac316ebda46b3f171723ed7d919b1242049f2bf3a09ad9a2',
-            'P7' => '87a549668d891206e5bd29e75514616916d71b87708f2d964a8824c8b3c0bebe',
-            'P7_DOWN_1' => '680a78d1b5c54488255b39da92e4995c3bcaa5d900f7b8f0baf40846c1f2c7be',
-            'P7_DOWN_2' => '65dbb7dd13d42731577f66a58fd6b7bf02d6fe44988b7eaaad747a8a517702ea',
+            'P9' => '16e1dcd6521b19d31200a010fd532178e3684eacbc23907da8edabb630e31eeb',
+            'P9_DOWN_1' => 'ad390d2f921345302aff1f672ddd39376a11092f792e42ecc3d10c9d8b124a05',
+            'P9_DOWN_2' => 'd698f9638c16d769b122eb85424bc5a6f38b9ecf41ad2fcb56765af6bccae74f',
+            'P8' => '4a8e646732f220aa1403acbb13a8eb67a3fa2845aaff31acd48e937919c98f48',
+            'P8_DOWN_1' => 'df3bdedf29e9aded014b2d172926dd977bc372fbdb1c65089ac59b6ce8be8d68',
+            'P8_DOWN_2' => 'b992f274eb7f13a26a44ed98eca879b40e2d3e30e45a55c1c0665630f2ef2ae3',
+            'P7' => '765692fc06ba30ee87f27a7357edcb793927a52aef2375846a79257e5e8fcc83',
+            'P7_DOWN_1' => '3f42d4567c985254acd7aaab903469c1035d870881adba431592abe6d509cd03',
+            'P7_DOWN_2' => 'bf9efbbe90dc3add76109294b8de1801ce7a6e9af4684956415335a95485565a',
+            'P7_DOWN_3' => '99b8610f13a307576198c2e1d77b5b903061d23ff82adbd57dae47ac703b7e00',
             'P6' => 'ea265e4717c2f61abba6731f08be576ff6fcd01fe6b673d61d41011a888056aa',
             'P5' => '8cc5afed3a68c4152bf1456a10741c5e23bd077bf4dae39cae639208872ca56f',
             'P4' => '1fc28641da815cd4737b50b5b8ed065918b3f416f970ba2cccef82e5342e8d57',
@@ -8603,57 +8711,180 @@ TEXT;
     /** @return array<string, array{classification: string, domain: string}> */
     private function expectedPhaseThreeP0StateMetadata(): array
     {
+        // Independent design-side literal inventory; never read from the implementation under test.
         return [
-            'P0_BASELINE' => ['classification' => 'BASELINE_AUTHORITY', 'domain' => 'phase-iii-p0-prefix-v1'],
-            'P9' => ['classification' => 'NORMAL_PREFIX', 'domain' => 'phase-iii-p0-prefix-v1'],
-            'P9_DOWN_1' => ['classification' => 'RECOGNIZED_PARTIAL', 'domain' => 'phase-iii-p0-partial-state-v1'],
-            'P9_DOWN_2' => ['classification' => 'RECOGNIZED_PARTIAL', 'domain' => 'phase-iii-p0-partial-state-v1'],
-            'P8' => ['classification' => 'NORMAL_PREFIX', 'domain' => 'phase-iii-p0-prefix-v1'],
-            'P8_DOWN_1' => ['classification' => 'RECOGNIZED_PARTIAL', 'domain' => 'phase-iii-p0-partial-state-v1'],
-            'P8_DOWN_2' => ['classification' => 'RECOGNIZED_PARTIAL', 'domain' => 'phase-iii-p0-partial-state-v1'],
-            'P7' => ['classification' => 'NORMAL_PREFIX', 'domain' => 'phase-iii-p0-prefix-v1'],
-            'P7_DOWN_1' => ['classification' => 'RECOGNIZED_PARTIAL', 'domain' => 'phase-iii-p0-partial-state-v1'],
-            'P7_DOWN_2' => ['classification' => 'RECOGNIZED_PARTIAL', 'domain' => 'phase-iii-p0-partial-state-v1'],
-            'P6' => ['classification' => 'NORMAL_PREFIX', 'domain' => 'phase-iii-p0-prefix-v1'],
-            'P5' => ['classification' => 'NORMAL_PREFIX', 'domain' => 'phase-iii-p0-prefix-v1'],
-            'P4' => ['classification' => 'NORMAL_PREFIX', 'domain' => 'phase-iii-p0-prefix-v1'],
-            'P3' => ['classification' => 'NORMAL_PREFIX', 'domain' => 'phase-iii-p0-prefix-v1'],
-            'P2' => ['classification' => 'NORMAL_PREFIX', 'domain' => 'phase-iii-p0-prefix-v1'],
-            'P1' => ['classification' => 'NORMAL_PREFIX', 'domain' => 'phase-iii-p0-prefix-v1'],
-            'P0' => ['classification' => 'NORMAL_PREFIX', 'domain' => 'phase-iii-p0-prefix-v1'],
+            'P0_BASELINE' => [
+                'classification' => 'BASELINE_AUTHORITY',
+                'domain' => 'phase-iii-p0-prefix-v1',
+            ],
+            'P9' => [
+                'classification' => 'NORMAL_PREFIX',
+                'domain' => 'phase-iii-p0-prefix-v1',
+            ],
+            'P9_DOWN_1' => [
+                'classification' => 'RECOGNIZED_PARTIAL',
+                'domain' => 'phase-iii-p0-partial-state-v1',
+            ],
+            'P9_DOWN_2' => [
+                'classification' => 'RECOGNIZED_PARTIAL',
+                'domain' => 'phase-iii-p0-partial-state-v1',
+            ],
+            'P8' => [
+                'classification' => 'NORMAL_PREFIX',
+                'domain' => 'phase-iii-p0-prefix-v1',
+            ],
+            'P8_DOWN_1' => [
+                'classification' => 'RECOGNIZED_PARTIAL',
+                'domain' => 'phase-iii-p0-partial-state-v1',
+            ],
+            'P8_DOWN_2' => [
+                'classification' => 'RECOGNIZED_PARTIAL',
+                'domain' => 'phase-iii-p0-partial-state-v1',
+            ],
+            'P7' => [
+                'classification' => 'NORMAL_PREFIX',
+                'domain' => 'phase-iii-p0-prefix-v1',
+            ],
+            'P7_DOWN_1' => [
+                'classification' => 'RECOGNIZED_PARTIAL',
+                'domain' => 'phase-iii-p0-partial-state-v1',
+            ],
+            'P7_DOWN_2' => [
+                'classification' => 'RECOGNIZED_PARTIAL',
+                'domain' => 'phase-iii-p0-partial-state-v1',
+            ],
+            'P7_DOWN_3' => [
+                'classification' => 'RECOGNIZED_PARTIAL',
+                'domain' => 'phase-iii-p0-partial-state-v1',
+            ],
+            'P6' => [
+                'classification' => 'NORMAL_PREFIX',
+                'domain' => 'phase-iii-p0-prefix-v1',
+            ],
+            'P5' => [
+                'classification' => 'NORMAL_PREFIX',
+                'domain' => 'phase-iii-p0-prefix-v1',
+            ],
+            'P4' => [
+                'classification' => 'NORMAL_PREFIX',
+                'domain' => 'phase-iii-p0-prefix-v1',
+            ],
+            'P3' => [
+                'classification' => 'NORMAL_PREFIX',
+                'domain' => 'phase-iii-p0-prefix-v1',
+            ],
+            'P2' => [
+                'classification' => 'NORMAL_PREFIX',
+                'domain' => 'phase-iii-p0-prefix-v1',
+            ],
+            'P1' => [
+                'classification' => 'NORMAL_PREFIX',
+                'domain' => 'phase-iii-p0-prefix-v1',
+            ],
+            'P0' => [
+                'classification' => 'NORMAL_PREFIX',
+                'domain' => 'phase-iii-p0-prefix-v1',
+            ],
         ];
     }
 
     private function expectedPhaseThreeP0OracleMetadataSha256(): string
     {
-        return '0ca5b057d4733cb791d791bbf6113e8e7f3a678ffdd61a7c11ca36306023def6';
+        return 'cf58441e3f1c17254310e3e76a24605ad0aa1a89adcdab16568afad614f927f6';
     }
 
     /** @return array<string, array{precondition_state: string, result_state: string, next_operation: string}> */
     private function expectedPhaseThreeP0DowngradeTransitions(): array
     {
+        // Independent design-side literal inventory; never read from the implementation under test.
         return [
-            'P0-09-DOWN-01' => ['precondition_state' => 'P9', 'result_state' => 'P9_DOWN_1', 'next_operation' => 'P0-09-DOWN-02'],
-            'P0-09-DOWN-02' => ['precondition_state' => 'P9_DOWN_1', 'result_state' => 'P9_DOWN_2', 'next_operation' => 'P0-09-DOWN-03'],
-            'P0-09-DOWN-03' => ['precondition_state' => 'P9_DOWN_2', 'result_state' => 'P8', 'next_operation' => 'NONE_TARGET_PREFIX_VERIFICATION'],
-            'P0-08-DOWN-01' => ['precondition_state' => 'P8', 'result_state' => 'P8_DOWN_1', 'next_operation' => 'P0-08-DOWN-02'],
-            'P0-08-DOWN-02' => ['precondition_state' => 'P8_DOWN_1', 'result_state' => 'P8_DOWN_2', 'next_operation' => 'P0-08-DOWN-03'],
-            'P0-08-DOWN-03' => ['precondition_state' => 'P8_DOWN_2', 'result_state' => 'P7', 'next_operation' => 'NONE_TARGET_PREFIX_VERIFICATION'],
-            'P0-07-DOWN-01' => ['precondition_state' => 'P7', 'result_state' => 'P7_DOWN_1', 'next_operation' => 'P0-07-DOWN-02'],
-            'P0-07-DOWN-02' => ['precondition_state' => 'P7_DOWN_1', 'result_state' => 'P7_DOWN_2', 'next_operation' => 'P0-07-DOWN-03'],
-            'P0-07-DOWN-03' => ['precondition_state' => 'P7_DOWN_2', 'result_state' => 'P6', 'next_operation' => 'NONE_TARGET_PREFIX_VERIFICATION'],
-            'P0-06-DOWN-01' => ['precondition_state' => 'P6', 'result_state' => 'P5', 'next_operation' => 'NONE_TARGET_PREFIX_VERIFICATION'],
-            'P0-05-DOWN-01' => ['precondition_state' => 'P5', 'result_state' => 'P4', 'next_operation' => 'NONE_TARGET_PREFIX_VERIFICATION'],
-            'P0-04-DOWN-01' => ['precondition_state' => 'P4', 'result_state' => 'P3', 'next_operation' => 'NONE_TARGET_PREFIX_VERIFICATION'],
-            'P0-03-DOWN-01' => ['precondition_state' => 'P3', 'result_state' => 'P2', 'next_operation' => 'NONE_TARGET_PREFIX_VERIFICATION'],
-            'P0-02-DOWN-01' => ['precondition_state' => 'P2', 'result_state' => 'P1', 'next_operation' => 'NONE_TARGET_PREFIX_VERIFICATION'],
-            'P0-01-DOWN-01' => ['precondition_state' => 'P1', 'result_state' => 'P0', 'next_operation' => 'NONE_TARGET_PREFIX_VERIFICATION'],
+            'P0-09-DOWN-01' => [
+                'precondition_state' => 'P9',
+                'result_state' => 'P9_DOWN_1',
+                'next_operation' => 'P0-09-DOWN-02',
+            ],
+            'P0-09-DOWN-02' => [
+                'precondition_state' => 'P9_DOWN_1',
+                'result_state' => 'P9_DOWN_2',
+                'next_operation' => 'P0-09-DOWN-03',
+            ],
+            'P0-09-DOWN-03' => [
+                'precondition_state' => 'P9_DOWN_2',
+                'result_state' => 'P8',
+                'next_operation' => 'NONE_TARGET_PREFIX_VERIFICATION',
+            ],
+            'P0-08-DOWN-01' => [
+                'precondition_state' => 'P8',
+                'result_state' => 'P8_DOWN_1',
+                'next_operation' => 'P0-08-DOWN-02',
+            ],
+            'P0-08-DOWN-02' => [
+                'precondition_state' => 'P8_DOWN_1',
+                'result_state' => 'P8_DOWN_2',
+                'next_operation' => 'P0-08-DOWN-03',
+            ],
+            'P0-08-DOWN-03' => [
+                'precondition_state' => 'P8_DOWN_2',
+                'result_state' => 'P7',
+                'next_operation' => 'NONE_TARGET_PREFIX_VERIFICATION',
+            ],
+            'P0-07-DOWN-01' => [
+                'precondition_state' => 'P7',
+                'result_state' => 'P7_DOWN_1',
+                'next_operation' => 'P0-07-DOWN-02',
+            ],
+            'P0-07-DOWN-02' => [
+                'precondition_state' => 'P7_DOWN_1',
+                'result_state' => 'P7_DOWN_2',
+                'next_operation' => 'P0-07-DOWN-03',
+            ],
+            'P0-07-DOWN-03' => [
+                'precondition_state' => 'P7_DOWN_2',
+                'result_state' => 'P7_DOWN_3',
+                'next_operation' => 'P0-07-DOWN-04',
+            ],
+            'P0-07-DOWN-04' => [
+                'precondition_state' => 'P7_DOWN_3',
+                'result_state' => 'P6',
+                'next_operation' => 'NONE_TARGET_PREFIX_VERIFICATION',
+            ],
+            'P0-06-DOWN-01' => [
+                'precondition_state' => 'P6',
+                'result_state' => 'P5',
+                'next_operation' => 'NONE_TARGET_PREFIX_VERIFICATION',
+            ],
+            'P0-05-DOWN-01' => [
+                'precondition_state' => 'P5',
+                'result_state' => 'P4',
+                'next_operation' => 'NONE_TARGET_PREFIX_VERIFICATION',
+            ],
+            'P0-04-DOWN-01' => [
+                'precondition_state' => 'P4',
+                'result_state' => 'P3',
+                'next_operation' => 'NONE_TARGET_PREFIX_VERIFICATION',
+            ],
+            'P0-03-DOWN-01' => [
+                'precondition_state' => 'P3',
+                'result_state' => 'P2',
+                'next_operation' => 'NONE_TARGET_PREFIX_VERIFICATION',
+            ],
+            'P0-02-DOWN-01' => [
+                'precondition_state' => 'P2',
+                'result_state' => 'P1',
+                'next_operation' => 'NONE_TARGET_PREFIX_VERIFICATION',
+            ],
+            'P0-01-DOWN-01' => [
+                'precondition_state' => 'P1',
+                'result_state' => 'P0',
+                'next_operation' => 'NONE_TARGET_PREFIX_VERIFICATION',
+            ],
         ];
     }
 
     /** @return array<string, string> */
     private function expectedPhaseThreeP0DowngradeSqlHashes(): array
     {
+        // Independent design-side literal inventory; never read from the implementation under test.
         return [
             'P0-09-DOWN-01' => 'd185d32efd235d764912ca8e9c86ed93f05c9c1eba2b42a17667ba0a238801f3',
             'P0-09-DOWN-02' => 'f331f7256769eeb73dc803376625c972f45d7e65621e6ec4e0e291e20a0063b3',
@@ -8661,9 +8892,10 @@ TEXT;
             'P0-08-DOWN-01' => '9a86e2fef9e52dc202d45fd1cc16be9ed932ed952dd88293e550d22eb8534363',
             'P0-08-DOWN-02' => '7a82e1dc5ef358acc751de2e277b7f52b809e3bd7943f797f5ca33189fa7015a',
             'P0-08-DOWN-03' => '54dd4062b9bfdb72edd6673918021dc1af9d8ead46ce3aeb8024f9b5e4641981',
-            'P0-07-DOWN-01' => '28d5d6f9a81299fe2c9d1e6515eadaa9a39be4aae142bab5910a2eebd5228983',
-            'P0-07-DOWN-02' => 'd2603aa14ecedc2b3cc33461a9b6bd2ebfc50864cb790e6d05d1f0f32e918e9a',
-            'P0-07-DOWN-03' => '09dab898d7998022683aedfadce79825d449623de2d136bd2c3106b70c86723c',
+            'P0-07-DOWN-01' => 'fae83a8cc42a6c4622548fda5e48b5863e7ad3657ad76c5aa3868d4e17e44200',
+            'P0-07-DOWN-02' => '28d5d6f9a81299fe2c9d1e6515eadaa9a39be4aae142bab5910a2eebd5228983',
+            'P0-07-DOWN-03' => 'd2603aa14ecedc2b3cc33461a9b6bd2ebfc50864cb790e6d05d1f0f32e918e9a',
+            'P0-07-DOWN-04' => '09dab898d7998022683aedfadce79825d449623de2d136bd2c3106b70c86723c',
             'P0-06-DOWN-01' => 'e0682e16ec3133c75efd5a482f92a8ddaf92c9e656aa0eb5f59639268bbf8ce4',
             'P0-05-DOWN-01' => '82c47afa019ced270a87e1ddf3c30d4fadd38042a5cd6f370fdf2822a28dfd6f',
             'P0-04-DOWN-01' => '0c765888b90e978f2ff88a6b3957a2f723021e1f55e8d59189abd65ff1871632',
