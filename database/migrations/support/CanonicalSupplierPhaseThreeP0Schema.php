@@ -47,6 +47,7 @@ final class CanonicalSupplierPhaseThreeP0Schema
         'P0-04' => ['predecessor' => 'P3', 'target' => 'P4'],
         'P0-05' => ['predecessor' => 'P4', 'target' => 'P5'],
         'P0-06' => ['predecessor' => 'P5', 'target' => 'P6'],
+        'P0-07' => ['predecessor' => 'P6', 'target' => 'P7'],
     ];
 
     /** @var array<string, array{initial: string, target: string, operation: string}> */
@@ -57,6 +58,7 @@ final class CanonicalSupplierPhaseThreeP0Schema
         'P0-04' => ['initial' => 'P4', 'target' => 'P3', 'operation' => 'P0-04-DOWN-01'],
         'P0-05' => ['initial' => 'P5', 'target' => 'P4', 'operation' => 'P0-05-DOWN-01'],
         'P0-06' => ['initial' => 'P6', 'target' => 'P5', 'operation' => 'P0-06-DOWN-01'],
+        'P0-07' => ['initial' => 'P7', 'target' => 'P6', 'operation' => 'P0-07-DOWN-01'],
     ];
 
     private static bool $active = false;
@@ -71,6 +73,12 @@ final class CanonicalSupplierPhaseThreeP0Schema
         $states = self::FORWARD_STATES[$step->value] ?? null;
         if ($states === null) {
             throw new RuntimeException('phase_three_p0_forward_step_not_implemented');
+        }
+
+        if ($step === P0MigrationStep::P0_07) {
+            self::runP0_07Forward();
+
+            return;
         }
 
         self::assertProtectedGatesDisabled();
@@ -114,6 +122,7 @@ final class CanonicalSupplierPhaseThreeP0Schema
                     $invocationId,
                     $evidence,
                     afterDdl: false,
+                    p007: $step === P0MigrationStep::P0_07,
                 );
                 $evidence['initial_state'] = $classification['state'];
                 $evidence['last_verified_state'] = $classification['state'];
@@ -123,6 +132,12 @@ final class CanonicalSupplierPhaseThreeP0Schema
 
                 if ($classification['state'] === CanonicalSupplierPhaseThreeP0SchemaComparator::UNCLASSIFIED_STATE) {
                     self::fail('UNCLASSIFIED_P0_SCHEMA_STATE', $invocationId);
+                }
+
+                if ($step === P0MigrationStep::P0_07) {
+                    self::executeP0_07Down($pdo, $classification['state'], $invocationId, $evidence);
+
+                    return;
                 }
 
                 if ($classification['state'] !== $states['initial']) {
@@ -443,6 +458,338 @@ final class CanonicalSupplierPhaseThreeP0Schema
         });
     }
 
+    /** P7 preserves compatible predecessor evidence without binding or backfill. */
+    private static function assertP0_07Data(PDO $pdo, bool $down): void
+    {
+        $bad = $pdo->query(<<<'SQL'
+            SELECT EXISTS(
+                SELECT 1 FROM supplier_product_source_revisions r
+                LEFT JOIN supplier_products p ON p.id = r.supplier_product_id
+                WHERE p.id IS NULL OR p.supplier_id IS NULL OR p.supplier_feed_id IS NULL
+                   OR r.supplier_id IS NULL OR r.supplier_feed_id IS NULL
+                   OR NOT (p.supplier_id <=> r.supplier_id)
+                   OR NOT (p.supplier_feed_id <=> r.supplier_feed_id)
+            )
+            SQL)->fetchColumn();
+        if (! in_array($bad, [0, 1], true)) {
+            throw new RuntimeException('phase_three_p0_schema_inspection_unavailable');
+        }
+        if ($bad === 1) {
+            throw new RuntimeException('phase_three_p0_pointer_scope_incompatible');
+        }
+        if ($down) {
+            $bound = $pdo->query(<<<'SQL'
+                SELECT EXISTS(SELECT 1 FROM supplier_products
+                    WHERE supplier_product_identity_head_id IS NOT NULL
+                       OR current_source_revision_id IS NOT NULL)
+                SQL)->fetchColumn();
+            if (! in_array($bound, [0, 1], true)) {
+                throw new RuntimeException('phase_three_p0_schema_inspection_unavailable');
+            }
+            if ($bound === 1) {
+                throw new RuntimeException('phase_three_p0_pointers_not_pristine');
+            }
+        }
+    }
+
+    /** Include inbound FKs from outside the inspector's P0 table inventory. */
+    private static function assertP0_07Dependencies(PDO $pdo, string $state): void
+    {
+        $parents = ['supplier_products', 'supplier_product_source_revisions', 'supplier_product_identity_heads'];
+        $expected = [];
+        foreach (CanonicalSupplierPhaseThreeP0Oracle::signaturesFor($state) as $record) {
+            $s = $record['signature'];
+            if ($s['type'] === 'foreign_key' && in_array($s['parent_table'], $parents, true)) {
+                foreach ($s['child_columns'] as $ordinal => $column) {
+                    $expected[] = [$s['child_table'], $s['name'], $column, $s['parent_table'],
+                        $s['parent_columns'][$ordinal], $ordinal + 1, $s['update_rule'], $s['delete_rule']];
+                }
+            }
+        }
+        // Exact pre-existing ID references, not name-only exemptions.
+        foreach (['product_supplier_offers', 'product_sync_logs', 'catalog_sync_logs', 'supplier_product_attributes'] as $table) {
+            $expected[] = [$table, $table.'_supplier_product_id_foreign', 'supplier_product_id',
+                'supplier_products', 'id', 1, 'NO ACTION', $table === 'supplier_product_attributes' ? 'CASCADE' : 'SET NULL'];
+        }
+        $rows = $pdo->query(<<<'SQL'
+            SELECT k.CONSTRAINT_SCHEMA, k.TABLE_SCHEMA, k.TABLE_NAME, k.CONSTRAINT_NAME,
+                   k.COLUMN_NAME, k.REFERENCED_TABLE_NAME, k.REFERENCED_COLUMN_NAME,
+                   k.ORDINAL_POSITION, r.UPDATE_RULE, r.DELETE_RULE
+            FROM information_schema.KEY_COLUMN_USAGE k
+            JOIN information_schema.REFERENTIAL_CONSTRAINTS r
+              ON r.CONSTRAINT_SCHEMA = k.CONSTRAINT_SCHEMA
+             AND r.TABLE_NAME = k.TABLE_NAME AND r.CONSTRAINT_NAME = k.CONSTRAINT_NAME
+            WHERE k.REFERENCED_TABLE_SCHEMA = DATABASE()
+              AND k.REFERENCED_TABLE_NAME IN
+                  ('supplier_products', 'supplier_product_source_revisions', 'supplier_product_identity_heads')
+            SQL)->fetchAll(PDO::FETCH_ASSOC);
+        $database = $pdo->query('SELECT DATABASE()')->fetchColumn();
+        $actual = [];
+        foreach ($rows as $r) {
+            if ($r['CONSTRAINT_SCHEMA'] !== $database || $r['TABLE_SCHEMA'] !== $database) {
+                throw new RuntimeException('phase_three_p0_pointer_has_inbound_dependencies');
+            }
+            $actual[] = [$r['TABLE_NAME'], $r['CONSTRAINT_NAME'], $r['COLUMN_NAME'],
+                $r['REFERENCED_TABLE_NAME'], $r['REFERENCED_COLUMN_NAME'], (int) $r['ORDINAL_POSITION'],
+                $r['UPDATE_RULE'], $r['DELETE_RULE']];
+        }
+        sort($expected);
+        sort($actual);
+        if ($actual !== $expected) {
+            throw new RuntimeException('phase_three_p0_pointer_has_inbound_dependencies');
+        }
+    }
+
+    private static function runP0_07Forward(): void
+    {
+        $id = (string) Str::uuid();
+        $evidence = self::initialEvidence($id, P0MigrationStep::P0_07, 'P7');
+        $evidence['event_version'] = 'phase_three_p0_forward_evidence_v1';
+        $failure = null;
+        try {
+            self::assertProtectedGatesDisabled($id);
+            self::withGuard(function (PDO $pdo) use ($id, &$evidence): void {
+                $evidence['mutex_acquire'] = 'ACQUIRED';
+                $state = self::classifyForDowngrade($pdo, $id, $evidence, afterDdl: false, p007: true);
+                $evidence['initial_state'] = $evidence['last_verified_state'] = $state['state'];
+                if ($state['state'] !== 'P6') {
+                    self::fail('phase_three_p0_forward_precondition_failed', $id);
+                }
+                try {
+                    self::assertP0_07Data($pdo, false);
+                    self::assertP0_07Dependencies($pdo, 'P6');
+                } catch (Throwable $error) {
+                    self::failP0_07Inspection($error, $id, $evidence);
+                }
+                self::executeP0_07Forward($pdo, $id, $evidence);
+                $evidence['primary_outcome'] = 'phase_three_p0_forward_succeeded';
+            }, $id, $evidence);
+        } catch (CanonicalSupplierPhaseThreeP0SchemaException $error) {
+            $failure = $error;
+            $evidence['primary_outcome'] = $error->primaryCode;
+        } finally {
+            Log::info('phase_three_p0_forward_evidence_v1', $evidence);
+        }
+        if ($failure !== null) {
+            throw $failure;
+        }
+    }
+
+    /** @param array<string, mixed> $evidence */
+    private static function failP0_07Inspection(Throwable $error, string $id, array &$evidence): never
+    {
+        $uncertain = $error instanceof PDOException && self::isP0_07ConnectionUncertain($error);
+        $evidence['connection_status'] = $uncertain ? 'UNCERTAIN' : 'CONNECTED';
+        $known = ['phase_three_p0_pointer_scope_incompatible', 'phase_three_p0_pointers_not_pristine',
+            'phase_three_p0_pointer_has_inbound_dependencies'];
+        self::fail($uncertain ? 'phase_three_p0_connection_lost_pre_ddl'
+            : (in_array($error->getMessage(), $known, true) ? $error->getMessage() : 'phase_three_p0_schema_inspection_unavailable'), $id);
+    }
+
+    /** @param array<string, mixed> $evidence */
+    private static function executeP0_07Down(PDO $pdo, string $state, string $id, array &$evidence): void
+    {
+        $next = ['P7' => 'P0-07-DOWN-01', 'P7_DOWN_1' => 'P0-07-DOWN-02',
+            'P7_DOWN_2' => 'P0-07-DOWN-03', 'P7_DOWN_3' => 'P0-07-DOWN-04'];
+        if (! isset($next[$state])) {
+            self::fail('phase_three_p0_step_not_terminal', $id);
+        }
+        while ($state !== 'P6') {
+            try {
+                self::assertP0_07Data($pdo, true);
+                self::assertP0_07Dependencies($pdo, $state);
+            } catch (Throwable $error) {
+                self::failP0_07Inspection($error, $id, $evidence);
+            }
+            $operation = CanonicalSupplierPhaseThreeP0Oracle::operation($next[$state]);
+            self::assertConnectionLiveBeforeDdl($pdo, $id, $evidence);
+            try {
+                if ($pdo->exec($operation['sql']) === false) {
+                    self::fail('phase_three_p0_downgrade_ddl_failed', $id);
+                }
+            } catch (CanonicalSupplierPhaseThreeP0SchemaException $error) {
+                throw $error;
+            } catch (Throwable $error) {
+                $uncertain = $error instanceof PDOException && self::isP0_07ConnectionUncertain($error);
+                $evidence['connection_status'] = $uncertain ? 'UNCERTAIN' : 'CONNECTED';
+                self::fail($uncertain ? 'phase_three_p0_connection_outcome_unknown' : 'phase_three_p0_downgrade_ddl_failed', $id);
+            }
+            $evidence['completed_ddl_ids'][] = $operation['operation_id'];
+            $post = self::classifyForDowngrade($pdo, $id, $evidence, afterDdl: true, p007: true);
+            $evidence['last_verified_state'] = $post['state'];
+            $evidence['partial_state'] = str_contains($post['state'], '_DOWN_') ? $post['state'] : null;
+            if ($post['state'] !== $operation['result_state'] || $post['sha256'] !== $operation['result_sha256']) {
+                self::fail('phase_three_p0_downgrade_postcondition_failed', $id);
+            }
+            $state = $post['state'];
+        }
+        $evidence['primary_outcome'] = 'phase_three_p0_downgrade_succeeded';
+    }
+
+    /** @param array<string, mixed> $evidence */
+    private static function executeP0_07Forward(PDO $pdo, string $id, array &$evidence): void
+    {
+        $statements = [
+            <<<'SQL'
+            ALTER TABLE supplier_products
+              ADD COLUMN supplier_product_identity_head_id bigint unsigned DEFAULT NULL,
+              ADD COLUMN current_source_revision_id bigint unsigned DEFAULT NULL,
+              ADD UNIQUE KEY uq_supplier_product_identity_head_assignment (supplier_product_identity_head_id),
+              ADD UNIQUE KEY uq_supplier_product_source_revision_scope (id, supplier_id, supplier_feed_id),
+              ADD KEY ix_supplier_product_identity_head_fk (supplier_product_identity_head_id, supplier_id, supplier_feed_id),
+              ADD KEY ix_supplier_product_current_revision_fk (current_source_revision_id, id, supplier_product_identity_head_id, supplier_id, supplier_feed_id),
+              ADD CONSTRAINT fk_supplier_product_identity_head FOREIGN KEY (supplier_product_identity_head_id, supplier_id, supplier_feed_id) REFERENCES supplier_product_identity_heads (id, supplier_id, supplier_feed_id) ON UPDATE RESTRICT ON DELETE RESTRICT,
+              ADD CONSTRAINT fk_supplier_product_current_revision FOREIGN KEY (current_source_revision_id, id, supplier_product_identity_head_id, supplier_id, supplier_feed_id) REFERENCES supplier_product_source_revisions (id, supplier_product_id, supplier_product_identity_head_id, supplier_id, supplier_feed_id) ON UPDATE RESTRICT ON DELETE RESTRICT,
+              ADD CONSTRAINT chk_supplier_product_source_revision_pointers CHECK (((supplier_product_identity_head_id is null) and (current_source_revision_id is null)) or ((supplier_product_identity_head_id is not null) and (current_source_revision_id is not null)))
+            SQL,
+            <<<'SQL'
+            ALTER TABLE supplier_product_source_revisions
+              DROP FOREIGN KEY fk_supplier_product_revision_product_id,
+              DROP INDEX ix_supplier_product_revision_product_id_fk,
+              ADD KEY ix_supplier_product_revision_product_scope_fk (supplier_product_id, supplier_id, supplier_feed_id),
+              ADD CONSTRAINT fk_supplier_product_revision_product_scope FOREIGN KEY (supplier_product_id, supplier_id, supplier_feed_id) REFERENCES supplier_products (id, supplier_id, supplier_feed_id) ON UPDATE RESTRICT ON DELETE RESTRICT
+            SQL,
+            <<<'SQL'
+            CREATE TRIGGER `trg_supplier_product_source_projection_guard`
+            BEFORE UPDATE ON `supplier_products`
+            FOR EACH ROW
+            BEGIN
+              DECLARE matching_revision_count bigint unsigned DEFAULT 0;
+              IF (NEW.`supplier_product_identity_head_id` IS NULL) <> (NEW.`current_source_revision_id` IS NULL) THEN
+                SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Supplier product source pointers must be complete';
+              END IF;
+              IF OLD.`supplier_product_identity_head_id` IS NOT NULL AND (
+                  NOT (OLD.`supplier_product_identity_head_id` <=> NEW.`supplier_product_identity_head_id`)
+                  OR NOT (OLD.`supplier_id` <=> NEW.`supplier_id`)
+                  OR NOT (OLD.`supplier_feed_id` <=> NEW.`supplier_feed_id`)) THEN
+                SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Bound supplier product identity scope is immutable';
+              END IF;
+              IF OLD.`current_source_revision_id` IS NOT NULL AND NEW.`current_source_revision_id` IS NULL THEN
+                SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Supplier product source revision cannot be cleared';
+              END IF;
+              IF NEW.`supplier_product_identity_head_id` IS NOT NULL AND (NEW.`supplier_id` IS NULL OR NEW.`supplier_feed_id` IS NULL) THEN
+                SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Bound source pointer scope cannot be NULL';
+              END IF;
+              IF NOT (OLD.`current_source_revision_id` <=> NEW.`current_source_revision_id`) THEN
+                SELECT COUNT(*) INTO matching_revision_count
+                  FROM `supplier_product_source_revisions` AS r
+                  INNER JOIN `supplier_product_identity_heads` AS h
+                    ON h.`id` = r.`supplier_product_identity_head_id`
+                    AND h.`supplier_id` = r.`supplier_id`
+                    AND h.`supplier_feed_id` = r.`supplier_feed_id`
+                    AND h.`supplier_sku_bytes` = r.`supplier_sku_bytes`
+                  WHERE r.`id` = NEW.`current_source_revision_id`
+                    AND r.`supplier_product_id` = NEW.`id`
+                    AND r.`supplier_product_identity_head_id` = NEW.`supplier_product_identity_head_id`
+                    AND r.`supplier_id` = NEW.`supplier_id`
+                    AND r.`supplier_feed_id` = NEW.`supplier_feed_id`
+                    AND h.`supplier_sku_bytes` = CAST(NEW.`supplier_sku` AS BINARY);
+                IF matching_revision_count <> 1 THEN
+                  SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Supplier product source revision scope mismatch';
+                END IF;
+              ELSEIF NEW.`supplier_product_identity_head_id` IS NOT NULL AND (
+                  NOT (CAST(OLD.`supplier_sku` AS BINARY) <=> CAST(NEW.`supplier_sku` AS BINARY))
+                  OR NOT (CAST(OLD.`ean` AS BINARY) <=> CAST(NEW.`ean` AS BINARY))
+                  OR NOT (CAST(OLD.`mpn` AS BINARY) <=> CAST(NEW.`mpn` AS BINARY))
+                  OR NOT (CAST(OLD.`name` AS BINARY) <=> CAST(NEW.`name` AS BINARY))
+                  OR NOT (CAST(OLD.`brand_name` AS BINARY) <=> CAST(NEW.`brand_name` AS BINARY))
+                  OR NOT (CAST(OLD.`category_name` AS BINARY) <=> CAST(NEW.`category_name` AS BINARY))
+                  OR NOT (CAST(OLD.`external_availability_status` AS BINARY) <=> CAST(NEW.`external_availability_status` AS BINARY))
+                  OR NOT (CAST(OLD.`external_availability_label` AS BINARY) <=> CAST(NEW.`external_availability_label` AS BINARY))
+                  OR NOT (CAST(OLD.`currency` AS BINARY) <=> CAST(NEW.`currency` AS BINARY))
+                  OR NOT (CAST(OLD.`payload_hash` AS BINARY) <=> CAST(NEW.`payload_hash` AS BINARY))
+                  OR NOT (OLD.`price` <=> NEW.`price`)
+                  OR NOT (OLD.`supplier_price_raw` <=> NEW.`supplier_price_raw`)
+                  OR NOT (OLD.`recommended_price` <=> NEW.`recommended_price`)
+                  OR NOT (OLD.`quantity` <=> NEW.`quantity`)
+                  OR NOT (OLD.`availability_status_id` <=> NEW.`availability_status_id`)
+                  OR NOT (OLD.`raw_data` <=> NEW.`raw_data`)
+                  OR NOT (OLD.`received_at` <=> NEW.`received_at`)
+              ) THEN
+                SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Source-owned projection change requires revision pointer CAS';
+              END IF;
+            END
+            SQL,
+            <<<'SQL'
+            CREATE TRIGGER `trg_supplier_product_source_pointer_insert_guard`
+            BEFORE INSERT ON `supplier_products`
+            FOR EACH ROW
+            BEGIN
+              IF (NEW.`supplier_product_identity_head_id` IS NOT NULL OR NEW.`current_source_revision_id` IS NOT NULL)
+                 AND (NEW.`supplier_id` IS NULL OR NEW.`supplier_feed_id` IS NULL) THEN
+                SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Bound source pointer scope cannot be NULL';
+              END IF;
+            END
+            SQL,
+        ];
+        $results = ['P7_DOWN_3', 'P7_DOWN_2', 'P7_DOWN_1', 'P7'];
+        $settings = null;
+        $failure = null;
+        try {
+            $settings = $pdo->query(<<<'SQL'
+                SELECT @@SESSION.sql_mode AS sql_mode,
+                       @@SESSION.character_set_client AS character_set_client,
+                       @@SESSION.character_set_results AS character_set_results,
+                       @@SESSION.collation_connection AS collation_connection
+                SQL)->fetch(PDO::FETCH_ASSOC);
+            if (! is_array($settings)) {
+                self::fail('phase_three_p0_schema_session_unavailable', $id);
+            }
+            foreach (['sql_mode' => self::TRIGGER_SQL_MODE, 'character_set_client' => 'cp866',
+                'character_set_results' => 'cp866', 'collation_connection' => 'cp866_general_ci'] as $name => $value) {
+                if ($pdo->exec('SET SESSION '.$name.' = '.$pdo->quote($value)) === false) {
+                    self::fail('phase_three_p0_schema_session_unavailable', $id);
+                }
+            }
+            foreach ($statements as $i => $sql) {
+                self::assertConnectionLiveBeforeDdl($pdo, $id, $evidence);
+                if ($pdo->exec($sql) === false) {
+                    self::fail('phase_three_p0_forward_ddl_failed', $id);
+                }
+                $evidence['completed_ddl_ids'][] = 'P0-07-UP-0'.($i + 1);
+                $post = self::classifyForDowngrade($pdo, $id, $evidence, afterDdl: true, p007: true);
+                $evidence['last_verified_state'] = $post['state'];
+                $evidence['partial_state'] = str_contains($post['state'], '_DOWN_') ? $post['state'] : null;
+                if ($post['state'] !== $results[$i]) {
+                    self::fail('phase_three_p0_forward_postcondition_failed', $id);
+                }
+            }
+        } catch (CanonicalSupplierPhaseThreeP0SchemaException $error) {
+            $failure = $error;
+        } catch (Throwable $error) {
+            $uncertain = $error instanceof PDOException && self::isP0_07ConnectionUncertain($error);
+            $evidence['connection_status'] = $uncertain ? 'UNCERTAIN' : 'CONNECTED';
+            $failure = new CanonicalSupplierPhaseThreeP0SchemaException(
+                $uncertain ? 'phase_three_p0_connection_outcome_unknown' : 'phase_three_p0_forward_ddl_failed', $id,
+            );
+        } finally {
+            if (is_array($settings)) {
+                foreach ($settings as $name => $value) {
+                    try {
+                        if ($pdo->exec('SET SESSION '.$name.' = '.$pdo->quote((string) $value)) === false) {
+                            throw new RuntimeException('Session restoration failed.');
+                        }
+                    } catch (Throwable) {
+                        $evidence['secondary_codes'][] = 'phase_three_p0_schema_session_restore_failed';
+                        $failure ??= new CanonicalSupplierPhaseThreeP0SchemaException('phase_three_p0_schema_session_restore_failed', $id);
+                    }
+                }
+            }
+        }
+        if ($failure !== null) {
+            throw $failure;
+        }
+    }
+
+    private static function isP0_07ConnectionUncertain(PDOException $error): bool
+    {
+        // mysqlnd also reports server-gone/lost-connection as HY000, not SQLSTATE 08.
+        // Keep the frozen P0-01--06 outcome policy unchanged.
+        return CanonicalSupplierPhaseThreeP0ConnectionOutcome::isUncertain($error)
+            || (($error->errorInfo[0] ?? null) === 'HY000'
+                && in_array($error->errorInfo[1] ?? null, [2006, 2013], true));
+    }
+
     private static function assertState(PDO $pdo, string $expected, string $error): void
     {
         try {
@@ -465,12 +812,14 @@ final class CanonicalSupplierPhaseThreeP0Schema
         string $invocationId,
         array &$evidence,
         bool $afterDdl,
+        bool $p007 = false,
     ): array {
         try {
             return self::classify($pdo);
         } catch (Throwable $exception) {
             $uncertain = $exception instanceof PDOException
-                && CanonicalSupplierPhaseThreeP0ConnectionOutcome::isUncertain($exception);
+                && ($p007 ? self::isP0_07ConnectionUncertain($exception)
+                    : CanonicalSupplierPhaseThreeP0ConnectionOutcome::isUncertain($exception));
             $evidence['connection_status'] = $uncertain ? 'UNCERTAIN' : 'CONNECTED';
 
             self::fail(

@@ -22,6 +22,7 @@ use App\Repositories\Suppliers\SupplierImportSourceExecutionRepository;
 use App\Repositories\Suppliers\SupplierImportSourcePayloadReceiptRepository;
 use Carbon\CarbonImmutable;
 use Database\Migrations\Support\CanonicalSupplierPhaseThreeP0Oracle as Oracle;
+use Database\Migrations\Support\CanonicalSupplierPhaseThreeP0Schema;
 use Database\Migrations\Support\CanonicalSupplierPhaseThreeP0Schema as P0;
 use Database\Migrations\Support\CanonicalSupplierPhaseThreeP0SchemaException;
 use Database\Migrations\Support\CanonicalSupplierPhaseThreeP0SchemaInspector as Inspector;
@@ -57,6 +58,22 @@ final class PhaseThreeP0SourceRevisionFoundationMysqlTest extends TestCase
         $this->assertStringStartsWith('8.4.', DB::scalar('SELECT VERSION()'));
         $databaseCollation = $this->schemaDefault();
         $this->artisan('migrate:fresh', ['--force' => true])->assertExitCode(0);
+        // Normal discovery must first prove the complete new P7 endpoint.
+        $p7 = CanonicalSupplierPhaseThreeP0Schema::classify(DB::connection()->getPdo());
+        $this->assertSame(['P7', 'NORMAL_PREFIX', 350, '765692fc06ba30ee87f27a7357edcb793927a52aef2375846a79257e5e8fcc83'],
+            [$p7['state'], $p7['classification'], $p7['object_count'], $p7['sha256']]);
+        $p07Grant = 'SUPPLIER_PHASE_THREE_P0_EMPTY_SCHEMA_DOWN_CONFIRMED';
+        putenv($p07Grant.'=true');
+        $_ENV[$p07Grant] = $_SERVER[$p07Grant] = 'true';
+        try {
+            $p07 = require database_path('migrations/2026_08_28_090006_add_source_revision_pointers_to_supplier_products_table.php');
+            $p07->down();
+        } finally {
+            $this->assertFalse(getenv($p07Grant));
+            $this->assertArrayNotHasKey($p07Grant, $_ENV);
+            $this->assertArrayNotHasKey($p07Grant, $_SERVER);
+        }
+
         $this->assertSame($databaseCollation, $this->schemaDefault());
         $this->assertPrefix('P6');
     }
