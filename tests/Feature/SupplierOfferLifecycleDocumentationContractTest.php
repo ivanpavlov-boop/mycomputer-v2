@@ -2525,7 +2525,8 @@ TEXT;
     public function test_slice_five_owner_authorized_presence_is_exact_and_dormant(): void
     {
         // Owner implementation authorization is separate from the unchanged design-adoption checkpoint.
-        $present = $this->discoverSliceFiveArtifacts(base_path());
+        // The frozen fifteen-artifact checkpoint is tested in an explicit historical fixture.
+        $present = $this->discoverFoundationFixture($this->sliceFiveFoundationPaths(), true);
         $this->assertCount(15, $present);
         $this->assertSame([], $this->sliceFivePresenceViolations($present));
         $this->assertNotSame([], $this->sliceFivePresenceViolations([...$present, $present[0]]));
@@ -11951,5 +11952,117 @@ TEXT;
         $this->assertNotFalse($end, "Missing section boundary {$endHeading}.");
 
         return substr($contents, $start, $end - $start);
+    }
+
+    /** @return list<string> */
+    private function p007FoundationPaths(): array
+    {
+        return [...$this->sliceFiveFoundationPaths(),
+            'database/migrations/2026_08_28_090006_add_source_revision_pointers_to_supplier_products_table.php',
+            'tests/Feature/PhaseThreeP0StagingSourceRevisionPointersFoundationMysqlTest.php',
+        ];
+    }
+
+    /** @return list<string> */
+    private function discoverP007Artifacts(string $root): array
+    {
+        $artifacts = $this->discoverSliceFiveArtifacts($root);
+        foreach (glob($root.'/tests/Feature/*PhaseThreeP0StagingSourceRevision*.php') ?: [] as $file) {
+            $relative = 'tests/Feature/'.basename($file);
+            if (is_file($file) && ! in_array($relative, $artifacts, true)) {
+                $artifacts[] = $relative;
+            }
+        }
+
+        return $artifacts;
+    }
+
+    /** @param list<string> $present */
+    private function p007PresenceViolations(array $present): array
+    {
+        $expected = $this->p007FoundationPaths();
+        sort($expected);
+        sort($present);
+
+        return $present === $expected ? [] : ['P0-07 permits exactly seventeen dormant foundation artifacts.'];
+    }
+
+    public function test_p007_owner_authorized_schema_presence_is_exact_and_has_no_runtime_caller(): void
+    {
+        $present = $this->discoverP007Artifacts(base_path());
+        $this->assertCount(17, $present);
+        $this->assertSame([], $this->p007PresenceViolations($present));
+        $this->assertNotSame([], $this->p007PresenceViolations([...$present, $present[0]]));
+        foreach ($this->p007FoundationPaths() as $path) {
+            $this->assertFileExists(base_path($path));
+        }
+        $migration = file_get_contents(base_path('database/migrations/2026_08_28_090006_add_source_revision_pointers_to_supplier_products_table.php'));
+        $this->assertStringContainsString('runForwardStep(P0MigrationStep::P0_07)', $migration);
+        $this->assertStringContainsString('runTerminalDowngradeStep(P0MigrationStep::P0_07)', $migration);
+        $this->assertDoesNotMatchRegularExpression('/(?<![A-Za-z0-9_])(?:DB|Schema)::|->(?:insert|update|delete)\(/', $migration);
+        foreach (['app', 'routes', 'bootstrap', 'config'] as $directory) {
+            foreach ((new Filesystem)->allFiles(base_path($directory)) as $file) {
+                $relative = $directory.'/'.str_replace('\\', '/', $file->getRelativePathname());
+                if ($relative === 'app/Models/SupplierProductSourceRevision.php' || $file->getExtension() !== 'php') {
+                    continue;
+                }
+                $this->assertDoesNotMatchRegularExpression(
+                    '/SupplierProductSourceRevision|supplier_product_source_revisions|current_source_revision_id|supplier_product_identity_head_id/',
+                    $file->getContents(), $relative,
+                );
+            }
+        }
+    }
+
+    public function test_p007_discovery_rejects_missing_renamed_duplicate_extra_and_deferred_artifacts(): void
+    {
+        $allowed = $this->p007FoundationPaths();
+        $cases = ['normal' => $allowed];
+        foreach ($allowed as $required) {
+            $cases['missing '.$required] = array_values(array_diff($allowed, [$required]));
+        }
+        $migration = 'database/migrations/2026_08_28_090006_add_source_revision_pointers_to_supplier_products_table.php';
+        $renamed = 'database/migrations/2099_01_01_000006_add_source_revision_pointers_to_supplier_products_table.php';
+        $cases['renamed migration'] = [...array_values(array_diff($allowed, [$migration])), $renamed];
+        $cases['duplicate migration'] = [...$allowed, $renamed];
+        foreach ([
+            'tests/Feature/PhaseThreeP0StagingSourceRevisionAliasMysqlTest.php',
+            'app/Models/SupplierProductSourceRevisionAlias.php',
+            'app/Repositories/Suppliers/SupplierProductSourceRevisionRepository.php',
+            'app/Services/Suppliers/Imports/SupplierProductSourceRevisionWriter.php',
+            'app/Jobs/CaptureSupplierSnapshot.php',
+            'config/supplier_snapshot_capture.php',
+            'database/migrations/2026_08_28_090007_add_source_authority_to_snapshot_claims_and_generations.php',
+            'database/migrations/2026_08_28_090008_add_policy_v2_authority_to_snapshot_claims_and_generations.php',
+        ] as $extra) {
+            $cases['extra '.$extra] = [...$allowed, $extra];
+        }
+        foreach ($cases as $label => $files) {
+            $root = tempnam(sys_get_temp_dir(), 'p007-discovery-');
+            $this->assertNotFalse($root);
+            $this->assertStringStartsNotWith(strtolower(str_replace('\\', '/', realpath(base_path()))).'/', strtolower(str_replace('\\', '/', $root)));
+            $this->assertTrue(unlink($root));
+            $this->assertTrue(mkdir($root, 0700));
+            try {
+                foreach ($files as $file) {
+                    if (! is_dir(dirname($root.'/'.$file))) {
+                        $this->assertTrue(mkdir(dirname($root.'/'.$file), 0700, true));
+                    }
+                    $this->assertNotFalse(file_put_contents($root.'/'.$file, "<?php // Inert discovery fixture only.\n"));
+                }
+                $discovered = $this->discoverP007Artifacts($root);
+                sort($files);
+                sort($discovered);
+                $this->assertSame($files, $discovered, $label);
+                if ($label === 'normal') {
+                    $this->assertSame([], $this->p007PresenceViolations($discovered), $label);
+                } else {
+                    $this->assertNotSame([], $this->p007PresenceViolations($discovered), $label);
+                }
+            } finally {
+                $this->assertTrue((new Filesystem)->deleteDirectory($root));
+                $this->assertDirectoryDoesNotExist($root);
+            }
+        }
     }
 }
