@@ -25,7 +25,7 @@ final class CanonicalSupplierPhaseThreeP0OracleTest extends TestCase
         $this->assertCount(16, CanonicalSupplierPhaseThreeP0Oracle::operations());
         $this->assertSame(173874, strlen(CanonicalSupplierPhaseThreeP0Oracle::metadataBytes()));
         $this->assertSame(
-            'cf58441e3f1c17254310e3e76a24605ad0aa1a89adcdab16568afad614f927f6',
+            '14c7652e31e6eff49c722553f07582828118d92bd8b8c3694715740bfbaa91d7',
             hash(
                 'sha256',
                 CanonicalSupplierPhaseThreeP0Oracle::METADATA_VERSION
@@ -40,10 +40,10 @@ final class CanonicalSupplierPhaseThreeP0OracleTest extends TestCase
         // Authored from frozen S/B_X plus the accepted design delta before PHP transcription.
         $expected = [
             'P0_BASELINE' => 'dd03ca3b3610207ea12afbd14373a62275e74c8cda50f72b9e129006192bc812',
-            'P9' => '16e1dcd6521b19d31200a010fd532178e3684eacbc23907da8edabb630e31eeb',
-            'P9_DOWN_1' => 'ad390d2f921345302aff1f672ddd39376a11092f792e42ecc3d10c9d8b124a05',
-            'P9_DOWN_2' => 'd698f9638c16d769b122eb85424bc5a6f38b9ecf41ad2fcb56765af6bccae74f',
-            'P8' => '4a8e646732f220aa1403acbb13a8eb67a3fa2845aaff31acd48e937919c98f48',
+            'P9' => '74071cc3a44b5c995d1164eded1ead2bb05b40b47fde6fc7935dcf794a7e66bd',
+            'P9_DOWN_1' => '4bc9e218eba51e785454b97436f9fb55d2e7cd585c486499743c81e671bba69d',
+            'P9_DOWN_2' => '2d56b8630560cef210e4f17636e497f5f5b7465158bfe50edb614d0363ce7b6b',
+            'P8' => '2b4bc4e29959e536c354c80eee1e87e054f3abfa1c34955810b54ea2027a0755',
             'P8_DOWN_1' => 'df3bdedf29e9aded014b2d172926dd977bc372fbdb1c65089ac59b6ce8be8d68',
             'P8_DOWN_2' => 'b992f274eb7f13a26a44ed98eca879b40e2d3e30e45a55c1c0665630f2ef2ae3',
             'P7' => '765692fc06ba30ee87f27a7357edcb793927a52aef2375846a79257e5e8fcc83',
@@ -77,12 +77,12 @@ final class CanonicalSupplierPhaseThreeP0OracleTest extends TestCase
             4 => 'trigger:supplier_products:trg_supplier_product_source_pointer_insert_guard',
         ];
         $frozenRemainders = [
-            'P8' => 'd30da2a40a2ad313f3fa60293ec49438e9d7228f5b92128669de2e0354f5c069',
+            'P8' => '6e19d6a8923bfa9b3ea472321453ce21d26fcb1194dd2e1d9ea009a37f6f8e8b',
             'P8_DOWN_1' => '3aba457947731cca1492526e92eb2eb6c68b7570f44855c5e2096e37cb9712da',
             'P8_DOWN_2' => 'f062239ceb7336c65a3900cad98cbda041f34e4a901ceeb4ce230ead8f14c08a',
-            'P9' => '0912b894208f4aaf15b4b8cedf9061cdf5a5dd1791292c06a7202455e7665321',
-            'P9_DOWN_1' => '9dee5d53546c4a57f1c20c7363d3bb9677a7f18bcb8c01403fb2b0652154cca4',
-            'P9_DOWN_2' => '06ba0d989430202f34ddac5331eefa7d59192b4e366e6f889d7ac851b625ea2e',
+            'P9' => 'fccf7c8f9e77f191accafee5d0130fee935ec2fff2a1c01cda5c46305a79122a',
+            'P9_DOWN_1' => '1c4f707f83b81f95cec2b8840fd231ca700bae32787404a52b49dd035a26e74e',
+            'P9_DOWN_2' => 'dde7d4e8847c4520d66639c978e6e67de2a866ffeb704a009e947a2ac0bd1834',
         ];
         foreach ($frozenRemainders as $state => $hash) {
             $map = [];
@@ -176,6 +176,60 @@ final class CanonicalSupplierPhaseThreeP0OracleTest extends TestCase
         }
         $this->assertStringContainsString('h.`supplier_sku_bytes` = CAST(NEW.`supplier_sku` AS BINARY)', $body);
         $this->assertSame('INSERT', $p7['trigger:supplier_products:trg_supplier_product_source_pointer_insert_guard']['signature']['event']);
+    }
+
+    public function test_p008_candidate_source_trigger_has_exact_five_field_update_authority(): void
+    {
+        // Independently authored contract delta; no DB/migration output supplies expected bytes.
+        $expected = 'BEGIN
+  IF OLD.`cohort_source_identity` IS NOT NULL
+     AND NOT (
+       (CAST(OLD.`cohort_authorization_version` AS BINARY) <=> CAST(NEW.`cohort_authorization_version` AS BINARY))
+       AND (OLD.`cohort_authorized_at` <=> NEW.`cohort_authorized_at`)
+       AND (OLD.`cohort_seed_count` <=> NEW.`cohort_seed_count`)
+       AND (CAST(OLD.`cohort_seed_fingerprint` AS BINARY) <=> CAST(NEW.`cohort_seed_fingerprint` AS BINARY))
+       AND (CAST(OLD.`cohort_source_identity` AS BINARY) <=> CAST(NEW.`cohort_source_identity` AS BINARY))
+     ) THEN
+    SIGNAL SQLSTATE \'45000\' SET MESSAGE_TEXT = \'Execution claim cohort source identity is immutable\';
+  END IF;
+  IF OLD.`cohort_source_identity` IS NULL
+     AND NEW.`cohort_source_identity` IS NOT NULL
+     AND NOT (
+       OLD.`cohort_authorization_version` IS NULL
+       AND OLD.`cohort_authorized_at` IS NULL
+       AND OLD.`cohort_seed_count` IS NULL
+       AND OLD.`cohort_seed_fingerprint` IS NULL
+       AND NEW.`cohort_authorization_version` IS NOT NULL
+       AND NEW.`cohort_authorized_at` IS NOT NULL
+       AND NEW.`cohort_seed_count` IS NOT NULL
+       AND NEW.`cohort_seed_fingerprint` IS NOT NULL
+     ) THEN
+    SIGNAL SQLSTATE \'45000\' SET MESSAGE_TEXT = \'Execution claim cohort source requires atomic authorization\';
+  END IF;
+END';
+        $record = CanonicalSupplierPhaseThreeP0Oracle::signaturesFor('P8')['trigger:supplier_import_execution_claims:trg_import_execution_claim_cohort_source_immutable'];
+        $this->assertSame($expected, $record['signature']['action_statement']);
+        $this->assertSame('4becd5052c9bca3c39fd4e3b6423fa08828d9f289a24a40e85ade13018fa6a66', $record['sha256']);
+        $this->assertSame('UPDATE', $record['signature']['event']);
+        $this->assertSame(['P9', 'P9_DOWN_1', 'P9_DOWN_2', 'P8'], $record['memberships']);
+        foreach (['state', 'active_attempt_token_hash', 'terminalized_at'] as $field) {
+            $this->assertStringNotContainsString('OLD.'.chr(96).$field.chr(96), $expected);
+        }
+    }
+
+    public function test_p008_candidate_executable_sql_bytes_are_frozen_separately_from_metadata(): void
+    {
+        // Fixed byte goldens from the independent SQL specification, not Oracle output.
+        $expected = [
+            'P0-08-DOWN-02' => [1526, '0de42fd713379a86203b735d0770590897a4e455a2944f7f2ae56891661f06a8', '20ab6b7e5fd3132aa9e439be7ffcdc639796030de262c2210ba39982bc475d6e'],
+            'P0-08-DOWN-03' => [1685, 'd0c59adde64aee5a187d42821b37f5e9e70b1fe5d50c1b163c4d7be2f1dfbb4d', '77dea316cf5f6c7af72b533620b2bb1e636bdb744964ca6065ba57c2467c19bf'],
+        ];
+        foreach ($expected as $id => [$length, $rawHash, $domainHash]) {
+            $sql = CanonicalSupplierPhaseThreeP0Oracle::operation($id)['sql'];
+            $this->assertSame($length, strlen($sql));
+            $this->assertSame($rawHash, hash('sha256', $sql));
+            $this->assertSame($domainHash, hash('sha256', "phase-iii-p0-downgrade-sql-v1\0".$sql));
+        }
     }
 
     public function test_matching_utf8mb4_schema_defaults_normalize_to_one_canonical_trigger_identity(): void
