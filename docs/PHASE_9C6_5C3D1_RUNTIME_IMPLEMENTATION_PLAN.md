@@ -60,8 +60,13 @@ Slice 5 is defined only in the [canonical sequence and definition](IMMUTABLE_SUP
 P0-06 schema/read model only, DEFINED_NOT_IMPLEMENTATION_AUTHORIZED.
 P0-06 is IMPLEMENTATION_PRESENT_DORMANT at HEAD `b2d7e0bb428745dfe9d0e39a6973fd34a5cf371c`.
 Attributed staging/CI evidence is recorded in [Slice 5 evidence](PHASE_III_P0_SLICE_5_STAGING_EVIDENCE_2026_10_20.md); this is not a new deployment verification.
-P0-07 through P0-09 remain unimplemented and implementation-unauthorized.
-P0-07 through P0-09 remain unsliced and unauthorized; runtime activation stays closed.
+P0-07 schema foundation is IMPLEMENTED_MERGED_DEPLOYED_DORMANT.
+[Dated P0-07 staging closure](PHASE_III_P0_P007_STAGING_CLOSURE_EVIDENCE_2026_11_06.md) attributes the completed 2026-11-06 rollout.
+P0-08 is a canonical correction candidate; NOT ADOPTED; implementation not authorized.
+P0-08 through P0-09 remain unimplemented and implementation-unauthorized.
+P0-08 through P0-09 remain unsliced and unauthorized.
+Deferred P0-06/P0-07 writer/admission/importer integration remains unauthorized.
+Runtime activation stays closed.
 
 <!-- phase-iii-architecture-status-reference authority=phase-iii-architecture-contract-v1 -->
 The exact current Phase III architecture status map is owned only by the
@@ -623,8 +628,12 @@ Runtime activation remains unauthorized.
 Slice 5 defines only P0-06 schema/read model; it supplies no implementation authority.
 P0-06 is IMPLEMENTATION_PRESENT_DORMANT at HEAD `b2d7e0bb428745dfe9d0e39a6973fd34a5cf371c`.
 Attributed staging/CI evidence is recorded in [Slice 5 evidence](PHASE_III_P0_SLICE_5_STAGING_EVIDENCE_2026_10_20.md); this is not a new deployment verification.
-P0-07 through P0-09 remain unimplemented and implementation-unauthorized.
-P0-07 through P0-09 remain unsliced and unauthorized.
+P0-07 schema foundation is IMPLEMENTED_MERGED_DEPLOYED_DORMANT.
+[Dated P0-07 staging closure](PHASE_III_P0_P007_STAGING_CLOSURE_EVIDENCE_2026_11_06.md) attributes the completed 2026-11-06 rollout.
+P0-08 is a canonical correction candidate; NOT ADOPTED; implementation not authorized.
+P0-08 through P0-09 remain unimplemented and implementation-unauthorized.
+P0-08 through P0-09 remain unsliced and unauthorized.
+Deferred P0-06/P0-07 writer/admission/importer integration remains unauthorized.
 This subphase is additive to, and
 does not rewrite, the historical deployed Phase I ten-table foundation or
 frozen Phase II contracts.
@@ -1130,7 +1139,7 @@ before protected runtime use is permitted.
 | P0-05 | `supplier_product_identity_heads`: `id>supplier_id>supplier_feed_id>supplier_sku_bytes>created_at` | `PRIMARY(id)`; `uq_supplier_product_identity_head(supplier_id>supplier_feed_id>supplier_sku_bytes)`; `uq_supplier_product_identity_head_scope(id>supplier_id>supplier_feed_id)`; `uq_supplier_product_identity_head_revision_scope(id>supplier_id>supplier_feed_id>supplier_sku_bytes)`; `ix_supplier_product_identity_head_feed_owner_fk(supplier_feed_id>supplier_id)` | `fk_supplier_product_identity_head_feed_owner`; `chk_supplier_product_identity_head_sku_bytes`; `trg_supplier_product_identity_head_no_update`; `trg_supplier_product_identity_head_no_delete` |
 | P0-06 | `supplier_product_source_revisions`: `id>supplier_product_identity_head_id>supplier_product_id>supplier_import_source_execution_id>supplier_id>supplier_feed_id>supplier_sku_bytes>source_identity>source_descriptor_fingerprint>source_execution_fingerprint>source_member_identity_hash>source_row_fingerprint>staging_projection_fingerprint>revision_fingerprint>observed_at>created_at` | `PRIMARY(id)`; `uq_supplier_product_revision_execution_head(supplier_import_source_execution_id>supplier_product_identity_head_id)`; `uq_supplier_product_revision_pointer_scope(id>supplier_product_id>supplier_product_identity_head_id>supplier_id>supplier_feed_id)`; `ix_supplier_product_revision_head_fk(supplier_product_identity_head_id>supplier_id>supplier_feed_id>supplier_sku_bytes)`; `ix_supplier_product_revision_execution_fk(supplier_import_source_execution_id>supplier_id>supplier_feed_id>source_identity>source_descriptor_fingerprint>source_execution_fingerprint)`; `ix_supplier_product_revision_product_id_fk(supplier_product_id)` | `fk_supplier_product_revision_head`; `fk_supplier_product_revision_execution`; `fk_supplier_product_revision_product_id`; `chk_supplier_product_revision_source_identity`; `chk_supplier_product_revision_fingerprints`; `trg_supplier_product_revision_no_update`; `trg_supplier_product_revision_no_delete` |
 | P0-07 | `supplier_products`: `supplier_product_identity_head_id>current_source_revision_id`; no new revision columns | `uq_supplier_product_identity_head_assignment(supplier_product_identity_head_id)`; `uq_supplier_product_source_revision_scope(id>supplier_id>supplier_feed_id)`; `ix_supplier_product_identity_head_fk(supplier_product_identity_head_id>supplier_id>supplier_feed_id)`; `ix_supplier_product_current_revision_fk(current_source_revision_id>id>supplier_product_identity_head_id>supplier_id>supplier_feed_id)`; `ix_supplier_product_revision_product_scope_fk(supplier_product_id>supplier_id>supplier_feed_id)` on `supplier_product_source_revisions` | `fk_supplier_product_identity_head`; `fk_supplier_product_current_revision`; replace `fk_supplier_product_revision_product_id` with `fk_supplier_product_revision_product_scope`; `chk_supplier_product_source_revision_pointers`; `trg_supplier_product_source_projection_guard`; `trg_supplier_product_source_pointer_insert_guard` |
-| P0-08 | `supplier_import_execution_claims`: `cohort_source_identity`; no new generation column | `uq_import_execution_claim_id_cohort_source(id>cohort_source_identity)`; `ix_snapshot_generation_claim_source(supplier_import_execution_claim_id>source_identity)` | replace `chk_import_claim_cohort_authorization_tuple`; replace `chk_import_claim_processing_owner`; `chk_import_execution_claim_cohort_source_identity`; `trg_import_execution_claim_cohort_source_immutable`; `fk_snapshot_generation_claim_source` |
+| P0-08 | `supplier_import_execution_claims`: `cohort_source_identity`; no new generation column | `uq_import_execution_claim_id_cohort_source(id>cohort_source_identity)`; `ix_snapshot_generation_claim_source(supplier_import_execution_claim_id>source_identity)` | replace `chk_import_claim_cohort_authorization_tuple`; replace `chk_import_claim_processing_owner`; replace `chk_import_claim_processing_time_order`; replace `chk_snapshot_generation_qualification_tuple`; `chk_import_execution_claim_cohort_source_identity`; `trg_import_execution_claim_cohort_source_immutable`; `fk_snapshot_generation_claim_source` |
 | P0-09 | `supplier_import_execution_claims`: `cohort_bounds_policy_key>cohort_bounds_policy_version>cohort_bounds_policy_fingerprint`; `supplier_offer_snapshot_generations`: `bounds_policy_key>bounds_policy_version>bounds_policy_fingerprint` | `uq_import_claim_id_bounds_policy(id>cohort_bounds_policy_key>cohort_bounds_policy_version>cohort_bounds_policy_fingerprint)`; `ix_snapshot_generation_bounds_policy(supplier_import_execution_claim_id>bounds_policy_key>bounds_policy_version>bounds_policy_fingerprint)` | `chk_import_claim_cohort_policy_authority`; `chk_import_claim_cohort_policy_identity`; replace `chk_import_claim_processing_owner`; `trg_import_execution_claim_cohort_policy_immutable`; `chk_snapshot_generation_bounds_policy_identity`; `fk_snapshot_generation_bounds_policy` |
 <!-- phase-iii-p0-artifact-registry:end id=phase-iii-p0-artifact-inventory-v1 -->
 
@@ -1169,7 +1178,7 @@ ordered top-level keys `version>objects>states>operations` and version
 `phase-iii-p0-oracle-metadata-v1`. Its exact length is `173874` bytes and the
 hardcoded SHA-256 over domain `phase-iii-p0-oracle-metadata-v1`, NUL and those
 bytes is
-`cf58441e3f1c17254310e3e76a24605ad0aa1a89adcdab16568afad614f927f6`.
+`14c7652e31e6eff49c722553f07582828118d92bd8b8c3694715740bfbaa91d7`.
 This metadata constant is independent of candidate DDL/database state and does
 not derive any expected value from implementation output. The historical
 collation-authority refreeze changed 16 trigger signatures and all 17 then-current
@@ -1223,12 +1232,12 @@ records in the canonical design. The exact normal-prefix authority is:
 | P5 | 309 | `8cc5afed3a68c4152bf1456a10741c5e23bd077bf4dae39cae639208872ca56f` |
 | P6 | 339 | `ea265e4717c2f61abba6731f08be576ff6fcd01fe6b673d61d41011a888056aa` |
 | P7 | 350 | `765692fc06ba30ee87f27a7357edcb793927a52aef2375846a79257e5e8fcc83` |
-| P8 | 356 | `4a8e646732f220aa1403acbb13a8eb67a3fa2845aaff31acd48e937919c98f48` |
-| P9 | 369 | `16e1dcd6521b19d31200a010fd532178e3684eacbc23907da8edabb630e31eeb` |
+| P8 | 356 | `2b4bc4e29959e536c354c80eee1e87e054f3abfa1c34955810b54ea2027a0755` |
+| P9 | 369 | `74071cc3a44b5c995d1164eded1ead2bb05b40b47fde6fc7935dcf794a7e66bd` |
 
 The only recognized partial hashes are
-`P9_DOWN_1=ad390d2f921345302aff1f672ddd39376a11092f792e42ecc3d10c9d8b124a05`,
-`P9_DOWN_2=d698f9638c16d769b122eb85424bc5a6f38b9ecf41ad2fcb56765af6bccae74f`,
+`P9_DOWN_1=4bc9e218eba51e785454b97436f9fb55d2e7cd585c486499743c81e671bba69d`,
+`P9_DOWN_2=2d56b8630560cef210e4f17636e497f5f5b7465158bfe50edb614d0363ce7b6b`,
 `P8_DOWN_1=df3bdedf29e9aded014b2d172926dd977bc372fbdb1c65089ac59b6ce8be8d68`,
 `P8_DOWN_2=b992f274eb7f13a26a44ed98eca879b40e2d3e30e45a55c1c0665630f2ef2ae3`,
 `P7_DOWN_1=3f42d4567c985254acd7aaab903469c1035d870881adba431592abe6d509cd03`
@@ -1363,8 +1372,10 @@ Its dormant head primitive must remain inside the complete caller-owned
 SupplierProduct/revision/pointer transaction; no independent head commit is allowed.
 Slice 5 is P0-06 schema/read model only, IMPLEMENTATION_PRESENT_DORMANT
 at HEAD b2d7e0bb428745dfe9d0e39a6973fd34a5cf371c, as reconciled in the canonical design.
-P0-07 through P0-09 implementation remains unauthorized. P0-07 through P0-09
+P0-07 schema foundation is IMPLEMENTED_MERGED_DEPLOYED_DORMANT; see the dated closure above.
+P0-08 through P0-09 implementation remains unauthorized. P0-08 through P0-09
 remain unsliced and unauthorized. Deferred P0-06 writer/integration is not included.
+Deferred P0-07 writer/admission/importer integration is not included.
 The canonical nine-file future allowlist, F1 guarded legacy fixture preparation,
 A10 five-suite real MySQL 8.4 acceptance and independent review obligations
 remain future requirements, not permission or validation evidence. No schema,
@@ -1757,6 +1768,7 @@ binding but cannot become active. Phase X supplies the DB-backed binding; even
 that merge does not activate recovery without canonical fresh evidence and a
 separate operational authorization.
 
+Historical next-step checkpoint (2026-09-07):
 The next safe step is independent implementation review of the P0-04-only
 Slice 3 candidate and review of its exact protected lifecycle-alignment proposal.
 The separate owner decision dated 2026-09-07 authorizes local dormant P0-04
@@ -1772,6 +1784,15 @@ remaining gate is separately closed.
 
 2026-10-26 isolated canonical candidate: the five-document design package is OWNER APPROVED. New P7/successor oracle literals are CANDIDATE — NOT OWNER APPROVED. Original-worktree adoption and P0-07 implementation/runtime activation are NOT PERFORMED.
 
+2026-11-06 dated follow-up: the preceding 2026-10-26 candidate statement is historical.
+Canonical adoption was subsequently accepted and merged through PR #238;
+P0-07 schema foundation is IMPLEMENTED_MERGED_DEPLOYED_DORMANT at release
+`37c1671b07ff33952337a3a5ea86b30411bb74d9`, as attributed in the
+[dated closure](PHASE_III_P0_P007_STAGING_CLOSURE_EVIDENCE_2026_11_06.md). Deferred writer/admission/importer integration
+remains unauthorized. New P0-08 correction values are CANDIDATE — NOT ADOPTED;
+P0-08 implementation and MySQL validation are respectively NOT AUTHORIZED and NOT RUN.
+
+
 Follow the sole [canonical D1-D3/R2 authority](IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md#p0-07-d1-d3r2-candidate-reconciliation-2026-10-26).
 Reverse ownership is (product,supplier,feed); full pointer ownership remains
 (revision,product,head,supplier,feed). Preserve compatible populated P6 after
@@ -1782,3 +1803,17 @@ operations remove INSERT, remove UPDATE, restore the P6 reverse pair, then
 remove the product pointer artifacts. Each successor uses its own frozen B_X
 plus four signature replacements and INSERT; P8_DOWN_2 retains its own CHECK.
 Registry cardinalities are 376 signatures, 18 states and 16 operations.
+
+## P0-08 correction candidate boundary — 2026-11-06
+
+P0-07 schema foundation is IMPLEMENTED_MERGED_DEPLOYED_DORMANT; the dated
+closure above attributes existing evidence. P0-08 is a canonical correction
+candidate, NOT ADOPTED; implementation not authorized. Follow the
+[separate proposed forward protocol](IMMUTABLE_SUPPLIER_OFFER_SNAPSHOT_PERSISTENCE_DESIGN.md#p0-08-forward-protocol-correction-candidate-2026-11-06):
+UP-01 atomic claim ALTER to exact P8_DOWN_2; UP-02 atomic generation ALTER to
+exact P8_DOWN_1; UP-03 corrected source trigger to revised exact P8. These
+are schema identities, not UP resume permission. The DOWN registry remains
+16 operations. STOP on failure or uncertain DDL, preserve the writer fence
+and evidence; no blind retry or transaction rollback promise. A separately
+approved recovery contract is required. MySQL validation is NOT RUN.
+P0-09 and deferred writer/admission/importer integration remain unauthorized.

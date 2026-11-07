@@ -1,5 +1,18 @@
 # P0-07 Staging Source Revision Pointers: D1-D3 Resolution Proposal
 
+## Dated closure follow-up — 2026-11-06
+
+2026-11-06 dated follow-up: the preceding 2026-10-26 candidate statement is historical.
+Canonical adoption was subsequently accepted and merged through PR #238;
+P0-07 schema foundation is IMPLEMENTED_MERGED_DEPLOYED_DORMANT at release
+`37c1671b07ff33952337a3a5ea86b30411bb74d9`, as attributed in the
+[dated closure](PHASE_III_P0_P007_STAGING_CLOSURE_EVIDENCE_2026_11_06.md). Deferred writer/admission/importer integration
+remains unauthorized. New P0-08 correction values are CANDIDATE — NOT ADOPTED;
+P0-08 implementation and MySQL validation are respectively NOT AUTHORIZED and NOT RUN.
+
+The remaining original proposal/checkpoint text is preserved as dated history.
+
+
 ## Candidate reconciliation — 2026-10-26
 
 2026-10-26 isolated canonical candidate: the five-document design package is OWNER APPROVED. New P7/successor oracle literals are CANDIDATE — NOT OWNER APPROVED. Original-worktree adoption and P0-07 implementation/runtime activation are NOT PERFORMED.

@@ -826,7 +826,7 @@ final class PhaseThreeP0StagingSourceRevisionPointersFoundationMysqlTest extends
             $this->assertSame(0, DB::table($table)->count());
         }
         $before = 'P7';
-        foreach (['P8' => '4a8e646732f220aa1403acbb13a8eb67a3fa2845aaff31acd48e937919c98f48', 'P9' => '16e1dcd6521b19d31200a010fd532178e3684eacbc23907da8edabb630e31eeb'] as $state => $hash) {
+        foreach (['P8' => '2b4bc4e29959e536c354c80eee1e87e054f3abfa1c34955810b54ea2027a0755', 'P9' => '74071cc3a44b5c995d1164eded1ead2bb05b40b47fde6fc7935dcf794a7e66bd'] as $state => $hash) {
             $this->installEmptySuffixFixture($before, $state);
             $actual = P0::classify(DB::connection()->getPdo());
             $this->assertSame($state, $actual['state']);
